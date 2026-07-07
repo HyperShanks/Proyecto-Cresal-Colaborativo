@@ -1,9 +1,14 @@
 import requests
 from bs4 import BeautifulSoup
 import re
+import time  # <--- NUEVA LIBRERÍA IMPORTADA
 
 def obtener_datos_vehiculo(patente: str) -> dict:
-
+    """
+    Realiza scraping a una web pública chilena para obtener los datos de un vehículo.
+    Limpia los datos, extrae la cilindrada mediante Regex, captura el número de motor
+    y cuenta con manejo de errores, timeout de 5 segundos y pausa ética.
+    """
     # Limpieza estricta de la patente de entrada (elimina guiones y espacios)
     patente_limpia = re.sub(r'[^A-Za-z0-9]', '', patente).upper()
     
@@ -17,6 +22,9 @@ def obtener_datos_vehiculo(patente: str) -> dict:
     payload = {'term': patente_limpia} 
 
     try:
+        # Pausa ética de 1 segundo para no saturar el servidor destino
+        time.sleep(1)
+        
         # Petición principal POST con timeout estricto de 5 segundos
         response = requests.post(url, headers=headers, data=payload, timeout=5)
         
