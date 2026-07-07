@@ -3,11 +3,7 @@ from bs4 import BeautifulSoup
 import re
 
 def obtener_datos_vehiculo(patente: str) -> dict:
-    """
-    Realiza scraping a una web pública chilena para obtener los datos de un vehículo.
-    Limpia los datos, extrae la cilindrada mediante Regex, captura el número de motor
-    y cuenta con manejo de errores y timeout de 5 segundos (ISO 25000).
-    """
+
     # Limpieza estricta de la patente de entrada (elimina guiones y espacios)
     patente_limpia = re.sub(r'[^A-Za-z0-9]', '', patente).upper()
     
