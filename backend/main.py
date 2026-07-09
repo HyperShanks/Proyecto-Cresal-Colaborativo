@@ -19,3 +19,7 @@ app = FastAPI(
 @app.get("/")
 def read_root():
     return {"mensaje": "¡API de Cresal-SaaS en línea y Base de Datos conectada!"}
+
+
+# Para encender el servidor se uso "uvicorn main:app --reload" dentro de backend.
+# Esto permite que la API se ejecute en modo desarrollo y se recargue automáticamente al hacer cambios en el código.
