@@ -167,12 +167,13 @@ class Detalle_Caja_Cambio(Base):
     id_activo = Column(UUID(as_uuid=True), ForeignKey("Activo_Inventariado.id_activo"), primary_key=True)
     transmision_tipo = Column(String(50), nullable=True)
 
-class Imagen_Activo(Base):
-    __tablename__ = "Imagen_Activo"
+class Multimedia_Activo(Base):
+    __tablename__ = "Multimedia_Activo"
 
-    id_imagen = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id_multimedia = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     id_activo = Column(UUID(as_uuid=True), ForeignKey("Activo_Inventariado.id_activo"), nullable=False)
     url_storage = Column(String(255), nullable=False)
+    tipo_archivo = Column(String(20), nullable=False) 
 
 # ==========================================
 # MICRO-CRM, VENTAS Y PAGOS
