@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from database import SessionLocal
+from database import SessionLocal, get_db
 import schemas
 from services.vehiculo_service import procesar_patente_y_guardar
 
@@ -11,12 +11,7 @@ router = APIRouter(
 )
 
 # Dependencia para abrir y cerrar la conexión a la base de datos
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+
 
 # Configuración de respuestas Swagger (Sub-tarea D)
 @router.get("/{patente}", response_model=schemas.VehiculoResponse, status_code=200)
