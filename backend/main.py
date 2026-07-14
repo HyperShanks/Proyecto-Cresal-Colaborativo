@@ -3,6 +3,7 @@
 
 from fastapi import FastAPI
 from database import engine, Base
+from routers import vehiculos
 import models
 
 # Le dice a SQLAlchemy que lea models.py y cree las tablas en pgAdmin
@@ -20,6 +21,5 @@ app = FastAPI(
 def read_root():
     return {"mensaje": "¡API de Cresal-SaaS en línea y Base de Datos conectada!"}
 
-
-# Para encender el servidor se uso "uvicorn main:app --reload" dentro de backend.
-# Esto permite que la API se ejecute en modo desarrollo y se recargue automáticamente al hacer cambios en el código.
+# Registrar las rutas de la aplicación
+app.include_router(vehiculos.router)
