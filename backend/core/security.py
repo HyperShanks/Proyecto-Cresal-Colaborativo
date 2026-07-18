@@ -1,0 +1,1 @@
+# Lógica de JWT, encriptación y validación del PIN
