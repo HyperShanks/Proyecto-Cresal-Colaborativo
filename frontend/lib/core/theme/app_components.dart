@@ -3,14 +3,16 @@ import 'tokens/app_palette.dart';
 import 'tokens/app_typography.dart';
 
 class AppComponents {
-  // REGLA W3C: Touch target mínimo para operarios con guantes
+  // REGLA W3C: Touch target mínimo para operarios con guantes en el patio de desarme.
   static const double minTouchTarget = 44.0;
   static const double defaultBorderRadius = 8.0;
 
+  // Configuración global para los botones primarios de la aplicación.
   static ElevatedButtonThemeData get elevatedButtonTheme {
     return ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        minimumSize: const Size(double.infinity, minTouchTarget), // Infinito para que ocupe el ancho por defecto, o se adapte
+        // double.infinity permite que el botón ocupe todo el ancho disponible por defecto.
+        minimumSize: const Size(double.infinity, minTouchTarget),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         backgroundColor: AppPalette.primary,
         foregroundColor: AppPalette.textPrimary,
@@ -22,42 +24,49 @@ class AppComponents {
     );
   }
 
-  static CardTheme get cardTheme {
+  // Configuración de tarjetas para el tema oscuro.
+  static CardThemeData get cardTheme {
     return cardThemeWithSurface(AppPalette.surface);
   }
 
-  static CardTheme get cardThemeLight {
+  // Configuración de tarjetas para el tema claro.
+  static CardThemeData get cardThemeLight {
     return cardThemeWithSurface(AppPalette.surfaceLight);
   }
 
-  static CardTheme cardThemeWithSurface(Color surfaceColor) {
-    return CardTheme(
+  // Constructor base para las tarjetas, reutilizable en ambos modos (Claro/Oscuro).
+  static CardThemeData cardThemeWithSurface(Color surfaceColor) {
+    return CardThemeData(
       color: surfaceColor,
-      elevation: 0, // En Dark Mode puro es mejor usar el color de superficie que sombras
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12.0),
-      ),
+      // Se utiliza elevación 0 para mantener un diseño plano y evitar sombras que ensucien el Dark Mode.
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
       margin: const EdgeInsets.only(bottom: 16.0),
     );
   }
 
+  // Configuración de los campos de texto para el tema oscuro.
   static InputDecorationTheme get inputDecorationTheme {
     return inputDecorationThemeWithFill(AppPalette.surface);
   }
 
+  // Configuración de los campos de texto para el tema claro.
   static InputDecorationTheme get inputDecorationThemeLight {
     return inputDecorationThemeWithFill(AppPalette.surfaceLight);
   }
 
+  // Constructor base para los inputs (cajas de texto), definiendo su borde, relleno y estado de foco.
   static InputDecorationTheme inputDecorationThemeWithFill(Color fillColor) {
     return InputDecorationTheme(
       filled: true,
       fillColor: fillColor,
       contentPadding: const EdgeInsets.all(16.0),
+      // Borde por defecto (invisible para que resalte el color de fondo).
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(defaultBorderRadius),
         borderSide: BorderSide.none,
       ),
+      // Borde de color primario cuando el usuario selecciona el campo para escribir.
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(defaultBorderRadius),
         borderSide: const BorderSide(color: AppPalette.primary, width: 2),

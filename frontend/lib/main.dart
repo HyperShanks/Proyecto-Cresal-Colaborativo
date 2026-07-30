@@ -19,8 +19,9 @@ class _MyAppState extends State<MyApp> {
 
   void _toggleTheme() {
     setState(() {
-      _themeMode =
-          _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+      _themeMode = _themeMode == ThemeMode.dark
+          ? ThemeMode.light
+          : ThemeMode.dark;
     });
   }
 
@@ -66,7 +67,7 @@ class HomeScreen extends StatelessWidget {
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
         child: Column(
-          crossAxisAlignment: CrossAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'Panel de Control',
@@ -82,7 +83,7 @@ class HomeScreen extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
-                  crossAxisAlignment: CrossAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'Estado de Operación',
@@ -113,10 +114,7 @@ class HomeScreen extends StatelessWidget {
             GradientButton(
               onPressed: () {},
               gradient: const LinearGradient(
-                colors: [
-                  AppPalette.primary,
-                  AppPalette.secondary,
-                ],
+                colors: [AppPalette.primary, AppPalette.secondary],
                 begin: Alignment.centerLeft,
                 end: Alignment.centerRight,
               ),

@@ -4,25 +4,27 @@ import 'tokens/app_typography.dart';
 import 'app_components.dart';
 
 class AppTheme {
-  //Metodo estatico que genera el tema oscuro
+  // Metodo estatico que genera el tema oscuro
   static ThemeData get darkTheme {
     // 1. Generamos la paleta de Material 3 basada en tu azul
-    final colorScheme = ColorScheme.fromSeed(
-      seedColor: AppPalette.primary,
-      brightness: Brightness.dark,
-    ).copyWith(
-      // Forzamos nuestros colores exactos para no depender de la IA de Flutter en los fondos
-      surface: AppPalette.surface,
-      onSurface: AppPalette.textPrimary,
-      primary: AppPalette.primary,
-      error: AppPalette.error,
-    );
+    final colorScheme =
+        ColorScheme.fromSeed(
+          seedColor: AppPalette.primary,
+          brightness: Brightness.dark,
+        ).copyWith(
+          // Forzamos nuestros colores exactos para no depender de la IA de Flutter en los fondos
+          surface: AppPalette.surface,
+          onSurface: AppPalette.textPrimary,
+          primary: AppPalette.primary,
+          error: AppPalette.error,
+        );
 
     // 2. Ensamblamos el tema
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
-      scaffoldBackgroundColor: AppPalette.background, // Obligamos al fondo #0F1416
+      scaffoldBackgroundColor:
+          AppPalette.background, // Obligamos al fondo #0F1416
       fontFamily: AppTypography.fontFamily,
 
       // 3. Mapeo de tipografías nativas de Flutter
@@ -41,17 +43,18 @@ class AppTheme {
     );
   }
 
-  //Metodo estatico que genera el tema claro
+  // Metodo estatico que genera el tema claro
   static ThemeData get lightTheme {
-    final colorScheme = ColorScheme.fromSeed(
-      seedColor: AppPalette.primary,
-      brightness: Brightness.light,
-    ).copyWith(
-      surface: AppPalette.surfaceLight,
-      onSurface: AppPalette.textPrimaryLight,
-      primary: AppPalette.primary,
-      error: AppPalette.error,
-    );
+    final colorScheme =
+        ColorScheme.fromSeed(
+          seedColor: AppPalette.primary,
+          brightness: Brightness.light,
+        ).copyWith(
+          surface: AppPalette.surfaceLight,
+          onSurface: AppPalette.textPrimaryLight,
+          primary: AppPalette.primary,
+          error: AppPalette.error,
+        );
 
     // 2. Ensamblamos el tema
     return ThemeData(
@@ -62,11 +65,21 @@ class AppTheme {
 
       // 3. Mapeo de tipografías nativas de Flutter
       textTheme: TextTheme(
-        headlineLarge: AppTypography.headline.copyWith(color: AppPalette.textPrimaryLight),
-        titleLarge: AppTypography.title.copyWith(color: AppPalette.textPrimaryLight),
-        bodyLarge: AppTypography.body.copyWith(color: AppPalette.textPrimaryLight),
-        bodyMedium: AppTypography.small.copyWith(color: AppPalette.textSecondaryLight),
-        labelLarge: AppTypography.button.copyWith(color: AppPalette.textPrimaryLight),
+        headlineLarge: AppTypography.headline.copyWith(
+          color: AppPalette.textPrimaryLight,
+        ),
+        titleLarge: AppTypography.title.copyWith(
+          color: AppPalette.textPrimaryLight,
+        ),
+        bodyLarge: AppTypography.body.copyWith(
+          color: AppPalette.textPrimaryLight,
+        ),
+        bodyMedium: AppTypography.small.copyWith(
+          color: AppPalette.textSecondaryLight,
+        ),
+        labelLarge: AppTypography.button.copyWith(
+          color: AppPalette.textPrimaryLight,
+        ),
       ),
 
       // 4. Inyección de componentes modulares

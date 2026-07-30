@@ -12,7 +12,7 @@ class GradientButton extends StatelessWidget {
 
   const GradientButton({
     super.key,
-    required this.onPressed,
+    this.onPressed, // <-- Corregido: Se quitó el "required"
     required this.child,
     required this.gradient,
     this.height = AppComponents.minTouchTarget,
@@ -35,13 +35,10 @@ class GradientButton extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onPressed: onPressed,
+          onTap: onPressed,
           borderRadius: BorderRadius.circular(borderRadius),
           child: Center(
-            child: DefaultTextStyle(
-              style: AppTypography.button,
-              child: child,
-            ),
+            child: DefaultTextStyle(style: AppTypography.button, child: child),
           ),
         ),
       ),
