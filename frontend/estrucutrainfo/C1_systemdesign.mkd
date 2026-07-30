@@ -1,0 +1,177 @@
+
+
+---
+
+## 🎓 Clase 1: ¿Qué es un "System Design" y por qué importa?
+
+### La analogía del restaurante
+
+Imagina que quieres abrir un restaurante. Puedes:
+
+1. **Opción A (Sin diseño)**: Comprar una cocina, poner mesas al azar, contratar cocineros sin definir quién hace qué. Funciona... hasta que llegan 10 clientes y es un caos.
+2. **Opción B (Con diseño)**: Definir una **estructura**:
+   - La cocina (back-end) tiene zonas claras: parrilla, hornos, refrigeración.
+   - El salón (front-end) tiene mesas numeradas, un flujo de pedidos.
+   - Cada empleado sabe su rol.
+
+**System Design** es exactamente eso: **la estructura que le das a tu proyecto** para que sea fácil de mantener, escalar y entender. En programación, esto se llama **Arquitectura de Software**.
+
+---
+
+### ¿Por qué necesitas un System Design en Flutter?
+
+| **Sin diseño** | **Con diseño** |
+|----------------|----------------|
+| Todo el código en `main.dart` (archivo gigante de 5000 líneas). | Código organizado en carpetas con responsabilidades claras. |
+| Cambiar el color de un botón implica buscar en 50 archivos. | Cambias un valor en `app_palette.dart` y se actualiza toda la app. |
+| 2 desarrolladores trabajan en el mismo archivo → conflictos en Git. | Cada uno trabaja en su carpeta → cero conflictos. |
+| El cliente pide modo oscuro → tienes que reescribir media app. | Añades un `lightTheme` en 5 minutos. |
+
+---
+
+### Las 3 reglas de oro del System Design (para que no te enredes)
+
+1. **Separación de responsabilidades** (cada archivo hace UNA cosa).
+2. **Centralización** (los valores importantes están en UN SOLO lugar).
+3. **Escalabilidad** (puedes añadir cosas nuevas sin romper lo que ya funciona).
+
+---
+
+## 🗂️ Ahora sí: ¿Qué es cada carpeta en tu proyecto?
+
+Vamos a ver la estructura desde **arriba hacia abajo**, como si fueran cajas chinas.
+
+---
+
+### Nivel 1: La raíz del proyecto (`frontend/`)
+
+```
+frontend/
+├── android/
+├── ios/
+├── lib/
+├── linux/
+├── macos/
+├── test/
+├── web/
+├── windows/
+├── .gitignore
+├── .metadata
+├── analysis_options.yaml
+├── pubspec.lock
+├── pubspec.yaml
+└── README.md
+```
+
+**¿Qué es `frontend/`?** Es la carpeta **raíz** de tu proyecto Flutter. Contiene **todo** el código y configuración de tu app.
+
+**¿Por qué se llama `frontend`?** Porque tu proyecto tiene dos partes:
+- **Frontend** = Lo que ve el usuario (la app en PDA, Tablet, etc.).
+- **Backend** = El servidor (donde se guardan los datos, la lógica de negocio, etc.). En tu estructura, el backend está en otra carpeta (probablemente `backend/` fuera de esta imagen).
+
+---
+
+### Nivel 2: Las carpetas de plataformas
+
+| **Carpeta** | **¿Qué es?** | **¿La tocas?** |
+|-------------|--------------|----------------|
+| `android/` | Código nativo de Android (Java/Kotlin). | **Casi nunca**. Solo si necesitas configurar permisos o notificaciones push. |
+| `ios/` | Código nativo de iOS (Swift/Objective-C). | **Casi nunca**. Solo si necesitas configurar algo específico de Apple. |
+| `linux/` | Código nativo para Linux. | **Casi nunca**. Flutter lo genera automáticamente. |
+| `macos/` | Código nativo para macOS. | **Casi nunca**. |
+| `web/` | Código para web (HTML/JS). | **Casi nunca**. |
+| `windows/` | Código nativo para Windows. | **Casi nunca**. |
+
+**¿Por qué existen?** Flutter es **multiplataforma**. Cuando compilas tu app, genera código nativo para cada sistema operativo. Estas carpetas contienen los "andamios" nativos que Flutter necesita.
+
+**Regla de oro**: **El 95% de tu trabajo está en `lib/`**. Las otras carpetas son "ruido" que Flutter genera automáticamente.
+
+---
+
+### Nivel 3: `lib/` (el corazón de tu app)
+
+```
+lib/
+├── core/
+├── widgets/
+├── main.dart
+└── coreinfo.txt
+```
+
+**`lib/`** es donde **tú escribes código**. Todo lo que hace tu app vive aquí.
+
+- **`main.dart`** es el punto de entrada (el "botón de encendido" de tu app).
+- **`core/`** es donde viven las cosas **fundamentales** y **reusables** (temas, colores, componentes base).
+- **`widgets/`** es donde viven los **componentes visuales reutilizables** (como `gradient_button.dart`).
+
+---
+
+### Nivel 4: `core/` (el núcleo)
+
+```
+core/
+├── theme/
+└── widgets/
+```
+
+**`core/`** contiene todo lo que es **infraestructura**:
+- Lo que **no cambia** con cada pantalla (colores, fuentes, temas).
+- Cosas que **se usan en toda la app** (como `gradient_button.dart`).
+
+**`core/theme/`** es la **fábrica de estilos**. Toda la apariencia visual de la app se define aquí.
+
+**`core/widgets/`** son **componentes reutilizables** que no tienen lógica de negocio (solo se ven bonitos).
+
+---
+
+### Nivel 5: `core/theme/` (la fábrica de estilos)
+
+```
+theme/
+├── tokens/
+│   ├── app_palette.dart
+│   └── app_typography.dart
+├── app_components.dart
+└── app_theme.dart
+```
+
+Aquí es donde **todo cobra sentido**. Es el corazón de tu System Design.
+
+| **Archivo** | **¿Qué hace?** | **Analogía** |
+|-------------|----------------|--------------|
+| `tokens/app_palette.dart` | Guarda **solo colores** (hex). | La **paleta de pinturas** del restaurante. |
+| `tokens/app_typography.dart` | Guarda **solo estilos de texto**. | Las **recetas** de cómo escribir los menús. |
+| `app_components.dart` | Define cómo se ven **botones, tarjetas, inputs**. | Los **muebles y vajilla** del restaurante. |
+| `app_theme.dart` | **Coordina** todo y genera el tema final. | El **gerente** que junta todo y da la orden final. |
+
+---
+
+## 🧠 ¿Por qué esta estructura es la mejor para ti?
+
+| **Tu caso** | **Cómo lo resuelve** |
+|-------------|----------------------|
+| Cliente real (cambios frecuentes) | Cambiar un color es 1 minuto en `app_palette.dart`. |
+| 2 desarrolladores | Cada uno trabaja en archivos distintos. |
+| PDA + Tablet (claro/oscuro) | `app_theme.dart` tiene ambos modos listos. |
+| Botones con degradado | `gradient_button.dart` en `core/widgets/` lo soluciona. |
+
+---
+
+## ✅ Primera comprobación de entendimiento
+
+Antes de seguir, dime si entiendes esto:
+
+1. **¿Qué es System Design?** (con tus palabras)
+2. **¿Por qué `lib/` es la carpeta más importante?**
+3. **¿Qué diferencia hay entre `core/theme/` y `core/widgets/`?**
+
+---
+
+## 🚀 ¿Qué sigue?
+
+Cuando me confirmes que entiendes esto, pasaremos a:
+- **Clase 2**: ¿Qué hace exactamente cada archivo de `core/theme/`? (código línea por línea).
+- **Clase 3**: ¿Cómo se conecta todo con `main.dart`?
+- **Clase 4**: ¿Qué es `gradient_button.dart` y cómo se usa?
+
+**Tómate tu tiempo.** No avances hasta que esto esté claro. 😊
