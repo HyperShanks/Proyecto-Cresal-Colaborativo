@@ -109,7 +109,7 @@ class Ticket_Soporte(Base):
 
 class Vehiculo_Origen(Base):
     __tablename__ = "Vehiculo_Origen"
-
+    
     id_vehiculo = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     numero_ingreso = Column(String(10), nullable=False, unique=True)
     patente = Column(String(10), nullable=True, unique=True)
@@ -117,6 +117,7 @@ class Vehiculo_Origen(Base):
     marca = Column(String(100), nullable=False)
     modelo = Column(String(100), nullable=False)
     anio = Column(Integer, nullable=False)
+    traccion = Column(String(50), nullable=True)
     estado = Column(String(20), nullable=False, server_default="Activo")
     fecha_creacion = Column(DateTime, nullable=False, server_default=text("now()"))
     fecha_actualizacion = Column(DateTime, nullable=True)
@@ -143,6 +144,7 @@ class Activo_Inventariado(Base):
     id_sucursal_actual = Column(Integer, ForeignKey("Sucursal.id_sucursal"), nullable=False)
     id_vehiculo = Column(UUID(as_uuid=True), ForeignKey("Vehiculo_Origen.id_vehiculo"), nullable=True)
     ubicacion_pasillo = Column(String(50), nullable=True)
+    ubicacion_galpon = Column(String(50), nullable=True)
     ubicacion_pallet = Column(String(50), nullable=True)
     precio_referencia = Column(Integer, nullable=True)
     observacion_estado = Column(String(255), nullable=True)

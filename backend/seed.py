@@ -32,7 +32,7 @@ def seed_data():
         print("- Categorías creados.")
 
         # 4. Poblar Estados del Activo
-        estados_base = ["Disponible", "Reservado", "Vendido", "En Importación"]
+        estados_base = ["En Desarme", "Disponible", "Reservado", "Vendido", "En Importación"]
         for est in estados_base:
             if not db.query(Estado_Activo).filter_by(nombre_estado=est).first():
                 db.add(Estado_Activo(nombre_estado=est))
