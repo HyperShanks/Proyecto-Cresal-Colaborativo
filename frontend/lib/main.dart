@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/tokens/app_palette.dart';
 import 'core/widgets/gradient_button.dart';
+import 'screens/recepcion_vehiculo_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -119,6 +120,18 @@ class HomeScreen extends StatelessWidget {
                 end: Alignment.centerRight,
               ),
               child: const Text('BOTÓN GRADIENTE (44PX)'),
+            ),
+            const SizedBox(height: 16), // Espacio
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const RecepcionVehiculoScreen(),
+                  ),
+                );
+              },
+              child: const Text('ABRIR MÓDULO DE RECEPCIÓN (HU-2.2)'),
             ),
           ],
         ),

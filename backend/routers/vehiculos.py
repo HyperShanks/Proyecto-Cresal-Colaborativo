@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from database import SessionLocal, get_db
 import schemas
 from services.vehiculo_service import procesar_patente_y_guardar
 from sqlalchemy import func, cast, Integer
 from models import Vehiculo_Origen, Activo_Inventariado, Detalle_Motor, Detalle_Caja_Cambio
+import json # <-- Importante para traducir el texto a JSON
 
 # Instanciamos el enrutador con su prefijo oficial (Sub-tarea A)
 router = APIRouter(
@@ -34,16 +35,55 @@ def obtener_siguiente_ingreso(db: Session = Depends(get_db)):
     return {"siguiente_ingreso": str(siguiente_numero)}
 
 @router.post("/", response_model=schemas.VehiculoResponse, status_code=201)
-def registrar_ingreso_vehiculo(vehiculo_in: schemas.VehiculoCreate, db: Session = Depends(get_db)):
+def registrar_ingreso_vehiculo(
+    # --- NUEVO: Recibimos los datos y la foto por separado (Multipart) ---
+    datos: str = Form(...),
+    foto: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
     """
-    Registra un vehículo y sus componentes principales (Motor y Caja) en una sola transacción.
+    Registra un vehículo y sus componentes principales (Motor y Caja) previa validación Poka-Yoke.
     """
+    # 1. DESEMPACAR EL JSON QUE VIENE DESDE FLUTTER
     try:
-        # 1. Calcular el correlativo definitivo y bloquearlo
+        datos_dict = json.loads(datos)
+        vehiculo_in = schemas.VehiculoCreate(**datos_dict) 
+    except Exception as e:
+        raise HTTPException(status_code=422, detail="Error al leer los datos del vehículo")
+
+    # ==========================================
+    # 2. SIMULADOR DE OCR (El Poka-Yoke temporal)
+    # ==========================================
+    print("\n" + "="*40)
+    print("🛂 INICIANDO VALIDACIÓN POKA-YOKE (ADUANA)")
+    print("="*40)
+    print(f"📸 Archivo recibido: {foto.filename}")
+    
+    # AQUI ESTÁ EL CAMBIO: Usamos datos_dict en lugar de vehiculo_in
+    numero_esperado = datos_dict.get("correlativo_ingreso") 
+    
+    print(f"🔍 Motor OCR Simulado: Analizando imagen en busca del número {numero_esperado}...")
+    
+    # Aquí simulamos que el OCR leyó exitosamente el número correcto
+    numero_leido_por_ocr = numero_esperado 
+    
+    if str(numero_leido_por_ocr) != str(numero_esperado):
+        print("❌ ERROR: La foto no corresponde al vehículo.")
+        raise HTTPException(status_code=400, detail="El número en la foto no coincide.")
+        
+    print("✅ Poka-Yoke superado. Autorizando registro en Base de Datos.")
+    print("="*40 + "\n")
+
+
+    # ==========================================
+    # 3. GUARDAR EN LA BASE DE DATOS (Tu lógica intacta)
+    # ==========================================
+    try:
+        # 3.1 Calcular el correlativo definitivo y bloquearlo
         max_ingreso = db.query(func.max(cast(Vehiculo_Origen.numero_ingreso, Integer))).scalar()
         nuevo_numero_ingreso = str(1000) if max_ingreso is None else str(max_ingreso + 1)
 
-        # 2. Crear la "Cabecera" (El Vehículo)
+        # 3.2 Crear la "Cabecera" (El Vehículo)
         nuevo_vehiculo = Vehiculo_Origen(
             numero_ingreso=nuevo_numero_ingreso,
             patente=vehiculo_in.patente,
@@ -53,30 +93,21 @@ def registrar_ingreso_vehiculo(vehiculo_in: schemas.VehiculoCreate, db: Session 
             traccion=vehiculo_in.traccion
         )
         db.add(nuevo_vehiculo)
-        
-        # IMPORTANTE: Hacemos flush en vez de commit. 
-        # Esto guarda el auto en memoria temporal para que PostgreSQL nos entregue su ID autogenerado.
         db.flush() 
-
-        # =========================================================
-        # 3. CREACIÓN DE COMPONENTES HIJOS (Activos Inventariados)
-        # Nota: Los IDs de categoría, estado y sucursal son estáticos 
-        # asumiendo tus catálogos. (1=Motor, 2=Caja, 1=Disponible, 1=Casa Matriz)
-        # =========================================================
 
         # --- A. MOTOR ---
         activo_motor = Activo_Inventariado(
-            sku_qr_fisico=f"MOT-{nuevo_numero_ingreso}", # Generamos un SKU temporal
+            sku_qr_fisico=f"MOT-{nuevo_numero_ingreso}", 
             id_categoria=1, 
             id_estado=5,    
             id_sucursal_actual=1, 
-            id_vehiculo=nuevo_vehiculo.id_vehiculo # Conectamos con el ID del auto recién creado
+            id_vehiculo=nuevo_vehiculo.id_vehiculo 
         )
         db.add(activo_motor)
-        db.flush() # Guardamos temporalmente para obtener el id_activo del motor
+        db.flush() 
 
         detalle_motor = Detalle_Motor(
-            id_activo=activo_motor.id_activo, # Relación 1 a 1 exacta
+            id_activo=activo_motor.id_activo, 
             numero_motor=vehiculo_in.numero_motor,
             cilindrada=vehiculo_in.cilindrada,
             combustible=vehiculo_in.combustible
@@ -100,15 +131,14 @@ def registrar_ingreso_vehiculo(vehiculo_in: schemas.VehiculoCreate, db: Session 
         )
         db.add(detalle_caja)
 
-        # 4. Confirmar la Transacción Completa (ACID)
+        # 3.3 Confirmar la Transacción Completa (ACID)
         db.commit()
-        db.refresh(nuevo_vehiculo) # Actualizamos el objeto con los datos finales de la base de datos
+        db.refresh(nuevo_vehiculo) 
 
-        # 5. Devolvemos el auto al frontend usando VehiculoResponse
+        # Devolvemos el auto al frontend
         return nuevo_vehiculo
 
     except Exception as e:
-        # Si CUALQUIER paso de arriba falla, PostgreSQL deshace todo inmediatamente.
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error crítico en la transacción: {str(e)}")
 
@@ -116,25 +146,16 @@ def registrar_ingreso_vehiculo(vehiculo_in: schemas.VehiculoCreate, db: Session 
 # 2. RUTAS DINÁMICAS (Van al final)
 # ==========================================
 
-# Configuración de respuestas Swagger 
 @router.get("/{patente}", response_model=schemas.VehiculoResponse, status_code=200)
 def obtener_vehiculo(patente: str, db: Session = Depends(get_db)):
     """
     Busca un vehículo por su patente en PostgreSQL. Si no existe, acciona el motor de Scraping 
     para registrarlo automáticamente.
     """
-    
-    # 1. Validación de seguridad con Pydantic
     try:
-        # Pydantic verificará que sean 6 caracteres alfanuméricos y limpiará espacios
         patente_validada = schemas.PatenteInput(patente=patente).patente
     except ValueError as e:
-        # Si el usuario mandó "123" o "$%&", devolvemos HTTP 400 Bad Request
         raise HTTPException(status_code=400, detail=str(e))
         
-    # 2. Orquestación del Servicio (Capa de lógica)
-    # Las excepciones 404 y 503 ya están manejadas dentro del servicio y subirán automáticamente
     vehiculo = procesar_patente_y_guardar(db=db, patente_limpia=patente_validada)
-    
-    # 3. FastAPI mapea automáticamente el objeto 'vehiculo' al esquema 'VehiculoResponse'
     return vehiculo

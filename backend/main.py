@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from database import engine, Base
 from routers import vehiculos
 import models
+from fastapi.middleware.cors import CORSMiddleware
 
 # Le dice a SQLAlchemy que lea models.py y cree las tablas en pgAdmin
 Base.metadata.create_all(bind=engine)
@@ -14,6 +15,14 @@ app = FastAPI(
     title="API Cresal-SaaS",
     description="Backend transaccional para gestión de inventario y barrera digital",
     version="1.0.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Permite que cualquier frontend se conecte (ideal para desarrollo local)
+    allow_credentials=True,
+    allow_methods=["*"],  # Permite GET, POST, PUT, DELETE, etc.
+    allow_headers=["*"],
 )
 
 # Un endpoint de prueba para saber que el servidor funciona
