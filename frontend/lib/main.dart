@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'core/theme/app_theme.dart';
-import 'features/auth/presentation/splash_screen.dart';
-import 'features/auth/presentation/pin_login_screen.dart';
-import 'features/home/presentation/home_screen.dart';
+import 'features/auth/presentation/screens/splash_screen.dart';
+import 'features/auth/presentation/screens/pin_login_screen.dart';
+import 'features/home/presentation/screens/home_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -24,7 +24,6 @@ class _MyAppState extends State<MyApp> {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.dark, // Oscuro por defecto industrial
-
       // Pantalla inicial: Splash que decide la ruta según sesión
       home: const SplashScreen(),
 

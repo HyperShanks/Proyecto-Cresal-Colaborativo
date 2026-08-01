@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../../core/theme/tokens/app_palette.dart';
-import '../../../core/theme/tokens/app_typography.dart';
-import '../../auth/services/auth_service.dart';
+import '../../../../core/theme/tokens/app_palette.dart';
+import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../auth/services/auth_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HOME SCREEN — Panel principal protegido por sesión
@@ -41,10 +41,7 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppPalette.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: Text(
-          'Cerrar sesión',
-          style: AppTypography.title,
-        ),
+        title: Text('Cerrar sesión', style: AppTypography.title),
         content: const Text(
           '¿Estás seguro de que deseas cerrar sesión?',
           style: AppTypography.small,
@@ -154,7 +151,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 12),
                 Text(
                   'OPERADOR',
-                  style: AppTypography.title.copyWith(fontSize: 15, letterSpacing: 1.2),
+                  style: AppTypography.title.copyWith(
+                    fontSize: 15,
+                    letterSpacing: 1.2,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 const Text('Zona Norte', style: AppTypography.small),
@@ -193,7 +193,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 icon: const Icon(Icons.logout, size: 20),
                 label: Text(
                   'CERRAR SESIÓN',
-                  style: AppTypography.button.copyWith(fontSize: 14, letterSpacing: 0.8),
+                  style: AppTypography.button.copyWith(
+                    fontSize: 14,
+                    letterSpacing: 0.8,
+                  ),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppPalette.error,
@@ -319,12 +322,7 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               Icon(icon, size: 32, color: AppPalette.primary),
               const SizedBox(width: 16),
-              Expanded(
-                child: Text(
-                  title,
-                  style: AppTypography.cardTitle,
-                ),
-              ),
+              Expanded(child: Text(title, style: AppTypography.cardTitle)),
             ],
           ),
         ),

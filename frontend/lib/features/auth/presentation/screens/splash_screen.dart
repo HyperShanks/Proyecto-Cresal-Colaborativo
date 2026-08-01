@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../../core/theme/tokens/app_palette.dart';
-import '../../../core/theme/tokens/app_typography.dart';
-import '../services/auth_service.dart';
+import '../../../../core/theme/tokens/app_palette.dart';
+import '../../../../core/theme/tokens/app_typography.dart';
+import '../../services/auth_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SPLASH SCREEN — Punto de entrada de la app
