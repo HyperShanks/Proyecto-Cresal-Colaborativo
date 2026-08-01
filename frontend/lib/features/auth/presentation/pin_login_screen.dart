@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/tokens/app_palette.dart';
 import '../../../core/theme/tokens/app_typography.dart';
-import '../../../core/theme/app_components.dart';
 import '../services/auth_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -218,21 +217,22 @@ class _PinLoginScreenState extends State<PinLoginScreen>
               color: hasError
                   ? AppPalette.error
                   : isFilled
-                      ? AppPalette.primary
-                      : AppPalette.surface,
+                  ? AppPalette.primary
+                  : AppPalette.surface,
               border: Border.all(
                 color: hasError
                     ? AppPalette.error
                     : isFilled
-                        ? AppPalette.primary
-                        : AppPalette.neutral,
+                    ? AppPalette.primary
+                    : AppPalette.neutral,
                 width: 2,
               ),
               boxShadow: isFilled
                   ? [
                       BoxShadow(
-                        color: (hasError ? AppPalette.error : AppPalette.primary)
-                            .withValues(alpha: 0.5),
+                        color:
+                            (hasError ? AppPalette.error : AppPalette.primary)
+                                .withValues(alpha: 0.5),
                         blurRadius: 8,
                         spreadRadius: 1,
                       ),
@@ -264,8 +264,11 @@ class _PinLoginScreenState extends State<PinLoginScreen>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.warning_amber_rounded,
-                      color: AppPalette.error, size: 18),
+                  const Icon(
+                    Icons.warning_amber_rounded,
+                    color: AppPalette.error,
+                    size: 18,
+                  ),
                   const SizedBox(width: 8),
                   Flexible(
                     child: Text(
@@ -288,10 +291,18 @@ class _PinLoginScreenState extends State<PinLoginScreen>
   Widget _buildNumericKeypad() {
     const double keypadSpacing = 14;
     final List<String?> keys = [
-      '1', '2', '3',
-      '4', '5', '6',
-      '7', '8', '9',
-      'C', '0', '⌫',
+      '1',
+      '2',
+      '3',
+      '4',
+      '5',
+      '6',
+      '7',
+      '8',
+      '9',
+      'C',
+      '0',
+      '⌫',
     ];
 
     if (_isLoading) {
