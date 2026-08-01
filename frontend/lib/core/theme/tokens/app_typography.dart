@@ -45,4 +45,13 @@ abstract class AppTypography {
     color: AppPalette.textPrimary,
     fontFamily: fontFamily,
   );
+
+  // Tarjetas
+  static const TextStyle cardTitle = TextStyle(
+    fontSize: 13,
+    fontWeight: FontWeight.bold,
+    color: AppPalette.textPrimary,
+    fontFamily: fontFamily,
+    letterSpacing: 0.4,
+  );
 }

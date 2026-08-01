@@ -145,28 +145,17 @@ class _PinLoginScreenState extends State<PinLoginScreen>
               ),
             ],
           ),
-          child: const Center(
+          child: Center(
             child: Text(
               'C',
-              style: TextStyle(
-                fontSize: 42,
-                fontWeight: FontWeight.bold,
-                color: AppPalette.textPrimary,
-                fontFamily: AppTypography.fontFamily,
-              ),
+              style: AppTypography.headline.copyWith(fontSize: 42),
             ),
           ),
         ),
         const SizedBox(height: 20),
-        const Text(
+        Text(
           'CRESAL',
-          style: TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
-            color: AppPalette.textPrimary,
-            letterSpacing: 6,
-            fontFamily: AppTypography.fontFamily,
-          ),
+          style: AppTypography.headline.copyWith(fontSize: 28, letterSpacing: 6),
         ),
         const SizedBox(height: 8),
         const Text(
@@ -383,11 +372,9 @@ class _PinLoginScreenState extends State<PinLoginScreen>
               ? Icon(Icons.backspace_outlined, color: fgColor, size: 22)
               : Text(
                   label ?? '',
-                  style: TextStyle(
+                  style: AppTypography.title.copyWith(
                     fontSize: isSpecial ? 16 : 24,
-                    fontWeight: FontWeight.w600,
                     color: fgColor,
-                    fontFamily: AppTypography.fontFamily,
                   ),
                 ),
         ),
