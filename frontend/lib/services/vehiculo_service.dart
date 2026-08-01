@@ -20,6 +20,25 @@ class VehiculoService {
     }
   }
 
+  Future<Map<String, dynamic>?> buscarDatosPorPatente(String patente) async {
+    try {
+      // Ajusta esta URL a la ruta exacta donde viva tu scraping en FastAPI
+      final url = Uri.parse('$baseUrl/scraping/$patente');
+
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        // Retornamos el diccionario JSON con los datos del vehículo
+        return json.decode(response.body);
+      } else {
+        return null;
+      }
+    } catch (e) {
+      print("Error en scraping: $e");
+      return null;
+    }
+  }
+
   // 2. POST MULTIPART: La nueva forma de enviar datos + foto
   // Fíjate que ahora exige recibir el Map (datos) y el XFile (foto)
   Future<bool> guardarIngreso(

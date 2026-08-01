@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from database import engine, Base
 from routers import vehiculos
 import models
+import os
 from fastapi.middleware.cors import CORSMiddleware
 
 # Le dice a SQLAlchemy que lea models.py y cree las tablas en pgAdmin
@@ -25,6 +26,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ==========================================
+# CONFIGURACIÓN DE IA (Google Cloud Vision)
+# ==========================================
+# Le indicamos a Python la ruta exacta de tu llave criptográfica
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "vision-key.json"
+
 # Un endpoint de prueba para saber que el servidor funciona
 @app.get("/")
 def read_root():
@@ -32,3 +39,4 @@ def read_root():
 
 # Registrar las rutas de la aplicación
 app.include_router(vehiculos.router)
+

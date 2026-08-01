@@ -5,7 +5,9 @@ import schemas
 from services.vehiculo_service import procesar_patente_y_guardar
 from sqlalchemy import func, cast, Integer
 from models import Vehiculo_Origen, Activo_Inventariado, Detalle_Motor, Detalle_Caja_Cambio
+from google.cloud import vision
 import json # <-- Importante para traducir el texto a JSON
+from services.scraping import obtener_datos_vehiculo
 
 # Instanciamos el enrutador con su prefijo oficial (Sub-tarea A)
 router = APIRouter(
@@ -35,7 +37,7 @@ def obtener_siguiente_ingreso(db: Session = Depends(get_db)):
     return {"siguiente_ingreso": str(siguiente_numero)}
 
 @router.post("/", response_model=schemas.VehiculoResponse, status_code=201)
-def registrar_ingreso_vehiculo(
+async def registrar_ingreso_vehiculo(
     # --- NUEVO: Recibimos los datos y la foto por separado (Multipart) ---
     datos: str = Form(...),
     foto: UploadFile = File(...),
@@ -52,28 +54,52 @@ def registrar_ingreso_vehiculo(
         raise HTTPException(status_code=422, detail="Error al leer los datos del vehículo")
 
     # ==========================================
-    # 2. SIMULADOR DE OCR (El Poka-Yoke temporal)
+    # 2. ADUANA POKA-YOKE (GOOGLE CLOUD VISION REAL)
     # ==========================================
     print("\n" + "="*40)
-    print("🛂 INICIANDO VALIDACIÓN POKA-YOKE (ADUANA)")
+    print("🛂 INICIANDO VALIDACIÓN POKA-YOKE CON INTELIGENCIA ARTIFICIAL")
     print("="*40)
-    print(f"📸 Archivo recibido: {foto.filename}")
     
-    # AQUI ESTÁ EL CAMBIO: Usamos datos_dict en lugar de vehiculo_in
-    numero_esperado = datos_dict.get("correlativo_ingreso") 
-    
-    print(f"🔍 Motor OCR Simulado: Analizando imagen en busca del número {numero_esperado}...")
-    
-    # Aquí simulamos que el OCR leyó exitosamente el número correcto
-    numero_leido_por_ocr = numero_esperado 
-    
-    if str(numero_leido_por_ocr) != str(numero_esperado):
-        print("❌ ERROR: La foto no corresponde al vehículo.")
-        raise HTTPException(status_code=400, detail="El número en la foto no coincide.")
-        
-    print("✅ Poka-Yoke superado. Autorizando registro en Base de Datos.")
+    numero_esperado = datos_dict.get("correlativo_ingreso")
+    print(f"📸 Foto recibida: {foto.filename}")
+    print(f"🔍 Buscando el folio {numero_esperado} en la imagen...")
+
+    # A. Leer los bytes físicos de la imagen que envió Flutter
+    contenido_imagen = await foto.read()
+
+    # B. Inicializar el cliente de Google y empaquetar la foto
+    cliente_vision = vision.ImageAnnotatorClient()
+    imagen_vision = vision.Image(content=contenido_imagen)
+
+    # C. Llamar a la nube de Google para extraer los textos
+    respuesta = cliente_vision.text_detection(image=imagen_vision)
+    textos_detectados = respuesta.text_annotations
+
+    # D. Validar que Google no haya devuelto un error de servidor
+    if respuesta.error.message:
+        raise HTTPException(status_code=500, detail=f"Error en Google Vision: {respuesta.error.message}")
+
+    # E. Comprobar si Google encontró letras o números
+    if not textos_detectados:
+        print("❌ ERROR: La IA no detectó ningún texto en la foto.")
+        raise HTTPException(status_code=400, detail="No se detectó texto en la imagen. Escribe más claro.")
+
+    # F. Extraer el texto crudo leído por la IA
+    texto_completo = textos_detectados[0].description
+    print(f"🧠 Texto crudo detectado por la IA:\n{texto_completo}")
+
+    # G. Validación Industrial: ¿El número del sistema está escrito en la foto?
+    if str(numero_esperado) not in texto_completo:
+        print(f"❌ ERROR: El folio {numero_esperado} no está escrito en la foto.")
+        raise HTTPException(status_code=400, detail="Validación Poka-Yoke fallida: La foto no corresponde al vehículo.")
+
+    print("✅ Poka-Yoke superado. IA confirma que la foto es legítima.")
     print("="*40 + "\n")
 
+    # H. REBOBINAR LA FOTO (Paso crítico)
+    # Como leímos la foto para la IA, el cursor de memoria quedó al final.
+    # Debemos regresarlo a cero para que el código de base de datos pueda guardarla después.
+    await foto.seek(0)
 
     # ==========================================
     # 3. GUARDAR EN LA BASE DE DATOS (Tu lógica intacta)
@@ -159,3 +185,31 @@ def obtener_vehiculo(patente: str, db: Session = Depends(get_db)):
         
     vehiculo = procesar_patente_y_guardar(db=db, patente_limpia=patente_validada)
     return vehiculo
+
+@router.get("/scraping/{patente}")
+async def scraping_patente(patente: str):
+    print("\n" + "="*40)
+    print(f"🕵️ BÚSQUEDA SCRAPING INICIADA")
+    print(f"Patente solicitada: {patente}")
+    print("="*40)
+    
+    # 1. Llamamos a TU archivo scraping.py real
+    datos = obtener_datos_vehiculo(patente)
+    
+    # 2. Manejo de errores basado en cómo armaste tu diccionario en scraping.py
+    if "error" in datos:
+        raise HTTPException(status_code=404, detail=datos["error"])
+        
+    if datos.get("marca") == "No encontrado":
+        raise HTTPException(status_code=404, detail="Vehículo no encontrado en registros.")
+        
+    print(f"✅ Scraping exitoso: {datos.get('marca')} {datos.get('modelo')}")
+    
+    # 3. Mapeamos los datos (Tu script usa 'nro_motor', pero Flutter espera 'numero_motor')
+    return {
+        "marca": datos.get("marca", ""),
+        "modelo": datos.get("modelo", ""),
+        "anio": datos.get("anio", ""),
+        "cilindrada": datos.get("cilindrada", ""),
+        "numero_motor": datos.get("nro_motor", "") 
+    }
