@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/tokens/app_palette.dart';
 import 'core/widgets/gradient_button.dart';
+import 'features/auth/presentation/pin_login_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -33,10 +34,15 @@ class _MyAppState extends State<MyApp> {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: _themeMode,
-      home: HomeScreen(
-        onToggleTheme: _toggleTheme,
-        isDarkMode: _themeMode == ThemeMode.dark,
-      ),
+      // Pantalla inicial: Login por PIN
+      home: const PinLoginScreen(),
+      // Rutas nombradas para navegación post-login
+      routes: {
+        '/home': (context) => HomeScreen(
+              onToggleTheme: _toggleTheme,
+              isDarkMode: _themeMode == ThemeMode.dark,
+            ),
+      },
     );
   }
 }
