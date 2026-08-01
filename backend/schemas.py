@@ -6,7 +6,7 @@ from uuid import UUID
 import re
 
 # ==========================================
-# ESQUEMAS PARA VEHÍCULOS (HU-1.3)
+# ESQUEMAS PARA VEHÍCULOS 
 # ==========================================
 
 class VehiculoResponse(BaseModel):
@@ -34,3 +34,32 @@ class PatenteInput(BaseModel):
             raise ValueError("La patente solo debe contener letras mayúsculas y números")
             
         return patente_limpia
+
+
+# ==========================================
+# ESQUEMAS PARA AUTENTICACIÓN 
+# ==========================================
+
+class LoginPINRequest(BaseModel):
+    """Payload de entrada para el login por PIN de operario."""
+    pin: str
+
+
+class UsuarioData(BaseModel):
+    """DTO de salida con los datos públicos del usuario autenticado."""
+    id_usuario: UUID
+    nombres: str
+    apellidos: str
+    rut_usuario: str
+    id_rol: int
+    id_sucursal: int
+
+    class Config:
+        from_attributes = True  # Permite lectura directa desde el modelo SQLAlchemy
+
+
+class TokenResponse(BaseModel):
+    """Respuesta completa del endpoint de login exitoso."""
+    access_token: str
+    token_type: str = "bearer"
+    usuario: UsuarioData

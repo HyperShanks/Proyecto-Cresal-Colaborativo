@@ -3,7 +3,7 @@
 
 from fastapi import FastAPI
 from database import engine, Base
-from routers import vehiculos
+from routers import vehiculos, auth
 import models
 
 # Le dice a SQLAlchemy que lea models.py y cree las tablas en pgAdmin
@@ -23,3 +23,4 @@ def read_root():
 
 # Registrar las rutas de la aplicación
 app.include_router(vehiculos.router)
+app.include_router(auth.router)
