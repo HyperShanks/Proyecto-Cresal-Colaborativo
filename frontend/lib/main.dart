@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'core/theme/app_theme.dart';
-import 'core/theme/tokens/app_palette.dart';
-import 'core/widgets/gradient_button.dart';
-import 'screens/recepcion_vehiculo_screen.dart';
+import 'features/auth/presentation/screens/splash_screen.dart';
+import 'features/auth/presentation/screens/pin_login_screen.dart';
+import 'features/home/presentation/screens/home_screen.dart';
+import 'features/recepcion/presentation/screens/recepcion_vehiculo_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -16,16 +17,6 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  ThemeMode _themeMode = ThemeMode.dark;
-
-  void _toggleTheme() {
-    setState(() {
-      _themeMode = _themeMode == ThemeMode.dark
-          ? ThemeMode.light
-          : ThemeMode.dark;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -33,114 +24,16 @@ class _MyAppState extends State<MyApp> {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
-      themeMode: _themeMode,
-      home: HomeScreen(
-        onToggleTheme: _toggleTheme,
-        isDarkMode: _themeMode == ThemeMode.dark,
-      ),
-    );
-  }
-}
+      themeMode: ThemeMode.dark, // Oscuro por defecto industrial
+      // Pantalla inicial: Splash que decide la ruta según sesión
+      home: const SplashScreen(),
 
-class HomeScreen extends StatefulWidget {
-  final VoidCallback onToggleTheme;
-  final bool isDarkMode;
-
-  const HomeScreen({
-    super.key,
-    required this.onToggleTheme,
-    required this.isDarkMode,
-  });
-
-  @override
-  State<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends State<HomeScreen> {
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Cresal Industrial System'),
-        actions: [
-          IconButton(
-            icon: Icon(widget.isDarkMode ? Icons.light_mode : Icons.dark_mode),
-            onPressed: widget.onToggleTheme,
-            tooltip: 'Cambiar Modo',
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Panel de Control',
-              style: Theme.of(context).textTheme.headlineLarge,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Bienvenido al sistema de operaciones.',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 24),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Estado de Operación',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Sistema funcionando con parámetros óptimos.',
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            const TextField(
-              decoration: InputDecoration(
-                hintText: 'Ingrese código de lote...',
-                prefixIcon: Icon(Icons.search),
-              ),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () {},
-              child: const Text('BOTÓN ESTÁNDAR (44PX)'),
-            ),
-            const SizedBox(height: 16),
-            GradientButton(
-              onPressed: () {},
-              gradient: const LinearGradient(
-                colors: [AppPalette.primary, AppPalette.secondary],
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-              ),
-              child: const Text('BOTÓN GRADIENTE (44PX)'),
-            ),
-            const SizedBox(height: 16), // Espacio
-            ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const RecepcionVehiculoScreen(),
-                  ),
-                );
-              },
-              child: const Text('ABRIR MÓDULO DE RECEPCIÓN (HU-2.2)'),
-            ),
-          ],
-        ),
-      ),
+      // Rutas nombradas de la aplicación
+      routes: {
+        '/login': (context) => const PinLoginScreen(),
+        '/home': (context) => const HomeScreen(),
+        '/recepcion': (context) => const RecepcionVehiculoScreen(),
+      },
     );
   }
 }

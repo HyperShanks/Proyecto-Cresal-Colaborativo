@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import '../core/widgets/gradient_button.dart';
-import '../core/theme/tokens/app_palette.dart';
-import '../services/vehiculo_service.dart';
 import 'package:image_picker/image_picker.dart';
+
+// Rutas relativas actualizadas hacia la capa core y services del feature
+import '../../../../core/widgets/gradient_button.dart';
+import '../../../../core/theme/tokens/app_palette.dart';
+import '../../services/vehiculo_service.dart';
 
 class RecepcionVehiculoScreen extends StatefulWidget {
   const RecepcionVehiculoScreen({super.key});
