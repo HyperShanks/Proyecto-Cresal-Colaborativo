@@ -15,3 +15,4 @@ frontend/.pub-cache/
 # Archivos del sistema operativo
 .DS_Store
 Thumbs.db
+vision-key.json
