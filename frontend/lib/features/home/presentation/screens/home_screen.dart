@@ -264,14 +264,8 @@ class _HomeScreenState extends State<HomeScreen> {
           title: 'RECEPCIÓN DE VEHÍCULO',
           icon: Icons.local_shipping_outlined,
           onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Módulo de Recepción en preparación',
-                  style: AppTypography.body,
-                ),
-              ),
-            );
+            // ¡El enlace mágico hacia tu HU-2.2!
+            Navigator.pushNamed(context, '/recepcion');
           },
         ),
         const SizedBox(height: 16),
