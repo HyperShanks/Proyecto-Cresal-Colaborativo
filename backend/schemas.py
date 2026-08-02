@@ -17,10 +17,9 @@ class VehiculoResponse(BaseModel):
     modelo: str
     anio: int
     traccion: Optional[str] = None
-    
+
     class Config:
         from_attributes = True
-
 
 class PatenteInput(BaseModel):
     patente: str = Field(..., description="Patente del vehículo chileno (6 caracteres alfanuméricos)")
@@ -35,22 +34,47 @@ class PatenteInput(BaseModel):
             raise ValueError("La patente debe tener exactamente 6 caracteres")
         if not re.match(r"^[A-Z0-9]{6}$", patente_limpia):
             raise ValueError("La patente solo debe contener letras mayúsculas y números")
-        
-        return patente_limpia
 
+        return patente_limpia
 
 class VehiculoCreate(BaseModel):
     # Datos del Vehículo (Autocompletados por scraper o copiados del padrón)
     patente: str = Field(..., description="Patente validada del vehículo")
-    marca: str 
+    marca: str
     modelo: str
     anio: int
     traccion: str = Field(..., description="Ej: 4x2, 4x4")
-    
+
     # Datos que FastAPI usará para crear el Detalle_Motor internamente
     cilindrada: str = Field(..., description="Ej: 1.4")
     numero_motor: str = Field(..., description="Número de serie del motor (ej: 10FDCG0803508)")
     combustible: str = Field(..., description="Ej: diesel, gasolina")
-    
+
     # Datos que FastAPI usará para crear el Detalle_Caja_Cambio internamente
     transmision: str = Field(..., description="Ej: mec, at")
+
+# ==========================================
+# ESQUEMAS PARA AUTENTICACIÓN
+# ==========================================
+
+class LoginPINRequest(BaseModel):
+    """Payload de entrada para el login por PIN de operario."""
+    pin: str
+
+class UsuarioData(BaseModel):
+    """DTO de salida con los datos públicos del usuario autenticado."""
+    id_usuario: UUID
+    nombres: str
+    apellidos: str
+    rut_usuario: str
+    id_rol: int
+    id_sucursal: int
+
+    class Config:
+        from_attributes = True  # Permite lectura directa desde el modelo SQLAlchemy
+
+class TokenResponse(BaseModel):
+    """Respuesta completa del endpoint de login exitoso."""
+    access_token: str
+    token_type: str = "bearer"
+    usuario: UsuarioData

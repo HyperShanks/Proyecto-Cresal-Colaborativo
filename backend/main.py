@@ -1,12 +1,9 @@
-# Este archivo es el punto de entrada de la API de Cresal-SaaS. Aquí se inicializa la aplicación FastAPI 
-# y se crean las tablas en la base de datos PostgreSQL usando SQLAlchemy.
-
 from fastapi import FastAPI
 from database import engine, Base
-from routers import vehiculos
+from routers import vehiculos, auth
+from fastapi.middleware.cors import CORSMiddleware
 import models
 import os
-from fastapi.middleware.cors import CORSMiddleware
 
 # Le dice a SQLAlchemy que lea models.py y cree las tablas en pgAdmin
 Base.metadata.create_all(bind=engine)
@@ -18,11 +15,12 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Configuración de CORS para permitir peticiones desde Flutter Web u otros orígenes
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Permite que cualquier frontend se conecte (ideal para desarrollo local)
+    allow_origins=["*"], # Permite que cualquier frontend se conecte (ideal para desarrollo local)
     allow_credentials=True,
-    allow_methods=["*"],  # Permite GET, POST, PUT, DELETE, etc.
+    allow_methods=["*"], # Permite GET, POST, PUT, DELETE, OPTIONS, etc.
     allow_headers=["*"],
 )
 
@@ -32,6 +30,7 @@ app.add_middleware(
 # Le indicamos a Python la ruta exacta de tu llave criptográfica
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "vision-key.json"
 
+
 # Un endpoint de prueba para saber que el servidor funciona
 @app.get("/")
 def read_root():
@@ -39,4 +38,4 @@ def read_root():
 
 # Registrar las rutas de la aplicación
 app.include_router(vehiculos.router)
-
+app.include_router(auth.router)
