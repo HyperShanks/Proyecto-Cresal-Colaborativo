@@ -3,7 +3,8 @@
 
 from fastapi import FastAPI
 from database import engine, Base
-from routers import vehiculos
+from routers import vehiculos, auth
+from fastapi.middleware.cors import CORSMiddleware
 import models
 
 # Le dice a SQLAlchemy que lea models.py y cree las tablas en pgAdmin
@@ -16,6 +17,15 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Configuración de CORS para permitir peticiones desde Flutter Web u otros orígenes
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+)
+
 # Un endpoint de prueba para saber que el servidor funciona
 @app.get("/")
 def read_root():
@@ -23,3 +33,4 @@ def read_root():
 
 # Registrar las rutas de la aplicación
 app.include_router(vehiculos.router)
+app.include_router(auth.router)
