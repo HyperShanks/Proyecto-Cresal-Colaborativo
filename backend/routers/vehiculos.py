@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
 from sqlalchemy.orm import Session
 from database import SessionLocal, get_db
 import schemas
@@ -8,6 +8,32 @@ from models import Vehiculo_Origen, Activo_Inventariado, Detalle_Motor, Detalle_
 from google.cloud import vision
 import json # <-- Importante para traducir el texto a JSON
 from services.scraping import obtener_datos_vehiculo
+import models
+from dotenv import load_dotenv # Para cargar el .env
+from typing import List # Para definir la lista de imágenes en FastAPI
+from supabase import create_client, Client # El cliente de Supabase
+import os
+from dotenv import load_dotenv
+
+# Cargar variables del .env
+load_dotenv()
+
+# Configuración de Supabase (Paso A)
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+
+# Inicializamos el cliente. Usamos "try" por si acaso las llaves están mal.
+try:
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        print("⚠️ ADVERTENCIA: No se encontraron SUPABASE_URL o SUPABASE_KEY en el .env. El Storage no funcionará.")
+        supabase: Client = None
+    else:
+        # Aquí está la magia que conecta FastAPI con Supabase
+        supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+        print(f"✅ Conexión exitosa a Supabase en {SUPABASE_URL}. Cliente de Storage listo.")
+except Exception as e:
+    print(f"❌ ERROR al conectar con Supabase: {str(e)}")
+    supabase = None
 
 # Instanciamos el enrutador con su prefijo oficial (Sub-tarea A)
 router = APIRouter(
@@ -52,6 +78,24 @@ async def registrar_ingreso_vehiculo(
         vehiculo_in = schemas.VehiculoCreate(**datos_dict) 
     except Exception as e:
         raise HTTPException(status_code=422, detail="Error al leer los datos del vehículo")
+
+    # ==========================================
+    # 1.5 NORMALIZACIÓN Y PRE-VALIDACIÓN (HU-2.2)
+    # ==========================================
+    # Limpiamos espacios y forzamos mayúsculas
+    patente_normalizada = vehiculo_in.patente.strip().upper() if vehiculo_in.patente else None
+
+    # Verificamos si la patente ya existe para devolver un error amigable antes de subir la foto
+    if patente_normalizada:
+        vehiculo_existente = db.query(models.Vehiculo_Origen).filter(
+            models.Vehiculo_Origen.patente == patente_normalizada
+        ).first()
+        
+        if vehiculo_existente:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"La patente {patente_normalizada} ya se encuentra registrada en el sistema."
+            )
 
     # ==========================================
     # 2. ADUANA POKA-YOKE (GOOGLE CLOUD VISION REAL)
@@ -102,17 +146,17 @@ async def registrar_ingreso_vehiculo(
     await foto.seek(0)
 
     # ==========================================
-    # 3. GUARDAR EN LA BASE DE DATOS (Tu lógica intacta)
+    # 3. GUARDAR EN LA BASE DE DATOS
     # ==========================================
     try:
         # 3.1 Calcular el correlativo definitivo y bloquearlo
-        max_ingreso = db.query(func.max(cast(Vehiculo_Origen.numero_ingreso, Integer))).scalar()
+        max_ingreso = db.query(func.max(cast(models.Vehiculo_Origen.numero_ingreso, Integer))).scalar()
         nuevo_numero_ingreso = str(1000) if max_ingreso is None else str(max_ingreso + 1)
 
         # 3.2 Crear la "Cabecera" (El Vehículo)
-        nuevo_vehiculo = Vehiculo_Origen(
+        nuevo_vehiculo = models.Vehiculo_Origen(
             numero_ingreso=nuevo_numero_ingreso,
-            patente=vehiculo_in.patente,
+            patente=patente_normalizada, # <-- Usamos la patente normalizada
             marca=vehiculo_in.marca,
             modelo=vehiculo_in.modelo,
             anio=vehiculo_in.anio,
@@ -122,7 +166,7 @@ async def registrar_ingreso_vehiculo(
         db.flush() 
 
         # --- A. MOTOR ---
-        activo_motor = Activo_Inventariado(
+        activo_motor = models.Activo_Inventariado(
             sku_qr_fisico=f"MOT-{nuevo_numero_ingreso}", 
             id_categoria=1, 
             id_estado=5,    
@@ -132,7 +176,7 @@ async def registrar_ingreso_vehiculo(
         db.add(activo_motor)
         db.flush() 
 
-        detalle_motor = Detalle_Motor(
+        detalle_motor = models.Detalle_Motor(
             id_activo=activo_motor.id_activo, 
             numero_motor=vehiculo_in.numero_motor,
             cilindrada=vehiculo_in.cilindrada,
@@ -141,7 +185,7 @@ async def registrar_ingreso_vehiculo(
         db.add(detalle_motor)
 
         # --- B. CAJA DE CAMBIOS ---
-        activo_caja = Activo_Inventariado(
+        activo_caja = models.Activo_Inventariado(
             sku_qr_fisico=f"CAJ-{nuevo_numero_ingreso}",
             id_categoria=2, 
             id_estado=5,
@@ -151,7 +195,7 @@ async def registrar_ingreso_vehiculo(
         db.add(activo_caja)
         db.flush()
 
-        detalle_caja = Detalle_Caja_Cambio(
+        detalle_caja = models.Detalle_Caja_Cambio(
             id_activo=activo_caja.id_activo,
             transmision_tipo=vehiculo_in.transmision
         )
@@ -213,3 +257,303 @@ async def scraping_patente(patente: str):
         "cilindrada": datos.get("cilindrada", ""),
         "numero_motor": datos.get("nro_motor", "") 
     }
+
+
+@router.get("/buscar/{numero_ingreso}")
+def buscar_vehiculo_por_ingreso(numero_ingreso: str, db: Session = Depends(get_db)):
+    """
+    Busca los datos de un vehículo por su número de ingreso (Folio).
+    Retorna los datos del vehículo y los detalles técnicos de sus repuestos (Motor y Caja).
+    """
+    print(f"\n🔍 Buscando inventario para el folio: {numero_ingreso}")
+    
+    # 1. Buscar el vehículo base
+    vehiculo = db.query(models.Vehiculo_Origen).filter(models.Vehiculo_Origen.numero_ingreso == numero_ingreso).first()
+    
+    if not vehiculo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No se encontró un vehículo registrado con el folio '{numero_ingreso}'"
+        )
+
+    # 2. Buscar el activo MOTOR (Categoría 1) y sus detalles
+    activo_motor = db.query(models.Activo_Inventariado).filter(
+        models.Activo_Inventariado.id_vehiculo == vehiculo.id_vehiculo,
+        models.Activo_Inventariado.id_categoria == 1 # Asumiendo que 1 es Motor
+    ).first()
+
+    detalle_motor = None
+    if activo_motor:
+        detalle_motor = db.query(models.Detalle_Motor).filter(
+            models.Detalle_Motor.id_activo == activo_motor.id_activo
+        ).first()
+
+    # 3. Buscar el activo CAJA DE CAMBIOS (Categoría 2) y sus detalles
+    activo_caja = db.query(models.Activo_Inventariado).filter(
+        models.Activo_Inventariado.id_vehiculo == vehiculo.id_vehiculo,
+        models.Activo_Inventariado.id_categoria == 2 # Asumiendo que 2 es Caja
+    ).first()
+
+    detalle_caja = None
+    if activo_caja:
+        detalle_caja = db.query(models.Detalle_Caja_Cambio).filter(
+            models.Detalle_Caja_Cambio.id_activo == activo_caja.id_activo
+        ).first()
+
+    # 4. Empaquetar todo en un JSON amigable para Flutter
+    return {
+        "vehiculo": {
+            "marca": vehiculo.marca,
+            "modelo": vehiculo.modelo,
+            "anio": vehiculo.anio,
+        },
+        "motor": {
+            "id_activo": str(activo_motor.id_activo) if activo_motor else None,
+            "numero_motor": detalle_motor.numero_motor if detalle_motor else "S/A",
+            "cilindrada": detalle_motor.cilindrada if detalle_motor else "S/A",
+            "combustible": detalle_motor.combustible if detalle_motor else "S/A",
+            "transmision_tipo": detalle_motor.transmision_tipo if detalle_motor else "S/A",
+        },
+        "caja_cambios": {
+            "id_activo": str(activo_caja.id_activo) if activo_caja else None,
+            "transmision_tipo": detalle_caja.transmision_tipo if detalle_caja else "S/A",
+        }
+    }
+
+@router.post("/validar-ocr-pieza")
+async def validar_ocr_pieza(
+    numero_ingreso: str = Form(...),
+    imagen_posca: UploadFile = File(...)
+):
+    """
+    [Poka-Yoke Digital] - HU-2.3
+    Recibe la fotografía de la pieza con el número escrito en Posca.
+    Utiliza Google Cloud Vision OCR para verificar que el número físico 
+    coincida con el folio en el sistema.
+    """
+    print("\n" + "="*40)
+    print("🛂 INICIANDO VALIDACIÓN POKA-YOKE DE PIEZA (OCR)")
+    print("="*40)
+    
+    print(f"📸 Foto recibida: {imagen_posca.filename}")
+    print(f"🔍 Buscando el folio '{numero_ingreso}' en la pieza...")
+
+    try:
+        # 1. Leemos los bytes de la imagen enviada desde Flutter
+        contenido_imagen = await imagen_posca.read()
+        
+        # 2. Preparamos el cliente de Google Vision
+        client = vision.ImageAnnotatorClient()
+        image = vision.Image(content=contenido_imagen)
+        
+        # 3. Solicitamos la detección de texto (OCR)
+        response = client.text_detection(image=image)
+        texts = response.text_annotations
+        
+        # Si Google no detecta ningún texto en la foto, rechazamos de inmediato
+        if not texts:
+            print("❌ ERROR: La IA no detectó ningún texto en la fotografía.")
+            print("="*40 + "\n")
+            return {
+                "match": False,
+                "mensaje": "No se detectó ningún texto en la fotografía.",
+                "texto_detectado": ""
+            }
+            
+        # 4. Extraemos el texto completo detectado y lo limpiamos
+        texto_completo = texts[0].description
+        print(f"🧠 Texto crudo detectado por la IA:\n{texto_completo}")
+        
+        # Limpiamos saltos de línea y espacios extras para una búsqueda exacta
+        texto_limpio = texto_completo.replace('\n', '').replace(' ', '').strip()
+        print(f"🧹 Texto procesado (sin espacios/saltos): '{texto_limpio}'")
+        
+        # 5. La magia del Poka-Yoke: ¿El folio está escrito en el metal?
+        match_exitoso = numero_ingreso in texto_limpio
+        
+        if match_exitoso:
+            print(f"✅ Poka-Yoke superado. Se encontró el folio '{numero_ingreso}' en la pieza.")
+        else:
+            print(f"❌ ERROR: El folio '{numero_ingreso}' no coincide con lo escrito en la pieza.")
+            
+        print("="*40 + "\n")
+        
+        return {
+            "match": match_exitoso,
+            "mensaje": "Match exitoso" if match_exitoso else f"El número {numero_ingreso} no coincide con lo escrito en la pieza.",
+            "texto_detectado": texto_limpio # Útil para depurar en el frontend
+        }
+        
+    except Exception as e:
+        print(f"⚠️ ERROR CRÍTICO EN OCR: {str(e)}")
+        print("="*40 + "\n")
+        # Si Google Cloud falla (ej. sin internet), manejamos el error elegantemente
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al procesar el OCR con Google Vision: {str(e)}"
+        )
+
+@router.post("/guardar-paletizado", status_code=201)
+async def guardar_paletizado(
+    # --- Datos de Texto ---
+    numero_ingreso: str = Form(...),
+    tipo_repuesto: str = Form(...), # 'Motor' o 'Caja de Cambios'
+    galpon: str = Form(...),
+    pasillo: str = Form(...),
+    pallet: str = Form(...),
+    observaciones: str = Form(None), # Opcional
+    
+    # --- Lista de hasta 10 fotos comerciales ---
+    fotos_comerciales: List[UploadFile] = File(...),
+    
+    db: Session = Depends(get_db)
+):
+    """
+    [Jefe Final] - HU-2.3
+    1. Sube las fotos comerciales a Supabase Storage.
+    2. Actualiza la ubicación física en PostgreSQL (Activo_Inventariado).
+    3. Registra las URLs de las fotos en PostgreSQL (Multimedia_Activo).
+    """
+    
+    print("\n" + "="*40)
+    print(f"💾 INICIANDO GUARDADO LOGÍSTICO PARA FOLIO {numero_ingreso}")
+    print("="*40)
+
+    # 1. Validación de seguridad: ¿Está configurado Supabase?
+    if not supabase:
+        raise HTTPException(
+            status_code=500,
+            detail="El servicio de almacenamiento de Supabase no está configurado en el servidor."
+        )
+
+    if len(fotos_comerciales) > 10:
+        raise HTTPException(status_code=400, detail="Máximo 10 fotografías comerciales permitidas.")
+
+    # ========================================================
+    # PASO A. SUBIR IMÁGENES A SUPABASE STORAGE
+    # ========================================================
+    urls_fotos_publicas = []
+    
+    # Nombre del "bucket" o contenedor principal en Supabase
+    BUCKET_NAME = "multimedia-activos"
+    
+    # Intentamos crear el bucket si no existe (con Service Role Key podemos hacerlo)
+    try:
+        supabase.storage.create_bucket(BUCKET_NAME, options={"public": True}) # public=True para tener URLs directas
+        print(f"✅ Bucket '{BUCKET_NAME}' creado (o ya existía).")
+    except Exception as e:
+        # Si ya existe, nos dará error, pero está bien. Solo imprimimos para saber.
+        print(f"ℹ️ Info sobre Bucket: {str(e)}")
+        pass
+
+    # Iteramos sobre cada foto comercial que envió Flutter
+    for i, foto in enumerate(fotos_comerciales):
+        try:
+            # Creamos un nombre de archivo único para la nube.
+            # Ejemplo: paletizado/1008/moto_1008_comercial_1.jpg
+            prefijo = "moto" if tipo_repuesto == "Motor" else "caja"
+            nombre_archivo_nube = f"{numero_ingreso}/{prefijo}_{numero_ingreso}_comercial_{i+1}.jpg"
+            
+            # Leemos los bytes físicos de la imagen (que ya viene comprimida desde Flutter)
+            contenido_imagen = await foto.read()
+            
+            # Hacemos la subida física a Supabase Storage
+            # path= es la ruta dentro del bucket, file= es el contenido
+            supabase.storage.from_(BUCKET_NAME).upload(
+                path=nombre_archivo_nube, 
+                file=contenido_imagen,
+                file_options={"cache-control": "3600", "content-type": "image/jpeg"} # Ayuda al navegador
+            )
+            
+            # Obtenemos la URL pública para guardarla después en PostgreSQL
+            url_publica = supabase.storage.from_(BUCKET_NAME).get_public_url(nombre_archivo_nube)
+            urls_fotos_publicas.append(url_publica)
+            
+            print(f"📸 Foto {i+1} subida exitosamente: {nombre_archivo_nube}")
+            
+        except Exception as e:
+            # Si una foto falla, queremos abortar todo y avisar
+            print(f"❌ ERROR al subir foto {i+1}: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Fallo al subir la fotografía comercial {i+1} a la nube. El guardado ha sido abortado."
+            )
+
+    # ========================================================
+    # PASO B. GUARDAR EN POSTGRESQL CON TRANSACCIÓN (SQLAlchemy)
+    # ========================================================
+    try:
+        # 1. Buscar el activo específico (Motor o Caja) usando el Folio
+        # Usamos join para ir de Vehiculo_Origen -> Activo_Inventariado
+        query_activo = db.query(models.Activo_Inventariado).join(models.Vehiculo_Origen).filter(
+            models.Vehiculo_Origen.numero_ingreso == numero_ingreso
+        )
+        
+        # Filtramos por categoría: 1 para Motor, 2 para Caja
+        id_categoria = 1 if tipo_repuesto == "Motor" else 2
+        query_activo = query_activo.filter(models.Activo_Inventariado.id_categoria == id_categoria)
+        
+        activo = query_activo.first()
+        
+        if not activo:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No se encontró el activo '{tipo_repuesto}' asociado al folio {numero_ingreso}."
+            )
+
+        # 2. Actualizar la Ubicación Física y Observaciones (PERSISTENCIA LOGÍSTICA)
+        activo.ubicacion_galpon = galpon   # <-- Corregido
+        activo.ubicacion_pasillo = pasillo # <-- Corregido
+        activo.ubicacion_pallet = pallet # <-- Corregido
+        
+        #Guardar observación
+        if hasattr(activo, 'observacion_estado') and observaciones:
+            activo.observacion_estado = observaciones
+            
+        activo.id_estado = 1
+        
+        db.flush() # Empujamos los cambios a la base de datos pero sin hacer commit aún
+        
+        # 3. Guardar las URLs de las fotos en Multimedia_Activo (PERSISTENCIA COMERCIAL)
+        for url in urls_fotos_publicas:
+            nueva_multimedia = models.Multimedia_Activo(
+                id_activo=activo.id_activo,
+                url_storage=url,
+                tipo_archivo="imagen" # <-- Usamos la columna que realmente existe en tu modelo
+            )
+            db.add(nueva_multimedia)
+            
+        # 4. Confirmar la transacción completa (ACID)
+        db.commit() # Si llegamos aquí, todo salió perfecto (subida y base de datos)
+        
+        print(f"✅ Paletizado guardado exitosamente en base de datos para Folio {numero_ingreso}.")
+        print("="*40 + "\n")
+        
+        return {
+            "status": "success",
+            "mensaje": f"Se ha guardado exitosamente el paletizado del '{tipo_repuesto}' (Folio {numero_ingreso}) con sus ubicación física y {len(urls_fotos_publicas)} fotografías comerciales.",
+            "urls_fotos": urls_fotos_publicas
+        }
+        
+    except Exception as e:
+        # ¡IMPORTANTE! Si la base de datos falla, debemos revertir la subida de fotos a Supabase (Rolback)
+        print(f"⚠️ ERROR CRÍTICO EN BASE DE DATOS: {str(e)}. Iniciando Rollback de Storage.")
+        db.rollback()
+        
+        # Intento de borrado de archivos subidos en Supabase Storage
+        for url in urls_fotos_publicas:
+            try:
+                # Extraemos el nombre del archivo de la URL
+                # Ejemplo URL: .../object/public/multimedia-activos/1008/moto_1008_comercial_1.jpg
+                parts = url.split(f"{BUCKET_NAME}/")
+                if len(parts) == 2:
+                    nombre_archivo = parts[1]
+                    supabase.storage.from_(BUCKET_NAME).remove([nombre_archivo])
+                    print(f"🧹 Archivo revertido de la nube: {nombre_archivo}")
+            except Exception as se:
+                print(f"⚠️ No se pudo revertir el archivo de la nube: {str(se)}")
+                
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error crítico al guardar en PostgreSQL: {str(e)}. Los datos y archivos se han revertido para mantener la integridad."
+        )

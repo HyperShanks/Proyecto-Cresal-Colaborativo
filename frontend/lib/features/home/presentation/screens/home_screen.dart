@@ -273,7 +273,10 @@ class _HomeScreenState extends State<HomeScreen> {
           context: context,
           title: 'PALETIZADO DE PIEZAS',
           icon: Icons.inventory_2_outlined,
-          onTap: () {}, // Futuro módulo
+          onTap: () {
+            // ¡El enlace mágico hacia tu HU-2.3!
+            Navigator.pushNamed(context, '/paletizado');
+          },
         ),
         const SizedBox(height: 16),
         _buildModuleCard(

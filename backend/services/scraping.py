@@ -1,43 +1,53 @@
 import requests
 from bs4 import BeautifulSoup
 import re
-import time  # <--- NUEVA LIBRERÍA IMPORTADA
+import traceback
+import time
+
+# Llave de ScraperAPI obtenida del dashboard
+API_KEY = "13ec1970f5b4a842d75057d4a8136915" 
 
 def obtener_datos_vehiculo(patente: str) -> dict:
     """
-    Realiza scraping a una web pública chilena para obtener los datos de un vehículo.
-    Limpia los datos, extrae la cilindrada mediante Regex, captura el número de motor
-    y cuenta con manejo de errores, timeout de 5 segundos y pausa ética.
+    Realiza scraping a través de un proxy residencial para evadir el Error 403.
     """
-    # Limpieza estricta de la patente de entrada (elimina guiones y espacios)
     patente_limpia = re.sub(r'[^A-Za-z0-9]', '', patente).upper()
     
-    url = "https://www.volanteomaleta.com/patente"
+    # URL base del servicio de Proxy
+    proxy_url = "http://api.scraperapi.com/"
+    target_post_url = "https://www.volanteomaleta.com/patente"
     
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Referer': 'https://www.volanteomaleta.com/'
-    }
-
     payload = {'term': patente_limpia} 
 
     try:
-        # Pausa ética de 1 segundo para no saturar el servidor destino
-        time.sleep(1)
+        print(f"🔄 [PROXY] Iniciando conexión enrutada para la patente: {patente_limpia}")
         
-        # Petición principal POST con timeout estricto de 5 segundos
-        response = requests.post(url, headers=headers, data=payload, timeout=5)
+        # Parámetros que le dicen al proxy a dónde ir
+        params = {
+            'api_key': API_KEY,
+            'url': target_post_url,
+            'keep_headers': 'true', # Ayuda a simular peticiones reales
+            'render': 'true' # Le indica al proxy: "Ejecuta el JavaScript de la página"
+        }
         
-        # Plan B por si falla el método POST en algún momento
+        # Subimos el timeout a 20s porque viajar por un proxy toma un par de segundos extra
+        print("🌐 [PROXY] Ejecutando petición POST a través de ScraperAPI...")
+        response = requests.post(proxy_url, params=params, data=payload, timeout=60)
+        print(f"✅ [PROXY] Respuesta POST recibida. Status code: {response.status_code}")
+        
+        # Plan B por si falla el método POST
         if response.status_code != 200:
-             url_get = f"https://www.volanteomaleta.com/vehiculo/{patente_limpia}"
-             response = requests.get(url_get, headers=headers, timeout=5)
+             print("⚠️ [PROXY] POST falló. Intentando petición GET alternativa...")
+             target_get_url = f"https://www.volanteomaleta.com/vehiculo/{patente_limpia}"
+             params['url'] = target_get_url
+             response = requests.get(proxy_url, params=params, timeout=60)
+             print(f"✅ [PROXY] Respuesta GET recibida. Status code: {response.status_code}")
              
         response.raise_for_status()
         
+        print("📄 [PROXY] Conexión exitosa. Parseando el HTML con BeautifulSoup...")
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # Diccionario optimizado para el flujo del negocio (sin campo color)
         datos_vehiculo = {
             "patente": patente_limpia,
             "marca": "No encontrado",
@@ -50,6 +60,7 @@ def obtener_datos_vehiculo(patente: str) -> dict:
         tabla_datos = soup.find('table')
 
         if tabla_datos:
+            print("📊 [PROXY] Tabla de datos encontrada. Extrayendo información...")
             filas = tabla_datos.find_all('tr')
             
             if len(filas) >= 2:
@@ -58,35 +69,32 @@ def obtener_datos_vehiculo(patente: str) -> dict:
 
                 for i, etiqueta in enumerate(titulos):
                     if i < len(datos):
-                        # Limpieza de espacios en blanco múltiples o saltos de línea
                         valor_limpio = " ".join(datos[i].split())
 
                         if 'marca' in etiqueta:
                             datos_vehiculo['marca'] = valor_limpio
                         elif 'modelo' in etiqueta:
                             datos_vehiculo['modelo'] = valor_limpio
-                            
-                            # Aislamiento de cilindrada mediante Expresión Regular (ej: 1.6, 2.0, 4.0)
                             match_cilindrada = re.search(r'(\d\.\d)', valor_limpio)
                             if match_cilindrada:
                                 datos_vehiculo['cilindrada'] = match_cilindrada.group(1)
-                                
                         elif 'año' in etiqueta or 'ano' in etiqueta:
                             datos_vehiculo['anio'] = valor_limpio
                         elif 'motor' in etiqueta:
                             datos_vehiculo['nro_motor'] = valor_limpio
+            
+            print(f"🎯 [PROXY] Extracción finalizada. Datos: Marca={datos_vehiculo['marca']}, Modelo={datos_vehiculo['modelo']}")
+        else:
+            print("❌ [PROXY] ATENCIÓN: No se encontró la etiqueta <table> en el HTML.")
 
         return datos_vehiculo
 
-    except requests.exceptions.Timeout:
-        return {"error": "Timeout: La fuente externa tardó más de 5 segundos en responder."}
-    except requests.exceptions.RequestException:
-        return {"error": f"Error de conexión: HTTP {response.status_code if 'response' in locals() else 'Desconocido'}"}
     except Exception as e:
-         return {"error": f"Error inesperado procesando el HTML: {str(e)}"}
-
-# Bloque de ejecución local para pruebas rápidas de desarrollo
-if __name__ == "__main__":
-    print("Probando motor de scraping final de producción...")
-    resultado = obtener_datos_vehiculo("BBCL12")
-    print(resultado)
+         print("\n🚨🚨🚨 ERROR CRÍTICO EN SCRAPING 🚨🚨🚨")
+         print(f"Tipo de error: {type(e).__name__}")
+         print(f"Mensaje: {str(e)}")
+         print("Traza de ejecución:")
+         print(traceback.format_exc())
+         print("🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨\n")
+         
+         return {"error": f"Error procesando el scraping: {str(e)}"}

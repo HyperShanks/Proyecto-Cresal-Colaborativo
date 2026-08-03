@@ -141,3 +141,16 @@ class TicketResponse(BaseModel):
 
     class Config:
         from_attributes = True  # Permite lectura directa desde el modelo SQLAlchemy
+class VehiculoInventarioResponse(BaseModel):
+    """Esquema de respuesta para buscar un vehículo por su folio (HU-2.3)"""
+    id_vehiculo: UUID
+    numero_ingreso: str
+    patente: Optional[str] = None
+    marca: str
+    modelo: str
+    anio: int
+    traccion: Optional[str] = None
+    # Aquí podríamos agregar más campos técnicos (motor, caja) a medida que los necesitemos
+    
+    class Config:
+        from_attributes = True
