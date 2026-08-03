@@ -80,6 +80,24 @@ async def registrar_ingreso_vehiculo(
         raise HTTPException(status_code=422, detail="Error al leer los datos del vehículo")
 
     # ==========================================
+    # 1.5 NORMALIZACIÓN Y PRE-VALIDACIÓN (HU-2.2)
+    # ==========================================
+    # Limpiamos espacios y forzamos mayúsculas
+    patente_normalizada = vehiculo_in.patente.strip().upper() if vehiculo_in.patente else None
+
+    # Verificamos si la patente ya existe para devolver un error amigable antes de subir la foto
+    if patente_normalizada:
+        vehiculo_existente = db.query(models.Vehiculo_Origen).filter(
+            models.Vehiculo_Origen.patente == patente_normalizada
+        ).first()
+        
+        if vehiculo_existente:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"La patente {patente_normalizada} ya se encuentra registrada en el sistema."
+            )
+
+    # ==========================================
     # 2. ADUANA POKA-YOKE (GOOGLE CLOUD VISION REAL)
     # ==========================================
     print("\n" + "="*40)
@@ -128,17 +146,17 @@ async def registrar_ingreso_vehiculo(
     await foto.seek(0)
 
     # ==========================================
-    # 3. GUARDAR EN LA BASE DE DATOS (Tu lógica intacta)
+    # 3. GUARDAR EN LA BASE DE DATOS
     # ==========================================
     try:
         # 3.1 Calcular el correlativo definitivo y bloquearlo
-        max_ingreso = db.query(func.max(cast(Vehiculo_Origen.numero_ingreso, Integer))).scalar()
+        max_ingreso = db.query(func.max(cast(models.Vehiculo_Origen.numero_ingreso, Integer))).scalar()
         nuevo_numero_ingreso = str(1000) if max_ingreso is None else str(max_ingreso + 1)
 
         # 3.2 Crear la "Cabecera" (El Vehículo)
-        nuevo_vehiculo = Vehiculo_Origen(
+        nuevo_vehiculo = models.Vehiculo_Origen(
             numero_ingreso=nuevo_numero_ingreso,
-            patente=vehiculo_in.patente,
+            patente=patente_normalizada, # <-- Usamos la patente normalizada
             marca=vehiculo_in.marca,
             modelo=vehiculo_in.modelo,
             anio=vehiculo_in.anio,
@@ -148,7 +166,7 @@ async def registrar_ingreso_vehiculo(
         db.flush() 
 
         # --- A. MOTOR ---
-        activo_motor = Activo_Inventariado(
+        activo_motor = models.Activo_Inventariado(
             sku_qr_fisico=f"MOT-{nuevo_numero_ingreso}", 
             id_categoria=1, 
             id_estado=5,    
@@ -158,7 +176,7 @@ async def registrar_ingreso_vehiculo(
         db.add(activo_motor)
         db.flush() 
 
-        detalle_motor = Detalle_Motor(
+        detalle_motor = models.Detalle_Motor(
             id_activo=activo_motor.id_activo, 
             numero_motor=vehiculo_in.numero_motor,
             cilindrada=vehiculo_in.cilindrada,
@@ -167,7 +185,7 @@ async def registrar_ingreso_vehiculo(
         db.add(detalle_motor)
 
         # --- B. CAJA DE CAMBIOS ---
-        activo_caja = Activo_Inventariado(
+        activo_caja = models.Activo_Inventariado(
             sku_qr_fisico=f"CAJ-{nuevo_numero_ingreso}",
             id_categoria=2, 
             id_estado=5,
@@ -177,7 +195,7 @@ async def registrar_ingreso_vehiculo(
         db.add(activo_caja)
         db.flush()
 
-        detalle_caja = Detalle_Caja_Cambio(
+        detalle_caja = models.Detalle_Caja_Cambio(
             id_activo=activo_caja.id_activo,
             transmision_tipo=vehiculo_in.transmision
         )
