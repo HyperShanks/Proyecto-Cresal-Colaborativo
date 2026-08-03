@@ -10,7 +10,7 @@ class LogisticaService {
 
   static Future<List<TareaAlerta>> obtenerAlertas() async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/alertas'));
+      final response = await http.get(Uri.parse('$baseUrl/tareas-pendientes'));
 
       if (response.statusCode == 200) {
         // Aseguramos decodificación correcta para caracteres especiales/tildes

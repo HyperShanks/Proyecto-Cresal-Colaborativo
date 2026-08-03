@@ -1,17 +1,13 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Optional
 
-# Asegúrate de importar tus modelos y la función de la base de datos correctamente
 from database import get_db
 from models import Activo_Inventariado, Orden_Venta, Detalle_Orden, Vehiculo_Origen
 
 router = APIRouter(prefix="/api/v1/bodega", tags=["Tablero Operativo"])
 
-# ==========================================
-# 1. ESQUEMAS DE RESPUESTA (PYDANTIC)
-# ==========================================
 class TareaAlerta(BaseModel):
     id_tarea: str
     tipo_alerta: str
@@ -22,23 +18,23 @@ class TareaAlerta(BaseModel):
     estado_bloqueo: Optional[str] = None
     accion_requerida: str
 
-
-#==========================================
-#2. ENDPOINT Y MOTOR DE REGLAS
-#==========================================
 @router.get("/tareas-pendientes", response_model=List[TareaAlerta])
-def obtener_tareas_pendientes(db: Session = Depends(get_db)):
+def obtener_tareas_pendientes(
+    # Recibimos la sucursal como parámetro (por defecto 1 para tus pruebas)
+    sucursal_id: int = Query(1, description="ID de la sucursal del bodeguero"),
+    db: Session = Depends(get_db)
+):
     alertas = []
 
     # ---------------------------------------------------------
-    # REGLA 1: Pendiente de Impresión
-    # Condición: Activo está disponible pero qr_impreso es False
+    # REGLA 1: Pendiente de Impresión (FILTRADO POR SUCURSAL)
     # ---------------------------------------------------------
     activos_sin_qr = db.query(Activo_Inventariado, Vehiculo_Origen).join(
         Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo
     ).filter(
         Activo_Inventariado.qr_impreso == False,
-        Activo_Inventariado.estado == 'Activo'
+        Activo_Inventariado.estado == 'Activo',
+        Activo_Inventariado.id_sucursal_actual == sucursal_id # <--- Filtro aplicado
     ).all()
 
     for activo, vehiculo in activos_sin_qr:
@@ -52,8 +48,7 @@ def obtener_tareas_pendientes(db: Session = Depends(get_db)):
         })
 
     # ---------------------------------------------------------
-    # REGLAS 2 Y 3: Preparación de Pedido y Liberación de Salida
-    # Condición: Cruzar Orden_Venta + Detalle_Orden + Activo
+    # REGLAS 2 Y 3: Preparación y Liberación (FILTRADO POR SUCURSAL)
     # ---------------------------------------------------------
     detalles_orden = db.query(Detalle_Orden, Orden_Venta, Activo_Inventariado, Vehiculo_Origen).join(
         Orden_Venta, Detalle_Orden.id_orden == Orden_Venta.id_orden
@@ -62,11 +57,11 @@ def obtener_tareas_pendientes(db: Session = Depends(get_db)):
     ).join(
         Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo
     ).filter(
-        Orden_Venta.estado_orden.in_(["Reservada", "Pagada"])
+        Orden_Venta.estado_orden.in_(["Reservada", "Pagada"]),
+        Activo_Inventariado.id_sucursal_actual == sucursal_id # <--- Filtro aplicado
     ).all()
 
     for detalle, orden, activo, vehiculo in detalles_orden:
-        # Motor de Reglas Logístico
         if orden.monto_pendiente > 0:
             tipo = "PREPARACION"
             bloqueo = "ESPERANDO PAGO EN CAJA"
@@ -85,6 +80,6 @@ def obtener_tareas_pendientes(db: Session = Depends(get_db)):
             "nota_especial": detalle.notas_preparacion,
             "estado_bloqueo": bloqueo,
             "accion_requerida": accion
-         })
+        })
 
     return alertas
