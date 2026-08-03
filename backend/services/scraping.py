@@ -4,7 +4,11 @@ import hmac
 import hashlib
 import json
 import re
+import urllib3
 from bs4 import BeautifulSoup
+
+# Deshabilitar advertencias de SSL no verificado en consola
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 def cifrarData(mensaje):
     """
@@ -21,12 +25,10 @@ def cifrarData(mensaje):
 
 def obtener_datos_vehiculo(patente: str) -> dict:
     """
-    Realiza el scraping a patentechile.com generando los tokens nativamente,
-    sin necesidad de proxies externos ni herramientas de pago.
+    Realiza el scraping a patentechile.com generando los tokens nativamente.
     """
     patente_limpia = re.sub(r'[^A-Za-z0-9]', '', patente).upper()
     
-    # Estructura exacta que espera tu FastAPI
     datos_vehiculo = {
         "patente": patente_limpia,
         "marca": "No encontrado",
@@ -37,22 +39,27 @@ def obtener_datos_vehiculo(patente: str) -> dict:
     }
 
     try:
-        print(f"🔄 [NUEVO SCRAPER] Iniciando búsqueda para: {patente_limpia}")
+        print(f"\n🚀 [SCRAPER 2.0] Iniciando consulta para la patente: {patente_limpia}")
         
-        header = {
-            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "es-ES,es;q=0.9"
         }
-        sesion = requests.session()
+        sesion = requests.Session()
 
-        # 1. Visitar la portada para obtener y almacenar las cookies de sesión iniciales[cite: 1]
-        req = sesion.get("https://www.patentechile.com/", headers=header, verify=False, timeout=15)
+        # Step 1: Obtener cookies
+        print("🌐 [PASO 1] Conectando a patentechile.com para obtener cookies...")
+        start_time = time.time()
+        req_home = sesion.get("https://www.patentechile.com/", headers=headers, verify=False, timeout=8)
+        print(f"   ↳ Respuesta recibida en {round(time.time() - start_time, 2)}s con Status: {req_home.status_code}")
 
-        if req.status_code == 200:
-            header["origin"] = "https://www.patentechile.com"
-            header["referer"] = "https://www.patentechile.com/"
-            header["content-type"] = "application/json"
+        if req_home.status_code == 200:
+            headers["Origin"] = "https://www.patentechile.com"
+            headers["Referer"] = "https://www.patentechile.com/"
+            headers["Content-Type"] = "application/json"
             
-            # 2. Construir los parámetros (placa, fecha/hora y valor cifrado) para el JWT[cite: 1, 2]
+            # Step 2: Generar payload y solicitar JWT
             timestamp = str(int(time.time()))
             valor = f"vehiculo|{patente_limpia}|{timestamp}"
             valorcifrado = cifrarData(valor)
@@ -64,52 +71,76 @@ def obtener_datos_vehiculo(patente: str) -> dict:
                 "z": valorcifrado
             }
 
-            print("🔑 [NUEVO SCRAPER] Solicitando token de acceso...")
-            req = sesion.post("https://www.patentechile.com/v3/token", data=json.dumps(payload), headers=header, verify=False, timeout=15)
+            print("🔑 [PASO 2] Solicitando token de acceso (POST /v3/token)...")
+            start_time = time.time()
+            req_token = sesion.post(
+                "https://www.patentechile.com/v3/token", 
+                data=json.dumps(payload), 
+                headers=headers, 
+                verify=False, 
+                timeout=8
+            )
+            print(f"   ↳ Respuesta token recibida en {round(time.time() - start_time, 2)}s con Status: {req_token.status_code}")
 
-            if req.status_code == 200:
-                rpta = req.json()
+            if req_token.status_code == 200:
+                rpta = req_token.json()
+                print(f"   ↳ JSON del Token: {rpta}")
                 
-                if "status" in rpta and rpta["status"]:
+                if rpta.get("status") and "jwt" in rpta:
                     token = rpta["jwt"]
-                    header["content-type"] = "application/x-www-form-urlencoded"
+                    headers["Content-Type"] = "application/x-www-form-urlencoded"
                     payload_token = f"q={token}"
                     
-                    print("📄 [NUEVO SCRAPER] Token obtenido. Solicitando HTML de resultados[cite: 1]...")
-                    req_data = sesion.post("https://www.patentechile.com/resultados/", data=payload_token, headers=header, verify=False, timeout=15)
+                    # Step 3: Obtener HTML de resultados
+                    print("📄 [PASO 3] Solicitando HTML final (/resultados/)...")
+                    start_time = time.time()
+                    req_data = sesion.post(
+                        "https://www.patentechile.com/resultados/", 
+                        data=payload_token, 
+                        headers=headers, 
+                        verify=False, 
+                        timeout=8
+                    )
+                    print(f"   ↳ HTML recibido en {round(time.time() - start_time, 2)}s con Status: {req_data.status_code}")
 
                     if req_data.status_code == 200:
-                        # 3. Parsear el HTML con BeautifulSoup para extraer los datos de la tabla
                         soup = BeautifulSoup(req_data.text, 'html.parser')
                         filas = soup.find_all('tr')
+                        print(f"📊 [PASO 4] Parseando {len(filas)} filas en la tabla...")
                         
                         for fila in filas:
                             celdas = fila.find_all(['th', 'td'])
-                            # Verificamos que la fila tenga al menos 2 columnas (Etiqueta y Valor)
                             if len(celdas) >= 2:
                                 etiqueta = celdas[0].text.strip().lower()
                                 valor_celda = celdas[1].text.strip()
                                 
-                                # Mapeo de datos basado en las etiquetas de la imagen
-                                if 'marca' == etiqueta:
+                                if 'marca' in etiqueta:
                                     datos_vehiculo['marca'] = valor_celda
-                                elif 'modelo' == etiqueta:
+                                elif 'modelo' in etiqueta:
                                     datos_vehiculo['modelo'] = valor_celda
-                                    # Extraemos la cilindrada (ej: 1.6) del modelo si existe
                                     match_cilindrada = re.search(r'(\d\.\d)', valor_celda)
                                     if match_cilindrada:
                                         datos_vehiculo['cilindrada'] = match_cilindrada.group(1)
-                                elif 'año' == etiqueta:
+                                elif 'año' in etiqueta or 'ano' in etiqueta:
                                     datos_vehiculo['anio'] = valor_celda
-                                elif 'nº motor' in etiqueta or 'motor' in etiqueta:
+                                elif 'motor' in etiqueta:
                                     datos_vehiculo['nro_motor'] = valor_celda
                         
-                        print(f"✅ [NUEVO SCRAPER] Éxito: {datos_vehiculo['marca']} {datos_vehiculo['modelo']}")
+                        print(f"✅ Extracción terminada: Marca={datos_vehiculo['marca']}, Modelo={datos_vehiculo['modelo']}")
                     else:
-                        print("⚠️ [NUEVO SCRAPER] Falló la obtención de la tabla de resultados.")
+                        print("❌ Falló la consulta a /resultados/")
+                else:
+                    print("❌ El token devuelto por el servidor no fue válido o status es False.")
+            else:
+                print(f"❌ Error HTTP en solicitud de token: {req_token.status_code}")
+        else:
+            print(f"❌ Error conectando a la página principal: {req_home.status_code}")
 
+    except requests.exceptions.Timeout:
+        print("⏱️ [ERROR DE TIMEOUT] La página patentechile.com no respondió a tiempo (Timeout 8s).")
+        return {"error": "El servicio de patentes no respondió a tiempo. Intenta nuevamente."}
     except Exception as e:
-        print(f"🚨 Error interno procesando el scraping: {str(e)}")
-        return {"error": f"Error procesando el scraping: {str(e)}"}
+        print(f"🚨 [ERROR INESPERADO]: {str(e)}")
+        return {"error": f"Error en scraping: {str(e)}"}
 
     return datos_vehiculo
