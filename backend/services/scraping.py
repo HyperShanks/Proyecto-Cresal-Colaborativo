@@ -31,7 +31,7 @@ def obtener_datos_vehiculo(patente: str) -> dict:
         
         # Subimos el timeout a 20s porque viajar por un proxy toma un par de segundos extra
         print("🌐 [PROXY] Ejecutando petición POST a través de ScraperAPI...")
-        response = requests.post(proxy_url, params=params, data=payload, timeout=20)
+        response = requests.post(proxy_url, params=params, data=payload, timeout=60)
         print(f"✅ [PROXY] Respuesta POST recibida. Status code: {response.status_code}")
         
         # Plan B por si falla el método POST
@@ -39,7 +39,7 @@ def obtener_datos_vehiculo(patente: str) -> dict:
              print("⚠️ [PROXY] POST falló. Intentando petición GET alternativa...")
              target_get_url = f"https://www.volanteomaleta.com/vehiculo/{patente_limpia}"
              params['url'] = target_get_url
-             response = requests.get(proxy_url, params=params, timeout=20)
+             response = requests.get(proxy_url, params=params, timeout=60)
              print(f"✅ [PROXY] Respuesta GET recibida. Status code: {response.status_code}")
              
         response.raise_for_status()
