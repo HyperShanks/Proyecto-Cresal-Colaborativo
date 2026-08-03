@@ -11,8 +11,8 @@ class AppComponents {
   static ElevatedButtonThemeData get elevatedButtonTheme {
     return ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        // double.infinity permite que el botón ocupe todo el ancho disponible por defecto.
-        minimumSize: const Size(double.infinity, minTouchTarget),
+        // CORRECCIÓN: Evitamos el infinito global para que no rompa las filas (Rows)
+        minimumSize: const Size(64, minTouchTarget),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         backgroundColor: AppPalette.primary,
         foregroundColor: AppPalette.textPrimary,

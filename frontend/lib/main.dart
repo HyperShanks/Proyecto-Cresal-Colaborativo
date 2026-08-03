@@ -4,6 +4,7 @@ import 'features/auth/presentation/screens/splash_screen.dart';
 import 'features/auth/presentation/screens/pin_login_screen.dart';
 import 'features/home/presentation/screens/home_screen.dart';
 import 'features/recepcion/presentation/screens/recepcion_vehiculo_screen.dart';
+import 'features/paletizado/presentation/screens/paletizado_screen.dart'; // Importa la pantalla de paletizado
 
 void main() {
   runApp(const MyApp());
@@ -33,6 +34,8 @@ class _MyAppState extends State<MyApp> {
         '/login': (context) => const PinLoginScreen(),
         '/home': (context) => const HomeScreen(),
         '/recepcion': (context) => const RecepcionVehiculoScreen(),
+        '/paletizado': (context) =>
+            const PaletizadoScreen(), // Nueva ruta para el módulo de paletizado
       },
     );
   }

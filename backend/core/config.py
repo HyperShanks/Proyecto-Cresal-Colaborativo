@@ -10,7 +10,9 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: str = "clave_secreta_para_desarrollo_cambiar_en_produccion"
     TOKEN_EXPIRE_MINUTES: int = 30
     ALGORITHM: str = "HS256"
-
+    SUPABASE_URL: str 
+    SUPABASE_KEY: str
+    
     class Config:
         env_file = ".env"
 
