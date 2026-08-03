@@ -26,7 +26,8 @@ def obtener_datos_vehiculo(patente: str) -> dict:
         params = {
             'api_key': API_KEY,
             'url': target_post_url,
-            'keep_headers': 'true' # Ayuda a simular peticiones reales
+            'keep_headers': 'true', # Ayuda a simular peticiones reales
+            'render': 'true' # Le indica al proxy: "Ejecuta el JavaScript de la página"
         }
         
         # Subimos el timeout a 20s porque viajar por un proxy toma un par de segundos extra
