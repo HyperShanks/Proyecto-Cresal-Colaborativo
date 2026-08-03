@@ -5,7 +5,8 @@ import 'package:flutter/foundation.dart';
 
 class PaletizadoService {
   // Usamos la misma IP de tu red local que configuramos en la HU anterior
-  static const String baseUrl = 'http://192.168.1.85:8000/api/v1/vehiculos';
+  static const String baseUrl =
+      'https://cresal-backend-dev.onrender.com/api/v1/vehiculos';
 
   /// Busca un vehículo por su folio. Retorna un Map con los datos si lo encuentra, o null si falla/no existe.
   Future<Map<String, dynamic>?> buscarVehiculoPorIngreso(
