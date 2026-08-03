@@ -1,43 +1,50 @@
-import cloudscraper # <--- NUEVA LIBRERÍA DE CAMUFLAJE
+import requests
 from bs4 import BeautifulSoup
 import re
-import time 
+import traceback
+import time
+
+# Llave de ScraperAPI obtenida del dashboard
+API_KEY = "13ec1970f5b4a842d75057d4a8136915" 
 
 def obtener_datos_vehiculo(patente: str) -> dict:
     """
-    Realiza scraping a una web pública chilena evadiendo bloqueos de Cloudflare.
-    Limpia los datos, extrae la cilindrada mediante Regex, captura el número de motor
-    y cuenta con manejo de errores, timeout de 10 segundos y pausa ética.
+    Realiza scraping a través de un proxy residencial para evadir el Error 403.
     """
     patente_limpia = re.sub(r'[^A-Za-z0-9]', '', patente).upper()
-    url = "https://www.volanteomaleta.com/patente"
     
-    # INICIALIZAR EL NAVEGADOR CAMUFLADO
-    scraper = cloudscraper.create_scraper() 
+    # URL base del servicio de Proxy
+    proxy_url = "http://api.scraperapi.com/"
+    target_post_url = "https://www.volanteomaleta.com/patente"
     
     payload = {'term': patente_limpia} 
 
     try:
-        print(f"🔄 [SCRAPER] Iniciando conexión para la patente: {patente_limpia}")
+        print(f"🔄 [PROXY] Iniciando conexión enrutada para la patente: {patente_limpia}")
         
-        # Pausa ética
-        time.sleep(1)
+        # Parámetros que le dicen al proxy a dónde ir
+        params = {
+            'api_key': API_KEY,
+            'url': target_post_url,
+            'keep_headers': 'true' # Ayuda a simular peticiones reales
+        }
         
-        # Petición principal POST
-        print(f"🌐 [SCRAPER] Ejecutando petición POST a {url} ...")
-        response = scraper.post(url, data=payload, timeout=10)
-        print(f"✅ [SCRAPER] Respuesta POST recibida. Status code: {response.status_code}")
+        # Subimos el timeout a 20s porque viajar por un proxy toma un par de segundos extra
+        print("🌐 [PROXY] Ejecutando petición POST a través de ScraperAPI...")
+        response = requests.post(proxy_url, params=params, data=payload, timeout=20)
+        print(f"✅ [PROXY] Respuesta POST recibida. Status code: {response.status_code}")
         
         # Plan B por si falla el método POST
         if response.status_code != 200:
-             print("⚠️ [SCRAPER] POST falló. Intentando petición GET alternativa...")
-             url_get = f"https://www.volanteomaleta.com/vehiculo/{patente_limpia}"
-             response = scraper.get(url_get, timeout=10)
-             print(f"✅ [SCRAPER] Respuesta GET recibida. Status code: {response.status_code}")
+             print("⚠️ [PROXY] POST falló. Intentando petición GET alternativa...")
+             target_get_url = f"https://www.volanteomaleta.com/vehiculo/{patente_limpia}"
+             params['url'] = target_get_url
+             response = requests.get(proxy_url, params=params, timeout=20)
+             print(f"✅ [PROXY] Respuesta GET recibida. Status code: {response.status_code}")
              
         response.raise_for_status()
         
-        print("📄 [SCRAPER] Conexión exitosa. Parseando el HTML con BeautifulSoup...")
+        print("📄 [PROXY] Conexión exitosa. Parseando el HTML con BeautifulSoup...")
         soup = BeautifulSoup(response.text, 'html.parser')
         
         datos_vehiculo = {
@@ -52,7 +59,7 @@ def obtener_datos_vehiculo(patente: str) -> dict:
         tabla_datos = soup.find('table')
 
         if tabla_datos:
-            print("📊 [SCRAPER] Tabla de datos encontrada. Extrayendo información...")
+            print("📊 [PROXY] Tabla de datos encontrada. Extrayendo información...")
             filas = tabla_datos.find_all('tr')
             
             if len(filas) >= 2:
@@ -75,17 +82,13 @@ def obtener_datos_vehiculo(patente: str) -> dict:
                         elif 'motor' in etiqueta:
                             datos_vehiculo['nro_motor'] = valor_limpio
             
-            print(f"🎯 [SCRAPER] Extracción finalizada. Datos preliminares: Marca={datos_vehiculo['marca']}, Modelo={datos_vehiculo['modelo']}")
+            print(f"🎯 [PROXY] Extracción finalizada. Datos: Marca={datos_vehiculo['marca']}, Modelo={datos_vehiculo['modelo']}")
         else:
-            print("❌ [SCRAPER] ATENCIÓN: No se encontró la etiqueta <table> en el HTML.")
-            print("🔍 [SCRAPER] Imprimiendo los primeros 500 caracteres de la página devuelta para diagnóstico:")
-            print(response.text[:500])
+            print("❌ [PROXY] ATENCIÓN: No se encontró la etiqueta <table> en el HTML.")
 
         return datos_vehiculo
 
     except Exception as e:
-         # Esto imprimirá la línea exacta y el motivo real del fallo en Render
-         import traceback
          print("\n🚨🚨🚨 ERROR CRÍTICO EN SCRAPING 🚨🚨🚨")
          print(f"Tipo de error: {type(e).__name__}")
          print(f"Mensaje: {str(e)}")
