@@ -167,8 +167,8 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: Icons.confirmation_number_outlined,
             label: 'TICKET',
             onTap: () {
-              Navigator.of(context).pop();
-              // TODO: navegar a la pantalla de tickets
+              Navigator.of(context).pop(); // Cierra el Drawer
+              Navigator.of(context).pushNamed('/tickets');
             },
           ),
           _buildDrawerItem(

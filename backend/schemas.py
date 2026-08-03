@@ -54,7 +54,7 @@ class VehiculoCreate(BaseModel):
     transmision: str = Field(..., description="Ej: mec, at")
 
 # ==========================================
-# ESQUEMAS PARA AUTENTICACIÓN
+# ESQUEMAS PARA AUTENTICACIÓN (HU-2.1 LOGIN-PIN)
 # ==========================================
 
 class LoginPINRequest(BaseModel):
@@ -78,3 +78,66 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     usuario: UsuarioData
+
+# ==========================================
+# ESQUEMAS PARA TICKETS DE SOPORTE (HU-2.7)
+# ==========================================
+
+class TicketCreate(BaseModel):
+    """
+    Payload de entrada para crear un ticket de soporte.
+    El id_usuario_creador NO se incluye aquí: se inyecta automáticamente
+    desde el JWT del operario autenticado en el endpoint.
+    """
+    tipo_ticket: str = Field(
+        ...,
+        description="Categoría del ticket: 'Bug', 'Consulta', 'Incidencia', etc.",
+        max_length=50,
+    )
+    prioridad: str = Field(
+        "Media",
+        description="Nivel de urgencia: 'Baja', 'Media', 'Alta', 'Crítica'",
+        max_length=20,
+    )
+    asunto: str = Field(
+        ...,
+        description="Título corto y descriptivo del problema",
+        max_length=150,
+    )
+    descripcion: str = Field(
+        ...,
+        description="Detalle completo del problema o solicitud",
+        max_length=1000,
+    )
+    tabla_referencia: Optional[str] = Field(
+        None,
+        description="Nombre de la tabla relacionada (ej: 'Vehiculo_Origen')",
+        max_length=50,
+    )
+    id_referencia: Optional[UUID] = Field(
+        None,
+        description="UUID del registro relacionado en tabla_referencia",
+    )
+
+
+class TicketResponse(BaseModel):
+    """
+    DTO de salida con todos los campos del ticket.
+    Refleja 1:1 la tabla Ticket_Soporte de la base de datos.
+    """
+    id_ticket: UUID
+    tipo_ticket: str
+    prioridad: str
+    asunto: str
+    descripcion: str
+    id_usuario_creador: UUID
+    id_usuario_resolutor: Optional[UUID] = None
+    tabla_referencia: Optional[str] = None
+    id_referencia: Optional[UUID] = None
+    estado_ticket: str
+    observacion_cierre: Optional[str] = None
+    fecha_creacion: Optional[str] = None  # Serializado como ISO string para compatibilidad Flutter
+    fecha_cierre: Optional[str] = None
+
+    class Config:
+        from_attributes = True  # Permite lectura directa desde el modelo SQLAlchemy
