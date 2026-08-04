@@ -154,3 +154,64 @@ class VehiculoInventarioResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+# ==========================================
+# ESQUEMAS PARA PALETIZADO Y QR (HU-2.4)
+# ==========================================
+
+class PaletizadoResponse(BaseModel):
+    """
+    DTO de respuesta enriquecido del endpoint POST /guardar-paletizado.
+
+    Incluye el SKU/QR del activo recién guardado y todos los datos necesarios
+    para que Flutter renderice el widget EtiquetaTermicaWidget sin requerir
+    una segunda llamada a la API.
+
+    Campos del vehículo origen
+    --------------------------
+    numero_ingreso : N° correlativo del vehículo (se imprime en grande en la etiqueta).
+    marca, modelo, anio : Datos básicos del vehículo origen.
+
+    Campos técnicos (pueden ser None si el activo no tiene Detalle_Motor)
+    ----------------------------------------------------------------------
+    cilindrada, combustible, transmision, numero_motor : Detalles técnicos.
+    Se serializan como None y Flutter los muestra como "N/A".
+
+    Campos de identidad digital
+    ---------------------------
+    sku_qr_fisico : El código SKU generado (ej. "MOT-8A2F"). Es el contenido del QR.
+    qr_impreso    : Siempre False al momento del guardado inicial.
+
+    Campos de ubicación
+    -------------------
+    galpon, pasillo, pallet : Ubicación física del activo en el almacén.
+
+    Campos de respaldo (igual que la respuesta anterior para no romper integraciones)
+    ----------------------------------------------------------------------------------
+    status, mensaje, urls_fotos : Compatibilidad con la respuesta anterior.
+    """
+    # ── Identidad digital (HU-2.4) ──────────────────────────────────────────
+    sku_qr_fisico: str
+    qr_impreso: bool = False
+
+    # ── Datos del vehículo origen ────────────────────────────────────────────
+    numero_ingreso: str
+    marca: str
+    modelo: str
+    anio: int
+
+    # ── Detalles técnicos del activo (opcionales, None → "N/A" en Flutter) ──
+    cilindrada: Optional[str] = None
+    combustible: Optional[str] = None
+    transmision: Optional[str] = None
+    numero_motor: Optional[str] = None
+
+    # ── Ubicación física en el almacén ───────────────────────────────────────
+    galpon: str
+    pasillo: str
+    pallet: str
+
+    # ── Compatibilidad con respuesta anterior (no rompe integraciones) ────────
+    status: str = "success"
+    mensaje: str = ""
+    urls_fotos: list = []

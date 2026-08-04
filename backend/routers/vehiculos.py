@@ -8,6 +8,7 @@ from models import Vehiculo_Origen, Activo_Inventariado, Detalle_Motor, Detalle_
 from google.cloud import vision
 import json # <-- Importante para traducir el texto a JSON
 from services.scraping import obtener_datos_vehiculo
+from services.sku_service import generar_sku  # HU-2.4: Generación de identidad digital
 import models
 from dotenv import load_dotenv # Para cargar el .env
 from typing import List # Para definir la lista de imágenes en FastAPI
@@ -166,15 +167,25 @@ async def registrar_ingreso_vehiculo(
         db.flush() 
 
         # --- A. MOTOR ---
+        # HU-2.4: Primero persistimos sin SKU para obtener el UUID generado por PostgreSQL,
+        # luego usamos ese UUID para construir el SKU con el servicio dedicado.
         activo_motor = models.Activo_Inventariado(
-            sku_qr_fisico=f"MOT-{nuevo_numero_ingreso}", 
+            sku_qr_fisico="PENDIENTE",  # Placeholder temporal, se actualiza justo debajo
             id_categoria=1, 
             id_estado=5,    
             id_sucursal_actual=1, 
-            id_vehiculo=nuevo_vehiculo.id_vehiculo 
+            id_vehiculo=nuevo_vehiculo.id_vehiculo,
+            qr_impreso=False  # HU-2.4: False por defecto hasta que el operario imprima
         )
         db.add(activo_motor)
-        db.flush() 
+        db.flush()  # Flush para que PostgreSQL asigne el UUID
+
+        # HU-2.4: Generamos el SKU real usando el UUID ya asignado
+        activo_motor.sku_qr_fisico = generar_sku(
+            nombre_categoria="Motor",
+            id_activo_str=str(activo_motor.id_activo)
+        )
+        db.flush()
 
         detalle_motor = models.Detalle_Motor(
             id_activo=activo_motor.id_activo, 
@@ -186,13 +197,21 @@ async def registrar_ingreso_vehiculo(
 
         # --- B. CAJA DE CAMBIOS ---
         activo_caja = models.Activo_Inventariado(
-            sku_qr_fisico=f"CAJ-{nuevo_numero_ingreso}",
+            sku_qr_fisico="PENDIENTE",  # Placeholder temporal
             id_categoria=2, 
             id_estado=5,
             id_sucursal_actual=1,
-            id_vehiculo=nuevo_vehiculo.id_vehiculo
+            id_vehiculo=nuevo_vehiculo.id_vehiculo,
+            qr_impreso=False  # HU-2.4: False por defecto
         )
         db.add(activo_caja)
+        db.flush()  # Flush para obtener UUID
+
+        # HU-2.4: Generamos el SKU real para la caja
+        activo_caja.sku_qr_fisico = generar_sku(
+            nombre_categoria="Caja de Cambio",
+            id_activo_str=str(activo_caja.id_activo)
+        )
         db.flush()
 
         detalle_caja = models.Detalle_Caja_Cambio(
@@ -393,7 +412,7 @@ async def validar_ocr_pieza(
             detail=f"Error al procesar el OCR con Google Vision: {str(e)}"
         )
 
-@router.post("/guardar-paletizado", status_code=201)
+@router.post("/guardar-paletizado", response_model=schemas.PaletizadoResponse, status_code=201)
 async def guardar_paletizado(
     # --- Datos de Texto ---
     numero_ingreso: str = Form(...),
@@ -417,7 +436,17 @@ async def guardar_paletizado(
     
     print("\n" + "="*40)
     print(f"💾 INICIANDO GUARDADO LOGÍSTICO PARA FOLIO {numero_ingreso}")
+    print(f"DEBUG TIPO_REPUESTO: {repr(tipo_repuesto)}")
     print("="*40)
+
+    # 0. Normalización tolerante de categoría
+    tipo_clean = tipo_repuesto.strip().lower() if tipo_repuesto else ""
+    if "motor" in tipo_clean:
+        id_categoria_objetivo = 1
+    elif "caja" in tipo_clean or "transmision" in tipo_clean:
+        id_categoria_objetivo = 2
+    else:
+        id_categoria_objetivo = 1 if tipo_repuesto == "Motor" else 2
 
     # 1. Validación de seguridad: ¿Está configurado Supabase?
     if not supabase:
@@ -451,7 +480,7 @@ async def guardar_paletizado(
         try:
             # Creamos un nombre de archivo único para la nube.
             # Ejemplo: paletizado/1008/moto_1008_comercial_1.jpg
-            prefijo = "moto" if tipo_repuesto == "Motor" else "caja"
+            prefijo = "moto" if id_categoria_objetivo == 1 else "caja"
             nombre_archivo_nube = f"{numero_ingreso}/{prefijo}_{numero_ingreso}_comercial_{i+1}.jpg"
             
             # Leemos los bytes físicos de la imagen (que ya viene comprimida desde Flutter)
@@ -489,24 +518,23 @@ async def guardar_paletizado(
             models.Vehiculo_Origen.numero_ingreso == numero_ingreso
         )
         
-        # Filtramos por categoría: 1 para Motor, 2 para Caja
-        id_categoria = 1 if tipo_repuesto == "Motor" else 2
-        query_activo = query_activo.filter(models.Activo_Inventariado.id_categoria == id_categoria)
+        # Filtramos por categoría usando la normalización tolerante
+        query_activo = query_activo.filter(models.Activo_Inventariado.id_categoria == id_categoria_objetivo)
         
         activo = query_activo.first()
         
         if not activo:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"No se encontró el activo '{tipo_repuesto}' asociado al folio {numero_ingreso}."
+                detail=f"No se encontró el activo '{tipo_repuesto}' (categoría {id_categoria_objetivo}) asociado al folio {numero_ingreso}."
             )
 
         # 2. Actualizar la Ubicación Física y Observaciones (PERSISTENCIA LOGÍSTICA)
-        activo.ubicacion_galpon = galpon   # <-- Corregido
-        activo.ubicacion_pasillo = pasillo # <-- Corregido
-        activo.ubicacion_pallet = pallet # <-- Corregido
+        activo.ubicacion_galpon = galpon
+        activo.ubicacion_pasillo = pasillo
+        activo.ubicacion_pallet = pallet
         
-        #Guardar observación
+        # Guardar observación
         if hasattr(activo, 'observacion_estado') and observaciones:
             activo.observacion_estado = observaciones
             
@@ -525,15 +553,62 @@ async def guardar_paletizado(
             
         # 4. Confirmar la transacción completa (ACID)
         db.commit() # Si llegamos aquí, todo salió perfecto (subida y base de datos)
+        db.refresh(activo)  # HU-2.4: Refrescar para obtener el SKU definitivo y ubicación desde la BD
         
         print(f"✅ Paletizado guardado exitosamente en base de datos para Folio {numero_ingreso}.")
+        print(f"🏷️  SKU asignado: {activo.sku_qr_fisico}")
+        print(f"📍 Ubicación persistida: Galpón {activo.ubicacion_galpon}, Pasillo {activo.ubicacion_pasillo}, Pallet {activo.ubicacion_pallet}")
         print("="*40 + "\n")
-        
-        return {
-            "status": "success",
-            "mensaje": f"Se ha guardado exitosamente el paletizado del '{tipo_repuesto}' (Folio {numero_ingreso}) con sus ubicación física y {len(urls_fotos_publicas)} fotografías comerciales.",
-            "urls_fotos": urls_fotos_publicas
-        }
+
+        # ── HU-2.4: Recopilar datos técnicos para la etiqueta térmica ──────────
+        detalle_motor_resp = None
+        detalle_caja_resp = None
+
+        if activo.id_categoria == 1:
+            detalle_motor_resp = db.query(models.Detalle_Motor).filter(
+                models.Detalle_Motor.id_activo == activo.id_activo
+            ).first()
+        elif activo.id_categoria == 2:
+            detalle_caja_resp = db.query(models.Detalle_Caja_Cambio).filter(
+                models.Detalle_Caja_Cambio.id_activo == activo.id_activo
+            ).first()
+
+        # Obtenemos los datos del vehículo origen para la etiqueta
+        vehiculo_origen = db.query(models.Vehiculo_Origen).filter(
+            models.Vehiculo_Origen.id_vehiculo == activo.id_vehiculo
+        ).first()
+
+        # Determinamos la transmisión adecuada (motor o caja)
+        transmision_val = None
+        if detalle_motor_resp and detalle_motor_resp.transmision_tipo:
+            transmision_val = detalle_motor_resp.transmision_tipo
+        elif detalle_caja_resp and detalle_caja_resp.transmision_tipo:
+            transmision_val = detalle_caja_resp.transmision_tipo
+
+        # ── HU-2.4: Respuesta enriquecida con PaletizadoResponse ────────────────
+        return schemas.PaletizadoResponse(
+            # Identidad digital
+            sku_qr_fisico=activo.sku_qr_fisico,
+            qr_impreso=activo.qr_impreso,
+            # Datos del vehículo origen
+            numero_ingreso=vehiculo_origen.numero_ingreso if vehiculo_origen else numero_ingreso,
+            marca=vehiculo_origen.marca if vehiculo_origen else "",
+            modelo=vehiculo_origen.modelo if vehiculo_origen else "",
+            anio=vehiculo_origen.anio if vehiculo_origen else 0,
+            # Detalles técnicos (None si no aplica → Flutter muestra "N/A")
+            cilindrada=detalle_motor_resp.cilindrada if detalle_motor_resp else None,
+            combustible=detalle_motor_resp.combustible if detalle_motor_resp else None,
+            transmision=transmision_val,
+            numero_motor=detalle_motor_resp.numero_motor if detalle_motor_resp else None,
+            # Ubicación física confirmada desde la instancia de BD
+            galpon=activo.ubicacion_galpon or galpon,
+            pasillo=activo.ubicacion_pasillo or pasillo,
+            pallet=activo.ubicacion_pallet or pallet,
+            # Compatibilidad
+            status="success",
+            mensaje=f"Paletizado del '{tipo_repuesto}' (Folio {numero_ingreso}) guardado con {len(urls_fotos_publicas)} fotos.",
+            urls_fotos=urls_fotos_publicas,
+        )
         
     except Exception as e:
         # ¡IMPORTANTE! Si la base de datos falla, debemos revertir la subida de fotos a Supabase (Rolback)
