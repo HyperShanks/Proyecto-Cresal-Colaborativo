@@ -4,9 +4,10 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 class PaletizadoService {
-  // Usamos la misma IP de tu red local que configuramos en la HU anterior
-  static const String baseUrl =
-      'https://cresal-backend-dev.onrender.com/api/v1/vehiculos';
+  // Servidor local (10.0.2.2 para Emulador Android / localhost para Windows-Web)
+  static const String baseUrl = 'http://192.168.1.4:8000/api/v1/vehiculos';
+  // static const String baseUrl =
+  //     'https://cresal-backend-dev.onrender.com/api/v1/vehiculos';
 
   /// Busca un vehículo por su folio. Retorna un Map con los datos si lo encuentra, o null si falla/no existe.
   Future<Map<String, dynamic>?> buscarVehiculoPorIngreso(
@@ -63,14 +64,21 @@ class PaletizadoService {
     }
   }
 
-  /// Envía los datos logísticos y la lista de fotos a FastAPI
-  Future<bool> guardarPaletizadoDefinitivo({
+  /// Envía los datos logísticos y la lista de fotos a FastAPI.
+  ///
+  /// HU-2.4: Ahora devuelve [Map<String, dynamic>?] en lugar de [bool],
+  /// con el payload completo de [PaletizadoResponse] del backend.
+  /// Esto incluye [sku_qr_fisico] y todos los datos para construir
+  /// el [EtiquetaTermicaWidget] sin una segunda llamada a la API.
+  ///
+  /// Retorna [null] en caso de error de red o respuesta no exitosa.
+  Future<Map<String, dynamic>?> guardarPaletizadoDefinitivo({
     required String folio,
     required String tipoRepuesto,
     required String galpon,
     required String pasillo,
     required String pallet,
-    String? observaciones, // <-- Parámetro opcional agregado
+    String? observaciones, // <-- Parámetro opcional
     required List<File> fotos,
   }) async {
     try {
@@ -101,16 +109,17 @@ class PaletizadoService {
       final response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 201) {
-        return true;
+        // HU-2.4: Devolvemos el Map completo (contiene sku_qr_fisico y datos de etiqueta)
+        return jsonDecode(response.body) as Map<String, dynamic>;
       } else {
-        print(
+        debugPrint(
           "Error al guardar paletizado: ${response.statusCode} - ${response.body}",
         );
-        return false;
+        return null;
       }
     } catch (e) {
-      print("Error de conexión en guardarPaletizadoDefinitivo: $e");
-      return false;
+      debugPrint("Error de conexión en guardarPaletizadoDefinitivo: $e");
+      return null;
     }
   }
 }

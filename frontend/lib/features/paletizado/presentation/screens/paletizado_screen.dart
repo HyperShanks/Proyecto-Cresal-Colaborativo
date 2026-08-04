@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../services/paletizado_service.dart';
+import '../../services/print_service.dart'; // HU-2.4: Servicio de impresión Bluetooth
+import '../../domain/models/etiqueta_data.dart'; // HU-2.4: Modelo de dominio de etiqueta
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 
@@ -142,15 +144,14 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
             .toList();
 
         // Llamamos al guardado que envía los textos y las fotos
-        final guardadoExitoso = await _paletizadoService
+        final resultadoGuardado = await _paletizadoService
             .guardarPaletizadoDefinitivo(
               folio: folio,
               tipoRepuesto: _tipoActivoSeleccionado,
               galpon: _galponController.text.trim(),
               pasillo: _pasilloController.text.trim(),
               pallet: _palletController.text.trim(),
-              observaciones: _observacionController.text
-                  .trim(), // <-- ENVIAMOS LA OBSERVACIÓN AQUÍ
+              observaciones: _observacionController.text.trim(),
               fotos: fotosArchivos,
             );
 
@@ -159,25 +160,16 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
         // Terminó el proceso pesado, detenemos el indicador de carga del botón
         setState(() => _isValidatingOCR = false);
 
-        if (guardadoExitoso) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('¡Paletizado y Catálogo guardados con éxito!'),
-              backgroundColor: AppPalette.primary,
-            ),
-          );
+        // HU-2.4: En lugar de un simple SnackBar, mostramos el modal interactivo
+        if (resultadoGuardado != null) {
+          // Construimos el EtiquetaData a partir de la respuesta enriquecida del backend
+          final etiqueta = EtiquetaData.fromJson(resultadoGuardado);
 
-          // Limpiamos la pantalla para el siguiente repuesto
-          setState(() {
-            _searchController.clear();
-            _vehiculoEncontrado = false;
-            _galponController.clear();
-            _pasilloController.clear();
-            _palletController.clear();
-            _observacionController.clear(); // <-- LIMPIAMOS LA OBSERVACIÓN AQUÍ
-            _fotosComerciales.clear();
-            _tipoActivoSeleccionado = 'Motor';
-          });
+          // Limpiamos el formulario ANTES de mostrar el modal
+          _limpiarFormulario();
+
+          // Mostramos el Modal Bottom Sheet con las 3 opciones
+          await _mostrarModalExito(etiqueta);
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -213,6 +205,40 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
         ),
       );
     }
+  }
+
+  /// Limpia todos los campos del formulario para preparar la siguiente operación.
+  void _limpiarFormulario() {
+    setState(() {
+      _searchController.clear();
+      _vehiculoEncontrado = false;
+      _galponController.clear();
+      _pasilloController.clear();
+      _palletController.clear();
+      _observacionController.clear();
+      _fotosComerciales.clear();
+      _tipoActivoSeleccionado = 'Motor';
+    });
+  }
+
+  // ── HU-2.4: Modal Bottom Sheet con 3 acciones post-guardado ──────────────
+  //
+  // Este método es el punto de entrada para el flujo de identidad digital.
+  // Se invoca SOLO en caso de éxito, inyectando el [EtiquetaData] ya construido
+  // para que los 3 botones puedan actuar sin otra llamada al backend.
+  Future<void> _mostrarModalExito(EtiquetaData etiqueta) async {
+    if (!mounted) return;
+
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: AppPalette.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      isDismissible: false, // El operario debe elegir conscientemente
+      enableDrag: false,
+      builder: (ctx) => _ModalExitoContent(etiqueta: etiqueta),
+    );
   }
 
   Future<void> _buscarVehiculo() async {
@@ -589,6 +615,151 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon, color: AppPalette.primary, size: 20),
+      ),
+    );
+  }
+}
+
+// ── HU-2.4: Widget del Modal Bottom Sheet con las 3 acciones ─────────────────
+//
+// Se extrae como un StatefulWidget separado para encapsular su propio estado
+// (ej. el indicador de carga del botón "Imprimir Ahora") sin contaminar
+// el estado de PaletizadoScreen.
+class _ModalExitoContent extends StatefulWidget {
+  final EtiquetaData etiqueta;
+  const _ModalExitoContent({required this.etiqueta});
+
+  @override
+  State<_ModalExitoContent> createState() => _ModalExitoContentState();
+}
+
+class _ModalExitoContentState extends State<_ModalExitoContent> {
+  bool _isConnecting = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ── Indicador visual del modal ────────────────────────────────────
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: AppPalette.neutral,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // ── Ícono y título de éxito ───────────────────────────────────────
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: const BoxDecoration(
+              color: AppPalette.success,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.check, color: Colors.white, size: 32),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            '¡Activo Guardado!',
+            style: AppTypography.headline.copyWith(color: AppPalette.textPrimary),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'SKU: ${widget.etiqueta.skuQrFisico}  •  Folio N° ${widget.etiqueta.numeroIngreso}',
+            style: AppTypography.small.copyWith(color: AppPalette.primary),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 32),
+
+          // ── Botón 1: Imprimir Ahora ───────────────────────────────────────
+          // FUTURO: Aquí se activará la impresión real via flutter_blue_plus.
+          // Ver: lib/features/paletizado/services/print_service.dart
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _isConnecting
+                  ? null
+                  : () async {
+                      setState(() => _isConnecting = true);
+
+                      // Stub: imprime en consola "Conectando a Bluetooth..."
+                      // FUTURO: PrintService invocará flutter_blue_plus aquí.
+                      await PrintService.imprimirEtiqueta(widget.etiqueta);
+
+                      if (!mounted) return;
+                      setState(() => _isConnecting = false);
+
+                      Navigator.of(context).pop(); // Cierra el modal
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('🖨️ Impresión enviada (Bluetooth stub).'),
+                          backgroundColor: AppPalette.primary,
+                        ),
+                      );
+                    },
+              icon: _isConnecting
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : const Icon(Icons.print, color: Colors.white),
+              label: Text(
+                _isConnecting ? 'CONECTANDO...' : 'Imprimir Ahora',
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppPalette.primary,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // ── Botón 2: Ver Tarjeta ──────────────────────────────────────────
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () {
+                Navigator.of(context).pop(); // Cierra el modal
+                // Navega a la pantalla de previsualización con los datos de la etiqueta
+                Navigator.of(context).pushNamed(
+                  '/etiqueta-preview',
+                  arguments: widget.etiqueta,
+                );
+              },
+              icon: const Icon(Icons.qr_code_2, color: AppPalette.primary),
+              label: const Text(
+                'Ver Tarjeta',
+                style: TextStyle(color: AppPalette.primary),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: AppPalette.primary),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // ── Botón 3: Hacerlo más tarde ────────────────────────────────────
+          SizedBox(
+            width: double.infinity,
+            child: TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text(
+                'Hacerlo más tarde',
+                style: TextStyle(color: AppPalette.textSecondary),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

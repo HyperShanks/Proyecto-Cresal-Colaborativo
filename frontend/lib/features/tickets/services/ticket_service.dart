@@ -8,8 +8,7 @@ import '../models/ticket_model.dart';
 //   • localhost → Windows / Web / macOS desktop
 //   • 10.0.2.2  → Emulador Android (apunta al localhost del PC host)
 // ─────────────────────────────────────────────────────────────────────────────
-const String _baseUrl = 'http://localhost:8000/api/v1/tickets';
-//const String _baseUrl = 'http://192.168.1.85:8000/api/v1/tickets';
+const String _baseUrl = 'http://192.168.1.4:8000/api/v1/tickets';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RESULTADO TIPADO DE OPERACIONES DE TICKET

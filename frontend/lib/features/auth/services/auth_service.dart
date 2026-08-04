@@ -8,7 +8,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 //   • 127.0.0.1 → Windows / Web / macOS desktop
 // ─────────────────────────────────────────────────────────────────────────────
 
-const String _baseUrl = 'https://cresal-backend-dev.onrender.com/api/auth';
+const String _baseUrl = 'http://192.168.1.4:8000/api/auth';
 
 // Clave bajo la que se guarda el JWT en el almacenamiento seguro
 const String _tokenKey = 'access_token';
