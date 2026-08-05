@@ -283,7 +283,9 @@ class _HomeScreenState extends State<HomeScreen> {
           context: context,
           title: 'BUSCADOR DE INVENTARIO',
           icon: Icons.search,
-          onTap: () {}, // Futuro módulo
+          onTap: () {
+            Navigator.pushNamed(context, '/buscador');
+          },
         ),
         const SizedBox(height: 16),
         _buildModuleCard(

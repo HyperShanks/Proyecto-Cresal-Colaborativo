@@ -7,6 +7,7 @@ import 'features/recepcion/presentation/screens/recepcion_vehiculo_screen.dart';
 import 'features/tickets/presentation/screens/tickets_screen.dart';
 import 'features/paletizado/presentation/screens/paletizado_screen.dart'; // Importa la pantalla de paletizado
 import 'features/alertas/presentation/screens/alertas_screen.dart'; // Importa la pantalla de alertas
+import 'features/inventario/presentation/screens/buscador_screen.dart'; // Importa la pantalla de buscador
 
 void main() {
   runApp(const MyApp());
@@ -41,6 +42,8 @@ class _MyAppState extends State<MyApp> {
             const PaletizadoScreen(), // Nueva ruta para el módulo de paletizado
         '/alertas': (context) =>
             const AlertasScreen(), // Nueva ruta para el módulo de alertas
+        '/buscador': (context) =>
+            const BuscadorScreen(), // Nueva ruta para el módulo de buscador
       },
     );
   }
