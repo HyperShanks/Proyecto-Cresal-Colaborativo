@@ -7,7 +7,8 @@ import 'package:flutter/foundation.dart';
 
 class PaletizadoService {
   // Ajusta esta IP según tu entorno
-  static const String baseUrl = 'http://192.168.1.4:8000/api/v1/vehiculos';
+  static const String baseUrl =
+      'https://cresal-backend-dev.onrender.com/api/v1/vehiculos';
 
   Future<Map<String, dynamic>?> buscarVehiculoPorIngreso(
     String numeroIngreso,
