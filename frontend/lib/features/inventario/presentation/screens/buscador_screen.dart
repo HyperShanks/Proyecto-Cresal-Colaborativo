@@ -39,9 +39,52 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
 
   Future<void> _cargarFiltros() async {
     try {
-      final opciones = await InventarioService.obtenerOpcionesFiltros();
+      final opciones = await InventarioService.obtenerOpcionesFiltros(
+        categoria: _categoria,
+        pasillo: _pasillo,
+        pallet: _pallet,
+        marca: _marca,
+        modelo: _modelo,
+        cilindrada: _cilindrada,
+        combustible: _combustible,
+        transmision: _transmision,
+      );
+
       setState(() {
         _opcionesFiltros = opciones;
+
+        // ⚠️ ANTI-CRASHEO: Si el valor que el usuario tenía elegido ya no existe
+        // en las nuevas opciones generadas (ej. Suzuki ya no está en el pasillo 1),
+        // lo reiniciamos a nulo ("Todas").
+        if (_pasillo != null &&
+            !(opciones['pasillos']?.contains(_pasillo) ?? false)) {
+          _pasillo = null;
+        }
+        if (_pallet != null &&
+            !(opciones['pallets']?.contains(_pallet) ?? false)) {
+          _pallet = null;
+        }
+        if (_marca != null &&
+            !(opciones['marcas']?.contains(_marca) ?? false)) {
+          _marca = null;
+        }
+        if (_modelo != null &&
+            !(opciones['modelos']?.contains(_modelo) ?? false)) {
+          _modelo = null;
+        }
+        if (_cilindrada != null &&
+            !(opciones['cilindradas']?.contains(_cilindrada) ?? false)) {
+          _cilindrada = null;
+        }
+        if (_combustible != null &&
+            !(opciones['combustibles']?.contains(_combustible) ?? false)) {
+          _combustible = null;
+        }
+        if (_transmision != null &&
+            !(opciones['transmisiones']?.contains(_transmision) ?? false)) {
+          _transmision = null;
+        }
+
         _isLoadingFiltros = false;
       });
     } catch (e) {
@@ -92,7 +135,10 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
                       'CAJAS DE CAMBIO',
                       'ACCESORIOS',
                     ], // Esto suele ser fijo
-                    onChanged: (val) => setState(() => _categoria = val),
+                    onChanged: (val) {
+                      setState(() => _categoria = val);
+                      _cargarFiltros(); // ⚠️ Refresca las opciones
+                    },
                     isFeatured: true,
                   ),
                   const SizedBox(height: 16),
@@ -105,7 +151,10 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
                           label: 'PASILLO',
                           value: _pasillo,
                           items: _opcionesFiltros['pasillos'] ?? [],
-                          onChanged: (val) => setState(() => _pasillo = val),
+                          onChanged: (val) {
+                            setState(() => _pasillo = val);
+                            _cargarFiltros(); // ⚠️ Refresca las opciones
+                          },
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -114,7 +163,10 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
                           label: 'PALLET',
                           value: _pallet,
                           items: _opcionesFiltros['pallets'] ?? [],
-                          onChanged: (val) => setState(() => _pallet = val),
+                          onChanged: (val) {
+                            setState(() => _pallet = val);
+                            _cargarFiltros(); // ⚠️ Refresca las opciones
+                          },
                         ),
                       ),
                     ],
@@ -127,7 +179,10 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
                           label: 'MARCA',
                           value: _marca,
                           items: _opcionesFiltros['marcas'] ?? [],
-                          onChanged: (val) => setState(() => _marca = val),
+                          onChanged: (val) {
+                            setState(() => _marca = val);
+                            _cargarFiltros(); // ⚠️ Refresca las opciones
+                          },
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -136,7 +191,10 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
                           label: 'MODELO',
                           value: _modelo,
                           items: _opcionesFiltros['modelos'] ?? [],
-                          onChanged: (val) => setState(() => _modelo = val),
+                          onChanged: (val) {
+                            setState(() => _modelo = val);
+                            _cargarFiltros(); // ⚠️ Refresca las opciones
+                          },
                         ),
                       ),
                     ],
@@ -146,21 +204,30 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
                     label: 'CILINDRADA',
                     value: _cilindrada,
                     items: _opcionesFiltros['cilindradas'] ?? [],
-                    onChanged: (val) => setState(() => _cilindrada = val),
+                    onChanged: (val) {
+                      setState(() => _cilindrada = val);
+                      _cargarFiltros(); // ⚠️ Refresca las opciones
+                    },
                   ),
                   const SizedBox(height: 12),
                   _buildDropdown(
                     label: 'TIPO COMBUSTIBLE',
                     value: _combustible,
                     items: _opcionesFiltros['combustibles'] ?? [],
-                    onChanged: (val) => setState(() => _combustible = val),
+                    onChanged: (val) {
+                      setState(() => _combustible = val);
+                      _cargarFiltros(); // ⚠️ Refresca las opciones
+                    },
                   ),
                   const SizedBox(height: 12),
                   _buildDropdown(
                     label: 'TIPO TRANSMISIÓN',
                     value: _transmision,
                     items: _opcionesFiltros['transmisiones'] ?? [],
-                    onChanged: (val) => setState(() => _transmision = val),
+                    onChanged: (val) {
+                      setState(() => _transmision = val);
+                      _cargarFiltros(); // ⚠️ Refresca las opciones
+                    },
                   ),
 
                   const SizedBox(height: 24),
@@ -258,6 +325,7 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
                               _transmision = null;
                               _resultados = [];
                             });
+                            _cargarFiltros(); // ⚠️ Refresca las opciones al limpiar
                           },
                           icon: const Icon(
                             Icons.clear_all,
@@ -292,7 +360,7 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
                   // ── ITERACIÓN DE TARJETAS DE RESULTADO ──
                   ..._resultados.map((item) {
                     return ResultadoCard(
-                      itemCompleto: item, // ⚠️ PASAMOS TODO EL ITEM AQUÍ
+                      itemCompleto: item,
                       marca: item['marca']?.toString() ?? 'Desconocida',
                       modelo: item['modelo']?.toString() ?? 'Desconocido',
                       sku: item['sku']?.toString() ?? 'S/N',
@@ -328,7 +396,6 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
         ),
         const SizedBox(height: 6),
         DropdownButtonFormField<String>(
-          // ⚠️ FIX: isExpanded en true evita el error "RenderFlex overflowed by 89 pixels"
           isExpanded: true,
           value: value,
           decoration: InputDecoration(
@@ -362,8 +429,6 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
             Icons.keyboard_arrow_down,
             color: isFeatured ? AppPalette.primary : AppPalette.textSecondary,
           ),
-          // ⚠️ FIX: Eliminamos el 'hint' e inyectamos un valor nulo manual en los items
-          // Esto permite que el usuario pueda "deseleccionar" un filtro dejándolo en "TODAS"
           items: [
             DropdownMenuItem<String>(
               value: null,
@@ -383,8 +448,7 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
                 child: Text(
                   item,
                   style: AppTypography.body,
-                  overflow: TextOverflow
-                      .ellipsis, // Protección extra contra desbordes
+                  overflow: TextOverflow.ellipsis,
                 ),
               );
             }).toList(),

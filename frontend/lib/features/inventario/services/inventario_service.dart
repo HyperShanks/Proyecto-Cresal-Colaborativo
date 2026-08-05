@@ -7,22 +7,42 @@ class InventarioService {
   static const String baseUrl =
       'https://cresal-backend-dev.onrender.com/api/v1/inventario';
 
-  static Future<Map<String, List<String>>> obtenerOpcionesFiltros() async {
+  static Future<Map<String, List<String>>> obtenerOpcionesFiltros({
+    String? categoria,
+    String? pasillo,
+    String? pallet,
+    String? marca,
+    String? modelo,
+    String? cilindrada,
+    String? combustible,
+    String? transmision,
+  }) async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/opciones-filtros'));
+      final Map<String, String> queryParams = {};
+
+      if (categoria != null) queryParams['categoria'] = categoria;
+      if (pasillo != null) queryParams['pasillo'] = pasillo;
+      if (pallet != null) queryParams['pallet'] = pallet;
+      if (marca != null) queryParams['marca'] = marca;
+      if (modelo != null) queryParams['modelo'] = modelo;
+      if (cilindrada != null) queryParams['cilindrada'] = cilindrada;
+      if (combustible != null) queryParams['combustible'] = combustible;
+      if (transmision != null) queryParams['transmision'] = transmision;
+
+      final uri = Uri.parse(
+        '$baseUrl/opciones-filtros',
+      ).replace(queryParameters: queryParams);
+      final response = await http.get(uri);
 
       if (response.statusCode == 200) {
-        // Decodificamos el JSON
         final Map<String, dynamic> data = jsonDecode(
           utf8.decode(response.bodyBytes),
         );
-
-        // Convertimos las listas dinámicas a List<String> fuertemente tipadas
         return data.map(
           (key, value) => MapEntry(key, List<String>.from(value)),
         );
       } else {
-        throw Exception('Error al cargar filtros: ${response.statusCode}');
+        throw Exception('Error al cargar filtros dinámicos');
       }
     } catch (e) {
       throw Exception('Error de conexión: $e');

@@ -9,22 +9,70 @@ from models import Activo_Inventariado, Vehiculo_Origen, Detalle_Motor, Multimed
 router = APIRouter(prefix="/api/v1/inventario", tags=["Buscador Inventario"])
 
 @router.get("/opciones-filtros", response_model=Dict[str, List[str]])
-def obtener_opciones_filtros(db: Session = Depends(get_db)):
-    # 1. Extraer marcas y modelos únicos
-    marcas = db.query(func.upper(Vehiculo_Origen.marca)).distinct().all()
-    modelos = db.query(func.upper(Vehiculo_Origen.modelo)).distinct().all()
-    
-    # 2. Extraer datos técnicos
-    cilindradas = db.query(func.upper(Detalle_Motor.cilindrada)).distinct().all()
-    combustibles = db.query(func.upper(Detalle_Motor.combustible)).distinct().all()
-    transmisiones = db.query(func.upper(Detalle_Motor.transmision_tipo)).distinct().all()
+def obtener_opciones_filtros(
+    categoria: Optional[str] = None,
+    pasillo: Optional[str] = None,
+    pallet: Optional[str] = None,
+    marca: Optional[str] = None,
+    modelo: Optional[str] = None,
+    cilindrada: Optional[str] = None,
+    combustible: Optional[str] = None,
+    transmision: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    # 1. Base idéntica a la del buscador (incluyendo joins y exclusión de estados)
+    query = db.query(Activo_Inventariado, Vehiculo_Origen, Detalle_Motor, Detalle_Caja_Cambio).outerjoin(
+        Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo
+    ).outerjoin(
+        Detalle_Motor, Activo_Inventariado.id_activo == Detalle_Motor.id_activo
+    ).outerjoin(
+        Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo
+    )
 
-    # 3. Extraer ubicaciones físicas
-    pasillos = db.query(func.upper(Activo_Inventariado.ubicacion_pasillo)).distinct().all()
-    pallets = db.query(func.upper(Activo_Inventariado.ubicacion_pallet)).distinct().all()
+    query = query.filter(Activo_Inventariado.id_estado.notin_([3, 5]))
+
+    # 2. Aplicamos los filtros actuales que el usuario ya seleccionó
+    if categoria:
+        cat_upper = categoria.upper()
+        if cat_upper == "MOTORES":
+            query = query.filter(Activo_Inventariado.id_categoria == 1)
+        elif cat_upper == "CAJAS DE CAMBIO":
+            query = query.filter(Activo_Inventariado.id_categoria == 2)
+        elif cat_upper == "ACCESORIOS":
+            query = query.filter(Activo_Inventariado.id_categoria == 3)
+
+    if pasillo:
+        query = query.filter(func.upper(Activo_Inventariado.ubicacion_pasillo) == pasillo.upper())
+    if pallet:
+        query = query.filter(func.upper(Activo_Inventariado.ubicacion_pallet) == pallet.upper())
+    if marca:
+        query = query.filter(func.upper(Vehiculo_Origen.marca) == marca.upper())
+    if modelo:
+        query = query.filter(func.upper(Vehiculo_Origen.modelo) == modelo.upper())
+    if cilindrada:
+        query = query.filter(func.upper(Detalle_Motor.cilindrada) == cilindrada.upper())
+    if combustible:
+        query = query.filter(func.upper(Detalle_Motor.combustible) == combustible.upper())
+    if transmision:
+        query = query.filter(
+            (func.upper(Detalle_Motor.transmision_tipo) == transmision.upper()) | 
+            (func.upper(Detalle_Caja_Cambio.transmision_tipo) == transmision.upper())
+        )
+
+    # 3. Extraemos las opciones ÚNICAS de lo que quedó después de filtrar
+    marcas = query.with_entities(func.upper(Vehiculo_Origen.marca)).distinct().all()
+    modelos = query.with_entities(func.upper(Vehiculo_Origen.modelo)).distinct().all()
+    cilindradas = query.with_entities(func.upper(Detalle_Motor.cilindrada)).distinct().all()
+    combustibles = query.with_entities(func.upper(Detalle_Motor.combustible)).distinct().all()
+    pasillos = query.with_entities(func.upper(Activo_Inventariado.ubicacion_pasillo)).distinct().all()
+    pallets = query.with_entities(func.upper(Activo_Inventariado.ubicacion_pallet)).distinct().all()
+    
+    trans_motor = query.with_entities(func.upper(Detalle_Motor.transmision_tipo)).distinct().all()
+    trans_caja = query.with_entities(func.upper(Detalle_Caja_Cambio.transmision_tipo)).distinct().all()
+    transmisiones = list(set(trans_motor + trans_caja)) # Unimos ambas transmisiones
 
     def limpiar_lista(query_result):
-        return sorted([item[0] for item in query_result if item[0] is not None and str(item[0]).strip() != ""])
+        return sorted(list(set([item[0] for item in query_result if item[0] is not None and str(item[0]).strip() != ""])))
 
     return {
         "marcas": limpiar_lista(marcas),
