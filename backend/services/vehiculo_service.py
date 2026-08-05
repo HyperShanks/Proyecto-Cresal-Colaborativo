@@ -1,50 +1,24 @@
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
-from services.scraping import obtener_datos_vehiculo
 import models
-import uuid
+# ⚠️ Se eliminó la importación de scraping que causaba el error 500 en Render
+# y también eliminamos 'uuid' porque ya no creamos registros de contingencia aquí.
 
 def procesar_patente_y_guardar(db: Session, patente_limpia: str):
     """
-    Orquesta la lógica de negocio para obtener datos de un vehículo.
-    Busca en base de datos primero, aplica web scraping como contingencia y guarda el registro.
+    Verifica si un vehículo ya existe en la base de datos local.
+    (El web scraping y la creación del registro ahora los maneja la PDA vía Flutter).
     """
-    # 1. Consulta inicial a PostgreSQL
+    # 1. Consulta a PostgreSQL
     vehiculo_db = db.query(models.Vehiculo_Origen).filter(models.Vehiculo_Origen.patente == patente_limpia).first()
     
     if vehiculo_db:
         return vehiculo_db 
         
-    # 2. Ejecución del Scraper externo
-    datos_scraper = obtener_datos_vehiculo(patente_limpia)
-    
-    # Manejo de fallos del scraper (Timeout, caídas o no encontrado)
-    if "error" in datos_scraper:
-         raise HTTPException(status_code=503, detail="Servicio externo no disponible o error de conexión temporal.")
-    
-    if datos_scraper.get("marca") == "No encontrado":
-         raise HTTPException(status_code=404, detail=f"La patente {patente_limpia} no arrojó resultados válidos.")
-
-    # 3. Mapeo y Persistencia en Supabase
-    nuevo_ingreso = f"ING-{str(uuid.uuid4())[:6].upper()}"
-
-    # Convertimos el año a entero, manejando posibles errores si el scraper trae texto corrupto
-    try:
-        anio_int = int(datos_scraper["anio"])
-    except ValueError:
-        anio_int = 0
-
-    nuevo_vehiculo = models.Vehiculo_Origen(
-        numero_ingreso=nuevo_ingreso,
-        patente=patente_limpia,
-        vin=None, # El scraper actual no extrae VIN
-        marca=datos_scraper["marca"],
-        modelo=datos_scraper["modelo"],
-        anio=anio_int
+    # 2. Si no existe, simplemente lanzamos un 404. 
+    # El Frontend en Flutter atrapará esto, hará el scraping nativo con la PDA 
+    # y luego enviará los datos correctos por el endpoint POST para guardarlo.
+    raise HTTPException(
+        status_code=404, 
+        detail=f"El vehículo con patente {patente_limpia} no está registrado en el sistema."
     )
-    
-    db.add(nuevo_vehiculo)
-    db.commit()
-    db.refresh(nuevo_vehiculo)
-    
-    return nuevo_vehiculo
