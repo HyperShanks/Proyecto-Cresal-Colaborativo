@@ -8,10 +8,8 @@ import '../models/ticket_model.dart';
 //   • localhost → Windows / Web / macOS desktop
 //   • 10.0.2.2  → Emulador Android (apunta al localhost del PC host)
 // ─────────────────────────────────────────────────────────────────────────────
-//const String _baseUrl = 'http://localhost:8000/api/v1/tickets';
-const String _baseUrl =
-    'https://cresal-backend-dev.onrender.com/api/v1/tickets';
-//const String _baseUrl = 'http://192.168.1.85:8000/api/v1/tickets';
+const String baseUrl = 'https://cresal-backend-dev.onrender.com/api/v1/tickets';
+//const String baseUrl = 'http://192.168.1.4:8000/api/v1/tickets';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RESULTADO TIPADO DE OPERACIONES DE TICKET
@@ -67,7 +65,7 @@ class TicketService {
   }) async {
     try {
       final headers = await _buildAuthHeaders();
-      final uri = Uri.parse(_baseUrl);
+      final uri = Uri.parse(baseUrl);
 
       final body = jsonEncode({
         'tipo_ticket': tipoTicket,
@@ -110,7 +108,7 @@ class TicketService {
   static Future<List<TicketModel>> obtenerMisTickets() async {
     try {
       final headers = await _buildAuthHeaders();
-      final uri = Uri.parse('$_baseUrl/mis-tickets');
+      final uri = Uri.parse('$baseUrl/mis-tickets');
 
       final response = await http
           .get(uri, headers: headers)

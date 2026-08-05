@@ -154,3 +154,4 @@ class VehiculoInventarioResponse(BaseModel):
     
     class Config:
         from_attributes = True
+

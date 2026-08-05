@@ -180,7 +180,8 @@ async def registrar_ingreso_vehiculo(
             id_activo=activo_motor.id_activo, 
             numero_motor=vehiculo_in.numero_motor,
             cilindrada=vehiculo_in.cilindrada,
-            combustible=vehiculo_in.combustible
+            combustible=vehiculo_in.combustible,
+            transmision_tipo=vehiculo_in.transmision
         )
         db.add(detalle_motor)
 
@@ -409,10 +410,11 @@ async def guardar_paletizado(
     db: Session = Depends(get_db)
 ):
     """
-    [Jefe Final] - HU-2.3
+    [Jefe Final] - HU-2.3 & HU-2.4
     1. Sube las fotos comerciales a Supabase Storage.
     2. Actualiza la ubicación física en PostgreSQL (Activo_Inventariado).
     3. Registra las URLs de las fotos en PostgreSQL (Multimedia_Activo).
+    4. Retorna payload enriquecido para generar la etiqueta térmica (HU-2.4).
     """
     
     print("\n" + "="*40)
@@ -434,45 +436,33 @@ async def guardar_paletizado(
     # ========================================================
     urls_fotos_publicas = []
     
-    # Nombre del "bucket" o contenedor principal en Supabase
     BUCKET_NAME = "multimedia-activos"
     
-    # Intentamos crear el bucket si no existe (con Service Role Key podemos hacerlo)
     try:
-        supabase.storage.create_bucket(BUCKET_NAME, options={"public": True}) # public=True para tener URLs directas
+        supabase.storage.create_bucket(BUCKET_NAME, options={"public": True})
         print(f"✅ Bucket '{BUCKET_NAME}' creado (o ya existía).")
     except Exception as e:
-        # Si ya existe, nos dará error, pero está bien. Solo imprimimos para saber.
         print(f"ℹ️ Info sobre Bucket: {str(e)}")
         pass
 
-    # Iteramos sobre cada foto comercial que envió Flutter
     for i, foto in enumerate(fotos_comerciales):
         try:
-            # Creamos un nombre de archivo único para la nube.
-            # Ejemplo: paletizado/1008/moto_1008_comercial_1.jpg
             prefijo = "moto" if tipo_repuesto == "Motor" else "caja"
             nombre_archivo_nube = f"{numero_ingreso}/{prefijo}_{numero_ingreso}_comercial_{i+1}.jpg"
-            
-            # Leemos los bytes físicos de la imagen (que ya viene comprimida desde Flutter)
             contenido_imagen = await foto.read()
             
-            # Hacemos la subida física a Supabase Storage
-            # path= es la ruta dentro del bucket, file= es el contenido
             supabase.storage.from_(BUCKET_NAME).upload(
                 path=nombre_archivo_nube, 
                 file=contenido_imagen,
-                file_options={"cache-control": "3600", "content-type": "image/jpeg"} # Ayuda al navegador
+                file_options={"cache-control": "3600", "content-type": "image/jpeg"}
             )
             
-            # Obtenemos la URL pública para guardarla después en PostgreSQL
             url_publica = supabase.storage.from_(BUCKET_NAME).get_public_url(nombre_archivo_nube)
             urls_fotos_publicas.append(url_publica)
             
             print(f"📸 Foto {i+1} subida exitosamente: {nombre_archivo_nube}")
             
         except Exception as e:
-            # Si una foto falla, queremos abortar todo y avisar
             print(f"❌ ERROR al subir foto {i+1}: {str(e)}")
             raise HTTPException(
                 status_code=500,
@@ -484,12 +474,10 @@ async def guardar_paletizado(
     # ========================================================
     try:
         # 1. Buscar el activo específico (Motor o Caja) usando el Folio
-        # Usamos join para ir de Vehiculo_Origen -> Activo_Inventariado
         query_activo = db.query(models.Activo_Inventariado).join(models.Vehiculo_Origen).filter(
             models.Vehiculo_Origen.numero_ingreso == numero_ingreso
         )
         
-        # Filtramos por categoría: 1 para Motor, 2 para Caja
         id_categoria = 1 if tipo_repuesto == "Motor" else 2
         query_activo = query_activo.filter(models.Activo_Inventariado.id_categoria == id_categoria)
         
@@ -502,49 +490,91 @@ async def guardar_paletizado(
             )
 
         # 2. Actualizar la Ubicación Física y Observaciones (PERSISTENCIA LOGÍSTICA)
-        activo.ubicacion_galpon = galpon   # <-- Corregido
-        activo.ubicacion_pasillo = pasillo # <-- Corregido
-        activo.ubicacion_pallet = pallet # <-- Corregido
+        activo.ubicacion_galpon = galpon
+        activo.ubicacion_pasillo = pasillo
+        activo.ubicacion_pallet = pallet
         
-        #Guardar observación
         if hasattr(activo, 'observacion_estado') and observaciones:
             activo.observacion_estado = observaciones
             
         activo.id_estado = 1
         
-        db.flush() # Empujamos los cambios a la base de datos pero sin hacer commit aún
+        db.flush()
         
         # 3. Guardar las URLs de las fotos en Multimedia_Activo (PERSISTENCIA COMERCIAL)
         for url in urls_fotos_publicas:
             nueva_multimedia = models.Multimedia_Activo(
                 id_activo=activo.id_activo,
                 url_storage=url,
-                tipo_archivo="imagen" # <-- Usamos la columna que realmente existe en tu modelo
+                tipo_archivo="imagen"
             )
             db.add(nueva_multimedia)
             
         # 4. Confirmar la transacción completa (ACID)
-        db.commit() # Si llegamos aquí, todo salió perfecto (subida y base de datos)
+        db.commit()
+        db.refresh(activo)
         
         print(f"✅ Paletizado guardado exitosamente en base de datos para Folio {numero_ingreso}.")
+        
+        # ========================================================
+        # PASO C. EXTRACCIÓN DE DATOS PARA LA ETIQUETA TÉRMICA (HU-2.4)
+        # ========================================================
+        print("🔍 Extrayendo datos enriquecidos para la previsualización de la etiqueta...")
+        
+        vehiculo = db.query(models.Vehiculo_Origen).filter(
+            models.Vehiculo_Origen.numero_ingreso == numero_ingreso
+        ).first()
+        
+        cilindrada = None
+        combustible = None
+        transmision = None
+        numero_motor = None
+        
+        if tipo_repuesto == "Motor":
+            detalle_motor = db.query(models.Detalle_Motor).filter(
+                models.Detalle_Motor.id_activo == activo.id_activo
+            ).first()
+            if detalle_motor:
+                cilindrada = detalle_motor.cilindrada
+                combustible = detalle_motor.combustible
+                numero_motor = detalle_motor.numero_motor
+                transmision = detalle_motor.transmision_tipo
+        else:
+            detalle_caja = db.query(models.Detalle_Caja_Cambio).filter(
+                models.Detalle_Caja_Cambio.id_activo == activo.id_activo
+            ).first()
+            if detalle_caja:
+                transmision = detalle_caja.transmision_tipo
+                
+        print(f"🏷️ SKU Generado y enviado a la UI: {activo.sku_qr_fisico}")
         print("="*40 + "\n")
         
         return {
             "status": "success",
-            "mensaje": f"Se ha guardado exitosamente el paletizado del '{tipo_repuesto}' (Folio {numero_ingreso}) con sus ubicación física y {len(urls_fotos_publicas)} fotografías comerciales.",
-            "urls_fotos": urls_fotos_publicas
+            "mensaje": f"Se ha guardado exitosamente el paletizado del '{tipo_repuesto}' (Folio {numero_ingreso}).",
+            "urls_fotos": urls_fotos_publicas,
+            "id_activo": str(activo.id_activo),
+            "sku_qr_fisico": activo.sku_qr_fisico,
+            "qr_impreso": activo.qr_impreso if activo.qr_impreso is not None else False,
+            "numero_ingreso": numero_ingreso,
+            "marca": vehiculo.marca if vehiculo else "S/A",
+            "modelo": vehiculo.modelo if vehiculo else "S/A",
+            "anio": vehiculo.anio if vehiculo else 0,
+            "galpon": galpon,
+            "pasillo": pasillo,
+            "pallet": pallet,
+            "cilindrada": cilindrada,
+            "combustible": combustible,
+            "transmision": transmision,
+            "numero_motor": numero_motor
         }
-        
+
     except Exception as e:
-        # ¡IMPORTANTE! Si la base de datos falla, debemos revertir la subida de fotos a Supabase (Rolback)
         print(f"⚠️ ERROR CRÍTICO EN BASE DE DATOS: {str(e)}. Iniciando Rollback de Storage.")
         db.rollback()
-        
-        # Intento de borrado de archivos subidos en Supabase Storage
+
         for url in urls_fotos_publicas:
             try:
-                # Extraemos el nombre del archivo de la URL
-                # Ejemplo URL: .../object/public/multimedia-activos/1008/moto_1008_comercial_1.jpg
                 parts = url.split(f"{BUCKET_NAME}/")
                 if len(parts) == 2:
                     nombre_archivo = parts[1]

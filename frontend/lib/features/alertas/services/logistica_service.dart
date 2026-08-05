@@ -7,6 +7,7 @@ class LogisticaService {
   // Si ya subiste el tareas.py a Render, usa tu URL de Render: 'https://cresal-backend-dev.onrender.com'
   static const String baseUrl =
       'https://cresal-backend-dev.onrender.com/api/v1/bodega';
+  //static const String baseUrl = 'http://192.168.1.4:8000/api/v1/bodega';
 
   static Future<List<TareaAlerta>> obtenerAlertas() async {
     try {
