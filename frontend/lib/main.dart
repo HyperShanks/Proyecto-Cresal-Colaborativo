@@ -6,6 +6,7 @@ import 'features/home/presentation/screens/home_screen.dart';
 import 'features/recepcion/presentation/screens/recepcion_vehiculo_screen.dart';
 import 'features/tickets/presentation/screens/tickets_screen.dart';
 import 'features/paletizado/presentation/screens/paletizado_screen.dart'; // Importa la pantalla de paletizado
+import 'features/paletizado/presentation/screens/etiqueta_preview_screen.dart'; // HU-2.4: Previsualización de etiqueta térmica
 import 'features/alertas/presentation/screens/alertas_screen.dart'; // Importa la pantalla de alertas
 
 void main() {
@@ -39,6 +40,8 @@ class _MyAppState extends State<MyApp> {
         '/tickets': (context) => const TicketsScreen(),
         '/paletizado': (context) =>
             const PaletizadoScreen(), // Nueva ruta para el módulo de paletizado
+        // HU-2.4: Pantalla de previsualización de etiqueta térmica con QR
+        '/etiqueta-preview': (context) => const EtiquetaPreviewScreen(),
         '/alertas': (context) =>
             const AlertasScreen(), // Nueva ruta para el módulo de alertas
       },
