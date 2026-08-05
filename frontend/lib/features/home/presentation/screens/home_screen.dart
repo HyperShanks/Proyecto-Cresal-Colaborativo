@@ -319,10 +319,12 @@ class _HomeScreenState extends State<HomeScreen> {
               left: BorderSide(color: AppPalette.primary, width: 4),
             ),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          // ⚠️ FIX: Aumentamos el padding vertical (de 24 a 32) para hacer la tarjeta más alta
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
           child: Row(
             children: [
-              Icon(icon, size: 32, color: AppPalette.primary),
+              // ⚠️ FIX: Aumentamos un poco el tamaño del ícono para que no se pierda en el nuevo espacio
+              Icon(icon, size: 36, color: AppPalette.primary),
               const SizedBox(width: 16),
               Expanded(child: Text(title, style: AppTypography.cardTitle)),
             ],

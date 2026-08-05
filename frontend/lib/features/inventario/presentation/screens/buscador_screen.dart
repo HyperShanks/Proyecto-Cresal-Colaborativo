@@ -14,6 +14,7 @@ class BuscadorScreen extends StatefulWidget {
 
 class _BuscadorScreenState extends State<BuscadorScreen> {
   bool _isLoadingFiltros = true;
+  bool _isUpdatingFiltros = false;
   String _errorFiltros = '';
   bool _isSearching = false;
   List<dynamic> _resultados = [];
@@ -38,6 +39,9 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
   }
 
   Future<void> _cargarFiltros() async {
+    // ⚠️ Encendemos la carga silenciosa antes de consultar al backend
+    setState(() => _isUpdatingFiltros = true);
+
     try {
       final opciones = await InventarioService.obtenerOpcionesFiltros(
         categoria: _categoria,
@@ -53,44 +57,37 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
       setState(() {
         _opcionesFiltros = opciones;
 
-        // ⚠️ ANTI-CRASHEO: Si el valor que el usuario tenía elegido ya no existe
-        // en las nuevas opciones generadas (ej. Suzuki ya no está en el pasillo 1),
-        // lo reiniciamos a nulo ("Todas").
+        // ANTI-CRASHEO
         if (_pasillo != null &&
-            !(opciones['pasillos']?.contains(_pasillo) ?? false)) {
+            !(opciones['pasillos']?.contains(_pasillo) ?? false))
           _pasillo = null;
-        }
         if (_pallet != null &&
-            !(opciones['pallets']?.contains(_pallet) ?? false)) {
+            !(opciones['pallets']?.contains(_pallet) ?? false))
           _pallet = null;
-        }
-        if (_marca != null &&
-            !(opciones['marcas']?.contains(_marca) ?? false)) {
+        if (_marca != null && !(opciones['marcas']?.contains(_marca) ?? false))
           _marca = null;
-        }
         if (_modelo != null &&
-            !(opciones['modelos']?.contains(_modelo) ?? false)) {
+            !(opciones['modelos']?.contains(_modelo) ?? false))
           _modelo = null;
-        }
         if (_cilindrada != null &&
-            !(opciones['cilindradas']?.contains(_cilindrada) ?? false)) {
+            !(opciones['cilindradas']?.contains(_cilindrada) ?? false))
           _cilindrada = null;
-        }
         if (_combustible != null &&
-            !(opciones['combustibles']?.contains(_combustible) ?? false)) {
+            !(opciones['combustibles']?.contains(_combustible) ?? false))
           _combustible = null;
-        }
         if (_transmision != null &&
-            !(opciones['transmisiones']?.contains(_transmision) ?? false)) {
+            !(opciones['transmisiones']?.contains(_transmision) ?? false))
           _transmision = null;
-        }
-
-        _isLoadingFiltros = false;
       });
     } catch (e) {
       setState(() {
         _errorFiltros = e.toString();
-        _isLoadingFiltros = false;
+      });
+    } finally {
+      // ⚠️ Apagamos la carga sin importar si hubo éxito o error
+      setState(() {
+        _isUpdatingFiltros = false;
+        _isLoadingFiltros = false; // (Mantenemos esto para la carga inicial)
       });
     }
   }
@@ -374,7 +371,7 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
     );
   }
 
-  // ── WIDGET REUTILIZABLE CORREGIDO ──
+  // ── WIDGET REUTILIZABLE ──
   Widget _buildDropdown({
     required String label,
     required String? value,
@@ -425,10 +422,24 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
             ),
           ),
           dropdownColor: AppPalette.surface,
-          icon: Icon(
-            Icons.keyboard_arrow_down,
-            color: isFeatured ? AppPalette.primary : AppPalette.textSecondary,
-          ),
+
+          // ⚠️ FIX VISUAL: Mostramos un mini-círculo de carga mientras el backend responde
+          icon: _isUpdatingFiltros
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    color: AppPalette.primary,
+                    strokeWidth: 2,
+                  ),
+                )
+              : Icon(
+                  Icons.keyboard_arrow_down,
+                  color: isFeatured
+                      ? AppPalette.primary
+                      : AppPalette.textSecondary,
+                ),
+
           items: [
             DropdownMenuItem<String>(
               value: null,
@@ -453,7 +464,8 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
               );
             }).toList(),
           ],
-          onChanged: onChanged,
+          // ⚠️ FIX LÓGICO: Bloqueamos el click mientras se actualizan las opciones
+          onChanged: _isUpdatingFiltros ? null : onChanged,
         ),
       ],
     );
