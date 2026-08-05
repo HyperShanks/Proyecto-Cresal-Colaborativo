@@ -290,7 +290,10 @@ class _HomeScreenState extends State<HomeScreen> {
           context: context,
           title: 'ALERTA TAREAS',
           icon: Icons.notifications_none,
-          onTap: () {}, // Futuro módulo
+          onTap: () {
+            // Conexión hacia la nueva vista del tablero
+            Navigator.pushNamed(context, '/alertas');
+          },
         ),
       ],
     );
