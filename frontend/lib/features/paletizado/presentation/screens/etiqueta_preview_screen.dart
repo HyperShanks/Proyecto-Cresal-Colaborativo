@@ -1,28 +1,13 @@
 // lib/features/paletizado/presentation/screens/etiqueta_preview_screen.dart
-//
-// HU-2.4 — Pantalla de previsualización de la etiqueta térmica en grande.
-//
-// Recibe un [EtiquetaData] como argumento de navegación y muestra el widget
-// EtiquetaTermicaWidget centrado y escalado para que el operario pueda
-// verificar visualmente el contenido antes de imprimir.
-//
-// Navegación de entrada:
-//   Navigator.pushNamed(
-//     context,
-//     '/etiqueta-preview',
-//     arguments: miEtiquetaData,
-//   );
 
 import 'package:flutter/material.dart';
 import '../../domain/models/etiqueta_data.dart';
 import '../widgets/etiqueta_termica_widget.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../core/widgets/bluetooth_error_dialog.dart';
 import '../../services/print_service.dart';
 
-/// Pantalla de previsualización completa de la etiqueta térmica.
-///
-/// El operario puede verificar el QR y los datos antes de imprimir.
 class EtiquetaPreviewScreen extends StatefulWidget {
   const EtiquetaPreviewScreen({super.key});
 
@@ -31,144 +16,130 @@ class EtiquetaPreviewScreen extends StatefulWidget {
 }
 
 class _EtiquetaPreviewScreenState extends State<EtiquetaPreviewScreen> {
-  bool _isConnecting = false;
+  bool _isImprimiendo = false;
 
-  Future<void> _imprimirDesdePreview(EtiquetaData data) async {
-    setState(() => _isConnecting = true);
+  // (Nota: Las funciones de _cargarImpresoraGuardada y selector Bluetooth
+  // se omiten en esta versión simulada para enfocarnos en la validación visual y de log.
+  // Cuando conectes el paquete real flutter_blue_plus, reactivaremos el selector de MAC).
 
-    // FUTURO: PrintService.imprimirEtiqueta() invocará flutter_blue_plus.
-    // Ver print_service.dart para el punto de inyección Bluetooth.
-    await PrintService.imprimirEtiqueta(data);
-
-    if (!mounted) return;
-    setState(() => _isConnecting = false);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('🖨️ Orden de impresión enviada (Bluetooth stub).'),
-        backgroundColor: AppPalette.primary,
-      ),
+  Future<void> _iniciarImpresion(EtiquetaData data) async {
+    debugPrint(
+      '📌 [PREVIEW_SCREEN] 🔘 Botón de impresión presionado para SKU: ${data.skuQrFisico}',
     );
+    setState(() => _isImprimiendo = true);
+
+    try {
+      // Llamada al PrintService (que por ahora es el Stub que ajustamos antes)
+      final exito = await PrintService.imprimirEtiqueta(data);
+
+      if (!mounted) return;
+
+      if (exito) {
+        debugPrint(
+          '📌 [PREVIEW_SCREEN] ✅ Impresión exitosa. (FUTURO: Llamar a PATCH confirmar-impresion)',
+        );
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Etiqueta impresa. SKU: ${data.skuQrFisico}'),
+            backgroundColor: AppPalette.success,
+          ),
+        );
+      } else {
+        debugPrint(
+          '📌 [PREVIEW_SCREEN] ❌ Fallo en la impresión reportado por el servicio.',
+        );
+        await BluetoothErrorDialog.show(
+          context,
+          mensaje: 'Error de conexión con la impresora.',
+        );
+      }
+    } catch (e) {
+      debugPrint('📌 [PREVIEW_SCREEN] ❌ Excepción no controlada: $e');
+    } finally {
+      if (mounted) setState(() => _isImprimiendo = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Obtenemos el EtiquetaData desde los argumentos de navegación
     final data = ModalRoute.of(context)?.settings.arguments as EtiquetaData?;
 
     if (data == null) {
+      debugPrint(
+        '📌 [PREVIEW_SCREEN] ⚠️ Pantalla iniciada sin EtiquetaData (Arguments Null)',
+      );
       return Scaffold(
         backgroundColor: AppPalette.background,
-        appBar: AppBar(
-          title: const Text('Previsualización', style: AppTypography.title),
-          backgroundColor: AppPalette.background,
-        ),
+        appBar: AppBar(title: const Text('Error')),
         body: const Center(
           child: Text(
-            'Error: No se recibieron datos de la etiqueta.',
-            style: TextStyle(color: AppPalette.error),
+            'Error: No se recibieron datos.',
+            style: TextStyle(color: Colors.white),
           ),
         ),
       );
     }
+
+    debugPrint(
+      '📌 [PREVIEW_SCREEN] 📄 Renderizando vista previa para Folio: ${data.numeroIngreso}',
+    );
 
     return Scaffold(
       backgroundColor: AppPalette.background,
       appBar: AppBar(
         backgroundColor: AppPalette.background,
         elevation: 0,
-        title: const Text('Vista Previa de Etiqueta', style: AppTypography.title),
+        title: const Text('Vista Previa', style: AppTypography.title),
         centerTitle: true,
-        actions: [
-          // Botón de impresión en el AppBar para acceso rápido
-          IconButton(
-            icon: _isConnecting
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      color: AppPalette.primary,
-                      strokeWidth: 2,
-                    ),
-                  )
-                : const Icon(Icons.print, color: AppPalette.primary),
-            tooltip: 'Imprimir etiqueta',
-            onPressed: _isConnecting ? null : () => _imprimirDesdePreview(data),
-          ),
-        ],
       ),
       body: Column(
         children: [
-          // ── Información contextual ──────────────────────────────────────
-          Container(
-            width: double.infinity,
-            margin: const EdgeInsets.fromLTRB(24, 8, 24, 0),
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-            decoration: BoxDecoration(
-              color: AppPalette.surface,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.info_outline,
-                  color: AppPalette.primary,
-                  size: 16,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Etiqueta generada para el activo ${data.skuQrFisico} '
-                    '— N° Ingreso ${data.numeroIngreso}',
-                    style: AppTypography.small,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // ── Widget de etiqueta centrado ─────────────────────────────────
+          const SizedBox(height: 16),
+          // ── Contenedor responsivo para visualizar la etiqueta ──
           Expanded(
             child: Center(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Etiqueta térmica escalada al ancho de la pantalla
-                    FittedBox(
-                      fit: BoxFit.contain,
-                      child: EtiquetaTermicaWidget(data: data),
-                    ),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: FittedBox(
+                  fit: BoxFit.contain,
+                  child: EtiquetaTermicaWidget(data: data),
+                ),
+              ),
+            ),
+          ),
 
-                    const SizedBox(height: 32),
-
-                    // Botón de impresión inferior
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed:
-                            _isConnecting ? null : () => _imprimirDesdePreview(data),
-                        icon: _isConnecting
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.print, color: Colors.white),
-                        label: Text(
-                          _isConnecting ? 'CONECTANDO...' : 'IMPRIMIR ETIQUETA',
+          // ── Botón de Impresión ──
+          Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _isImprimiendo
+                    ? null
+                    : () => _iniciarImpresion(data),
+                icon: _isImprimiendo
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
                         ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppPalette.primary,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                        ),
-                      ),
-                    ),
-                  ],
+                      )
+                    : const Icon(Icons.print, color: Colors.white),
+                label: Text(
+                  _isImprimiendo ? 'ENVIANDO...' : 'CONFIRMAR E IMPRIMIR',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppPalette.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
               ),
             ),

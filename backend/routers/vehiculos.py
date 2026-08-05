@@ -8,7 +8,6 @@ from models import Vehiculo_Origen, Activo_Inventariado, Detalle_Motor, Detalle_
 from google.cloud import vision
 import json # <-- Importante para traducir el texto a JSON
 from services.scraping import obtener_datos_vehiculo
-from services.sku_service import generar_sku  # HU-2.4: Generación de identidad digital
 import models
 from dotenv import load_dotenv # Para cargar el .env
 from typing import List # Para definir la lista de imágenes en FastAPI
@@ -167,51 +166,34 @@ async def registrar_ingreso_vehiculo(
         db.flush() 
 
         # --- A. MOTOR ---
-        # HU-2.4: Primero persistimos sin SKU para obtener el UUID generado por PostgreSQL,
-        # luego usamos ese UUID para construir el SKU con el servicio dedicado.
         activo_motor = models.Activo_Inventariado(
-            sku_qr_fisico="PENDIENTE",  # Placeholder temporal, se actualiza justo debajo
+            sku_qr_fisico=f"MOT-{nuevo_numero_ingreso}", 
             id_categoria=1, 
             id_estado=5,    
             id_sucursal_actual=1, 
-            id_vehiculo=nuevo_vehiculo.id_vehiculo,
-            qr_impreso=False  # HU-2.4: False por defecto hasta que el operario imprima
+            id_vehiculo=nuevo_vehiculo.id_vehiculo 
         )
         db.add(activo_motor)
-        db.flush()  # Flush para que PostgreSQL asigne el UUID
-
-        # HU-2.4: Generamos el SKU real usando el UUID ya asignado
-        activo_motor.sku_qr_fisico = generar_sku(
-            nombre_categoria="Motor",
-            id_activo_str=str(activo_motor.id_activo)
-        )
-        db.flush()
+        db.flush() 
 
         detalle_motor = models.Detalle_Motor(
             id_activo=activo_motor.id_activo, 
             numero_motor=vehiculo_in.numero_motor,
             cilindrada=vehiculo_in.cilindrada,
-            combustible=vehiculo_in.combustible
+            combustible=vehiculo_in.combustible,
+            transmision_tipo=vehiculo_in.transmision
         )
         db.add(detalle_motor)
 
         # --- B. CAJA DE CAMBIOS ---
         activo_caja = models.Activo_Inventariado(
-            sku_qr_fisico="PENDIENTE",  # Placeholder temporal
+            sku_qr_fisico=f"CAJ-{nuevo_numero_ingreso}",
             id_categoria=2, 
             id_estado=5,
             id_sucursal_actual=1,
-            id_vehiculo=nuevo_vehiculo.id_vehiculo,
-            qr_impreso=False  # HU-2.4: False por defecto
+            id_vehiculo=nuevo_vehiculo.id_vehiculo
         )
         db.add(activo_caja)
-        db.flush()  # Flush para obtener UUID
-
-        # HU-2.4: Generamos el SKU real para la caja
-        activo_caja.sku_qr_fisico = generar_sku(
-            nombre_categoria="Caja de Cambio",
-            id_activo_str=str(activo_caja.id_activo)
-        )
         db.flush()
 
         detalle_caja = models.Detalle_Caja_Cambio(
@@ -412,7 +394,7 @@ async def validar_ocr_pieza(
             detail=f"Error al procesar el OCR con Google Vision: {str(e)}"
         )
 
-@router.post("/guardar-paletizado", response_model=schemas.PaletizadoResponse, status_code=201)
+@router.post("/guardar-paletizado", status_code=201)
 async def guardar_paletizado(
     # --- Datos de Texto ---
     numero_ingreso: str = Form(...),
@@ -428,25 +410,16 @@ async def guardar_paletizado(
     db: Session = Depends(get_db)
 ):
     """
-    [Jefe Final] - HU-2.3
+    [Jefe Final] - HU-2.3 & HU-2.4
     1. Sube las fotos comerciales a Supabase Storage.
     2. Actualiza la ubicación física en PostgreSQL (Activo_Inventariado).
     3. Registra las URLs de las fotos en PostgreSQL (Multimedia_Activo).
+    4. Retorna payload enriquecido para generar la etiqueta térmica (HU-2.4).
     """
     
     print("\n" + "="*40)
     print(f"💾 INICIANDO GUARDADO LOGÍSTICO PARA FOLIO {numero_ingreso}")
-    print(f"DEBUG TIPO_REPUESTO: {repr(tipo_repuesto)}")
     print("="*40)
-
-    # 0. Normalización tolerante de categoría
-    tipo_clean = tipo_repuesto.strip().lower() if tipo_repuesto else ""
-    if "motor" in tipo_clean:
-        id_categoria_objetivo = 1
-    elif "caja" in tipo_clean or "transmision" in tipo_clean:
-        id_categoria_objetivo = 2
-    else:
-        id_categoria_objetivo = 1 if tipo_repuesto == "Motor" else 2
 
     # 1. Validación de seguridad: ¿Está configurado Supabase?
     if not supabase:
@@ -463,45 +436,33 @@ async def guardar_paletizado(
     # ========================================================
     urls_fotos_publicas = []
     
-    # Nombre del "bucket" o contenedor principal en Supabase
     BUCKET_NAME = "multimedia-activos"
     
-    # Intentamos crear el bucket si no existe (con Service Role Key podemos hacerlo)
     try:
-        supabase.storage.create_bucket(BUCKET_NAME, options={"public": True}) # public=True para tener URLs directas
+        supabase.storage.create_bucket(BUCKET_NAME, options={"public": True})
         print(f"✅ Bucket '{BUCKET_NAME}' creado (o ya existía).")
     except Exception as e:
-        # Si ya existe, nos dará error, pero está bien. Solo imprimimos para saber.
         print(f"ℹ️ Info sobre Bucket: {str(e)}")
         pass
 
-    # Iteramos sobre cada foto comercial que envió Flutter
     for i, foto in enumerate(fotos_comerciales):
         try:
-            # Creamos un nombre de archivo único para la nube.
-            # Ejemplo: paletizado/1008/moto_1008_comercial_1.jpg
-            prefijo = "moto" if id_categoria_objetivo == 1 else "caja"
+            prefijo = "moto" if tipo_repuesto == "Motor" else "caja"
             nombre_archivo_nube = f"{numero_ingreso}/{prefijo}_{numero_ingreso}_comercial_{i+1}.jpg"
-            
-            # Leemos los bytes físicos de la imagen (que ya viene comprimida desde Flutter)
             contenido_imagen = await foto.read()
             
-            # Hacemos la subida física a Supabase Storage
-            # path= es la ruta dentro del bucket, file= es el contenido
             supabase.storage.from_(BUCKET_NAME).upload(
                 path=nombre_archivo_nube, 
                 file=contenido_imagen,
-                file_options={"cache-control": "3600", "content-type": "image/jpeg"} # Ayuda al navegador
+                file_options={"cache-control": "3600", "content-type": "image/jpeg"}
             )
             
-            # Obtenemos la URL pública para guardarla después en PostgreSQL
             url_publica = supabase.storage.from_(BUCKET_NAME).get_public_url(nombre_archivo_nube)
             urls_fotos_publicas.append(url_publica)
             
             print(f"📸 Foto {i+1} subida exitosamente: {nombre_archivo_nube}")
             
         except Exception as e:
-            # Si una foto falla, queremos abortar todo y avisar
             print(f"❌ ERROR al subir foto {i+1}: {str(e)}")
             raise HTTPException(
                 status_code=500,
@@ -513,20 +474,19 @@ async def guardar_paletizado(
     # ========================================================
     try:
         # 1. Buscar el activo específico (Motor o Caja) usando el Folio
-        # Usamos join para ir de Vehiculo_Origen -> Activo_Inventariado
         query_activo = db.query(models.Activo_Inventariado).join(models.Vehiculo_Origen).filter(
             models.Vehiculo_Origen.numero_ingreso == numero_ingreso
         )
         
-        # Filtramos por categoría usando la normalización tolerante
-        query_activo = query_activo.filter(models.Activo_Inventariado.id_categoria == id_categoria_objetivo)
+        id_categoria = 1 if tipo_repuesto == "Motor" else 2
+        query_activo = query_activo.filter(models.Activo_Inventariado.id_categoria == id_categoria)
         
         activo = query_activo.first()
         
         if not activo:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"No se encontró el activo '{tipo_repuesto}' (categoría {id_categoria_objetivo}) asociado al folio {numero_ingreso}."
+                detail=f"No se encontró el activo '{tipo_repuesto}' asociado al folio {numero_ingreso}."
             )
 
         # 2. Actualizar la Ubicación Física y Observaciones (PERSISTENCIA LOGÍSTICA)
@@ -534,92 +494,87 @@ async def guardar_paletizado(
         activo.ubicacion_pasillo = pasillo
         activo.ubicacion_pallet = pallet
         
-        # Guardar observación
         if hasattr(activo, 'observacion_estado') and observaciones:
             activo.observacion_estado = observaciones
             
         activo.id_estado = 1
         
-        db.flush() # Empujamos los cambios a la base de datos pero sin hacer commit aún
+        db.flush()
         
         # 3. Guardar las URLs de las fotos en Multimedia_Activo (PERSISTENCIA COMERCIAL)
         for url in urls_fotos_publicas:
             nueva_multimedia = models.Multimedia_Activo(
                 id_activo=activo.id_activo,
                 url_storage=url,
-                tipo_archivo="imagen" # <-- Usamos la columna que realmente existe en tu modelo
+                tipo_archivo="imagen"
             )
             db.add(nueva_multimedia)
             
         # 4. Confirmar la transacción completa (ACID)
-        db.commit() # Si llegamos aquí, todo salió perfecto (subida y base de datos)
-        db.refresh(activo)  # HU-2.4: Refrescar para obtener el SKU definitivo y ubicación desde la BD
+        db.commit()
+        db.refresh(activo)
         
         print(f"✅ Paletizado guardado exitosamente en base de datos para Folio {numero_ingreso}.")
-        print(f"🏷️  SKU asignado: {activo.sku_qr_fisico}")
-        print(f"📍 Ubicación persistida: Galpón {activo.ubicacion_galpon}, Pasillo {activo.ubicacion_pasillo}, Pallet {activo.ubicacion_pallet}")
-        print("="*40 + "\n")
-
-        # ── HU-2.4: Recopilar datos técnicos para la etiqueta térmica ──────────
-        detalle_motor_resp = None
-        detalle_caja_resp = None
-
-        if activo.id_categoria == 1:
-            detalle_motor_resp = db.query(models.Detalle_Motor).filter(
+        
+        # ========================================================
+        # PASO C. EXTRACCIÓN DE DATOS PARA LA ETIQUETA TÉRMICA (HU-2.4)
+        # ========================================================
+        print("🔍 Extrayendo datos enriquecidos para la previsualización de la etiqueta...")
+        
+        vehiculo = db.query(models.Vehiculo_Origen).filter(
+            models.Vehiculo_Origen.numero_ingreso == numero_ingreso
+        ).first()
+        
+        cilindrada = None
+        combustible = None
+        transmision = None
+        numero_motor = None
+        
+        if tipo_repuesto == "Motor":
+            detalle_motor = db.query(models.Detalle_Motor).filter(
                 models.Detalle_Motor.id_activo == activo.id_activo
             ).first()
-        elif activo.id_categoria == 2:
-            detalle_caja_resp = db.query(models.Detalle_Caja_Cambio).filter(
+            if detalle_motor:
+                cilindrada = detalle_motor.cilindrada
+                combustible = detalle_motor.combustible
+                numero_motor = detalle_motor.numero_motor
+                transmision = detalle_motor.transmision_tipo
+        else:
+            detalle_caja = db.query(models.Detalle_Caja_Cambio).filter(
                 models.Detalle_Caja_Cambio.id_activo == activo.id_activo
             ).first()
-
-        # Obtenemos los datos del vehículo origen para la etiqueta
-        vehiculo_origen = db.query(models.Vehiculo_Origen).filter(
-            models.Vehiculo_Origen.id_vehiculo == activo.id_vehiculo
-        ).first()
-
-        # Determinamos la transmisión adecuada (motor o caja)
-        transmision_val = None
-        if detalle_motor_resp and detalle_motor_resp.transmision_tipo:
-            transmision_val = detalle_motor_resp.transmision_tipo
-        elif detalle_caja_resp and detalle_caja_resp.transmision_tipo:
-            transmision_val = detalle_caja_resp.transmision_tipo
-
-        # ── HU-2.4: Respuesta enriquecida con PaletizadoResponse ────────────────
-        return schemas.PaletizadoResponse(
-            # Identidad digital
-            sku_qr_fisico=activo.sku_qr_fisico,
-            qr_impreso=activo.qr_impreso,
-            # Datos del vehículo origen
-            numero_ingreso=vehiculo_origen.numero_ingreso if vehiculo_origen else numero_ingreso,
-            marca=vehiculo_origen.marca if vehiculo_origen else "",
-            modelo=vehiculo_origen.modelo if vehiculo_origen else "",
-            anio=vehiculo_origen.anio if vehiculo_origen else 0,
-            # Detalles técnicos (None si no aplica → Flutter muestra "N/A")
-            cilindrada=detalle_motor_resp.cilindrada if detalle_motor_resp else None,
-            combustible=detalle_motor_resp.combustible if detalle_motor_resp else None,
-            transmision=transmision_val,
-            numero_motor=detalle_motor_resp.numero_motor if detalle_motor_resp else None,
-            # Ubicación física confirmada desde la instancia de BD
-            galpon=activo.ubicacion_galpon or galpon,
-            pasillo=activo.ubicacion_pasillo or pasillo,
-            pallet=activo.ubicacion_pallet or pallet,
-            # Compatibilidad
-            status="success",
-            mensaje=f"Paletizado del '{tipo_repuesto}' (Folio {numero_ingreso}) guardado con {len(urls_fotos_publicas)} fotos.",
-            urls_fotos=urls_fotos_publicas,
-        )
+            if detalle_caja:
+                transmision = detalle_caja.transmision_tipo
+                
+        print(f"🏷️ SKU Generado y enviado a la UI: {activo.sku_qr_fisico}")
+        print("="*40 + "\n")
         
+        return {
+            "status": "success",
+            "mensaje": f"Se ha guardado exitosamente el paletizado del '{tipo_repuesto}' (Folio {numero_ingreso}).",
+            "urls_fotos": urls_fotos_publicas,
+            "id_activo": str(activo.id_activo),
+            "sku_qr_fisico": activo.sku_qr_fisico,
+            "qr_impreso": activo.qr_impreso if activo.qr_impreso is not None else False,
+            "numero_ingreso": numero_ingreso,
+            "marca": vehiculo.marca if vehiculo else "S/A",
+            "modelo": vehiculo.modelo if vehiculo else "S/A",
+            "anio": vehiculo.anio if vehiculo else 0,
+            "galpon": galpon,
+            "pasillo": pasillo,
+            "pallet": pallet,
+            "cilindrada": cilindrada,
+            "combustible": combustible,
+            "transmision": transmision,
+            "numero_motor": numero_motor
+        }
+
     except Exception as e:
-        # ¡IMPORTANTE! Si la base de datos falla, debemos revertir la subida de fotos a Supabase (Rolback)
         print(f"⚠️ ERROR CRÍTICO EN BASE DE DATOS: {str(e)}. Iniciando Rollback de Storage.")
         db.rollback()
-        
-        # Intento de borrado de archivos subidos en Supabase Storage
+
         for url in urls_fotos_publicas:
             try:
-                # Extraemos el nombre del archivo de la URL
-                # Ejemplo URL: .../object/public/multimedia-activos/1008/moto_1008_comercial_1.jpg
                 parts = url.split(f"{BUCKET_NAME}/")
                 if len(parts) == 2:
                     nombre_archivo = parts[1]

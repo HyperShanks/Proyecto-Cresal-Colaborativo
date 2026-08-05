@@ -12,6 +12,10 @@ import 'package:flutter/foundation.dart';
 
 /// Modelo inmutable con todos los datos de una etiqueta de activo inventariado.
 class EtiquetaData {
+  // ── Identificación del activo en BD (HU-2.4 Fase 4 — PATCH de confirmación) ─
+  /// UUID del Activo_Inventariado. Requerido para confirmar impresión en el backend.
+  final String idActivo;
+
   // ── Identificación del vehículo origen ──────────────────────────────────
   final String numeroIngreso;
   final String marca;
@@ -34,6 +38,7 @@ class EtiquetaData {
   final String skuQrFisico;
 
   const EtiquetaData({
+    required this.idActivo,
     required this.numeroIngreso,
     required this.marca,
     required this.modelo,
@@ -57,7 +62,9 @@ class EtiquetaData {
     final Map<String, dynamic> data = json.containsKey('numero_ingreso')
         ? json
         : (json['data'] as Map<String, dynamic>? ?? json);
+
     return EtiquetaData(
+      idActivo: data['id_activo']?.toString() ?? '',
       numeroIngreso: data['numero_ingreso']?.toString() ?? '',
       marca: data['marca']?.toString() ?? '',
       modelo: data['modelo']?.toString() ?? '',
