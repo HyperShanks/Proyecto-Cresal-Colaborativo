@@ -3,9 +3,9 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart'; // <-- IMPORTANTE PARA LEER LA FOTO
 
 class VehiculoService {
-  //static const String baseUrl =
-  //'https://cresal-backend-dev.onrender.com/api/v1/vehiculos';
-  static const String baseUrl = 'http://192.168.1.85:8000/api/v1/inventario';
+  static const String baseUrl =
+      'https://cresal-backend-dev.onrender.com/api/v1/vehiculos';
+  //static const String baseUrl = 'http://192.168.1.85:8000/api/v1/vehiculos';
 
   // 1. GET: Se mantiene exactamente igual
   Future<String> obtenerSiguienteIngreso() async {

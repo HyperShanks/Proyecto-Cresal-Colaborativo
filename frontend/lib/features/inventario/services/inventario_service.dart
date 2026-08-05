@@ -3,7 +3,9 @@ import 'package:http/http.dart' as http;
 
 class InventarioService {
   // Apuntando directo a tu servidor local vía Wi-Fi
-  static const String baseUrl = 'http://192.168.1.85:8000/api/v1/inventario';
+  //static const String baseUrl = 'http://192.168.1.85:8000/api/v1/inventario';
+  static const String baseUrl =
+      'https://cresal-backend-dev.onrender.com/api/v1/inventario';
 
   static Future<Map<String, List<String>>> obtenerOpcionesFiltros() async {
     try {
