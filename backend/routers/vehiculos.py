@@ -7,7 +7,6 @@ from sqlalchemy import func, cast, Integer
 from models import Vehiculo_Origen, Activo_Inventariado, Detalle_Motor, Detalle_Caja_Cambio
 from google.cloud import vision
 import json # <-- Importante para traducir el texto a JSON
-from services.scraping import obtener_datos_vehiculo
 import models
 from dotenv import load_dotenv # Para cargar el .env
 from typing import List # Para definir la lista de imágenes en FastAPI
@@ -230,35 +229,6 @@ def obtener_vehiculo(patente: str, db: Session = Depends(get_db)):
         
     vehiculo = procesar_patente_y_guardar(db=db, patente_limpia=patente_validada)
     return vehiculo
-
-@router.get("/scraping/{patente}")
-async def scraping_patente(patente: str):
-    print("\n" + "="*40)
-    print(f"🕵️ BÚSQUEDA SCRAPING INICIADA")
-    print(f"Patente solicitada: {patente}")
-    print("="*40)
-    
-    # 1. Llamamos a TU archivo scraping.py real
-    datos = obtener_datos_vehiculo(patente)
-    
-    # 2. Manejo de errores basado en cómo armaste tu diccionario en scraping.py
-    if "error" in datos:
-        raise HTTPException(status_code=404, detail=datos["error"])
-        
-    if datos.get("marca") == "No encontrado":
-        raise HTTPException(status_code=404, detail="Vehículo no encontrado en registros.")
-        
-    print(f"✅ Scraping exitoso: {datos.get('marca')} {datos.get('modelo')}")
-    
-    # 3. Mapeamos los datos (Tu script usa 'nro_motor', pero Flutter espera 'numero_motor')
-    return {
-        "marca": datos.get("marca", ""),
-        "modelo": datos.get("modelo", ""),
-        "anio": datos.get("anio", ""),
-        "cilindrada": datos.get("cilindrada", ""),
-        "numero_motor": datos.get("nro_motor", "") 
-    }
-
 
 @router.get("/buscar/{numero_ingreso}")
 def buscar_vehiculo_por_ingreso(numero_ingreso: str, db: Session = Depends(get_db)):

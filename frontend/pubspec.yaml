@@ -38,6 +38,7 @@ dependencies:
   html: ^0.15.6
   # HU-2.4: Paquete para renderizar códigos QR a partir del sku_qr_fisico
   qr_flutter: ^4.1.0
+  crypto: ^3.0.7
 
 dev_dependencies:
   flutter_test:

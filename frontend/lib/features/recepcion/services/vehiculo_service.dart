@@ -1,13 +1,16 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:image_picker/image_picker.dart'; // <-- IMPORTANTE PARA LEER LA FOTO
+import 'package:image_picker/image_picker.dart';
+import 'package:crypto/crypto.dart'; // ⚠️ NUEVO: Para el cifrado HMAC-SHA256
+import 'package:html/parser.dart' as html_parser; // ⚠️ NUEVO: Para leer el HTML
 
 class VehiculoService {
   static const String baseUrl =
       'https://cresal-backend-dev.onrender.com/api/v1/vehiculos';
-  //static const String baseUrl = 'http://192.168.1.4:8000/api/v1/vehiculos';
 
-  // 1. GET: Se mantiene exactamente igual
+  // ==========================================
+  // 1. GET: Siguiente Ingreso (Se mantiene)
+  // ==========================================
   Future<String> obtenerSiguienteIngreso() async {
     try {
       final response = await http.get(Uri.parse('$baseUrl/siguiente-ingreso'));
@@ -22,27 +25,135 @@ class VehiculoService {
     }
   }
 
+  // ==========================================
+  // 2. EL NUEVO SCRAPING NATIVO EN FLUTTER
+  // ==========================================
+  // Replicamos la función Python para generar la firma HMAC-SHA256
+  String _cifrarData(String mensaje) {
+    const secret =
+        "b708574124a2742b5eecab4993a7f3e91528b8a99d38e1a663b2fcbe92e38a8c";
+    final key = utf8.encode(secret);
+    final bytes = utf8.encode(mensaje);
+    final hmacSha256 = Hmac(sha256, key);
+    final digest = hmacSha256.convert(bytes);
+    return digest.toString();
+  }
+
   Future<Map<String, dynamic>?> buscarDatosPorPatente(String patente) async {
     try {
-      // Ajusta esta URL a la ruta exacta donde viva tu scraping en FastAPI
-      final url = Uri.parse('$baseUrl/scraping/$patente');
+      final patenteLimpia = patente
+          .replaceAll(RegExp(r'[^A-Za-z0-9]'), '')
+          .toUpperCase();
 
-      final response = await http.get(url);
+      final Map<String, String> headers = {
+        "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "es-ES,es;q=0.9",
+      };
 
-      if (response.statusCode == 200) {
-        // Retornamos el diccionario JSON con los datos del vehículo
-        return json.decode(response.body);
-      } else {
-        return null;
+      // PASO 1: Obtener las Cookies iniciales
+      final homeRes = await http.get(
+        Uri.parse('https://www.patentechile.com/'),
+        headers: headers,
+      );
+      final rawCookie = homeRes.headers['set-cookie'];
+      if (rawCookie != null) {
+        // Extraemos solo la primera parte de la cookie de sesión
+        headers['cookie'] = rawCookie.split(';')[0];
       }
+
+      headers['Origin'] = 'https://www.patentechile.com';
+      headers['Referer'] = 'https://www.patentechile.com/';
+      headers['Content-Type'] = 'application/json';
+
+      // PASO 2: Generar Payload y solicitar Token JWT
+      final timestamp = (DateTime.now().millisecondsSinceEpoch ~/ 1000)
+          .toString();
+      final valor = 'vehiculo|$patenteLimpia|$timestamp';
+      final valorCifrado = _cifrarData(valor);
+
+      final payload = {
+        "opt": "vehiculo",
+        "valor": patenteLimpia,
+        "x": valor,
+        "z": valorCifrado,
+      };
+
+      final tokenRes = await http.post(
+        Uri.parse('https://www.patentechile.com/v3/token'),
+        headers: headers,
+        body: jsonEncode(payload),
+      );
+
+      if (tokenRes.statusCode == 200) {
+        final rpta = jsonDecode(tokenRes.body);
+
+        if (rpta['status'] == true && rpta['jwt'] != null) {
+          final token = rpta['jwt'];
+          headers['Content-Type'] = 'application/x-www-form-urlencoded';
+          final payloadToken = 'q=$token';
+
+          // PASO 3: Obtener el HTML con los resultados reales
+          final dataRes = await http.post(
+            Uri.parse('https://www.patentechile.com/resultados/'),
+            headers: headers,
+            body: payloadToken,
+          );
+
+          if (dataRes.statusCode == 200) {
+            // Analizamos el HTML como lo hacía BeautifulSoup en Python
+            final document = html_parser.parse(dataRes.body);
+            final filas = document.querySelectorAll('tr');
+
+            Map<String, dynamic> datosVehiculo = {
+              "marca": "",
+              "modelo": "",
+              "anio": "",
+              "cilindrada": "",
+              "numero_motor": "",
+            };
+
+            for (var fila in filas) {
+              final celdas = fila.querySelectorAll('th, td');
+              if (celdas.length >= 2) {
+                final etiqueta = celdas[0].text.trim().toLowerCase();
+                final valorCelda = celdas[1].text.trim();
+
+                if (etiqueta.contains('marca')) {
+                  datosVehiculo['marca'] = valorCelda;
+                } else if (etiqueta.contains('modelo')) {
+                  datosVehiculo['modelo'] = valorCelda;
+                  // Extraemos la cilindrada usando Regex (Ej: "1.6" de "PEUGEOT 208 1.6")
+                  final match = RegExp(r'(\d\.\d)').firstMatch(valorCelda);
+                  if (match != null)
+                    datosVehiculo['cilindrada'] = match.group(1);
+                } else if (etiqueta.contains('año') ||
+                    etiqueta.contains('ano')) {
+                  datosVehiculo['anio'] = valorCelda;
+                } else if (etiqueta.contains('motor')) {
+                  datosVehiculo['numero_motor'] = valorCelda;
+                }
+              }
+            }
+
+            // Si encontró al menos la marca, consideramos que el scraping fue exitoso
+            if (datosVehiculo['marca'] != "") {
+              return datosVehiculo;
+            }
+          }
+        }
+      }
+      return null;
     } catch (e) {
-      print("Error en scraping: $e");
+      print("Error en scraping nativo: $e");
       return null;
     }
   }
 
-  // 2. POST MULTIPART: La nueva forma de enviar datos + foto
-  // Fíjate que ahora exige recibir el Map (datos) y el XFile (foto)
+  // ==========================================
+  // 3. POST MULTIPART: Guardar (Se mantiene)
+  // ==========================================
   Future<bool> guardarIngreso(
     Map<String, dynamic> datosVehiculo,
     XFile foto,
@@ -51,23 +162,17 @@ class VehiculoService {
       var uri = Uri.parse('$baseUrl/');
       var request = http.MultipartRequest('POST', uri);
 
-      // Compartimento 1: Empaquetamos todo tu JSON en un solo campo de texto llamado 'datos'
       request.fields['datos'] = jsonEncode(datosVehiculo);
 
-      // Compartimento 2: Leemos la foto y la empaquetamos como un archivo binario
       var bytes = await foto.readAsBytes();
       var multipartFile = http.MultipartFile.fromBytes(
-        'foto', // Así se llamará el campo que Python va a recibir
+        'foto',
         bytes,
-        filename: foto
-            .name, // Mantiene el nombre original del archivo (ej: imagen.jpg)
+        filename: foto.name,
       );
       request.files.add(multipartFile);
 
-      // Disparamos el misil al backend
       var streamedResponse = await request.send();
-
-      // Traducimos la respuesta del servidor para poder leerla
       var response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
