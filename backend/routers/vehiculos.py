@@ -280,6 +280,7 @@ def buscar_vehiculo_por_ingreso(numero_ingreso: str, db: Session = Depends(get_d
         },
         "motor": {
             "id_activo": str(activo_motor.id_activo) if activo_motor else None,
+            "id_estado": activo_motor.id_estado if activo_motor else None, # ⚠️ NUEVO
             "numero_motor": detalle_motor.numero_motor if detalle_motor else "S/A",
             "cilindrada": detalle_motor.cilindrada if detalle_motor else "S/A",
             "combustible": detalle_motor.combustible if detalle_motor else "S/A",
@@ -287,6 +288,7 @@ def buscar_vehiculo_por_ingreso(numero_ingreso: str, db: Session = Depends(get_d
         },
         "caja_cambios": {
             "id_activo": str(activo_caja.id_activo) if activo_caja else None,
+            "id_estado": activo_caja.id_estado if activo_caja else None, # ⚠️ NUEVO
             "transmision_tipo": detalle_caja.transmision_tipo if detalle_caja else "S/A",
         }
     }

@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
-// Rutas relativas actualizadas hacia la capa core y services del feature
+// Rutas relativas hacia la capa core y services del feature
 import '../../../../core/widgets/gradient_button.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
+import '../../../../core/theme/tokens/app_typography.dart';
 import '../../services/vehiculo_service.dart';
 
 class RecepcionVehiculoScreen extends StatefulWidget {
@@ -35,11 +36,10 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
 
   // Variables para la cámara
   final ImagePicker _picker = ImagePicker();
-  XFile? _fotoPuerta; // Aquí se guardará el archivo de la foto
+  XFile? _fotoPuerta;
 
-  // Variable para manejar la pantalla de carga del OCR
+  // Variable para manejar la pantalla de carga del OCR y Scraping
   bool _isUploading = false;
-  // Variable para manejar la carga del scraping de patente
   bool _isSearchingPatente = false;
 
   @override
@@ -51,19 +51,21 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
   Future<void> _cargarFolioDesdeBackend() async {
     final folio = await _vehiculoService.obtenerSiguienteIngreso();
 
-    setState(() {
-      numeroIngreso = folio;
-      isLoading = false;
-    });
+    if (mounted) {
+      setState(() {
+        numeroIngreso = folio;
+        isLoading = false;
+      });
+    }
   }
 
   Future<void> _ejecutarScrapingPatente() async {
-    final patente = _patenteController.text.trim();
+    final patente = _patenteController.text.trim().toUpperCase();
     if (patente.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('⚠️ Ingresa una patente primero para buscar.'),
-          backgroundColor: Colors.orange,
+          backgroundColor: AppPalette.secondary,
         ),
       );
       return;
@@ -73,33 +75,28 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
       _isSearchingPatente = true;
     });
 
-    // Llamamos al servicio que acabamos de crear
+    // Ejecutar Scraping NATIVO
     final datos = await _vehiculoService.buscarDatosPorPatente(patente);
 
     if (datos != null && context.mounted) {
       setState(() {
-        // Autocompletamos los campos con lo que encontró el backend
         _marcaController.text = datos['marca'] ?? '';
         _modeloController.text = datos['modelo'] ?? '';
         _anoController.text = datos['anio']?.toString() ?? '';
-        _cilindradaController.text =
-            datos['cilindrada'] ?? ''; // <- LÍNEA NUEVA
+        _cilindradaController.text = datos['cilindrada'] ?? '';
         _motorController.text = datos['numero_motor'] ?? '';
-
-        // Opcional: Autocompletar listas desplegables si los nombres coinciden exacto
-        // traccionSeleccionada = datos['traccion'];
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('✅ Datos recuperados exitosamente.'),
-          backgroundColor: Colors.green,
+          backgroundColor: AppPalette.success,
         ),
       );
     } else if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('❌ No se encontraron datos para esta patente.'),
-          backgroundColor: Colors.red,
+          backgroundColor: AppPalette.error,
         ),
       );
     }
@@ -114,92 +111,101 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Recepción de Vehículo')),
+      backgroundColor: AppPalette.background, // ⚠️ Aplicamos el fondo del token
+      appBar: AppBar(
+        title: const Text(
+          'Recepción de Vehículo',
+          style: AppTypography.title,
+        ), // ⚠️ Aplicamos tipografía
+        backgroundColor: AppPalette.background,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: AppPalette.primary),
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. TARJETA DEL FOLIO (CORRELATIVO)
-            SizedBox(
+            // 1. TARJETA DEL FOLIO (Diseño alineado a Paletizado)
+            Container(
               width: double.infinity,
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 24.0),
-                  child: Column(
-                    children: [
-                      Text(
-                        'NÚMERO DE INGRESO',
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: Theme.of(context).colorScheme.primary,
-                          letterSpacing: 2.0,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        numeroIngreso,
-                        style: Theme.of(context).textTheme.headlineLarge
-                            ?.copyWith(
-                              fontSize: 56,
-                              fontWeight: FontWeight.bold,
-                            ),
-                      ),
-                    ],
+              padding: const EdgeInsets.symmetric(
+                vertical: 32.0,
+                horizontal: 16.0,
+              ),
+              decoration: BoxDecoration(
+                color: AppPalette.surface,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    'NÚMERO DE INGRESO',
+                    style: AppTypography.small.copyWith(
+                      color: AppPalette.primary,
+                      letterSpacing: 2.0,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 8),
+                  Text(
+                    numeroIngreso,
+                    style: AppTypography.headline.copyWith(
+                      fontSize: 56,
+                      color: AppPalette.textPrimary,
+                    ),
+                  ),
+                ],
               ),
             ),
 
             const SizedBox(height: 32),
-            Text(
+            const Text(
               'Datos Técnicos del Vehículo',
-              style: Theme.of(context).textTheme.titleLarge,
+              style: AppTypography.title, // ⚠️ Tipografía unificada
             ),
             const SizedBox(height: 16),
 
             // 2. FORMULARIO COMPLETO
-            // 2. FORMULARIO COMPLETO
-            TextField(
+            _buildTextField(
               controller: _patenteController,
-              textCapitalization:
-                  TextCapitalization.characters, // Fuerza mayúsculas
-              decoration: InputDecoration(
-                labelText: 'Patente',
-                hintText: 'Ej: XXYY11',
-                prefixIcon: const Icon(Icons.directions_car),
-                // Aquí cambiamos el ícono fijo por un botón interactivo y reactivo
-                suffixIcon: _isSearchingPatente
-                    ? const Padding(
-                        padding: EdgeInsets.all(12.0),
-                        child: SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+              label: 'Patente (Ej: XXYY11)',
+              icon: Icons.directions_car,
+              isCapitalized: true,
+              suffixWidget: _isSearchingPatente
+                  ? const Padding(
+                      padding: EdgeInsets.all(12.0),
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppPalette.primary,
                         ),
-                      )
-                    : IconButton(
-                        icon: const Icon(Icons.search),
-                        color: AppPalette.primary,
-                        onPressed: _ejecutarScrapingPatente,
-                        tooltip: 'Buscar datos del vehículo',
                       ),
-              ),
+                    )
+                  : IconButton(
+                      icon: const Icon(Icons.search),
+                      color: AppPalette.primary,
+                      onPressed: _ejecutarScrapingPatente,
+                      tooltip: 'Buscar datos del vehículo',
+                    ),
             ),
             const SizedBox(height: 16),
 
             Row(
               children: [
                 Expanded(
-                  child: TextField(
+                  child: _buildTextField(
                     controller: _marcaController,
-                    decoration: const InputDecoration(labelText: 'Marca'),
+                    label: 'Marca',
                   ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
-                  child: TextField(
+                  child: _buildTextField(
                     controller: _modeloController,
-                    decoration: const InputDecoration(labelText: 'Modelo'),
+                    label: 'Modelo',
                   ),
                 ),
               ],
@@ -209,78 +215,60 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
             Row(
               children: [
                 Expanded(
-                  child: TextField(
+                  child: _buildTextField(
                     controller: _anoController,
-                    keyboardType:
-                        TextInputType.number, // Fuerza teclado numérico
-                    decoration: const InputDecoration(labelText: 'Año'),
+                    label: 'Año',
+                    keyboardType: TextInputType.number,
                   ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
-                  child: TextField(
+                  child: _buildTextField(
                     controller: _cilindradaController,
-                    decoration: const InputDecoration(labelText: 'Cilindrada'),
+                    label: 'Cilindrada',
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 16),
 
-            TextField(
+            _buildTextField(
               controller: _motorController,
-              decoration: const InputDecoration(labelText: 'Nro. de Motor'),
+              label: 'Nro. de Motor',
             ),
             const SizedBox(height: 16),
 
             // 3. SELECTORES OBLIGATORIOS
-            DropdownButtonFormField<String>(
-              decoration: const InputDecoration(labelText: 'Tracción'),
+            _buildDropdown(
+              label: 'Tracción',
               value: traccionSeleccionada,
-              items: ['4x2', '4x4', 'AWD'].map((String valor) {
-                return DropdownMenuItem<String>(
-                  value: valor,
-                  child: Text(valor),
-                );
-              }).toList(),
+              items: ['4x2', '4x4', 'AWD'],
               onChanged: (nuevoValor) =>
                   setState(() => traccionSeleccionada = nuevoValor),
             ),
             const SizedBox(height: 16),
 
-            DropdownButtonFormField<String>(
-              decoration: const InputDecoration(labelText: 'Transmisión'),
+            _buildDropdown(
+              label: 'Transmisión',
               value: transmisionSeleccionada,
-              items: ['Mecánica', 'Automática'].map((String valor) {
-                return DropdownMenuItem<String>(
-                  value: valor,
-                  child: Text(valor),
-                );
-              }).toList(),
+              items: ['Mecánica', 'Automática'],
               onChanged: (nuevoValor) =>
                   setState(() => transmisionSeleccionada = nuevoValor),
             ),
             const SizedBox(height: 16),
 
-            DropdownButtonFormField<String>(
-              decoration: const InputDecoration(labelText: 'Combustible'),
+            _buildDropdown(
+              label: 'Combustible',
               value: combustibleSeleccionado,
-              items: ['Gasolina', 'Diésel', 'Eléctrico', 'Híbrido'].map((
-                String valor,
-              ) {
-                return DropdownMenuItem<String>(
-                  value: valor,
-                  child: Text(valor),
-                );
-              }).toList(),
+              items: ['Gasolina', 'Diésel', 'Eléctrico', 'Híbrido'],
               onChanged: (nuevoValor) =>
                   setState(() => combustibleSeleccionado = nuevoValor),
             ),
 
             const SizedBox(height: 32),
-            Text(
+            const Text(
               'Poka-Yoke: Validación Física',
-              style: Theme.of(context).textTheme.titleLarge,
+              style: AppTypography.title, // ⚠️ Tipografía unificada
             ),
             const SizedBox(height: 16),
 
@@ -301,17 +289,15 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(24.0),
                 decoration: BoxDecoration(
-                  // Borde azul estándar si hay foto, sin verde validado
                   border: Border.all(
                     color: AppPalette.primary,
                     width: 2,
                     style: BorderStyle.solid,
                   ),
                   borderRadius: BorderRadius.circular(12),
-                  // Fondo sutil azul si ya se tomó la foto
                   color: _fotoPuerta != null
-                      ? AppPalette.primary.withOpacity(0.1)
-                      : Colors.transparent,
+                      ? AppPalette.primary.withValues(alpha: 0.1)
+                      : AppPalette.surface, // ⚠️ Fondo integrado con el tema
                 ),
                 child: Column(
                   children: [
@@ -327,7 +313,7 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
                       _fotoPuerta != null
                           ? '📸 Foto Adjunta (Pendiente de envío)'
                           : 'Tomar foto a la puerta',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      style: AppTypography.body.copyWith(
                         color: AppPalette.textPrimary,
                         fontWeight: _fotoPuerta != null
                             ? FontWeight.bold
@@ -338,10 +324,8 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
                     Text(
                       _fotoPuerta != null
                           ? 'Presiona "Guardar Ingreso" para validar con IA'
-                          : 'El OCR validará el código Posca',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppPalette.textSecondary,
-                      ),
+                          : 'El OCR validará el código escrito en la puerta',
+                      style: AppTypography.small,
                     ),
                   ],
                 ),
@@ -350,10 +334,10 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
 
             const SizedBox(height: 32),
 
-            // 5. EL BOTÓN GUARDAR (LÓGICA CONECTADA)
+            // 5. EL BOTÓN GUARDAR
             GradientButton(
               onPressed: _isUploading
-                  ? () {} // Deshabilita el clic si la IA está analizando
+                  ? null // Se deshabilita y se torna gris automáticamente
                   : () async {
                       if (_patenteController.text.trim().isEmpty ||
                           _marcaController.text.trim().isEmpty ||
@@ -363,14 +347,13 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
                             content: Text(
                               'Bloqueo: Faltan datos o la foto de validación.',
                             ),
-                            backgroundColor: Colors.red,
+                            backgroundColor: AppPalette.error,
                             behavior: SnackBarBehavior.floating,
                           ),
                         );
                         return;
                       }
 
-                      // Encendemos el círculo de carga y bloqueamos la pantalla
                       setState(() {
                         _isUploading = true;
                       });
@@ -390,18 +373,20 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
                       };
 
                       try {
-                        bool exito = await _vehiculoService.guardarIngreso(
-                          datosNuevos,
-                          _fotoPuerta!,
-                        );
+                        // ⚠️ Ajuste: Asegúrate de tener guardarIngresoConRespuesta en vehiculo_service.dart
+                        final resultado = await _vehiculoService
+                            .guardarIngresoConRespuesta(
+                              datosNuevos,
+                              _fotoPuerta!,
+                            );
 
-                        if (exito && context.mounted) {
+                        if (resultado['exito'] == true && context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text(
                                 '✅ Poka-Yoke Superado: ¡Vehículo ingresado con éxito!',
                               ),
-                              backgroundColor: Colors.green,
+                              backgroundColor: AppPalette.success,
                               duration: Duration(seconds: 4),
                             ),
                           );
@@ -422,14 +407,11 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
 
                           _cargarFolioDesdeBackend();
                         } else if (context.mounted) {
-                          // Si es false, significa que el backend/IA lo rechazó (HTTP 400)
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                '❌ Error Poka-Yoke: La IA rechazó la foto o no coincide el folio.',
-                              ),
-                              backgroundColor: Colors.red,
-                              duration: Duration(seconds: 6),
+                            SnackBar(
+                              content: Text('❌ ${resultado['mensaje']}'),
+                              backgroundColor: AppPalette.error,
+                              duration: const Duration(seconds: 6),
                             ),
                           );
                         }
@@ -440,12 +422,11 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
                               content: Text(
                                 '❌ Error de conexión con el servidor.',
                               ),
-                              backgroundColor: Colors.red,
+                              backgroundColor: AppPalette.error,
                             ),
                           );
                         }
                       } finally {
-                        // Apagamos el círculo de carga, pase lo que pase
                         if (context.mounted) {
                           setState(() {
                             _isUploading = false;
@@ -454,7 +435,7 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
                       }
                     },
               gradient: const LinearGradient(
-                colors: [AppPalette.primary, AppPalette.secondary],
+                colors: [AppPalette.primary, AppPalette.primary],
                 begin: Alignment.centerLeft,
                 end: Alignment.centerRight,
               ),
@@ -480,6 +461,57 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  // ── WIDGETS REUTILIZABLES PARA FORMULARIOS ──
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    IconData? icon,
+    bool isCapitalized = false,
+    TextInputType? keyboardType,
+    Widget? suffixWidget,
+  }) {
+    return TextField(
+      controller: controller,
+      style: AppTypography.body, // ⚠️ Tipografía correcta
+      textCapitalization: isCapitalized
+          ? TextCapitalization.characters
+          : TextCapitalization.none,
+      keyboardType: keyboardType,
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: AppTypography.small,
+        prefixIcon: icon != null
+            ? Icon(icon, color: AppPalette.primary, size: 20)
+            : null,
+        suffixIcon: suffixWidget,
+      ),
+    );
+  }
+
+  Widget _buildDropdown({
+    required String label,
+    required String? value,
+    required List<String> items,
+    required Function(String?) onChanged,
+  }) {
+    return DropdownButtonFormField<String>(
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: AppTypography.small,
+      ),
+      value: value,
+      dropdownColor:
+          AppPalette.surface, // ⚠️ Evita menús blancos en modo oscuro
+      style: AppTypography.body, // ⚠️ Tipografía correcta
+      icon: const Icon(Icons.keyboard_arrow_down, color: AppPalette.primary),
+      items: items.map((String valor) {
+        return DropdownMenuItem<String>(value: valor, child: Text(valor));
+      }).toList(),
+      onChanged: onChanged,
     );
   }
 }

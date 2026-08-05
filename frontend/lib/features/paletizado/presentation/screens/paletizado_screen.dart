@@ -34,6 +34,7 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
   Map<String, dynamic> _datosCaja = {};
 
   String _tipoActivoSeleccionado = 'Motor';
+  List<String> _opcionesRepuestos = []; // ⚠️ NUEVA LISTA DINÁMICA
 
   bool _isValidatingOCR = false;
 
@@ -259,18 +260,51 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
     if (!mounted) return;
 
     if (datosVehiculo != null) {
+      // Guardamos los diccionarios de las piezas
+      final datosMotorTemp = datosVehiculo['motor'] ?? {};
+      final datosCajaTemp = datosVehiculo['caja_cambios'] ?? {};
+
+      // ⚠️ LÓGICA DE BLOQUEO: Solo agregamos los que están en estado 5 (En Desarme)
+      List<String> opcionesDisponibles = [];
+      if (datosMotorTemp['id_estado'] == 5) opcionesDisponibles.add('Motor');
+      if (datosCajaTemp['id_estado'] == 5)
+        opcionesDisponibles.add('Caja de Cambios');
+
+      // Si la lista quedó vacía, significa que ambos ya fueron paletizados (estado 1 u otro)
+      if (opcionesDisponibles.isEmpty) {
+        setState(() {
+          _isLoading = false;
+          _vehiculoEncontrado = false;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                '✅ Todos los repuestos de este folio ya se encuentran paletizados.',
+              ),
+              backgroundColor: AppPalette.success,
+            ),
+          );
+        }
+        return; // Cortamos la ejecución aquí, no mostramos el formulario
+      }
+
+      // Si hay piezas pendientes, actualizamos la pantalla
       setState(() {
         _isLoading = false;
         _vehiculoEncontrado = true;
-        // Ahora los datos vienen anidados en el JSON
+
         final vehiculo = datosVehiculo['vehiculo'] ?? {};
         _marca = vehiculo['marca'] ?? 'Desconocida';
         _modelo = vehiculo['modelo'] ?? 'Desconocido';
         _anio = vehiculo['anio']?.toString() ?? 'S/A';
 
-        // Guardamos los diccionarios de las piezas
-        _datosMotor = datosVehiculo['motor'] ?? {};
-        _datosCaja = datosVehiculo['caja_cambios'] ?? {};
+        _datosMotor = datosMotorTemp;
+        _datosCaja = datosCajaTemp;
+
+        _opcionesRepuestos = opcionesDisponibles; // Asignamos la lista filtrada
+        _tipoActivoSeleccionado =
+            _opcionesRepuestos.first; // Seleccionamos el primero por defecto
       });
     }
   }
@@ -374,13 +408,10 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
                     color: AppPalette.primary,
                   ),
                 ),
-                items: const [
-                  DropdownMenuItem(value: 'Motor', child: Text('Motor')),
-                  DropdownMenuItem(
-                    value: 'Caja de Cambios',
-                    child: Text('Caja de Cambios'),
-                  ),
-                ],
+                // ⚠️ Usamos nuestra lista dinámica filtrada
+                items: _opcionesRepuestos.map((String valor) {
+                  return DropdownMenuItem(value: valor, child: Text(valor));
+                }).toList(),
                 onChanged: (value) {
                   if (value != null) {
                     setState(() => _tipoActivoSeleccionado = value);
@@ -666,7 +697,9 @@ class _ModalExitoContentState extends State<_ModalExitoContent> {
           const SizedBox(height: 16),
           Text(
             '¡Activo Guardado!',
-            style: AppTypography.headline.copyWith(color: AppPalette.textPrimary),
+            style: AppTypography.headline.copyWith(
+              color: AppPalette.textPrimary,
+            ),
           ),
           const SizedBox(height: 4),
           Text(
@@ -697,7 +730,9 @@ class _ModalExitoContentState extends State<_ModalExitoContent> {
                       Navigator.of(context).pop(); // Cierra el modal
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('🖨️ Impresión enviada (Bluetooth stub).'),
+                          content: Text(
+                            '🖨️ Impresión enviada (Bluetooth stub).',
+                          ),
                           backgroundColor: AppPalette.primary,
                         ),
                       );
@@ -712,9 +747,7 @@ class _ModalExitoContentState extends State<_ModalExitoContent> {
                       ),
                     )
                   : const Icon(Icons.print, color: Colors.white),
-              label: Text(
-                _isConnecting ? 'CONECTANDO...' : 'Imprimir Ahora',
-              ),
+              label: Text(_isConnecting ? 'CONECTANDO...' : 'Imprimir Ahora'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppPalette.primary,
                 padding: const EdgeInsets.symmetric(vertical: 14),
@@ -730,10 +763,9 @@ class _ModalExitoContentState extends State<_ModalExitoContent> {
               onPressed: () {
                 Navigator.of(context).pop(); // Cierra el modal
                 // Navega a la pantalla de previsualización con los datos de la etiqueta
-                Navigator.of(context).pushNamed(
-                  '/etiqueta-preview',
-                  arguments: widget.etiqueta,
-                );
+                Navigator.of(
+                  context,
+                ).pushNamed('/etiqueta-preview', arguments: widget.etiqueta);
               },
               icon: const Icon(Icons.qr_code_2, color: AppPalette.primary),
               label: const Text(

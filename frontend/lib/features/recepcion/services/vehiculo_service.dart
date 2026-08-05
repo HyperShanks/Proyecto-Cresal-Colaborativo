@@ -154,7 +154,7 @@ class VehiculoService {
   // ==========================================
   // 3. POST MULTIPART: Guardar (Se mantiene)
   // ==========================================
-  Future<bool> guardarIngreso(
+  Future<Map<String, dynamic>> guardarIngresoConRespuesta(
     Map<String, dynamic> datosVehiculo,
     XFile foto,
   ) async {
@@ -176,14 +176,15 @@ class VehiculoService {
       var response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        return true;
+        return {'exito': true, 'mensaje': 'Guardado exitoso'};
       } else {
-        print("Error del backend: ${response.body}");
-        return false;
+        final errorBody = jsonDecode(response.body);
+        final mensajeDetail =
+            errorBody['detail'] ?? 'Error al guardar el ingreso';
+        return {'exito': false, 'mensaje': mensajeDetail};
       }
     } catch (e) {
-      print("Error de conexión: $e");
-      return false;
+      return {'exito': false, 'mensaje': 'Error de conexión: $e'};
     }
   }
 }
