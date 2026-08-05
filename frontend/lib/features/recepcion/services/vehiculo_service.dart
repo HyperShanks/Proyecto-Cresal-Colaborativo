@@ -3,6 +3,8 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart'; // <-- IMPORTANTE PARA LEER LA FOTO
 
 class VehiculoService {
+  //static const String baseUrl =
+  //   'https://cresal-backend-dev.onrender.com/api/v1/vehiculos';
   static const String baseUrl =
       'https://cresal-backend-dev.onrender.com/api/v1/vehiculos';
 
