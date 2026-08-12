@@ -5,18 +5,16 @@ import 'package:http/http.dart' as http;
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 
+import '../../../core/constants/api_constants.dart';
+
 class PaletizadoService {
-  // Ajusta esta IP según tu entorno
-  static const String baseUrl =
-      'https://cresal-backend-dev.onrender.com/api/v1/vehiculos';
-  //static const String baseUrl = 'http://192.168.1.4:8000//api/v1/vehiculos';
 
   Future<Map<String, dynamic>?> buscarVehiculoPorIngreso(
     String numeroIngreso,
   ) async {
     try {
       debugPrint('📌 [PALETIZADO_SERVICE] 🔍 Buscando folio: $numeroIngreso');
-      final url = Uri.parse('$baseUrl/buscar/$numeroIngreso');
+      final url = Uri.parse('${ApiConstants.vehiculosEndpoint}/buscar/$numeroIngreso');
       final response = await http.get(url);
 
       if (response.statusCode == 200) {
@@ -36,7 +34,7 @@ class PaletizadoService {
     // ... (Mantén este método exactamente como lo tenías, solo agrégale los debugPrint si deseas)
     try {
       debugPrint('📌 [PALETIZADO_SERVICE] 🤖 Iniciando validación OCR...');
-      final url = Uri.parse('$baseUrl/validar-ocr-pieza');
+      final url = Uri.parse('${ApiConstants.vehiculosEndpoint}/validar-ocr-pieza');
       var request = http.MultipartRequest('POST', url);
       request.fields['numero_ingreso'] = numeroIngreso;
       request.files.add(
@@ -70,7 +68,7 @@ class PaletizadoService {
       debugPrint(
         '📌 [PALETIZADO_SERVICE] 🚀 Enviando paletizado para Folio $folio...',
       );
-      final url = Uri.parse('$baseUrl/guardar-paletizado');
+      final url = Uri.parse('${ApiConstants.vehiculosEndpoint}/guardar-paletizado');
       var request = http.MultipartRequest('POST', url);
 
       request.fields['numero_ingreso'] = folio;

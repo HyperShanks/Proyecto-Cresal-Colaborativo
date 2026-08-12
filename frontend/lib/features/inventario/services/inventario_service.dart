@@ -1,11 +1,9 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
+import '../../../core/constants/api_constants.dart';
+
 class InventarioService {
-  // Apuntando directo a tu servidor local vía Wi-Fi
-  //static const String baseUrl = 'http://192.168.1.85:8000/api/v1/inventario';
-  static const String baseUrl =
-      'https://cresal-backend-dev.onrender.com/api/v1/inventario';
 
   static Future<Map<String, List<String>>> obtenerOpcionesFiltros({
     String? categoria,
@@ -30,7 +28,7 @@ class InventarioService {
       if (transmision != null) queryParams['transmision'] = transmision;
 
       final uri = Uri.parse(
-        '$baseUrl/opciones-filtros',
+        '${ApiConstants.inventarioEndpoint}/opciones-filtros',
       ).replace(queryParameters: queryParams);
       final response = await http.get(uri);
 
@@ -74,7 +72,7 @@ class InventarioService {
 
       // 2. Construir la URI con los parámetros
       final uri = Uri.parse(
-        '$baseUrl/buscar',
+        '${ApiConstants.inventarioEndpoint}/buscar',
       ).replace(queryParameters: queryParams);
 
       // 3. Ejecutar la petición

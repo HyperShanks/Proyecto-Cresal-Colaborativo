@@ -1,15 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CONFIGURACIÓN DE URL BASE
-//   • 10.0.2.2  → Emulador Android (apunta al localhost del PC host)
-//   • 127.0.0.1 → Windows / Web / macOS desktop
-// ─────────────────────────────────────────────────────────────────────────────
-
-const String baseUrl = 'https://cresal-backend-dev.onrender.com/api/auth';
-//const String _baseUrl = 'http://192.168.1.85:8000/api/auth';
+import '../../../core/constants/api_constants.dart';
 
 // Clave bajo la que se guarda el JWT en el almacenamiento seguro
 const String _tokenKey = 'access_token';
@@ -37,7 +29,7 @@ class AuthService {
   /// o [AuthResult.fail(mensaje)] con el detalle del error del servidor.
   static Future<AuthResult> loginConPin(String pin) async {
     try {
-      final uri = Uri.parse('$baseUrl/login-pin');
+      final uri = Uri.parse('${ApiConstants.authEndpoint}/login-pin');
 
       final response = await http
           .post(

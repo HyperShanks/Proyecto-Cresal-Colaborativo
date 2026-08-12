@@ -4,16 +4,16 @@ import 'package:image_picker/image_picker.dart';
 import 'package:crypto/crypto.dart'; // ⚠️ NUEVO: Para el cifrado HMAC-SHA256
 import 'package:html/parser.dart' as html_parser; // ⚠️ NUEVO: Para leer el HTML
 
+import '../../../core/constants/api_constants.dart';
+
 class VehiculoService {
-  static const String baseUrl =
-      'https://cresal-backend-dev.onrender.com/api/v1/vehiculos';
 
   // ==========================================
   // 1. GET: Siguiente Ingreso (Se mantiene)
   // ==========================================
   Future<String> obtenerSiguienteIngreso() async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/siguiente-ingreso'));
+      final response = await http.get(Uri.parse('${ApiConstants.vehiculosEndpoint}/siguiente-ingreso'));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         return data['siguiente_ingreso'];
@@ -159,7 +159,7 @@ class VehiculoService {
     XFile foto,
   ) async {
     try {
-      var uri = Uri.parse('$baseUrl/');
+      var uri = Uri.parse('${ApiConstants.vehiculosEndpoint}/');
       var request = http.MultipartRequest('POST', uri);
 
       request.fields['datos'] = jsonEncode(datosVehiculo);
