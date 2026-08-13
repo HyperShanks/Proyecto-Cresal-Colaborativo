@@ -82,6 +82,10 @@ class Usuario(Base):
     rol = relationship("Rol", back_populates="usuarios")
     sucursal = relationship("Sucursal", back_populates="usuarios")
 
+    @property
+    def nombre_rol(self) -> str | None:
+        return self.rol.nombre_rol if self.rol else None
+
 # ==========================================
 # SOPORTE TÉCNICO Y MESA DE AYUDA INTERNA
 # ==========================================

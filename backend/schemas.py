@@ -61,6 +61,14 @@ class LoginPINRequest(BaseModel):
     """Payload de entrada para el login por PIN de operario."""
     pin: str
 
+class RolData(BaseModel):
+    """DTO para la información de un rol."""
+    id_rol: int
+    nombre_rol: str
+
+    class Config:
+        from_attributes = True
+
 class UsuarioData(BaseModel):
     """DTO de salida con los datos públicos del usuario autenticado."""
     id_usuario: UUID
@@ -68,7 +76,9 @@ class UsuarioData(BaseModel):
     apellidos: str
     rut_usuario: str
     id_rol: int
+    nombre_rol: Optional[str] = None
     id_sucursal: int
+    rol: Optional[RolData] = None
 
     class Config:
         from_attributes = True  # Permite lectura directa desde el modelo SQLAlchemy

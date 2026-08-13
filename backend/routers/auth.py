@@ -3,7 +3,7 @@
 # inicien sesión desde la app Flutter usando su PIN de 4 dígitos.
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from database import get_db
 from models import Usuario
@@ -31,8 +31,8 @@ def login_por_pin(request: LoginPINRequest, db: Session = Depends(get_db)):
     2. Camino Triste: Si no existe o está inactivo → 401 Unauthorized.
     3. Camino Feliz: Si es válido y activo → Genera JWT y retorna TokenResponse.
     """
-    # Consulta: buscar usuario por PIN
-    usuario = db.query(Usuario).filter(
+    # Consulta: buscar usuario por PIN (cargando relación con Rol)
+    usuario = db.query(Usuario).options(joinedload(Usuario.rol)).filter(
         Usuario.pin_acceso == request.pin
     ).first()
 

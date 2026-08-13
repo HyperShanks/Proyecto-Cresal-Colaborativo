@@ -3,8 +3,9 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../core/constants/api_constants.dart';
 
-// Clave bajo la que se guarda el JWT en el almacenamiento seguro
+// Claves de almacenamiento seguro
 const String _tokenKey = 'access_token';
+const String _rolKey = 'user_rol';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MODELOS DE RESULTADO (evita mezclar lógica HTTP en la UI)
@@ -23,7 +24,7 @@ class AuthResult {
 class AuthService {
   static const _storage = FlutterSecureStorage();
 
-  /// Envía el PIN al backend y persiste el JWT si la autenticación es exitosa.
+  /// Envía el PIN al backend y persiste el JWT y el rol si la autenticación es exitosa.
   ///
   /// Retorna [AuthResult.ok()] si el login fue correcto,
   /// o [AuthResult.fail(mensaje)] con el detalle del error del servidor.
@@ -46,8 +47,15 @@ class AuthService {
 
       if (response.statusCode == 200) {
         final token = body['access_token'] as String;
-        // Guardar el token de forma segura en el dispositivo
+        // Extraemos el rol en formato texto (ej. "Bodeguero", "Vendedor")
+        final usuarioMap = body['usuario'] as Map<String, dynamic>?;
+        final rolText = usuarioMap?['nombre_rol']?.toString() ??
+            usuarioMap?['rol']?['nombre_rol']?.toString() ??
+            '';
+
+        // Guardar token y rol de forma segura en el dispositivo
         await _storage.write(key: _tokenKey, value: token);
+        await _storage.write(key: _rolKey, value: rolText);
         return const AuthResult.ok();
       }
 
@@ -62,6 +70,13 @@ class AuthService {
   /// Recupera el token almacenado (útil para inyectarlo en peticiones futuras).
   static Future<String?> getToken() => _storage.read(key: _tokenKey);
 
-  /// Elimina el token (para logout o sesiones expiradas).
-  static Future<void> clearToken() => _storage.delete(key: _tokenKey);
+  /// Recupera el rol textual almacenado (ej. "Bodeguero", "Vendedor").
+  static Future<String?> getRol() => _storage.read(key: _rolKey);
+
+  /// Elimina el token y el rol (para logout o sesiones expiradas).
+  static Future<void> clearToken() async {
+    await _storage.delete(key: _tokenKey);
+    await _storage.delete(key: _rolKey);
+  }
 }
+
