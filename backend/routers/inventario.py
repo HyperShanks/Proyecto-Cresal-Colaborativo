@@ -1,11 +1,22 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_, case
 from typing import Dict, List, Optional
 
 from database import get_db
-from models import Activo_Inventariado, Vehiculo_Origen, Detalle_Motor, Multimedia_Activo, Detalle_Caja_Cambio, Categoria_Activo, Estado_Activo, Usuario
+from models import (
+    Activo_Inventariado,
+    Vehiculo_Origen,
+    Detalle_Motor,
+    Multimedia_Activo,
+    Detalle_Caja_Cambio,
+    Categoria_Activo,
+    Estado_Activo,
+    Sucursal,
+    Usuario,
+)
 from core.security import get_current_user
+from schemas import CatalogoItemResponse, PaginatedCatalogoResponse
 
 router = APIRouter(prefix="/api/v1/inventario", tags=["Buscador Inventario"])
 
@@ -189,3 +200,140 @@ def buscar_inventario(
         })
 
     return respuesta
+
+
+@router.get("/catalogo", response_model=PaginatedCatalogoResponse)
+def obtener_catalogo(
+    q: Optional[str] = Query(None, description="Texto libre para buscar por marca, modelo o SKU"),
+    id_categoria: Optional[int] = Query(None, description="Filtro por ID de categoría"),
+    id_sucursal: Optional[int] = Query(None, description="Filtro explícito por ID de sucursal"),
+    marca: Optional[str] = Query(None, description="Filtro por marca"),
+    anio: Optional[int] = Query(None, description="Filtro por año"),
+    limit: int = Query(15, ge=1, le=100, description="Límite de elementos por página"),
+    offset: int = Query(0, ge=0, description="Desplazamiento para paginación"),
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """
+    Endpoint paginado para catálogo de activos inventariados (HU-3.2).
+    Aplica filtros dinámicos y el algoritmo 'Radar de Stock' (prioriza la sucursal del usuario).
+    """
+    # 1. Base query con joins necesarios
+    query = db.query(
+        Activo_Inventariado,
+        Vehiculo_Origen,
+        Categoria_Activo,
+        Estado_Activo,
+        Sucursal,
+        Detalle_Motor,
+        Detalle_Caja_Cambio,
+    ).outerjoin(
+        Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo
+    ).join(
+        Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria
+    ).join(
+        Estado_Activo, Activo_Inventariado.id_estado == Estado_Activo.id_estado
+    ).join(
+        Sucursal, Activo_Inventariado.id_sucursal_actual == Sucursal.id_sucursal
+    ).outerjoin(
+        Detalle_Motor, Activo_Inventariado.id_activo == Detalle_Motor.id_activo
+    ).outerjoin(
+        Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo
+    )
+
+    # 2. Filtros Base: Borrado lógico y Estado Disponible
+    query = query.filter(
+        Activo_Inventariado.estado == 'Activo',
+        Estado_Activo.nombre_estado == 'Disponible'
+    )
+
+    # 3. Filtros Dinámicos Opcionales
+    if id_categoria is not None:
+        query = query.filter(Activo_Inventariado.id_categoria == id_categoria)
+
+    if id_sucursal is not None:
+        query = query.filter(Activo_Inventariado.id_sucursal_actual == id_sucursal)
+
+    if marca and marca.strip():
+        query = query.filter(func.upper(Vehiculo_Origen.marca) == marca.strip().upper())
+
+    if anio is not None:
+        query = query.filter(Vehiculo_Origen.anio == anio)
+
+    if q and q.strip():
+        q_term = f"%{q.strip().upper()}%"
+        query = query.filter(
+            or_(
+                func.upper(Activo_Inventariado.sku_qr_fisico).like(q_term),
+                func.upper(Vehiculo_Origen.marca).like(q_term),
+                func.upper(Vehiculo_Origen.modelo).like(q_term)
+            )
+        )
+
+    # 4. Total count antes de paginación
+    total_count = query.count()
+
+    # 5. Algoritmo Radar de Stock (ORDER BY)
+    # Si no hay filtro explícito de sucursal, ordenamos poniendo PRIMERO los activos de la sucursal del vendedor
+    if id_sucursal is None and getattr(current_user, "id_sucursal", None) is not None:
+        radar_order = case(
+            (Activo_Inventariado.id_sucursal_actual == current_user.id_sucursal, 1),
+            else_=0
+        ).desc()
+        query = query.order_by(radar_order, Activo_Inventariado.fecha_creacion.desc())
+    else:
+        query = query.order_by(Activo_Inventariado.fecha_creacion.desc())
+
+    # 6. Paginación
+    resultados = query.offset(offset).limit(limit).all()
+
+    # 7. Mapeo a CatalogoItemResponse
+    items: List[CatalogoItemResponse] = []
+    for activo, vehiculo, cat, est, suc, motor, caja in resultados:
+        # Evaluación técnica de motor vs caja
+        cilindrada_val = None
+        combustible_val = None
+        transmision_val = None
+
+        if cat.id_categoria == 1 and motor:
+            cilindrada_val = motor.cilindrada
+            combustible_val = motor.combustible
+            transmision_val = motor.transmision_tipo
+        elif cat.id_categoria == 2 and caja:
+            transmision_val = caja.transmision_tipo
+        else:
+            if motor:
+                cilindrada_val = motor.cilindrada
+                combustible_val = motor.combustible
+                transmision_val = motor.transmision_tipo
+            elif caja:
+                transmision_val = caja.transmision_tipo
+
+        item = CatalogoItemResponse(
+            id_activo=activo.id_activo,
+            sku_qr_fisico=activo.sku_qr_fisico,
+            precio_referencia=activo.precio_referencia,
+            id_categoria=cat.id_categoria,
+            nombre_categoria=cat.nombre_categoria,
+            id_sucursal_actual=suc.id_sucursal,
+            nombre_sucursal=suc.nombre_sucursal,
+            id_vehiculo=vehiculo.id_vehiculo if vehiculo else None,
+            marca=vehiculo.marca if vehiculo else None,
+            modelo=vehiculo.modelo if vehiculo else None,
+            anio=vehiculo.anio if vehiculo else None,
+            traccion=vehiculo.traccion if vehiculo else None,
+            cilindrada=cilindrada_val,
+            combustible=combustible_val,
+            transmision_tipo=transmision_val,
+            ubicacion_pasillo=activo.ubicacion_pasillo,
+            ubicacion_pallet=activo.ubicacion_pallet,
+            estado_activo=est.nombre_estado,
+        )
+        items.append(item)
+
+    return PaginatedCatalogoResponse(
+        items=items,
+        total_count=total_count,
+        limit=limit,
+        offset=offset
+    )

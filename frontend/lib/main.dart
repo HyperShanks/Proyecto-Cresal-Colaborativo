@@ -9,6 +9,8 @@ import 'features/paletizado/presentation/screens/paletizado_screen.dart'; // Imp
 import 'features/paletizado/presentation/screens/etiqueta_preview_screen.dart'; // HU-2.4: Previsualización de etiqueta térmica
 import 'features/alertas/presentation/screens/alertas_screen.dart'; // Importa la pantalla de alertas
 import 'features/inventario/presentation/screens/buscador_screen.dart'; // Importa la pantalla de buscador
+import 'features/ventas/presentation/screens/catalogo_screen.dart'; // HU-3.2: Catálogo Dinámico de Ventas
+import 'features/ventas/presentation/screens/ventas_main_screen.dart'; // HU-3.2: Layout Principal Vendedor
 
 void main() {
   runApp(const MyApp());
@@ -37,6 +39,7 @@ class _MyAppState extends State<MyApp> {
       routes: {
         '/login': (context) => const PinLoginScreen(),
         '/home': (context) => const HomeScreen(),
+        '/ventas_main': (context) => const VentasMainScreen(),
         '/recepcion': (context) => const RecepcionVehiculoScreen(),
         '/tickets': (context) => const TicketsScreen(),
         '/paletizado': (context) =>
@@ -47,6 +50,8 @@ class _MyAppState extends State<MyApp> {
             const AlertasScreen(), // Nueva ruta para el módulo de alertas
         '/buscador': (context) =>
             const BuscadorScreen(), // Nueva ruta para el módulo de buscador
+        '/catalogo': (context) =>
+            const CatalogoScreen(), // HU-3.2: Catálogo Dinámico con Radar de Stock
       },
     );
   }

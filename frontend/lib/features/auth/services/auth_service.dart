@@ -6,6 +6,8 @@ import '../../../core/constants/api_constants.dart';
 // Claves de almacenamiento seguro
 const String _tokenKey = 'access_token';
 const String _rolKey = 'user_rol';
+const String _sucursalKey = 'user_sucursal_id';
+const String _nombreUsuarioKey = 'user_nombre_completo';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MODELOS DE RESULTADO (evita mezclar lógica HTTP en la UI)
@@ -49,13 +51,34 @@ class AuthService {
         final token = body['access_token'] as String;
         // Extraemos el rol en formato texto (ej. "Bodeguero", "Vendedor")
         final usuarioMap = body['usuario'] as Map<String, dynamic>?;
-        final rolText = usuarioMap?['nombre_rol']?.toString() ??
+        String rolText = usuarioMap?['nombre_rol']?.toString() ??
             usuarioMap?['rol']?['nombre_rol']?.toString() ??
             '';
+        if (rolText.isEmpty && usuarioMap?['id_rol'] != null) {
+          final idRol = usuarioMap!['id_rol'];
+          if (idRol == 1) rolText = 'Bodeguero';
+          if (idRol == 2) rolText = 'Vendedor';
+          if (idRol == 3) rolText = 'Caja';
+          if (idRol == 4) rolText = 'Gerente';
+          if (idRol == 5) rolText = 'Administrador';
+          if (idRol == 6) rolText = 'Auditor';
+        }
+        final sucursalId = usuarioMap?['id_sucursal']?.toString();
+        final nombres = usuarioMap?['nombres']?.toString() ?? '';
+        final apellidos = usuarioMap?['apellidos']?.toString() ?? '';
 
-        // Guardar token y rol de forma segura en el dispositivo
+        // Guardar token, rol y sucursal de forma segura en el dispositivo
         await _storage.write(key: _tokenKey, value: token);
         await _storage.write(key: _rolKey, value: rolText);
+        if (sucursalId != null) {
+          await _storage.write(key: _sucursalKey, value: sucursalId);
+        }
+        if (nombres.isNotEmpty) {
+          await _storage.write(
+            key: _nombreUsuarioKey,
+            value: '$nombres $apellidos'.trim(),
+          );
+        }
         return const AuthResult.ok();
       }
 
@@ -73,10 +96,21 @@ class AuthService {
   /// Recupera el rol textual almacenado (ej. "Bodeguero", "Vendedor").
   static Future<String?> getRol() => _storage.read(key: _rolKey);
 
-  /// Elimina el token y el rol (para logout o sesiones expiradas).
+  /// Recupera el ID de sucursal del usuario autenticado (para Radar de Stock).
+  static Future<int?> getSucursalId() async {
+    final val = await _storage.read(key: _sucursalKey);
+    return val != null ? int.tryParse(val) : null;
+  }
+
+  /// Recupera el nombre completo del usuario autenticado.
+  static Future<String?> getNombreUsuario() => _storage.read(key: _nombreUsuarioKey);
+
+  /// Elimina el token, rol y datos de sesión (para logout o sesiones expiradas).
   static Future<void> clearToken() async {
     await _storage.delete(key: _tokenKey);
     await _storage.delete(key: _rolKey);
+    await _storage.delete(key: _sucursalKey);
+    await _storage.delete(key: _nombreUsuarioKey);
   }
 }
 

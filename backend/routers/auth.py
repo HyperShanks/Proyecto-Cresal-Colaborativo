@@ -62,8 +62,12 @@ def login_por_pin(request: LoginPINRequest, db: Session = Depends(get_db)):
         data={"sub": str(usuario.id_usuario)}
     )
 
+    usuario_data = UsuarioData.model_validate(usuario)
+    if usuario.rol and not usuario_data.nombre_rol:
+        usuario_data.nombre_rol = usuario.rol.nombre_rol
+
     return TokenResponse(
         access_token=access_token,
         token_type="bearer",
-        usuario=UsuarioData.model_validate(usuario)
+        usuario=usuario_data
     )

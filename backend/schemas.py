@@ -1,7 +1,7 @@
 # Este archivo contiene los esquemas de Pydantic para la validación de datos de entrada y salida en la API.
 
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
 import re
 
@@ -164,4 +164,49 @@ class VehiculoInventarioResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+
+# ==========================================
+# ESQUEMAS PARA CATÁLOGO Y RADAR (HU-3.2)
+# ==========================================
+
+class CatalogoItemResponse(BaseModel):
+    """DTO de salida para un elemento individual del catálogo de inventario."""
+    id_activo: UUID
+    sku_qr_fisico: str
+    precio_referencia: Optional[int] = None
+    
+    # Categoría y Sucursal
+    id_categoria: int
+    nombre_categoria: str
+    id_sucursal_actual: int
+    nombre_sucursal: str
+    
+    # Datos del Vehículo de Origen (opcional si es repuesto sin vehículo directo)
+    id_vehiculo: Optional[UUID] = None
+    marca: Optional[str] = None
+    modelo: Optional[str] = None
+    anio: Optional[int] = None
+    traccion: Optional[str] = None
+    
+    # Especificaciones Técnicas (Motor / Caja)
+    cilindrada: Optional[str] = None
+    combustible: Optional[str] = None
+    transmision_tipo: Optional[str] = None
+    
+    # Ubicación y estado
+    ubicacion_pasillo: Optional[str] = None
+    ubicacion_pallet: Optional[str] = None
+    estado_activo: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class PaginatedCatalogoResponse(BaseModel):
+    """DTO de respuesta paginada para el catálogo de activos con Radar de Stock."""
+    items: List[CatalogoItemResponse]
+    total_count: int
+    limit: int
+    offset: int
 

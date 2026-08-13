@@ -59,6 +59,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     final rol = await AuthService.getRol();
     if (mounted) {
+      if (rol?.toLowerCase() == 'vendedor') {
+        Navigator.of(context).pushReplacementNamed('/ventas_main');
+        return;
+      }
       setState(() {
         _userRol = rol;
       });
@@ -297,14 +301,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget _buildModuleList(BuildContext context) {
     return Column(
       children: [
-        // 📦 Si el rol es Bodeguero -> Módulos de Logística
-        if (_userRol == 'Bodeguero') ...[
+        // 📦 Si el rol es Bodeguero (o por defecto en el panel de HomeScreen) -> Módulos de Logística
+        if (_userRol == null ||
+            _userRol!.isEmpty ||
+            _userRol?.toLowerCase() == 'bodeguero' ||
+            _userRol?.toLowerCase() == 'administrador') ...[
           _buildModuleCard(
             context: context,
             title: 'RECEPCIÓN DE VEHÍCULO',
             icon: Icons.local_shipping_outlined,
             onTap: () {
-              // ¡El enlace mágico hacia tu HU-2.2!
+              // Enlace hacia HU-2.2
               Navigator.pushNamed(context, '/recepcion');
             },
           ),
@@ -314,38 +321,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             title: 'PALETIZADO DE PIEZAS',
             icon: Icons.inventory_2_outlined,
             onTap: () {
-              // ¡El enlace mágico hacia tu HU-2.3!
+              // Enlace hacia HU-2.3
               Navigator.pushNamed(context, '/paletizado');
-            },
-          ),
-          const SizedBox(height: 16),
-        ],
-
-        // 🛒 Si el rol es Vendedor -> Módulos de Ventas
-        if (_userRol == 'Vendedor') ...[
-          _buildModuleCard(
-            context: context,
-            title: 'CATÁLOGO DE VENTAS',
-            icon: Icons.storefront_outlined,
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Módulo de Catálogo de Ventas en desarrollo'),
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 16),
-          _buildModuleCard(
-            context: context,
-            title: 'MIS ÓRDENES',
-            icon: Icons.receipt_long_outlined,
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Módulo de Mis Órdenes en desarrollo'),
-                ),
-              );
             },
           ),
           const SizedBox(height: 16),

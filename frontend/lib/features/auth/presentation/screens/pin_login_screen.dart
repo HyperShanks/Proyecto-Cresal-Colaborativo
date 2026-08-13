@@ -84,8 +84,13 @@ class _PinLoginScreenState extends State<PinLoginScreen>
 
     if (result.success) {
       _failedAttempts = 0;
-      // Navegar al HomeScreen y reemplazar la pantalla de login en el stack
-      Navigator.of(context).pushReplacementNamed('/home');
+      final rol = await AuthService.getRol();
+      if (!mounted) return;
+      if (rol?.toLowerCase() == 'vendedor') {
+        Navigator.of(context).pushReplacementNamed('/ventas_main');
+      } else {
+        Navigator.of(context).pushReplacementNamed('/home');
+      }
     } else {
       _failedAttempts++;
       _shakeController.forward(from: 0);

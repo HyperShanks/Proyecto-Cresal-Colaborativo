@@ -57,7 +57,13 @@ class _SplashScreenState extends State<SplashScreen>
     if (!mounted) return;
 
     if (token != null && token.isNotEmpty) {
-      Navigator.of(context).pushReplacementNamed('/home');
+      final rol = await AuthService.getRol();
+      if (!mounted) return;
+      if (rol?.toLowerCase() == 'vendedor') {
+        Navigator.of(context).pushReplacementNamed('/ventas_main');
+      } else {
+        Navigator.of(context).pushReplacementNamed('/home');
+      }
     } else {
       Navigator.of(context).pushReplacementNamed('/login');
     }
