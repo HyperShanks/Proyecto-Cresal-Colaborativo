@@ -5,7 +5,7 @@ import 'package:crypto/crypto.dart'; // ⚠️ NUEVO: Para el cifrado HMAC-SHA25
 import 'package:html/parser.dart' as html_parser; // ⚠️ NUEVO: Para leer el HTML
 
 import '../../../core/constants/api_constants.dart';
-
+import '../../auth/services/auth_service.dart';
 class VehiculoService {
 
   // ==========================================
@@ -13,7 +13,12 @@ class VehiculoService {
   // ==========================================
   Future<String> obtenerSiguienteIngreso() async {
     try {
-      final response = await http.get(Uri.parse('${ApiConstants.vehiculosEndpoint}/siguiente-ingreso'));
+      final token = await AuthService.getToken();
+      final headers = {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      };
+      final response = await http.get(Uri.parse('${ApiConstants.vehiculosEndpoint}/siguiente-ingreso'), headers: headers);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         return data['siguiente_ingreso'];
@@ -161,6 +166,10 @@ class VehiculoService {
     try {
       var uri = Uri.parse('${ApiConstants.vehiculosEndpoint}/');
       var request = http.MultipartRequest('POST', uri);
+      final token = await AuthService.getToken();
+      if (token != null) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
 
       request.fields['datos'] = jsonEncode(datosVehiculo);
 

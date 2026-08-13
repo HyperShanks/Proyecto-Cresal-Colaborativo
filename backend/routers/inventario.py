@@ -4,7 +4,8 @@ from sqlalchemy import func
 from typing import Dict, List, Optional
 
 from database import get_db
-from models import Activo_Inventariado, Vehiculo_Origen, Detalle_Motor, Multimedia_Activo, Detalle_Caja_Cambio, Categoria_Activo, Estado_Activo
+from models import Activo_Inventariado, Vehiculo_Origen, Detalle_Motor, Multimedia_Activo, Detalle_Caja_Cambio, Categoria_Activo, Estado_Activo, Usuario
+from core.security import get_current_user
 
 router = APIRouter(prefix="/api/v1/inventario", tags=["Buscador Inventario"])
 
@@ -18,7 +19,8 @@ def obtener_opciones_filtros(
     cilindrada: Optional[str] = None,
     combustible: Optional[str] = None,
     transmision: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    usuario_logeado: Usuario = Depends(get_current_user)
 ):
     # 1. Base idéntica a la del buscador (incluyendo joins y exclusión de estados)
     query = db.query(Activo_Inventariado, Vehiculo_Origen, Detalle_Motor, Detalle_Caja_Cambio).outerjoin(
@@ -97,7 +99,8 @@ def buscar_inventario(
     cilindrada: Optional[str] = None,
     combustible: Optional[str] = None,
     transmision: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    usuario_logeado: Usuario = Depends(get_current_user)
 ):
     # Unimos todas las tablas necesarias, incluyendo cajas, categorías y estados
     query = db.query(

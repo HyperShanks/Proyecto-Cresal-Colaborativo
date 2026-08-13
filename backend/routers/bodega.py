@@ -4,7 +4,8 @@ from pydantic import BaseModel
 from typing import List, Optional
 
 from database import get_db
-from models import Activo_Inventariado, Orden_Venta, Detalle_Orden, Vehiculo_Origen
+from models import Activo_Inventariado, Orden_Venta, Detalle_Orden, Vehiculo_Origen, Usuario
+from core.security import get_current_user
 
 router = APIRouter(prefix="/api/v1/bodega", tags=["Tablero Operativo"])
 
@@ -22,7 +23,8 @@ class TareaAlerta(BaseModel):
 def obtener_tareas_pendientes(
     # Recibimos la sucursal como parámetro (por defecto 1 para tus pruebas)
     sucursal_id: int = Query(1, description="ID de la sucursal del bodeguero"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    usuario_logeado: Usuario = Depends(get_current_user)
 ):
     alertas = []
 

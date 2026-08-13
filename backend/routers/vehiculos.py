@@ -13,7 +13,7 @@ from typing import List # Para definir la lista de imágenes en FastAPI
 from supabase import create_client, Client # El cliente de Supabase
 import os
 from dotenv import load_dotenv
-
+from core.security import get_current_user
 # Cargar variables del .env
 load_dotenv()
 
@@ -45,7 +45,7 @@ router = APIRouter(
 # ==========================================
 
 @router.get("/siguiente-ingreso", status_code=200)
-def obtener_siguiente_ingreso(db: Session = Depends(get_db)):
+def obtener_siguiente_ingreso(db: Session = Depends(get_db), usuario_logeado: models.Usuario = Depends(get_current_user)):
     """
     Calcula y retorna el siguiente número correlativo para el ingreso de un vehículo.
     """
@@ -66,7 +66,8 @@ async def registrar_ingreso_vehiculo(
     # --- NUEVO: Recibimos los datos y la foto por separado (Multipart) ---
     datos: str = Form(...),
     foto: UploadFile = File(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    usuario_logeado: models.Usuario = Depends(get_current_user)
 ):
     """
     Registra un vehículo y sus componentes principales (Motor y Caja) previa validación Poka-Yoke.
@@ -217,7 +218,7 @@ async def registrar_ingreso_vehiculo(
 # ==========================================
 
 @router.get("/{patente}", response_model=schemas.VehiculoResponse, status_code=200)
-def obtener_vehiculo(patente: str, db: Session = Depends(get_db)):
+def obtener_vehiculo(patente: str, db: Session = Depends(get_db), usuario_logeado: models.Usuario = Depends(get_current_user)):
     """
     Busca un vehículo por su patente en PostgreSQL. Si no existe, acciona el motor de Scraping 
     para registrarlo automáticamente.
@@ -231,7 +232,7 @@ def obtener_vehiculo(patente: str, db: Session = Depends(get_db)):
     return vehiculo
 
 @router.get("/buscar/{numero_ingreso}")
-def buscar_vehiculo_por_ingreso(numero_ingreso: str, db: Session = Depends(get_db)):
+def buscar_vehiculo_por_ingreso(numero_ingreso: str, db: Session = Depends(get_db), usuario_logeado: models.Usuario = Depends(get_current_user)):
     """
     Busca los datos de un vehículo por su número de ingreso (Folio).
     Retorna los datos del vehículo y los detalles técnicos de sus repuestos (Motor y Caja).
@@ -296,7 +297,8 @@ def buscar_vehiculo_por_ingreso(numero_ingreso: str, db: Session = Depends(get_d
 @router.post("/validar-ocr-pieza")
 async def validar_ocr_pieza(
     numero_ingreso: str = Form(...),
-    imagen_posca: UploadFile = File(...)
+    imagen_posca: UploadFile = File(...),
+    usuario_logeado: models.Usuario = Depends(get_current_user)
 ):
     """
     [Poka-Yoke Digital] - HU-2.3
@@ -379,7 +381,8 @@ async def guardar_paletizado(
     # --- Lista de hasta 10 fotos comerciales ---
     fotos_comerciales: List[UploadFile] = File(...),
     
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    usuario_logeado: models.Usuario = Depends(get_current_user)
 ):
     """
     [Jefe Final] - HU-2.3 & HU-2.4

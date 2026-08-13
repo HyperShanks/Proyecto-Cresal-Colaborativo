@@ -6,7 +6,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import '../../../core/constants/api_constants.dart';
-
+import '../../auth/services/auth_service.dart';
 class PaletizadoService {
 
   Future<Map<String, dynamic>?> buscarVehiculoPorIngreso(
@@ -15,7 +15,12 @@ class PaletizadoService {
     try {
       debugPrint('📌 [PALETIZADO_SERVICE] 🔍 Buscando folio: $numeroIngreso');
       final url = Uri.parse('${ApiConstants.vehiculosEndpoint}/buscar/$numeroIngreso');
-      final response = await http.get(url);
+      final token = await AuthService.getToken();
+      final headers = {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      };
+      final response = await http.get(url, headers: headers);
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
@@ -36,6 +41,10 @@ class PaletizadoService {
       debugPrint('📌 [PALETIZADO_SERVICE] 🤖 Iniciando validación OCR...');
       final url = Uri.parse('${ApiConstants.vehiculosEndpoint}/validar-ocr-pieza');
       var request = http.MultipartRequest('POST', url);
+      final token = await AuthService.getToken();
+      if (token != null) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
       request.fields['numero_ingreso'] = numeroIngreso;
       request.files.add(
         await http.MultipartFile.fromPath('imagen_posca', imagenPosca.path),
@@ -70,6 +79,10 @@ class PaletizadoService {
       );
       final url = Uri.parse('${ApiConstants.vehiculosEndpoint}/guardar-paletizado');
       var request = http.MultipartRequest('POST', url);
+      final token = await AuthService.getToken();
+      if (token != null) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
 
       request.fields['numero_ingreso'] = folio;
       request.fields['tipo_repuesto'] = tipoRepuesto;

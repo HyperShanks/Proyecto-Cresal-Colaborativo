@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../../../core/constants/api_constants.dart';
-
+import '../../auth/services/auth_service.dart';
 class InventarioService {
 
   static Future<Map<String, List<String>>> obtenerOpcionesFiltros({
@@ -30,7 +30,12 @@ class InventarioService {
       final uri = Uri.parse(
         '${ApiConstants.inventarioEndpoint}/opciones-filtros',
       ).replace(queryParameters: queryParams);
-      final response = await http.get(uri);
+      final token = await AuthService.getToken();
+      final headers = {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      };
+      final response = await http.get(uri, headers: headers);
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = jsonDecode(
@@ -76,7 +81,12 @@ class InventarioService {
       ).replace(queryParameters: queryParams);
 
       // 3. Ejecutar la petición
-      final response = await http.get(uri);
+      final token = await AuthService.getToken();
+      final headers = {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      };
+      final response = await http.get(uri, headers: headers);
 
       if (response.statusCode == 200) {
         return jsonDecode(utf8.decode(response.bodyBytes));

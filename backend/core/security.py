@@ -3,8 +3,15 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from jose import jwt
+from jose import jwt, JWTError
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy.orm import Session
+from uuid import UUID
+
 from core.config import settings
+from database import get_db
+from models import Usuario
 
 
 def verify_pin(plain_pin: str, stored_pin: str) -> bool:
@@ -44,3 +51,47 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     )
 
     return encoded_jwt
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Esquema de seguridad HTTP Bearer (extrae el token del header Authorization)
+# ─────────────────────────────────────────────────────────────────────────────
+_bearer_scheme = HTTPBearer()
+
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(_bearer_scheme),
+    db: Session = Depends(get_db),
+) -> Usuario:
+    """
+    Dependencia reutilizable de FastAPI que:
+    1. Extrae el token del header 'Authorization: Bearer <token>'.
+    2. Lo decodifica y valida contra la clave secreta del proyecto.
+    3. Recupera el usuario de la BD usando el 'sub' del payload.
+    4. Lanza 401 si el token es inválido, expirado o el usuario no existe.
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Token inválido o expirado",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(
+            credentials.credentials,
+            settings.JWT_SECRET_KEY,
+            algorithms=[settings.ALGORITHM],
+        )
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+
+    usuario = db.query(Usuario).filter(
+        Usuario.id_usuario == UUID(user_id)
+    ).first()
+
+    if usuario is None or usuario.estado != "Activo":
+        raise credentials_exception
+
+    return usuario
