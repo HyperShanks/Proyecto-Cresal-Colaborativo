@@ -1,19 +1,125 @@
-# Router de Autenticación por PIN 
-# Expone el endpoint POST /api/auth/login-pin para que los operarios
-# inicien sesión desde la app Flutter usando su PIN de 4 dígitos.
-
+import random
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
 from database import get_db
-from models import Usuario
-from schemas import LoginPINRequest, TokenResponse, UsuarioData
-from core.security import verify_pin, create_access_token
+from models import Usuario, Rol, Sucursal
+from schemas import (
+    LoginPINRequest,
+    TokenResponse,
+    UsuarioData,
+    RegisterUserRequest,
+    RegisterUserResponse,
+)
+from core.security import verify_pin, create_access_token, hash_password
 
 router = APIRouter(
     prefix="/api/auth",
     tags=["Autenticación"]
 )
+
+
+@router.post(
+    "/register",
+    response_model=RegisterUserResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Registro de Nuevos Usuarios",
+    description="Crea un nuevo usuario en la base de datos con contraseña cifrada en bcrypt."
+)
+def registrar_usuario(request: RegisterUserRequest, db: Session = Depends(get_db)):
+    """
+    Registra un usuario en la tabla Usuario:
+    1. Valida unicidad de correo y RUT.
+    2. Valida la existencia del rol asignado.
+    3. Hashea la contraseña en texto plano usando bcrypt.
+    4. Genera o valida el PIN numérico de acceso de 4 dígitos.
+    5. Guarda el nuevo registro con estado 'Activo'.
+    """
+    # 1. Validar si el email ya existe
+    email_limpio = request.email.strip().lower()
+    if db.query(Usuario).filter(Usuario.email == email_limpio).first():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"El correo electrónico '{request.email}' ya se encuentra registrado."
+        )
+
+    # 2. Validar si el RUT ya existe
+    rut_limpio = request.rut_usuario.strip()
+    if db.query(Usuario).filter(Usuario.rut_usuario == rut_limpio).first():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"El RUT '{request.rut_usuario}' ya se encuentra registrado en el sistema."
+        )
+
+    # 3. Validar si el Rol existe
+    rol = db.query(Rol).filter(Rol.id_rol == request.id_rol).first()
+    if not rol:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"El rol con ID '{request.id_rol}' no existe."
+        )
+
+    # 4. Validar sucursal asignada
+    id_sucursal_final = request.id_sucursal or 1
+    sucursal = db.query(Sucursal).filter(Sucursal.id_sucursal == id_sucursal_final).first()
+    if not sucursal:
+        primera_sucursal = db.query(Sucursal).first()
+        if primera_sucursal:
+            id_sucursal_final = primera_sucursal.id_sucursal
+        else:
+            # Fallback en testing si no hay sucursales creadas
+            id_sucursal_final = 1
+
+    # 5. Generar o validar PIN de acceso único de 4 dígitos
+    pin_final = request.pin_acceso
+    if pin_final:
+        if db.query(Usuario).filter(Usuario.pin_acceso == pin_final).first():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"El PIN '{pin_final}' ya se encuentra asignado a otro usuario."
+            )
+    else:
+        for _ in range(50):
+            candidato = f"{random.randint(1000, 9999)}"
+            if not db.query(Usuario).filter(Usuario.pin_acceso == candidato).first():
+                pin_final = candidato
+                break
+        if not pin_final:
+            pin_final = "9999"
+
+    # 6. Hashear la contraseña con bcrypt
+    password_cifrada = hash_password(request.password)
+
+    # 7. Crear el usuario en la BD
+    nuevo_usuario = Usuario(
+        id_rol=request.id_rol,
+        id_sucursal=id_sucursal_final,
+        rut_usuario=rut_limpio,
+        nombres=request.nombres.strip(),
+        apellidos=request.apellidos.strip(),
+        email=email_limpio,
+        password_hash=password_cifrada,
+        pin_acceso=pin_final,
+        estado="Activo"
+    )
+
+    db.add(nuevo_usuario)
+    db.commit()
+    db.refresh(nuevo_usuario)
+
+    return RegisterUserResponse(
+        id_usuario=nuevo_usuario.id_usuario,
+        rut_usuario=nuevo_usuario.rut_usuario,
+        nombres=nuevo_usuario.nombres,
+        apellidos=nuevo_usuario.apellidos,
+        email=nuevo_usuario.email,
+        id_rol=nuevo_usuario.id_rol,
+        nombre_rol=rol.nombre_rol,
+        id_sucursal=nuevo_usuario.id_sucursal,
+        pin_acceso=nuevo_usuario.pin_acceso,
+        estado=nuevo_usuario.estado,
+        mensaje="Usuario registrado exitosamente con contraseña encriptada.",
+    )
 
 
 @router.post(

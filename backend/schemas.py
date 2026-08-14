@@ -61,6 +61,33 @@ class LoginPINRequest(BaseModel):
     """Payload de entrada para el login por PIN de operario."""
     pin: str
 
+class RegisterUserRequest(BaseModel):
+    """Payload de entrada para el registro de nuevos usuarios."""
+    rut_usuario: str = Field(..., min_length=3, max_length=12, description="RUT chileno del usuario (ej: 12.345.678-9)")
+    nombres: str = Field(..., min_length=1, max_length=100, description="Nombres del usuario")
+    apellidos: str = Field(..., min_length=1, max_length=100, description="Apellidos del usuario")
+    email: str = Field(..., description="Correo electrónico corporativo único")
+    password: str = Field(..., min_length=4, description="Contraseña en texto plano a ser encriptada con bcrypt")
+    id_rol: int = Field(..., description="ID del rol a asignar")
+    id_sucursal: Optional[int] = Field(1, description="ID de la sucursal del usuario (default: 1)")
+    pin_acceso: Optional[str] = Field(None, min_length=4, max_length=4, description="PIN numérico de 4 dígitos (opcional, auto-generado si no se provee)")
+
+class RegisterUserResponse(BaseModel):
+    """DTO de respuesta tras registrar exitosamente un usuario."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_usuario: UUID
+    rut_usuario: str
+    nombres: str
+    apellidos: str
+    email: str
+    id_rol: int
+    nombre_rol: Optional[str] = None
+    id_sucursal: int
+    pin_acceso: str
+    estado: str
+    mensaje: str
+
 class RolData(BaseModel):
     """DTO para la información de un rol."""
     id_rol: int
