@@ -1,4 +1,4 @@
-# Este archivo contiene los esquemas de Pydantic para la validación de datos de entrada y salida en la API.
+    # Este archivo contiene los esquemas de Pydantic para la validación de datos de entrada y salida en la API.
 
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional, List
@@ -52,6 +52,14 @@ class VehiculoCreate(BaseModel):
 
     # Datos que FastAPI usará para crear el Detalle_Caja_Cambio internamente
     transmision: str = Field(..., description="Ej: mec, at")
+
+# ==========================================
+# ESQUEMAS PARA PALETIZADO / IMPRESIÓN (HU-2.4)
+# ==========================================
+
+class ActualizarQrImpresoRequest(BaseModel):
+    """Payload para marcar un activo inventariado como impreso en la BD."""
+    qr_impreso: bool = True
 
 # ==========================================
 # ESQUEMAS PARA AUTENTICACIÓN (HU-2.1 LOGIN-PIN)
@@ -225,6 +233,7 @@ class CatalogoItemResponse(BaseModel):
     ubicacion_pasillo: Optional[str] = None
     ubicacion_pallet: Optional[str] = None
     estado_activo: Optional[str] = None
+    qr_impreso: bool = False
 
     class Config:
         from_attributes = True

@@ -562,3 +562,43 @@ async def guardar_paletizado(
             status_code=500,
             detail=f"Error crítico al guardar en PostgreSQL: {str(e)}. Los datos y archivos se han revertido para mantener la integridad."
         )
+
+# ==========================================
+# PATCH: Confirmar Impresión de Etiqueta QR (HU-2.4 Fase 4)
+# ==========================================
+
+@router.patch("/inventario/{id_activo}/impreso", status_code=200)
+def marcar_qr_impreso(
+    id_activo: str,
+    payload: schemas.ActualizarQrImpresoRequest,
+    db: Session = Depends(get_db),
+    usuario_logeado: models.Usuario = Depends(get_current_user)
+):
+    """
+    Marca el campo qr_impreso de un Activo_Inventariado como True (o False).
+    Llamado automáticamente desde la PDA Sunmi L3 tras una impresión física exitosa.
+    """
+    print(f"📌 [INVENTARIO] 🖨️ PATCH qr_impreso={payload.qr_impreso} para id_activo: {id_activo}")
+
+    activo = db.query(models.Activo_Inventariado).filter(
+        models.Activo_Inventariado.id_activo == id_activo
+    ).first()
+
+    if not activo:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Activo inventariado con ID '{id_activo}' no encontrado."
+        )
+
+    activo.qr_impreso = payload.qr_impreso
+    db.commit()
+    db.refresh(activo)
+
+    print(f"📌 [INVENTARIO] ✅ qr_impreso={activo.qr_impreso} guardado exitosamente en BD.")
+
+    return {
+        "status": "success",
+        "mensaje": "Estado de etiqueta QR actualizado exitosamente.",
+        "id_activo": str(activo.id_activo),
+        "qr_impreso": activo.qr_impreso
+    }

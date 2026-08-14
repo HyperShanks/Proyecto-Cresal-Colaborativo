@@ -120,4 +120,45 @@ class PaletizadoService {
       return null;
     }
   }
+
+  /// Confirma en el backend que el activo fue impreso físicamente.
+  ///
+  /// Ejecuta PATCH /api/v1/vehiculos/inventario/{idActivo}/impreso.
+  /// Retorna true si el backend confirmó el cambio, false ante cualquier error.
+  Future<bool> confirmarQrImpreso(String idActivo) async {
+    try {
+      debugPrint(
+        '📌 [PALETIZADO_SERVICE] 🖨️ Confirmando qr_impreso=true para activo: $idActivo',
+      );
+      final url = Uri.parse(
+        '${ApiConstants.vehiculosEndpoint}/inventario/$idActivo/impreso',
+      );
+      final token = await AuthService.getToken();
+      final response = await http.patch(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: '{"qr_impreso": true}',
+      );
+
+      if (response.statusCode == 200) {
+        debugPrint(
+          '📌 [PALETIZADO_SERVICE] ✅ qr_impreso confirmado en BD para activo: $idActivo',
+        );
+        return true;
+      } else {
+        debugPrint(
+          '📌 [PALETIZADO_SERVICE] ❌ Error ${response.statusCode} al confirmar qr_impreso: ${response.body}',
+        );
+        return false;
+      }
+    } catch (e) {
+      debugPrint(
+        '📌 [PALETIZADO_SERVICE] ❌ Excepción al confirmar qr_impreso: $e',
+      );
+      return false;
+    }
+  }
 }

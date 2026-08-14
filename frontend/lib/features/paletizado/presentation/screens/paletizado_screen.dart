@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../services/paletizado_service.dart';
-import '../../services/print_service.dart'; // HU-2.4: Servicio de impresión Bluetooth
-import '../../domain/models/etiqueta_data.dart'; // HU-2.4: Modelo de dominio de etiqueta
+import '../../services/print_service.dart';
+import '../../domain/exceptions/printer_exceptions.dart';
+import '../../domain/models/etiqueta_data.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 
@@ -78,6 +79,7 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
 
   // ── Función para Validar OCR y Guardar ──
   Future<void> _validarYGuardar() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     final folio = _searchController.text.trim();
 
     // 1. Validaciones básicas de interfaz
@@ -228,6 +230,7 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
   // Se invoca SOLO en caso de éxito, inyectando el [EtiquetaData] ya construido
   // para que los 3 botones puedan actuar sin otra llamada al backend.
   Future<void> _mostrarModalExito(EtiquetaData etiqueta) async {
+    FocusManager.instance.primaryFocus?.unfocus();
     if (!mounted) return;
 
     await showModalBottomSheet(
@@ -666,6 +669,7 @@ class _ModalExitoContent extends StatefulWidget {
 
 class _ModalExitoContentState extends State<_ModalExitoContent> {
   bool _isConnecting = false;
+  final PaletizadoService _paletizadoService = PaletizadoService();
 
   @override
   Widget build(BuildContext context) {
@@ -710,7 +714,7 @@ class _ModalExitoContentState extends State<_ModalExitoContent> {
           const SizedBox(height: 32),
 
           // ── Botón 1: Imprimir Ahora ───────────────────────────────────────
-          // FUTURO: Aquí se activará la impresión real via flutter_blue_plus.
+          // Impresión térmica industrial vía Sockets TCP (Puerto 9100 / ZPL).
           // Ver: lib/features/paletizado/services/print_service.dart
           SizedBox(
             width: double.infinity,
@@ -720,22 +724,123 @@ class _ModalExitoContentState extends State<_ModalExitoContent> {
                   : () async {
                       setState(() => _isConnecting = true);
 
-                      // Stub: imprime en consola "Conectando a Bluetooth..."
-                      // FUTURO: PrintService invocará flutter_blue_plus aquí.
-                      await PrintService.imprimirEtiqueta(widget.etiqueta);
+                      try {
+                        final exito = await PrintService.imprimirEtiqueta(widget.etiqueta);
 
-                      if (!mounted) return;
-                      setState(() => _isConnecting = false);
+                        if (!mounted) return;
 
-                      Navigator.of(context).pop(); // Cierra el modal
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            '🖨️ Impresión enviada (Bluetooth stub).',
+                        if (exito) {
+                          // Confirmación en Backend (PATCH qr_impreso = true)
+                          await _paletizadoService.confirmarQrImpreso(widget.etiqueta.idActivo);
+
+                          if (!mounted) return;
+                          Navigator.of(context).pop(); // Cierra el modal
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                '✅ Etiqueta impresa y registrada. SKU: ${widget.etiqueta.skuQrFisico}',
+                              ),
+                              backgroundColor: AppPalette.success,
+                            ),
+                          );
+                        }
+                      } on PrinterException catch (e) {
+                        debugPrint('📌 [PALETIZADO_SCREEN] ❌ Error de dominio de impresora: ${e.mensaje}');
+                        if (!mounted) return;
+                        await showDialog(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            backgroundColor: AppPalette.surface,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            title: const Row(
+                              children: [
+                                Icon(Icons.warning_amber_rounded, color: AppPalette.secondary, size: 28),
+                                SizedBox(width: 10),
+                                Text(
+                                  'Error de Impresión',
+                                  style: TextStyle(
+                                    color: AppPalette.textPrimary,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            content: Text(
+                              e.mensaje,
+                              style: const TextStyle(
+                                color: AppPalette.textSecondary,
+                                fontSize: 14,
+                                height: 1.4,
+                              ),
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.of(ctx).pop(),
+                                child: const Text(
+                                  'ENTENDIDO',
+                                  style: TextStyle(
+                                    color: AppPalette.primary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                          backgroundColor: AppPalette.primary,
-                        ),
-                      );
+                        );
+                      } catch (e) {
+                        debugPrint('📌 [PALETIZADO_SCREEN] ❌ Excepción no controlada: $e');
+                        if (!mounted) return;
+                        await showDialog(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            backgroundColor: AppPalette.surface,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            title: const Row(
+                              children: [
+                                Icon(Icons.error_outline, color: AppPalette.secondary, size: 28),
+                                SizedBox(width: 10),
+                                Text(
+                                  'Error Inesperado',
+                                  style: TextStyle(
+                                    color: AppPalette.textPrimary,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            content: Text(
+                              'Ocurrió un error inesperado al comunicarse con la impresora: $e',
+                              style: const TextStyle(
+                                color: AppPalette.textSecondary,
+                                fontSize: 14,
+                                height: 1.4,
+                              ),
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.of(ctx).pop(),
+                                child: const Text(
+                                  'ENTENDIDO',
+                                  style: TextStyle(
+                                    color: AppPalette.primary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      } finally {
+                        if (mounted) {
+                          setState(() => _isConnecting = false);
+                        }
+                      }
                     },
               icon: _isConnecting
                   ? const SizedBox(

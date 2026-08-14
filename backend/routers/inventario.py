@@ -28,6 +28,7 @@ from schemas import (
 
 router = APIRouter(prefix="/api/v1/inventario", tags=["Buscador Inventario"])
 
+
 @router.get("/opciones-filtros", response_model=Dict[str, List[str]])
 def obtener_opciones_filtros(
     categoria: Optional[str] = None,
@@ -39,15 +40,14 @@ def obtener_opciones_filtros(
     combustible: Optional[str] = None,
     transmision: Optional[str] = None,
     db: Session = Depends(get_db),
-    usuario_logeado: Usuario = Depends(get_current_user)
+    usuario_logeado: Usuario = Depends(get_current_user),
 ):
     # 1. Base idéntica a la del buscador (incluyendo joins y exclusión de estados)
-    query = db.query(Activo_Inventariado, Vehiculo_Origen, Detalle_Motor, Detalle_Caja_Cambio).outerjoin(
-        Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo
-    ).outerjoin(
-        Detalle_Motor, Activo_Inventariado.id_activo == Detalle_Motor.id_activo
-    ).outerjoin(
-        Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo
+    query = (
+        db.query(Activo_Inventariado, Vehiculo_Origen, Detalle_Motor, Detalle_Caja_Cambio)
+        .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
+        .outerjoin(Detalle_Motor, Activo_Inventariado.id_activo == Detalle_Motor.id_activo)
+        .outerjoin(Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo)
     )
 
     query = query.filter(Activo_Inventariado.id_estado.notin_([3, 5]))
@@ -76,8 +76,8 @@ def obtener_opciones_filtros(
         query = query.filter(func.upper(Detalle_Motor.combustible) == combustible.upper())
     if transmision:
         query = query.filter(
-            (func.upper(Detalle_Motor.transmision_tipo) == transmision.upper()) | 
-            (func.upper(Detalle_Caja_Cambio.transmision_tipo) == transmision.upper())
+            (func.upper(Detalle_Motor.transmision_tipo) == transmision.upper())
+            | (func.upper(Detalle_Caja_Cambio.transmision_tipo) == transmision.upper())
         )
 
     # 3. Extraemos las opciones ÚNICAS de lo que quedó después de filtrar
@@ -87,13 +87,17 @@ def obtener_opciones_filtros(
     combustibles = query.with_entities(func.upper(Detalle_Motor.combustible)).distinct().all()
     pasillos = query.with_entities(func.upper(Activo_Inventariado.ubicacion_pasillo)).distinct().all()
     pallets = query.with_entities(func.upper(Activo_Inventariado.ubicacion_pallet)).distinct().all()
-    
+
     trans_motor = query.with_entities(func.upper(Detalle_Motor.transmision_tipo)).distinct().all()
     trans_caja = query.with_entities(func.upper(Detalle_Caja_Cambio.transmision_tipo)).distinct().all()
-    transmisiones = list(set(trans_motor + trans_caja)) # Unimos ambas transmisiones
+    transmisiones = list(set(trans_motor + trans_caja))
 
     def limpiar_lista(query_result):
-        return sorted(list(set([item[0] for item in query_result if item[0] is not None and str(item[0]).strip() != ""])))
+        return sorted(
+            list(
+                set([item[0] for item in query_result if item[0] is not None and str(item[0]).strip() != ""])
+            )
+        )
 
     return {
         "marcas": limpiar_lista(marcas),
@@ -105,8 +109,6 @@ def obtener_opciones_filtros(
         "pallets": limpiar_lista(pallets),
     }
 
-# Asegúrate de tener estas importaciones arriba:
-# from models import Activo_Inventariado, Vehiculo_Origen, Detalle_Motor, Detalle_Caja_Cambio, Categoria_Activo, Estado_Activo, Multimedia_Activo
 
 @router.get("/buscar")
 def buscar_inventario(
@@ -119,32 +121,28 @@ def buscar_inventario(
     combustible: Optional[str] = None,
     transmision: Optional[str] = None,
     db: Session = Depends(get_db),
-    usuario_logeado: Usuario = Depends(get_current_user)
+    usuario_logeado: Usuario = Depends(get_current_user),
 ):
-    # Unimos todas las tablas necesarias, incluyendo cajas, categorías y estados
-    query = db.query(
-        Activo_Inventariado, 
-        Vehiculo_Origen, 
-        Detalle_Motor, 
-        Detalle_Caja_Cambio,
-        Categoria_Activo,
-        Estado_Activo
-    ).outerjoin(
-        Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo
-    ).outerjoin(
-        Detalle_Motor, Activo_Inventariado.id_activo == Detalle_Motor.id_activo
-    ).outerjoin(
-        Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo
-    ).join(
-        Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria
-    ).join(
-        Estado_Activo, Activo_Inventariado.id_estado == Estado_Activo.id_estado
+    query = (
+        db.query(
+            Activo_Inventariado,
+            Vehiculo_Origen,
+            Detalle_Motor,
+            Detalle_Caja_Cambio,
+            Categoria_Activo,
+            Estado_Activo,
+        )
+        .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
+        .outerjoin(Detalle_Motor, Activo_Inventariado.id_activo == Detalle_Motor.id_activo)
+        .outerjoin(Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo)
+        .join(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
+        .join(Estado_Activo, Activo_Inventariado.id_estado == Estado_Activo.id_estado)
     )
 
     # ⚠️ REGLA DE NEGOCIO: Excluir Vendidos (3) y En Desarme (5)
     query = query.filter(Activo_Inventariado.id_estado.notin_([3, 5]))
 
-    # Filtro de Categoría (Mapeamos el plural del frontend al ID real de la BD)
+    # Filtro de Categoría
     if categoria:
         cat_upper = categoria.upper()
         if cat_upper == "MOTORES":
@@ -154,7 +152,6 @@ def buscar_inventario(
         elif cat_upper == "ACCESORIOS":
             query = query.filter(Activo_Inventariado.id_categoria == 3)
 
-    # Resto de filtros dinámicos
     if pasillo:
         query = query.filter(func.upper(Activo_Inventariado.ubicacion_pasillo) == pasillo.upper())
     if pallet:
@@ -168,20 +165,22 @@ def buscar_inventario(
     if combustible:
         query = query.filter(func.upper(Detalle_Motor.combustible) == combustible.upper())
     if transmision:
-        # El filtro de transmisión debe buscar tanto en motor como en caja
         query = query.filter(
-            (func.upper(Detalle_Motor.transmision_tipo) == transmision.upper()) | 
-            (func.upper(Detalle_Caja_Cambio.transmision_tipo) == transmision.upper())
+            (func.upper(Detalle_Motor.transmision_tipo) == transmision.upper())
+            | (func.upper(Detalle_Caja_Cambio.transmision_tipo) == transmision.upper())
         )
 
     resultados_db = query.all()
 
     respuesta = []
     for activo, vehiculo, motor, caja, cat, est in resultados_db:
-        fotos_db = db.query(Multimedia_Activo.url_storage).filter(Multimedia_Activo.id_activo == activo.id_activo).all()
+        fotos_db = (
+            db.query(Multimedia_Activo.url_storage)
+            .filter(Multimedia_Activo.id_activo == activo.id_activo)
+            .all()
+        )
         lista_fotos = [foto[0] for foto in fotos_db] if fotos_db else []
 
-        # Determinar de dónde sacar la transmisión según la categoría
         if cat.id_categoria == 2 and caja:
             transmision_val = caja.transmision_tipo
         elif motor:
@@ -189,23 +188,29 @@ def buscar_inventario(
         else:
             transmision_val = "N/A"
 
-        respuesta.append({
-            "sku": activo.sku_qr_fisico,
-            "numero_ingreso": vehiculo.numero_ingreso if vehiculo else "N/A",
-            "marca": vehiculo.marca if vehiculo else "Desconocida",
-            "modelo": vehiculo.modelo if vehiculo else "Desconocido",
-            "ubicacion": f"{activo.ubicacion_pasillo or 'S/P'} - {activo.ubicacion_pallet or 'S/P'}",
-            
-            # ⚠️ Extraemos la Categoría y el Estado reales
-            "estado": est.nombre_estado, 
-            "categoria": cat.nombre_categoria, 
-            
-            "cilindrada": motor.cilindrada if motor else "N/A",
-            "combustible": motor.combustible if motor else "N/A",
-            "transmision": transmision_val or "N/A",
-            "observacion": getattr(activo, 'observacion_estado', 'Sin observaciones registradas.'),
-            "imagenes": lista_fotos
-        })
+        respuesta.append(
+            {
+                "id_activo": str(activo.id_activo),
+                "sku": activo.sku_qr_fisico,
+                "qr_impreso": activo.qr_impreso if activo.qr_impreso is not None else False,
+                "numero_ingreso": vehiculo.numero_ingreso if vehiculo else "N/A",
+                "marca": vehiculo.marca if vehiculo else "Desconocida",
+                "modelo": vehiculo.modelo if vehiculo else "Desconocido",
+                "anio": vehiculo.anio if vehiculo else 0,
+                "ubicacion": f"{activo.ubicacion_pasillo or 'S/P'} - {activo.ubicacion_pallet or 'S/P'}",
+                "pasillo": activo.ubicacion_pasillo or "",
+                "pallet": activo.ubicacion_pallet or "",
+                "galpon": getattr(activo, "ubicacion_galpon", "") or "",
+                "estado": est.nombre_estado,
+                "categoria": cat.nombre_categoria,
+                "cilindrada": motor.cilindrada if motor else "N/A",
+                "combustible": motor.combustible if motor else "N/A",
+                "transmision": transmision_val or "N/A",
+                "numero_motor": motor.numero_motor if motor else None,
+                "observacion": getattr(activo, "observacion_estado", "Sin observaciones registradas."),
+                "imagenes": lista_fotos,
+            }
+        )
 
     return respuesta
 
@@ -222,43 +227,33 @@ def obtener_catalogo(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    """
-    Endpoint paginado para catálogo de activos inventariados (HU-3.2).
-    Aplica filtros dinámicos y el algoritmo 'Radar de Stock' (prioriza la sucursal del usuario).
-    """
-    # 1. Base query con joins necesarios
-    query = db.query(
-        Activo_Inventariado,
-        Vehiculo_Origen,
-        Categoria_Activo,
-        Estado_Activo,
-        Sucursal,
-        Detalle_Motor,
-        Detalle_Caja_Cambio,
-    ).outerjoin(
-        Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo
-    ).join(
-        Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria
-    ).join(
-        Estado_Activo, Activo_Inventariado.id_estado == Estado_Activo.id_estado
-    ).join(
-        Sucursal, Activo_Inventariado.id_sucursal_actual == Sucursal.id_sucursal
-    ).outerjoin(
-        Detalle_Motor, Activo_Inventariado.id_activo == Detalle_Motor.id_activo
-    ).outerjoin(
-        Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo
+    query = (
+        db.query(
+            Activo_Inventariado,
+            Vehiculo_Origen,
+            Categoria_Activo,
+            Estado_Activo,
+            Sucursal,
+            Detalle_Motor,
+            Detalle_Caja_Cambio,
+        )
+        .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
+        .join(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
+        .join(Estado_Activo, Activo_Inventariado.id_estado == Estado_Activo.id_estado)
+        .join(Sucursal, Activo_Inventariado.id_sucursal_actual == Sucursal.id_sucursal)
+        .outerjoin(Detalle_Motor, Activo_Inventariado.id_activo == Detalle_Motor.id_activo)
+        .outerjoin(Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo)
     )
 
-    # 2. Filtros Base: Borrado lógico y Estado Disponible (id_estado = 1)
+    # Filtros Base de catálogo
     query = query.filter(
-        Activo_Inventariado.estado == 'Activo',
+        Activo_Inventariado.estado == "Activo",
         Activo_Inventariado.id_estado == 1,
-        Estado_Activo.nombre_estado == 'Disponible',
+        Estado_Activo.nombre_estado == "Disponible",
         Activo_Inventariado.precio_referencia.isnot(None),
-        Activo_Inventariado.precio_referencia > 0
+        Activo_Inventariado.precio_referencia > 0,
     )
 
-    # 3. Filtros Dinámicos Opcionales
     if id_categoria is not None:
         query = query.filter(Activo_Inventariado.id_categoria == id_categoria)
 
@@ -277,31 +272,25 @@ def obtener_catalogo(
             or_(
                 func.upper(Activo_Inventariado.sku_qr_fisico).like(q_term),
                 func.upper(Vehiculo_Origen.marca).like(q_term),
-                func.upper(Vehiculo_Origen.modelo).like(q_term)
+                func.upper(Vehiculo_Origen.modelo).like(q_term),
             )
         )
 
-    # 4. Total count antes de paginación
     total_count = query.count()
 
-    # 5. Algoritmo Radar de Stock (ORDER BY)
-    # Si no hay filtro explícito de sucursal, ordenamos poniendo PRIMERO los activos de la sucursal del vendedor
     if id_sucursal is None and getattr(current_user, "id_sucursal", None) is not None:
         radar_order = case(
             (Activo_Inventariado.id_sucursal_actual == current_user.id_sucursal, 1),
-            else_=0
+            else_=0,
         ).desc()
         query = query.order_by(radar_order, Activo_Inventariado.fecha_creacion.desc())
     else:
         query = query.order_by(Activo_Inventariado.fecha_creacion.desc())
 
-    # 6. Paginación
     resultados = query.offset(offset).limit(limit).all()
 
-    # 7. Mapeo a CatalogoItemResponse
     items: List[CatalogoItemResponse] = []
     for activo, vehiculo, cat, est, suc, motor, caja in resultados:
-        # Evaluación técnica de motor vs caja
         cilindrada_val = None
         combustible_val = None
         transmision_val = None
@@ -339,6 +328,7 @@ def obtener_catalogo(
             ubicacion_pasillo=activo.ubicacion_pasillo,
             ubicacion_pallet=activo.ubicacion_pallet,
             estado_activo=est.nombre_estado,
+            qr_impreso=activo.qr_impreso if activo.qr_impreso is not None else False,
         )
         items.append(item)
 
@@ -346,7 +336,7 @@ def obtener_catalogo(
         items=items,
         total_count=total_count,
         limit=limit,
-        offset=offset
+        offset=offset,
     )
 
 
@@ -359,7 +349,7 @@ def obtener_catalogo(
     response_model=List[ActivoPendientePrecioResponse],
     summary="Bandeja de Entrada de Activos Pendientes de Precio (HU-3.8)",
     description="Consulta todos los activos inventariados/paletizados por bodega que tienen "
-                "precio_referencia nulo o igual a 0. Requiere rol de Jefe de Ventas (id_rol == 6)."
+                "precio_referencia nulo o igual a 0. Requiere rol de Jefe de Ventas (id_rol == 6).",
 )
 def obtener_pendientes_precio(
     db: Session = Depends(get_db),
@@ -383,17 +373,14 @@ def obtener_pendientes_precio(
         .outerjoin(Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo)
         .filter(
             Activo_Inventariado.estado == "Activo",
-            # Sin precio de referencia asignado o igual a 0
             or_(
                 Activo_Inventariado.precio_referencia == None,
                 Activo_Inventariado.precio_referencia == 0,
             ),
-            # Validación de Ubicación Física (Paletizado por bodega)
             Activo_Inventariado.ubicacion_pasillo.isnot(None),
             Activo_Inventariado.ubicacion_pasillo != "",
             Activo_Inventariado.ubicacion_pallet.isnot(None),
             Activo_Inventariado.ubicacion_pallet != "",
-            # Exclusión explícita de estados tempranos (4: En Importación, 5: En Desarme) y estados finales (1: Disponible, 3: Vendido)
             Activo_Inventariado.id_estado.notin_([1, 3, 4, 5]),
             Estado_Activo.nombre_estado.notin_(["Disponible", "Vendido", "En Importación", "En Desarme"]),
         )
@@ -460,7 +447,7 @@ def obtener_pendientes_precio(
     response_model=AsignarPrecioResponse,
     summary="Asignar Precio de Referencia a Repuesto (HU-3.8)",
     description="Fija el precio_referencia de un repuesto y actualiza su estado automáticamente "
-                "a 'Disponible' para habilitar su venta en el catálogo. Requiere rol Jefe de Ventas."
+                "a 'Disponible' para habilitar su venta en el catálogo. Requiere rol Jefe de Ventas.",
 )
 def asignar_precio_repuesto(
     id_activo: UUID,
@@ -472,14 +459,12 @@ def asignar_precio_repuesto(
     if not activo:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Repuesto inventariado con ID '{id_activo}' no encontrado."
+            detail=f"Repuesto inventariado con ID '{id_activo}' no encontrado.",
         )
 
-    # Actualizar precio de referencia
     activo.precio_referencia = payload.precio_referencia
     activo.fecha_actualizacion = datetime.now()
 
-    # Transición automática a 'Disponible' (id_estado = 1)
     estado_disponible = db.query(Estado_Activo).filter(Estado_Activo.nombre_estado == "Disponible").first()
     if not estado_disponible:
         estado_disponible = Estado_Activo(id_estado=1, nombre_estado="Disponible")
@@ -499,4 +484,3 @@ def asignar_precio_repuesto(
         estado_activo="Disponible",
         mensaje="Precio asignado exitosamente. El repuesto ahora está disponible en el catálogo de ventas.",
     )
-

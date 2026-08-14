@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../paletizado/domain/models/etiqueta_data.dart';
 
 class DetalleActivoScreen extends StatefulWidget {
   final Map<String, dynamic> activo;
@@ -13,6 +14,16 @@ class DetalleActivoScreen extends StatefulWidget {
 
 class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
   int _currentImageIndex = 0;
+
+  // Refleja localmente el estado qr_impreso para actualizar el botón
+  // sin tener que recargar toda la pantalla desde el backend.
+  late bool _qrImpreso;
+
+  @override
+  void initState() {
+    super.initState();
+    _qrImpreso = widget.activo['qr_impreso'] as bool? ?? false;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,6 +57,22 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
     final List<String> imagenesReales = rawImages.isNotEmpty
         ? rawImages.map((e) => e.toString()).toList()
         : ['NO_IMAGE'];
+
+    // ── Construimos el EtiquetaData para pasarlo a EtiquetaPreviewScreen ──
+    final etiqueta = EtiquetaData(
+      idActivo: widget.activo['id_activo']?.toString() ?? '',
+      numeroIngreso: numeroIngreso,
+      marca: marca,
+      modelo: modelo,
+      anio: (widget.activo['anio'] as num?)?.toInt() ?? 0,
+      cilindrada: cilindrada == 'N/A' ? null : cilindrada,
+      combustible: combustible == 'N/A' ? null : combustible,
+      transmision: transmision == 'N/A' ? null : transmision,
+      galpon: widget.activo['galpon']?.toString() ?? '',
+      pasillo: widget.activo['pasillo']?.toString() ?? '',
+      pallet: widget.activo['pallet']?.toString() ?? '',
+      skuQrFisico: sku,
+    );
 
     return Scaffold(
       backgroundColor: AppPalette.background,
@@ -294,25 +321,45 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
                     ),
                   ),
 
+                  // ── Botón de Impresión / Reimpresión (HU-2.4 Fase 4) ──
+                  // Regla de Negocio: el botón NUNCA se oculta.
+                  // Si qr_impreso=false → "IMPRIMIR". Si qr_impreso=true → "REIMPRIMIR".
                   SizedBox(
                     width: double.infinity,
                     height: 55,
                     child: ElevatedButton.icon(
-                      onPressed: () {
-                        // Conexión futura a Bluetooth ESC/POS
+                      onPressed: () async {
+                        // Navega a la Vista Previa pasando el EtiquetaData construido
+                        final resultado = await Navigator.of(
+                          context,
+                        ).pushNamed('/etiqueta-preview', arguments: etiqueta);
+
+                        // Si la pantalla retornó true → la etiqueta fue impresa
+                        // Actualizamos el estado local del botón sin ir al backend de nuevo
+                        if (resultado == true && mounted) {
+                          setState(() => _qrImpreso = true);
+                          debugPrint(
+                            '📌 [DETALLE_SCREEN] ✅ Retorno exitoso de EtiquetaPreview. qr_impreso → true',
+                          );
+                        }
                       },
-                      icon: const Icon(
-                        Icons.qr_code_scanner,
+                      icon: Icon(
+                        _qrImpreso ? Icons.replay : Icons.qr_code_scanner,
                         color: Colors.white,
                       ),
                       label: Text(
-                        'IMPRIMIR ETIQUETA QR',
+                        _qrImpreso
+                            ? 'REIMPRIMIR ETIQUETA QR'
+                            : 'IMPRIMIR ETIQUETA QR',
                         style: AppTypography.button.copyWith(
                           color: Colors.white,
                         ),
                       ),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppPalette.primary,
+                        // Verde para primera impresión, ámbar para reimpresión
+                        backgroundColor: _qrImpreso
+                            ? AppPalette.secondary
+                            : AppPalette.primary,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
@@ -378,7 +425,7 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
             value,
             style: AppTypography.body.copyWith(
               fontWeight: FontWeight.bold,
-              color: Colors.white,
+              color: AppPalette.textPrimary,
             ),
           ),
         ],
@@ -392,21 +439,21 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
       case 'DISPONIBLE':
         estadoColor = AppPalette.success;
         break;
-      case 'RESERVADO':
+      case 'VENDIDO':
         estadoColor = AppPalette.secondary;
         break;
-      case 'VENDIDO':
-        estadoColor = AppPalette.error;
+      case 'RESERVADO':
+        estadoColor = Colors.orange;
         break;
       default:
         estadoColor = AppPalette.neutral;
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
         color: estadoColor.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: estadoColor, width: 1),
       ),
       child: Text(
