@@ -11,6 +11,7 @@ import 'features/alertas/presentation/screens/alertas_screen.dart'; // Importa l
 import 'features/inventario/presentation/screens/buscador_screen.dart'; // Importa la pantalla de buscador
 import 'features/ventas/presentation/screens/catalogo_screen.dart'; // HU-3.2: Catálogo Dinámico de Ventas
 import 'features/ventas/presentation/screens/ventas_main_screen.dart'; // HU-3.2: Layout Principal Vendedor
+import 'features/ventas/presentation/screens/checkout_crm_screen.dart'; // HU-3.4: Micro-CRM y Checkout
 
 void main() {
   runApp(const MyApp());
@@ -52,6 +53,8 @@ class _MyAppState extends State<MyApp> {
             const BuscadorScreen(), // Nueva ruta para el módulo de buscador
         '/catalogo': (context) =>
             const CatalogoScreen(), // HU-3.2: Catálogo Dinámico con Radar de Stock
+        '/checkout_crm': (context) =>
+            const CheckoutCrmScreen(), // HU-3.4: Micro-CRM y Flujo de Cobro
       },
     );
   }

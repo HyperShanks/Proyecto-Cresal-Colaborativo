@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../../auth/services/auth_service.dart';
+import '../../controllers/cart_controller.dart';
+import 'carrito_screen.dart';
 import 'catalogo_screen.dart';
 
 /// Contenedor Principal para el rol de Vendedor.
@@ -236,66 +238,85 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
             description: 'Módulo de cálculo de tasación y sugerencia de precios.',
             onOpenDrawer: () => _scaffoldKey.currentState?.openDrawer(),
           ),
-          _buildPlaceholderTab(
-            title: 'Carrito de Compras',
-            icon: Icons.shopping_cart_outlined,
-            description: 'Productos seleccionados listos para generar orden.',
-            onOpenDrawer: () => _scaffoldKey.currentState?.openDrawer(),
+          CarritoScreen(
+            onOpenMenuDrawer: () => _scaffoldKey.currentState?.openDrawer(),
+            onNavigateToCatalogo: () => setState(() => _currentIndex = 0),
           ),
         ],
       ),
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          color: AppPalette.surface,
-          border: Border(
-            top: BorderSide(
-              color: Colors.white10,
-              width: 1.0,
+      bottomNavigationBar: ListenableBuilder(
+        listenable: CartController.instance,
+        builder: (context, _) {
+          final totalItems = CartController.instance.totalItems;
+
+          return Container(
+            decoration: const BoxDecoration(
+              color: AppPalette.surface,
+              border: Border(
+                top: BorderSide(
+                  color: Colors.white10,
+                  width: 1.0,
+                ),
+              ),
             ),
-          ),
-        ),
-        child: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: (index) {
-            setState(() {
-              _currentIndex = index;
-            });
-          },
-          backgroundColor: AppPalette.surface,
-          selectedItemColor: AppPalette.primary,
-          unselectedItemColor: AppPalette.neutral,
-          selectedLabelStyle: AppTypography.small.copyWith(
-            fontWeight: FontWeight.bold,
-            fontSize: 12,
-          ),
-          unselectedLabelStyle: AppTypography.small.copyWith(
-            fontSize: 11,
-          ),
-          type: BottomNavigationBarType.fixed,
-          elevation: 0,
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.storefront_outlined),
-              activeIcon: Icon(Icons.storefront),
-              label: 'Catálogo',
+            child: BottomNavigationBar(
+              currentIndex: _currentIndex,
+              onTap: (index) {
+                setState(() {
+                  _currentIndex = index;
+                });
+              },
+              backgroundColor: AppPalette.surface,
+              selectedItemColor: AppPalette.primary,
+              unselectedItemColor: AppPalette.neutral,
+              selectedLabelStyle: AppTypography.small.copyWith(
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+              unselectedLabelStyle: AppTypography.small.copyWith(
+                fontSize: 11,
+              ),
+              type: BottomNavigationBarType.fixed,
+              elevation: 0,
+              items: [
+                const BottomNavigationBarItem(
+                  icon: Icon(Icons.storefront_outlined),
+                  activeIcon: Icon(Icons.storefront),
+                  label: 'Catálogo',
+                ),
+                const BottomNavigationBarItem(
+                  icon: Icon(Icons.receipt_long_outlined),
+                  activeIcon: Icon(Icons.receipt_long),
+                  label: 'Mis Órdenes',
+                ),
+                const BottomNavigationBarItem(
+                  icon: Icon(Icons.sell_outlined),
+                  activeIcon: Icon(Icons.sell),
+                  label: 'Tasación',
+                ),
+                BottomNavigationBarItem(
+                  icon: totalItems > 0
+                      ? Badge.count(
+                          count: totalItems,
+                          backgroundColor: AppPalette.secondary,
+                          textColor: AppPalette.background,
+                          child: const Icon(Icons.shopping_cart_outlined),
+                        )
+                      : const Icon(Icons.shopping_cart_outlined),
+                  activeIcon: totalItems > 0
+                      ? Badge.count(
+                          count: totalItems,
+                          backgroundColor: AppPalette.secondary,
+                          textColor: AppPalette.background,
+                          child: const Icon(Icons.shopping_cart),
+                        )
+                      : const Icon(Icons.shopping_cart),
+                  label: 'Carrito',
+                ),
+              ],
             ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.receipt_long_outlined),
-              activeIcon: Icon(Icons.receipt_long),
-              label: 'Mis Órdenes',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.sell_outlined),
-              activeIcon: Icon(Icons.sell),
-              label: 'Tasación',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.shopping_cart_outlined),
-              activeIcon: Icon(Icons.shopping_cart),
-              label: 'Carrito',
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }

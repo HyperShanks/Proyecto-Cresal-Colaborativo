@@ -6,11 +6,13 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../../auth/services/auth_service.dart';
+import '../../controllers/cart_controller.dart';
 import '../../models/catalogo_model.dart';
 import '../../services/catalogo_service.dart';
 import '../widgets/catalogo_item_card.dart';
 import '../widgets/catalogo_item_detail_sheet.dart';
 import '../widgets/filtros_drawer.dart';
+import '../widgets/venta_libre_dialog.dart';
 
 /// Pantalla Principal del Catálogo de Ventas con Radar de Stock (HU-3.2).
 /// Incluye buscador con debounce de 500ms, panel lateral de filtros interactivo,
@@ -198,6 +200,7 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
   }
 
   void _onAddToCart(CatalogoItem item) {
+    final agregado = CartController.instance.agregarInventariado(item);
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -205,11 +208,17 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
         duration: const Duration(seconds: 2),
         content: Row(
           children: [
-            const Icon(Icons.check_circle, color: AppPalette.primary, size: 20),
+            Icon(
+              agregado ? Icons.check_circle : Icons.info_outline,
+              color: agregado ? AppPalette.primary : AppPalette.secondary,
+              size: 20,
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                '${item.nombreCategoria} agregado al carrito',
+                agregado
+                    ? '${item.tituloRepuesto} agregado al carrito'
+                    : 'Este activo ya está en el carrito',
                 style: AppTypography.small.copyWith(color: AppPalette.textPrimary),
                 overflow: TextOverflow.ellipsis,
               ),
@@ -221,15 +230,7 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
   }
 
   void _onVentaRapida() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: AppPalette.surface,
-        content: Text(
-          'Iniciando flujo de Venta Rápida...',
-          style: AppTypography.small.copyWith(color: AppPalette.secondary),
-        ),
-      ),
-    );
+    VentaLibreDialog.show(context);
   }
 
   // ── Construcción de la Vista ──────────────────────────────────────────────
