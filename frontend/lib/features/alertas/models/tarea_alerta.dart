@@ -1,3 +1,5 @@
+import '../../paletizado/domain/models/etiqueta_data.dart';
+
 class TareaAlerta {
   final String idTarea;
   final String tipoAlerta; // 'IMPRESION', 'PREPARACION', 'LIBERADA'
@@ -7,6 +9,7 @@ class TareaAlerta {
   final String? notaEspecial;
   final String? estadoBloqueo;
   final String accionRequerida;
+  final EtiquetaData? etiquetaData;
 
   TareaAlerta({
     required this.idTarea,
@@ -17,6 +20,7 @@ class TareaAlerta {
     this.notaEspecial,
     this.estadoBloqueo,
     required this.accionRequerida,
+    this.etiquetaData,
   });
 
   factory TareaAlerta.fromJson(Map<String, dynamic> json) {
@@ -29,6 +33,10 @@ class TareaAlerta {
       notaEspecial: json['nota_especial'],
       estadoBloqueo: json['estado_bloqueo'],
       accionRequerida: json['accion_requerida'] ?? '',
+      etiquetaData: json['etiqueta_data'] != null
+          ? EtiquetaData.fromJson(json['etiqueta_data'])
+          : null,
     );
   }
 }
+

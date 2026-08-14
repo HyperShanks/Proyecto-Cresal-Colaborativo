@@ -8,8 +8,9 @@ import '../screens/auditoria_salida_screen.dart';
 
 class TaskCard extends StatelessWidget {
   final TareaAlerta tarea;
+  final VoidCallback? onActualizar;
 
-  const TaskCard({Key? key, required this.tarea}) : super(key: key);
+  const TaskCard({Key? key, required this.tarea, this.onActualizar}) : super(key: key);
 
   // Método para desplegar el Modal de Acción
   void _mostrarDetalleModal(
@@ -139,7 +140,7 @@ class TaskCard extends StatelessWidget {
                 width: double.infinity,
                 height: 55,
                 child: ElevatedButton.icon(
-                  onPressed: () {
+                  onPressed: () async {
                     // 1. Siempre cerramos el modal primero para que no quede estorbando abajo
                     Navigator.pop(context);
 
@@ -152,8 +153,27 @@ class TaskCard extends StatelessWidget {
                           builder: (context) => const AuditoriaSalidaScreen(),
                         ),
                       );
-                    } else {
-                      // Aquí irá la petición POST para Completar Impresión en el futuro
+                    } else if (tarea.tipoAlerta == 'IMPRESION') {
+                      if (tarea.etiquetaData != null) {
+                        final resultado = await Navigator.pushNamed(
+                          context,
+                          '/etiqueta-preview',
+                          arguments: tarea.etiquetaData,
+                        );
+
+                        if (resultado == true) {
+                          onActualizar?.call();
+                        }
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'No se encontraron los datos técnicos para previsualizar la etiqueta.',
+                            ),
+                            backgroundColor: AppPalette.error,
+                          ),
+                        );
+                      }
                     }
                   },
                   icon: Icon(

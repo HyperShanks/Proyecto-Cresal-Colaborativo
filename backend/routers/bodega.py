@@ -4,7 +4,15 @@ from pydantic import BaseModel
 from typing import List, Optional
 
 from database import get_db
-from models import Activo_Inventariado, Orden_Venta, Detalle_Orden, Vehiculo_Origen, Usuario
+from models import (
+    Activo_Inventariado,
+    Orden_Venta,
+    Detalle_Orden,
+    Vehiculo_Origen,
+    Usuario,
+    Detalle_Motor,
+    Detalle_Caja_Cambio,
+)
 from core.security import get_current_user
 
 router = APIRouter(prefix="/api/v1/bodega", tags=["Tablero Operativo"])
@@ -18,6 +26,7 @@ class TareaAlerta(BaseModel):
     nota_especial: Optional[str] = None
     estado_bloqueo: Optional[str] = None
     accion_requerida: str
+    etiqueta_data: Optional[dict] = None
 
 @router.get("/tareas-pendientes", response_model=List[TareaAlerta])
 def obtener_tareas_pendientes(
@@ -31,22 +40,52 @@ def obtener_tareas_pendientes(
     # ---------------------------------------------------------
     # REGLA 1: Pendiente de Impresión (FILTRADO POR SUCURSAL)
     # ---------------------------------------------------------
-    activos_sin_qr = db.query(Activo_Inventariado, Vehiculo_Origen).join(
+    activos_sin_qr = db.query(
+        Activo_Inventariado, Vehiculo_Origen, Detalle_Motor, Detalle_Caja_Cambio
+    ).join(
         Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo
+    ).outerjoin(
+        Detalle_Motor, Activo_Inventariado.id_activo == Detalle_Motor.id_activo
+    ).outerjoin(
+        Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo
     ).filter(
         Activo_Inventariado.qr_impreso == False,
         Activo_Inventariado.estado == 'Activo',
         Activo_Inventariado.id_sucursal_actual == sucursal_id # <--- Filtro aplicado
     ).all()
 
-    for activo, vehiculo in activos_sin_qr:
+    for activo, vehiculo, motor, caja in activos_sin_qr:
+        if activo.id_categoria == 2 and caja:
+            transmision_val = caja.transmision_tipo
+        elif motor:
+            transmision_val = motor.transmision_tipo
+        else:
+            transmision_val = None
+
+        etiqueta_data = {
+            "id_activo": str(activo.id_activo),
+            "numero_ingreso": vehiculo.numero_ingreso if vehiculo else "N/A",
+            "marca": vehiculo.marca if vehiculo else "Desconocida",
+            "modelo": vehiculo.modelo if vehiculo else "Desconocido",
+            "anio": vehiculo.anio if vehiculo else 0,
+            "cilindrada": motor.cilindrada if motor else None,
+            "combustible": motor.combustible if motor else None,
+            "transmision": transmision_val,
+            "numero_motor": motor.numero_motor if motor else None,
+            "galpon": activo.ubicacion_galpon or "",
+            "pasillo": activo.ubicacion_pasillo or "",
+            "pallet": activo.ubicacion_pallet or "",
+            "sku_qr_fisico": activo.sku_qr_fisico,
+        }
+
         alertas.append({
             "id_tarea": f"IMP-{str(activo.id_activo)[:8]}",
             "tipo_alerta": "IMPRESION",
             "titulo_pieza": f"Repuesto de {vehiculo.marca} {vehiculo.modelo}",
             "ubicacion": f"{activo.ubicacion_pasillo or 'S/P'} - {activo.ubicacion_pallet or 'S/P'}",
             "nota_especial": "GENERAR Y PEGAR ETIQUETA QR",
-            "accion_requerida": "GENERAR QR AHORA"
+            "accion_requerida": "GENERAR QR AHORA",
+            "etiqueta_data": etiqueta_data
         })
 
     # ---------------------------------------------------------

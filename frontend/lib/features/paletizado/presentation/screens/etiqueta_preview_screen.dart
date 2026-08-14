@@ -6,7 +6,7 @@ import '../../domain/models/etiqueta_data.dart';
 import '../widgets/etiqueta_termica_widget.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
-import '../../services/print_service.dart';
+//import '../../services/print_service.dart';
 import '../../services/paletizado_service.dart';
 
 class EtiquetaPreviewScreen extends StatefulWidget {
@@ -42,7 +42,9 @@ class _EtiquetaPreviewScreenState extends State<EtiquetaPreviewScreen> {
         debugPrint(
           '📌 [PREVIEW_SCREEN] 📡 Impresión física exitosa. Confirmando en backend...',
         );
-        final exitoPatch = await _paletizadoService.confirmarQrImpreso(data.idActivo);
+        final exitoPatch = await _paletizadoService.confirmarQrImpreso(
+          data.idActivo,
+        );
 
         if (!mounted) return;
 
@@ -79,7 +81,9 @@ class _EtiquetaPreviewScreenState extends State<EtiquetaPreviewScreen> {
         Navigator.of(context).pop(true);
       }
     } on PrinterException catch (e) {
-      debugPrint('📌 [PREVIEW_SCREEN] ❌ Error de dominio de impresora: ${e.mensaje}');
+      debugPrint(
+        '📌 [PREVIEW_SCREEN] ❌ Error de dominio de impresora: ${e.mensaje}',
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

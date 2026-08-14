@@ -77,7 +77,10 @@ class _AlertasScreenState extends State<AlertasScreen> {
               padding: const EdgeInsets.all(16.0),
               itemCount: snapshot.data!.length,
               itemBuilder: (context, index) {
-                return TaskCard(tarea: snapshot.data![index]);
+                return TaskCard(
+                  tarea: snapshot.data![index],
+                  onActualizar: _refreshAlertas,
+                );
               },
             );
           },
