@@ -1,6 +1,6 @@
 # Este archivo contiene los esquemas de Pydantic para la validación de datos de entrada y salida en la API.
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional, List
 from uuid import UUID
 import re
@@ -261,6 +261,8 @@ class OrdenCreateRequest(BaseModel):
 
 class OrdenResponse(BaseModel):
     """DTO de respuesta tras la creación exitosa de la orden."""
+    model_config = ConfigDict(from_attributes=True)
+
     id_orden: UUID
     estado_orden: str
     total_venta: int
@@ -270,7 +272,97 @@ class OrdenResponse(BaseModel):
     fecha_creacion: Optional[str] = None
     total_items: int
 
-    class Config:
-        from_attributes = True
+
+# ==========================================
+# ESQUEMAS PARA HISTORIAL Y MONITOREO DE ÓRDENES (HU-3.5)
+# ==========================================
+
+class ClienteOrdenResumen(BaseModel):
+    """Resumen de datos del cliente para el historial de ventas."""
+    model_config = ConfigDict(from_attributes=True)
+
+    rut_cliente: str
+    nombres: str
+    apellidos: str
+    telefono: Optional[str] = None
+    correo: Optional[str] = None
+    comuna: Optional[str] = None
+
+
+class DespachoOrdenResumen(BaseModel):
+    """Resumen de datos de despacho para el historial de ventas."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_despacho: UUID
+    direccion_envio: str
+    receptor_nombres: str
+    receptor_rut: str
+    receptor_telefono: str
+    empresa_transporte: Optional[str] = None
+    costo_envio: Optional[int] = 0
+    estado_despacho: str
+    comuna_destino: Optional[str] = None
+
+
+class DetalleOrdenItemResponse(BaseModel):
+    """DTO de detalle de línea de producto en el historial de órdenes."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_detalle: UUID
+    id_activo: Optional[UUID] = None
+    titulo: str
+    sku_qr_fisico: Optional[str] = None
+    descripcion_manual: Optional[str] = None
+    notas_preparacion: Optional[str] = None
+    cantidad: int
+    precio_unitario: Optional[int] = None
+    precio_final: int
+    subtotal: int
+    es_inventariado: bool
+
+
+class OrdenHistorialItemResponse(BaseModel):
+    """DTO completo de orden de venta para el historial y monitoreo del vendedor."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_orden: UUID
+    estado_orden: str
+    total_venta: int
+    monto_pendiente: int
+    qr_transaccional_salida: Optional[str] = None
+    fecha_creacion: Optional[str] = None
+    fecha_actualizacion: Optional[str] = None
+    total_items: int
+    cliente: Optional[ClienteOrdenResumen] = None
+    despacho: Optional[DespachoOrdenResumen] = None
+    detalles: List[DetalleOrdenItemResponse] = []
+
+
+class OrdenAnulacionResponse(BaseModel):
+    """DTO de respuesta tras anular una orden y liberar stock."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_orden: UUID
+    estado_orden: str
+    mensaje: str
+    activos_liberados: int
+
+
+class InstruccionesUpdateRequest(BaseModel):
+    """Payload para actualizar notas técnicas o instrucciones a bodega."""
+    notas_preparacion: str = Field(..., min_length=1, description="Texto de notas técnicas de preparación para bodega")
+    id_detalle: Optional[UUID] = Field(None, description="ID del detalle específico si solo se actualiza una línea")
+
+
+class InstruccionesUpdateResponse(BaseModel):
+    """DTO de respuesta tras actualizar instrucciones de preparación."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_orden: UUID
+    mensaje: str
+    notas_preparacion: str
+    detalles_actualizados: int
+
+
 
 

@@ -3,6 +3,7 @@
 # registrar datos de Micro-CRM, gestionar despacho y asegurar la consistencia ACID del inventario.
 
 import uuid
+from datetime import datetime, time as datetime_time
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -10,9 +11,16 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import (
     Usuario, Cliente, Comuna, Orden_Venta, Detalle_Orden,
-    Despacho, Activo_Inventariado, Estado_Activo
+    Despacho, Activo_Inventariado, Estado_Activo,
+    Vehiculo_Origen, Categoria_Activo
 )
-from schemas import OrdenCreateRequest, OrdenResponse
+from schemas import (
+    OrdenCreateRequest, OrdenResponse,
+    ClienteOrdenResumen, DespachoOrdenResumen,
+    DetalleOrdenItemResponse, OrdenHistorialItemResponse,
+    OrdenAnulacionResponse, InstruccionesUpdateRequest,
+    InstruccionesUpdateResponse
+)
 from core.security import get_current_user
 
 router = APIRouter(
@@ -247,6 +255,291 @@ def crear_orden(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error en la transacción de creación de la orden: {str(e)}"
+        )
+
+
+@router.get(
+    "/mis-ventas",
+    response_model=List[OrdenHistorialItemResponse],
+    summary="Historial y Monitoreo de Ventas del Vendedor (HU-3.5)",
+    description="Consulta las órdenes generadas por el usuario actual. "
+                "Por defecto filtra solo las ventas de la fecha actual (hoy). "
+                "Incluye estado de la orden, datos del cliente, despacho y desglose de líneas."
+)
+def obtener_mis_ventas(
+    fecha: Optional[str] = None,
+    todas: bool = False,
+    estado: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    query = db.query(Orden_Venta).filter(Orden_Venta.id_vendedor == current_user.id_usuario)
+
+    # Filtro de Rendimiento: Por defecto solo órdenes de hoy
+    if not todas:
+        if fecha and fecha.strip():
+            try:
+                target_date = datetime.strptime(fecha.strip(), "%Y-%m-%d").date()
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Formato de fecha no válido. Use 'YYYY-MM-DD'."
+                )
+        else:
+            target_date = datetime.now().date()
+
+        start_dt = datetime.combine(target_date, datetime_time.min)
+        end_dt = datetime.combine(target_date, datetime_time.max)
+        query = query.filter(
+            Orden_Venta.fecha_creacion >= start_dt,
+            Orden_Venta.fecha_creacion <= end_dt
+        )
+
+    if estado and estado.strip():
+        query = query.filter(Orden_Venta.estado_orden == estado.strip())
+
+    ordenes = query.order_by(Orden_Venta.fecha_creacion.desc()).all()
+
+    resultado = []
+    for orden in ordenes:
+        # Cliente
+        cliente_db = db.query(Cliente).filter(Cliente.id_cliente == orden.id_cliente).first()
+        cliente_resumen = None
+        if cliente_db:
+            comuna_nombre = None
+            if cliente_db.id_comuna:
+                c_obj = db.query(Comuna).filter(Comuna.id_comuna == cliente_db.id_comuna).first()
+                if c_obj:
+                    comuna_nombre = c_obj.nombre_comuna
+            cliente_resumen = ClienteOrdenResumen(
+                rut_cliente=cliente_db.rut_cliente,
+                nombres=cliente_db.nombres,
+                apellidos=cliente_db.apellidos,
+                telefono=cliente_db.telefono,
+                correo=cliente_db.correo,
+                comuna=comuna_nombre,
+            )
+
+        # Despacho
+        despacho_db = db.query(Despacho).filter(Despacho.id_orden == orden.id_orden).first()
+        despacho_resumen = None
+        if despacho_db:
+            comuna_dest_nombre = None
+            if despacho_db.id_comuna_destino:
+                c_dest = db.query(Comuna).filter(Comuna.id_comuna == despacho_db.id_comuna_destino).first()
+                if c_dest:
+                    comuna_dest_nombre = c_dest.nombre_comuna
+            despacho_resumen = DespachoOrdenResumen(
+                id_despacho=despacho_db.id_despacho,
+                direccion_envio=despacho_db.direccion_envio,
+                receptor_nombres=despacho_db.receptor_nombres,
+                receptor_rut=despacho_db.receptor_rut,
+                receptor_telefono=despacho_db.receptor_telefono,
+                empresa_transporte=despacho_db.empresa_transporte,
+                costo_envio=despacho_db.costo_envio or 0,
+                estado_despacho=despacho_db.estado_despacho,
+                comuna_destino=comuna_dest_nombre,
+            )
+
+        # Detalle de líneas
+        detalles_db = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == orden.id_orden).all()
+        detalles_resumen = []
+        for d in detalles_db:
+            sku_fisico = None
+            titulo_item = d.descripcion_manual or "Repuesto Misceláneo"
+            es_inv = False
+
+            if d.id_activo:
+                es_inv = True
+                activo_db = (
+                    db.query(Activo_Inventariado, Vehiculo_Origen, Categoria_Activo)
+                    .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
+                    .join(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
+                    .filter(Activo_Inventariado.id_activo == d.id_activo)
+                    .first()
+                )
+                if activo_db:
+                    act, veh, cat = activo_db
+                    sku_fisico = act.sku_qr_fisico
+                    nombre_cat = cat.nombre_categoria if cat else "Repuesto"
+                    if veh:
+                        titulo_item = f"{nombre_cat} - {veh.marca} {veh.modelo} {veh.anio or ''}".strip()
+                    else:
+                        titulo_item = f"{nombre_cat} ({sku_fisico})"
+
+            detalles_resumen.append(
+                DetalleOrdenItemResponse(
+                    id_detalle=d.id_detalle,
+                    id_activo=d.id_activo,
+                    titulo=titulo_item,
+                    sku_qr_fisico=sku_fisico,
+                    descripcion_manual=d.descripcion_manual,
+                    notas_preparacion=d.notas_preparacion,
+                    cantidad=d.cantidad,
+                    precio_unitario=d.precio_unitario,
+                    precio_final=d.precio_final,
+                    subtotal=d.precio_final * d.cantidad,
+                    es_inventariado=es_inv,
+                )
+            )
+
+        resultado.append(
+            OrdenHistorialItemResponse(
+                id_orden=orden.id_orden,
+                estado_orden=orden.estado_orden,
+                total_venta=orden.total_venta,
+                monto_pendiente=orden.monto_pendiente,
+                qr_transaccional_salida=orden.qr_transaccional_salida,
+                fecha_creacion=orden.fecha_creacion.isoformat() if orden.fecha_creacion else None,
+                fecha_actualizacion=orden.fecha_actualizacion.isoformat() if orden.fecha_actualizacion else None,
+                total_items=len(detalles_resumen),
+                cliente=cliente_resumen,
+                despacho=despacho_resumen,
+                detalles=detalles_resumen,
+            )
+        )
+
+    return resultado
+
+
+@router.patch(
+    "/{id_orden}/anular",
+    response_model=OrdenAnulacionResponse,
+    summary="Anular Orden y Liberar Stock (ACID)",
+    description="Anula una orden en estado 'Reservada' (Pendiente de pago) y "
+                "devuelve automáticamente los repuestos inventariados a 'Disponible' en el catálogo."
+)
+def anular_orden(
+    id_orden: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    orden = db.query(Orden_Venta).filter(Orden_Venta.id_orden == id_orden).first()
+    if not orden:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Orden con ID '{id_orden}' no encontrada."
+        )
+
+    # Solo se permite anular órdenes en estado 'Reservada' (Pendiente de pago)
+    if orden.estado_orden != "Reservada":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Solo se pueden anular órdenes en estado 'Reservada' (Pendientes de pago). "
+                   f"La orden actual está en estado '{orden.estado_orden}'."
+        )
+
+    try:
+        # Paso A: Cambiar estado de la orden a 'Anulada'
+        orden.estado_orden = "Anulada"
+        orden.monto_pendiente = 0
+        orden.fecha_actualizacion = datetime.now()
+
+        # Paso B: Liberar repuestos inventariados a 'Disponible'
+        estado_disponible = db.query(Estado_Activo).filter(Estado_Activo.nombre_estado == "Disponible").first()
+        if not estado_disponible:
+            estado_disponible = Estado_Activo(id_estado=1, nombre_estado="Disponible")
+            db.add(estado_disponible)
+            db.flush()
+
+        detalles = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == id_orden).all()
+        activos_liberados = 0
+
+        for d in detalles:
+            if d.id_activo:
+                activo = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == d.id_activo).first()
+                if activo:
+                    activo.id_estado = estado_disponible.id_estado
+                    activo.version_lock = (activo.version_lock or 1) + 1
+                    activos_liberados += 1
+
+        db.commit()
+        db.refresh(orden)
+
+        return OrdenAnulacionResponse(
+            id_orden=orden.id_orden,
+            estado_orden=orden.estado_orden,
+            mensaje="Orden anulada exitosamente. Los repuestos inventariados han sido devueltos al catálogo como disponibles.",
+            activos_liberados=activos_liberados,
+        )
+
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error transaccional al anular la orden: {str(e)}"
+        )
+
+
+@router.patch(
+    "/{id_orden}/instrucciones",
+    response_model=InstruccionesUpdateResponse,
+    summary="Actualizar Instrucciones Técnicas para Bodega",
+    description="Modifica las notas de preparación técnica asociadas a los detalles de una orden."
+)
+def actualizar_instrucciones_bodega(
+    id_orden: uuid.UUID,
+    payload: InstruccionesUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    orden = db.query(Orden_Venta).filter(Orden_Venta.id_orden == id_orden).first()
+    if not orden:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Orden con ID '{id_orden}' no encontrada."
+        )
+
+    if orden.estado_orden in ["Anulada", "Completada"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"No se pueden modificar instrucciones en una orden con estado '{orden.estado_orden}'."
+        )
+
+    try:
+        query_detalles = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == id_orden)
+
+        if payload.id_detalle:
+            query_detalles = query_detalles.filter(Detalle_Orden.id_detalle == payload.id_detalle)
+            detalle = query_detalles.first()
+            if not detalle:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Detalle con ID '{payload.id_detalle}' no encontrado en esta orden."
+                )
+            detalle.notas_preparacion = payload.notas_preparacion.strip()
+            detalles_actualizados = 1
+        else:
+            detalles = query_detalles.all()
+            if not detalles:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="La orden no contiene líneas de detalle para actualizar."
+                )
+            for d in detalles:
+                d.notas_preparacion = payload.notas_preparacion.strip()
+            detalles_actualizados = len(detalles)
+
+        orden.fecha_actualizacion = datetime.now()
+        db.commit()
+
+        return InstruccionesUpdateResponse(
+            id_orden=orden.id_orden,
+            mensaje="Instrucciones técnicas de preparación actualizadas exitosamente.",
+            notas_preparacion=payload.notas_preparacion.strip(),
+            detalles_actualizados=detalles_actualizados,
+        )
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al actualizar las instrucciones de la orden: {str(e)}"
         )
 
 
