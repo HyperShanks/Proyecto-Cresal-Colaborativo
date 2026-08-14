@@ -42,8 +42,10 @@ class OrdenResponseModel {
   }
 
   /// Retorna el monto formateado en pesos chilenos (ej: $520.000)
-  String get totalVentaFormateado {
-    final str = totalVenta.toString();
+  String get totalVentaFormateado => _formatearMonto(totalVenta);
+
+  static String _formatearMonto(int monto) {
+    final str = monto.toString();
     final buffer = StringBuffer();
     int count = 0;
     for (int i = str.length - 1; i >= 0; i--) {
@@ -57,15 +59,222 @@ class OrdenResponseModel {
   }
 }
 
-/// Servicio HTTP para la gestión de órdenes de venta en FastAPI (HU-3.4).
+/// Resumen del cliente asociado a una orden en el historial (HU-3.5).
+class ClienteOrdenResumenModel {
+  final String rutCliente;
+  final String nombres;
+  final String apellidos;
+  final String? telefono;
+  final String? correo;
+  final String? comuna;
+
+  const ClienteOrdenResumenModel({
+    required this.rutCliente,
+    required this.nombres,
+    required this.apellidos,
+    this.telefono,
+    this.correo,
+    this.comuna,
+  });
+
+  String get nombreCompleto => '$nombres $apellidos'.trim();
+
+  factory ClienteOrdenResumenModel.fromJson(Map<String, dynamic> json) {
+    return ClienteOrdenResumenModel(
+      rutCliente: json['rut_cliente']?.toString() ?? '',
+      nombres: json['nombres']?.toString() ?? '',
+      apellidos: json['apellidos']?.toString() ?? '',
+      telefono: json['telefono']?.toString(),
+      correo: json['correo']?.toString(),
+      comuna: json['comuna']?.toString(),
+    );
+  }
+}
+
+/// Resumen del despacho asociado a una orden en el historial (HU-3.5).
+class DespachoOrdenResumenModel {
+  final String idDespacho;
+  final String direccionEnvio;
+  final String receptorNombres;
+  final String receptorRut;
+  final String receptorTelefono;
+  final String? empresaTransporte;
+  final int costoEnvio;
+  final String estadoDespacho;
+  final String? comunaDestino;
+
+  const DespachoOrdenResumenModel({
+    required this.idDespacho,
+    required this.direccionEnvio,
+    required this.receptorNombres,
+    required this.receptorRut,
+    required this.receptorTelefono,
+    this.empresaTransporte,
+    this.costoEnvio = 0,
+    required this.estadoDespacho,
+    this.comunaDestino,
+  });
+
+  factory DespachoOrdenResumenModel.fromJson(Map<String, dynamic> json) {
+    return DespachoOrdenResumenModel(
+      idDespacho: json['id_despacho']?.toString() ?? '',
+      direccionEnvio: json['direccion_envio']?.toString() ?? '',
+      receptorNombres: json['receptor_nombres']?.toString() ?? '',
+      receptorRut: json['receptor_rut']?.toString() ?? '',
+      receptorTelefono: json['receptor_telefono']?.toString() ?? '',
+      empresaTransporte: json['empresa_transporte']?.toString(),
+      costoEnvio: json['costo_envio'] as int? ?? 0,
+      estadoDespacho: json['estado_despacho']?.toString() ?? 'Por Enviar',
+      comunaDestino: json['comuna_destino']?.toString(),
+    );
+  }
+}
+
+/// Línea de detalle de producto en el historial de órdenes (HU-3.5).
+class DetalleOrdenItemModel {
+  final String idDetalle;
+  final String? idActivo;
+  final String titulo;
+  final String? skuQrFisico;
+  final String? descripcionManual;
+  String? notasPreparacion;
+  final int cantidad;
+  final int? precioUnitario;
+  final int precioFinal;
+  final int subtotal;
+  final bool esInventariado;
+
+  DetalleOrdenItemModel({
+    required this.idDetalle,
+    this.idActivo,
+    required this.titulo,
+    this.skuQrFisico,
+    this.descripcionManual,
+    this.notasPreparacion,
+    required this.cantidad,
+    this.precioUnitario,
+    required this.precioFinal,
+    required this.subtotal,
+    required this.esInventariado,
+  });
+
+  String get precioFinalFormateado => OrdenResponseModel._formatearMonto(precioFinal);
+  String get subtotalFormateado => OrdenResponseModel._formatearMonto(subtotal);
+
+  factory DetalleOrdenItemModel.fromJson(Map<String, dynamic> json) {
+    final cant = json['cantidad'] as int? ?? 1;
+    final pFinal = json['precio_final'] as int? ?? 0;
+    final sub = json['subtotal'] as int? ?? (pFinal * cant);
+
+    return DetalleOrdenItemModel(
+      idDetalle: json['id_detalle']?.toString() ?? '',
+      idActivo: json['id_activo']?.toString(),
+      titulo: json['titulo']?.toString() ?? 'Repuesto',
+      skuQrFisico: json['sku_qr_fisico']?.toString(),
+      descripcionManual: json['descripcion_manual']?.toString(),
+      notasPreparacion: json['notas_preparacion']?.toString(),
+      cantidad: cant,
+      precioUnitario: json['precio_unitario'] as int?,
+      precioFinal: pFinal,
+      subtotal: sub,
+      esInventariado: json['es_inventariado'] as bool? ?? (json['id_activo'] != null),
+    );
+  }
+}
+
+/// DTO completo de orden de venta para el historial del vendedor (HU-3.5).
+class OrdenHistorialModel {
+  final String idOrden;
+  String estadoOrden;
+  final int totalVenta;
+  final int montoPendiente;
+  final String? qrTransaccionalSalida;
+  final String? fechaCreacion;
+  final String? fechaActualizacion;
+  final int totalItems;
+  final ClienteOrdenResumenModel? cliente;
+  final DespachoOrdenResumenModel? despacho;
+  final List<DetalleOrdenItemModel> detalles;
+
+  OrdenHistorialModel({
+    required this.idOrden,
+    required this.estadoOrden,
+    required this.totalVenta,
+    required this.montoPendiente,
+    this.qrTransaccionalSalida,
+    this.fechaCreacion,
+    this.fechaActualizacion,
+    required this.totalItems,
+    this.cliente,
+    this.despacho,
+    required this.detalles,
+  });
+
+  bool get esReservada => estadoOrden.toLowerCase() == 'reservada';
+  bool get esPagada => estadoOrden.toLowerCase() == 'pagada' || estadoOrden.toLowerCase() == 'completada';
+  bool get esAnulada => estadoOrden.toLowerCase() == 'anulada';
+
+  String get totalVentaFormateado => OrdenResponseModel._formatearMonto(totalVenta);
+  String get montoPendienteFormateado => OrdenResponseModel._formatearMonto(montoPendiente);
+
+  String get folioDisplay {
+    if (qrTransaccionalSalida != null && qrTransaccionalSalida!.isNotEmpty) {
+      return qrTransaccionalSalida!;
+    }
+    if (idOrden.length >= 8) {
+      return 'ORD-${idOrden.substring(0, 8).toUpperCase()}';
+    }
+    return 'ORD-$idOrden';
+  }
+
+  String get fechaFormateada {
+    if (fechaCreacion == null) return '--:--';
+    try {
+      final dt = DateTime.parse(fechaCreacion!);
+      final dia = dt.day.toString().padLeft(2, '0');
+      final mes = dt.month.toString().padLeft(2, '0');
+      final anio = dt.year;
+      final hora = dt.hour.toString().padLeft(2, '0');
+      final min = dt.minute.toString().padLeft(2, '0');
+      return '$dia/$mes/$anio $hora:$min';
+    } catch (_) {
+      return fechaCreacion!;
+    }
+  }
+
+  factory OrdenHistorialModel.fromJson(Map<String, dynamic> json) {
+    return OrdenHistorialModel(
+      idOrden: json['id_orden']?.toString() ?? '',
+      estadoOrden: json['estado_orden']?.toString() ?? 'Reservada',
+      totalVenta: json['total_venta'] as int? ?? 0,
+      montoPendiente: json['monto_pendiente'] as int? ?? 0,
+      qrTransaccionalSalida: json['qr_transaccional_salida']?.toString(),
+      fechaCreacion: json['fecha_creacion']?.toString(),
+      fechaActualizacion: json['fecha_actualizacion']?.toString(),
+      totalItems: json['total_items'] as int? ?? 0,
+      cliente: json['cliente'] != null
+          ? ClienteOrdenResumenModel.fromJson(json['cliente'] as Map<String, dynamic>)
+          : null,
+      despacho: json['despacho'] != null
+          ? DespachoOrdenResumenModel.fromJson(json['despacho'] as Map<String, dynamic>)
+          : null,
+      detalles: (json['detalles'] as List<dynamic>?)
+              ?.map((d) => DetalleOrdenItemModel.fromJson(d as Map<String, dynamic>))
+              .toList() ??
+          [],
+    );
+  }
+}
+
+/// Servicio HTTP para la gestión de órdenes de venta en FastAPI (HU-3.4 & HU-3.5).
 class OrdenesService {
-  /// Envía la orden de venta transaccional al backend FastAPI (POST /api/v1/ordenes)
-  /// inyectando el Bearer Token del usuario autenticado.
+  /// Crea una nueva orden de venta transaccional en el backend.
   static Future<OrdenResponseModel> crearOrden(
     Map<String, dynamic> payload, {
     http.Client? client,
   }) async {
     final httpClient = client ?? http.Client();
+
     try {
       final uri = Uri.parse(ApiConstants.ordenesEndpoint);
       final token = await AuthService.getToken();
@@ -140,8 +349,6 @@ class OrdenesService {
   }
 
   /// Busca un cliente en el backend por su RUT para autocompletar el formulario de Micro-CRM.
-  /// Si el cliente existe (200), retorna un mapa con sus datos.
-  /// Si no existe (404) o hay error de red, retorna `null` silenciosamente sin romper el flujo de UI.
   static Future<Map<String, dynamic>?> buscarClientePorRut(
     String rut, {
     http.Client? client,
@@ -179,6 +386,206 @@ class OrdenesService {
       return null;
     } catch (_) {
       return null;
+    } finally {
+      if (client == null) {
+        httpClient.close();
+      }
+    }
+  }
+
+  /// Consulta el historial de órdenes generadas por el vendedor actual (HU-3.5).
+  static Future<List<OrdenHistorialModel>> obtenerMisVentas({
+    String? fecha,
+    bool todas = false,
+    String? estado,
+    http.Client? client,
+  }) async {
+    final httpClient = client ?? http.Client();
+
+    try {
+      final queryParams = <String, String>{
+        if (todas) 'todas': 'true',
+        if (fecha != null && fecha.isNotEmpty) 'fecha': fecha,
+        if (estado != null && estado.isNotEmpty) 'estado': estado,
+      };
+
+      final uri = Uri.parse('${ApiConstants.ordenesEndpoint}/mis-ventas')
+          .replace(queryParameters: queryParams.isNotEmpty ? queryParams : null);
+
+      final token = await AuthService.getToken();
+
+      final headers = {
+        'Content-Type': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
+      final response = await httpClient
+          .get(uri, headers: headers)
+          .timeout(
+            const Duration(seconds: 15),
+            onTimeout: () => throw Exception('Tiempo de espera agotado al consultar órdenes.'),
+          );
+
+      dynamic decodedBody;
+      try {
+        decodedBody = jsonDecode(utf8.decode(response.bodyBytes));
+      } catch (_) {
+        try {
+          decodedBody = jsonDecode(response.body);
+        } catch (_) {
+          decodedBody = null;
+        }
+      }
+
+      if (response.statusCode == 200) {
+        if (decodedBody is List) {
+          return decodedBody
+              .map((item) => OrdenHistorialModel.fromJson(item as Map<String, dynamic>))
+              .toList();
+        }
+        return [];
+      } else if (response.statusCode == 401) {
+        throw Exception('Sesión expirada. Por favor vuelve a iniciar sesión.');
+      } else {
+        final detail = decodedBody is Map ? decodedBody['detail'] : null;
+        throw Exception(
+          detail?.toString() ?? 'Error al consultar el historial de órdenes (${response.statusCode}).',
+        );
+      }
+    } catch (e) {
+      if (e is Exception) rethrow;
+      throw Exception('Error inesperado al cargar historial de ventas: $e');
+    } finally {
+      if (client == null) {
+        httpClient.close();
+      }
+    }
+  }
+
+  /// Anula una orden en estado Reservada y libera los repuestos inventariados (HU-3.5).
+  static Future<Map<String, dynamic>> anularOrden(
+    String idOrden, {
+    http.Client? client,
+  }) async {
+    final httpClient = client ?? http.Client();
+
+    try {
+      final uri = Uri.parse('${ApiConstants.ordenesEndpoint}/$idOrden/anular');
+      final token = await AuthService.getToken();
+
+      final headers = {
+        'Content-Type': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
+      final response = await httpClient
+          .patch(uri, headers: headers)
+          .timeout(
+            const Duration(seconds: 15),
+            onTimeout: () => throw Exception('Tiempo de espera agotado al anular la orden.'),
+          );
+
+      dynamic decodedBody;
+      try {
+        decodedBody = jsonDecode(utf8.decode(response.bodyBytes));
+      } catch (_) {
+        try {
+          decodedBody = jsonDecode(response.body);
+        } catch (_) {
+          decodedBody = null;
+        }
+      }
+
+      if (response.statusCode == 200) {
+        if (decodedBody is Map<String, dynamic>) {
+          return decodedBody;
+        }
+        return {'mensaje': 'Orden anulada exitosamente.'};
+      } else if (response.statusCode == 400) {
+        final detail = decodedBody is Map ? decodedBody['detail'] : null;
+        throw Exception(detail?.toString() ?? 'No es posible anular la orden en su estado actual.');
+      } else if (response.statusCode == 404) {
+        throw Exception('La orden especificada no fue encontrada.');
+      } else if (response.statusCode == 401) {
+        throw Exception('Sesión expirada. Por favor vuelve a iniciar sesión.');
+      } else {
+        final detail = decodedBody is Map ? decodedBody['detail'] : null;
+        throw Exception(detail?.toString() ?? 'Error al anular la orden (${response.statusCode}).');
+      }
+    } catch (e) {
+      if (e is Exception) rethrow;
+      throw Exception('Error inesperado al anular la orden: $e');
+    } finally {
+      if (client == null) {
+        httpClient.close();
+      }
+    }
+  }
+
+  /// Actualiza las instrucciones/notas técnicas dirigidas a bodega para una orden (HU-3.5).
+  static Future<Map<String, dynamic>> actualizarInstruccionesBodega(
+    String idOrden,
+    String notasPreparacion, {
+    String? idDetalle,
+    http.Client? client,
+  }) async {
+    final httpClient = client ?? http.Client();
+
+    try {
+      final uri = Uri.parse('${ApiConstants.ordenesEndpoint}/$idOrden/instrucciones');
+      final token = await AuthService.getToken();
+
+      final headers = {
+        'Content-Type': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
+      final payload = {
+        'notas_preparacion': notasPreparacion.trim(),
+        if (idDetalle != null && idDetalle.isNotEmpty) 'id_detalle': idDetalle,
+      };
+
+      final response = await httpClient
+          .patch(
+            uri,
+            headers: headers,
+            body: jsonEncode(payload),
+          )
+          .timeout(
+            const Duration(seconds: 15),
+            onTimeout: () => throw Exception('Tiempo de espera agotado al actualizar instrucciones.'),
+          );
+
+      dynamic decodedBody;
+      try {
+        decodedBody = jsonDecode(utf8.decode(response.bodyBytes));
+      } catch (_) {
+        try {
+          decodedBody = jsonDecode(response.body);
+        } catch (_) {
+          decodedBody = null;
+        }
+      }
+
+      if (response.statusCode == 200) {
+        if (decodedBody is Map<String, dynamic>) {
+          return decodedBody;
+        }
+        return {'mensaje': 'Instrucciones actualizadas exitosamente.'};
+      } else if (response.statusCode == 400) {
+        final detail = decodedBody is Map ? decodedBody['detail'] : null;
+        throw Exception(detail?.toString() ?? 'No se pueden modificar instrucciones de esta orden.');
+      } else if (response.statusCode == 404) {
+        throw Exception('Orden o detalle no encontrado.');
+      } else if (response.statusCode == 401) {
+        throw Exception('Sesión expirada. Por favor vuelve a iniciar sesión.');
+      } else {
+        final detail = decodedBody is Map ? decodedBody['detail'] : null;
+        throw Exception(detail?.toString() ?? 'Error al actualizar instrucciones (${response.statusCode}).');
+      }
+    } catch (e) {
+      if (e is Exception) rethrow;
+      throw Exception('Error inesperado al actualizar instrucciones: $e');
     } finally {
       if (client == null) {
         httpClient.close();

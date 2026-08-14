@@ -1,5 +1,3 @@
-// lib/features/ventas/presentation/screens/ventas_main_screen.dart
-
 import 'package:flutter/material.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
@@ -7,6 +5,7 @@ import '../../../auth/services/auth_service.dart';
 import '../../controllers/cart_controller.dart';
 import 'carrito_screen.dart';
 import 'catalogo_screen.dart';
+import 'historial_screen.dart';
 
 /// Contenedor Principal para el rol de Vendedor.
 /// Implementa un BottomNavigationBar con IndexedStack para navegación fluida
@@ -228,11 +227,8 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
             key: _catalogoKey,
             onOpenMenuDrawer: () => _scaffoldKey.currentState?.openDrawer(),
           ),
-          _buildPlaceholderTab(
-            title: 'Mis Órdenes',
-            icon: Icons.receipt_long_outlined,
-            description: 'Historial y estado de cotizaciones y órdenes de venta.',
-            onOpenDrawer: () => _scaffoldKey.currentState?.openDrawer(),
+          HistorialScreen(
+            onOpenMenuDrawer: () => _scaffoldKey.currentState?.openDrawer(),
           ),
           _buildPlaceholderTab(
             title: 'Tasación de Vehículos',

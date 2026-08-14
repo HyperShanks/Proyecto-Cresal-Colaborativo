@@ -1,0 +1,386 @@
+// test/historial_screen_test.dart
+
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+
+import 'package:frontend/features/ventas/services/ordenes_service.dart';
+import 'package:frontend/features/ventas/presentation/widgets/orden_card.dart';
+import 'package:frontend/features/ventas/presentation/widgets/orden_detail_sheet.dart';
+import 'package:frontend/features/ventas/presentation/screens/historial_screen.dart';
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUpAll(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+      const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
+      (MethodCall methodCall) async {
+        if (methodCall.method == 'read') {
+          return 'fake-test-jwt-token';
+        }
+        return null;
+      },
+    );
+  });
+
+  final ordenMock = OrdenHistorialModel(
+    idOrden: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+    estadoOrden: 'Reservada',
+    totalVenta: 520000,
+    montoPendiente: 520000,
+    qrTransaccionalSalida: 'ORD-TEST-001',
+    fechaCreacion: '2026-08-14T10:30:00',
+    totalItems: 2,
+    cliente: const ClienteOrdenResumenModel(
+      rutCliente: '18.765.432-1',
+      nombres: 'Carlos',
+      apellidos: 'González',
+      telefono: '+56912345678',
+      correo: 'carlos@correo.cl',
+      comuna: 'Viña del Mar',
+    ),
+    despacho: const DespachoOrdenResumenModel(
+      idDespacho: 'desp-001',
+      direccionEnvio: 'Av. Libertad 1234, Depto 402',
+      receptorNombres: 'Carlos González',
+      receptorRut: '18.765.432-1',
+      receptorTelefono: '+56912345678',
+      estadoDespacho: 'Por Enviar',
+    ),
+    detalles: [
+      DetalleOrdenItemModel(
+        idDetalle: 'det-001',
+        idActivo: 'act-001',
+        titulo: 'Motor - Toyota Yaris 2018',
+        skuQrFisico: 'MOT-TOY-YAR-001',
+        notasPreparacion: 'Entregar con poleas y cables',
+        cantidad: 1,
+        precioUnitario: 500000,
+        precioFinal: 500000,
+        subtotal: 500000,
+        esInventariado: true,
+      ),
+      DetalleOrdenItemModel(
+        idDetalle: 'det-002',
+        titulo: 'Líquido Refrigerante Premium',
+        descripcionManual: 'Bidón 5L Verde',
+        notasPreparacion: null,
+        cantidad: 1,
+        precioUnitario: 20000,
+        precioFinal: 20000,
+        subtotal: 20000,
+        esInventariado: false,
+      ),
+    ],
+  );
+
+  group('OrdenHistorialModel Unit Tests', () {
+    test('fromJson y getters parsean datos y formatos correctamente', () {
+      final json = {
+        'id_orden': '11111111-2222-3333-4444-555555555555',
+        'estado_orden': 'Reservada',
+        'total_venta': 520000,
+        'monto_pendiente': 520000,
+        'qr_transaccional_salida': 'ORD-A1B2C3D4',
+        'fecha_creacion': '2026-08-14T14:30:00',
+        'total_items': 1,
+        'cliente': {
+          'rut_cliente': '19.876.543-2',
+          'nombres': 'María',
+          'apellidos': 'Pérez',
+          'telefono': '+56987654321',
+          'correo': 'maria@correo.cl',
+          'comuna': 'Valparaíso',
+        },
+        'despacho': {
+          'id_despacho': 'd-1',
+          'direccion_envio': 'Calle Prat 500',
+          'receptor_nombres': 'María Pérez',
+          'receptor_rut': '19.876.543-2',
+          'receptor_telefono': '+56987654321',
+          'estado_despacho': 'Por Enviar',
+        },
+        'detalles': [
+          {
+            'id_detalle': 'det-1',
+            'id_activo': 'act-1',
+            'titulo': 'Caja de Cambio - Toyota Yaris 2018',
+            'sku_qr_fisico': 'CAJ-TOY-001',
+            'notas_preparacion': 'Revisar sensor de retroceso',
+            'cantidad': 1,
+            'precio_unitario': 520000,
+            'precio_final': 520000,
+            'subtotal': 520000,
+            'es_inventariado': true,
+          }
+        ],
+      };
+
+      final model = OrdenHistorialModel.fromJson(json);
+
+      expect(model.idOrden, '11111111-2222-3333-4444-555555555555');
+      expect(model.folioDisplay, 'ORD-A1B2C3D4');
+      expect(model.esReservada, isTrue);
+      expect(model.esPagada, isFalse);
+      expect(model.esAnulada, isFalse);
+      expect(model.totalVentaFormateado, '\$520.000');
+      expect(model.montoPendienteFormateado, '\$520.000');
+      expect(model.fechaFormateada, '14/08/2026 14:30');
+      expect(model.cliente?.nombreCompleto, 'María Pérez');
+      expect(model.despacho?.direccionEnvio, 'Calle Prat 500');
+      expect(model.detalles.length, 1);
+      expect(model.detalles.first.titulo, 'Caja de Cambio - Toyota Yaris 2018');
+      expect(model.detalles.first.precioFinalFormateado, '\$520.000');
+    });
+
+    test('Estados Pagada y Anulada se evalúan correctamente', () {
+      final ordenPagada = OrdenHistorialModel(
+        idOrden: 'ord-p',
+        estadoOrden: 'Pagada',
+        totalVenta: 100000,
+        montoPendiente: 0,
+        totalItems: 1,
+        detalles: [],
+      );
+      expect(ordenPagada.esPagada, isTrue);
+      expect(ordenPagada.esReservada, isFalse);
+
+      final ordenAnulada = OrdenHistorialModel(
+        idOrden: 'ord-a',
+        estadoOrden: 'Anulada',
+        totalVenta: 100000,
+        montoPendiente: 0,
+        totalItems: 1,
+        detalles: [],
+      );
+      expect(ordenAnulada.esAnulada, isTrue);
+      expect(ordenAnulada.esReservada, isFalse);
+    });
+  });
+
+  group('OrdenesService HTTP Client Tests', () {
+    test('obtenerMisVentas retorna lista de OrdenHistorialModel en respuesta 200', () async {
+      final mockClient = MockClient((request) async {
+        expect(request.url.path, contains('/api/v1/ordenes/mis-ventas'));
+        final responseData = [
+          {
+            'id_orden': '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+            'estado_orden': 'Reservada',
+            'total_venta': 520000,
+            'monto_pendiente': 520000,
+            'qr_transaccional_salida': 'ORD-TEST-001',
+            'fecha_creacion': '2026-08-14T10:30:00',
+            'total_items': 1,
+            'detalles': [],
+          }
+        ];
+        return http.Response(jsonEncode(responseData), 200);
+      });
+
+      final result = await OrdenesService.obtenerMisVentas(client: mockClient);
+
+      expect(result.length, 1);
+      expect(result.first.idOrden, '3fa85f64-5717-4562-b3fc-2c963f66afa6');
+      expect(result.first.estadoOrden, 'Reservada');
+    });
+
+    test('anularOrden retorna respuesta exitosa en 200', () async {
+      final mockClient = MockClient((request) async {
+        expect(request.method, 'PATCH');
+        expect(request.url.path, contains('/anular'));
+        return http.Response(
+          jsonEncode({
+            'id_orden': 'ord-1',
+            'estado_orden': 'Anulada',
+            'mensaje': 'Orden anulada exitosamente.',
+            'activos_liberados': 1,
+          }),
+          200,
+        );
+      });
+
+      final result = await OrdenesService.anularOrden('ord-1', client: mockClient);
+      expect(result['estado_orden'], 'Anulada');
+      expect(result['activos_liberados'], 1);
+    });
+
+    test('anularOrden lanza excepción descriptiva ante error 400', () async {
+      final mockClient = MockClient((request) async {
+        return http.Response(
+          jsonEncode({'detail': 'Solo se pueden anular órdenes en estado Reservada'}),
+          400,
+        );
+      });
+
+      expect(
+        () => OrdenesService.anularOrden('ord-1', client: mockClient),
+        throwsA(isA<Exception>()),
+      );
+    });
+
+    test('actualizarInstruccionesBodega envía payload y procesa 200', () async {
+      final mockClient = MockClient((request) async {
+        expect(request.method, 'PATCH');
+        expect(request.url.path, contains('/instrucciones'));
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        expect(body['notas_preparacion'], 'Nueva nota técnica');
+
+        return http.Response(
+          jsonEncode({
+            'id_orden': 'ord-1',
+            'mensaje': 'Instrucciones actualizadas exitosamente.',
+            'notas_preparacion': 'Nueva nota técnica',
+            'detalles_actualizados': 1,
+          }),
+          200,
+        );
+      });
+
+      final result = await OrdenesService.actualizarInstruccionesBodega(
+        'ord-1',
+        'Nueva nota técnica',
+        client: mockClient,
+      );
+
+      expect(result['notas_preparacion'], 'Nueva nota técnica');
+    });
+  });
+
+  group('OrdenCard Widget Tests', () {
+    testWidgets('Renderiza Folio, Badge Reservada, Cliente, Ítems y Total', (tester) async {
+      bool cardTapped = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: OrdenCard(
+              orden: ordenMock,
+              onTap: () {
+                cardTapped = true;
+              },
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('ORD-TEST-001'), findsOneWidget);
+      expect(find.text('Reservada'), findsOneWidget);
+      expect(find.text('Carlos González (18.765.432-1)'), findsOneWidget);
+      expect(find.text('2 ítems'), findsOneWidget);
+      expect(find.text('Despacho: Av. Libertad 1234, Depto 402'), findsOneWidget);
+      expect(find.text('\$520.000'), findsOneWidget);
+      expect(find.text('Ver detalle'), findsOneWidget);
+
+      await tester.tap(find.text('ORD-TEST-001'));
+      await tester.pump();
+      expect(cardTapped, isTrue);
+    });
+  });
+
+  group('OrdenDetailSheet Widget Tests', () {
+    testWidgets('Renderiza desglose completo de líneas, notas técnicas y botones de acción', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: OrdenDetailSheet(
+              orden: ordenMock,
+            ),
+          ),
+        ),
+      );
+
+      // Encabezado
+      expect(find.text('ORD-TEST-001'), findsOneWidget);
+      expect(find.text('Datos del Cliente'), findsOneWidget);
+      expect(find.text('Despacho a Domicilio'), findsOneWidget);
+
+      // Líneas de detalle
+      expect(find.text('Motor - Toyota Yaris 2018'), findsOneWidget);
+      expect(find.text('SKU: MOT-TOY-YAR-001'), findsOneWidget);
+      expect(find.text('Nota: Entregar con poleas y cables'), findsOneWidget);
+      expect(find.text('Líquido Refrigerante Premium'), findsOneWidget);
+      expect(find.text('Bidón 5L Verde'), findsOneWidget);
+
+      // Total
+      expect(find.text('\$520.000'), findsOneWidget);
+
+      // Botones de acción condicionales (Solo para estado Reservada)
+      expect(find.text('Editar Instrucciones a Bodega'), findsOneWidget);
+      expect(find.text('Deshacer Orden (Liberar Stock)'), findsOneWidget);
+    });
+
+    testWidgets('Tap en Editar Instrucciones despliega AlertDialog con TextField', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: OrdenDetailSheet(
+              orden: ordenMock,
+            ),
+          ),
+        ),
+      );
+
+      await tester.ensureVisible(find.text('Editar Instrucciones a Bodega'));
+      await tester.tap(find.text('Editar Instrucciones a Bodega'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Instrucciones a Bodega'), findsOneWidget);
+      expect(find.text('Guardar'), findsOneWidget);
+      expect(find.text('Cancelar'), findsOneWidget);
+
+      // Cancelar diálogo
+      await tester.tap(find.text('Cancelar'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Instrucciones a Bodega'), findsNothing);
+    });
+
+    testWidgets('Tap en Deshacer Orden despliega AlertDialog de confirmación', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: OrdenDetailSheet(
+              orden: ordenMock,
+            ),
+          ),
+        ),
+      );
+
+      await tester.ensureVisible(find.text('Deshacer Orden (Liberar Stock)'));
+      await tester.tap(find.text('Deshacer Orden (Liberar Stock)'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('¿Deshacer esta Orden?'), findsOneWidget);
+      expect(find.text('Confirmar Anulación'), findsOneWidget);
+      expect(find.text('Volver'), findsOneWidget);
+
+      // Volver
+      await tester.tap(find.text('Volver'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('¿Deshacer esta Orden?'), findsNothing);
+    });
+  });
+
+  group('HistorialScreen Widget Tests', () {
+    testWidgets('Renderiza AppBar, barra de filtros y estado inicial de carga/vacío', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: HistorialScreen(),
+        ),
+      );
+
+      expect(find.text('Mis Órdenes de Venta'), findsOneWidget);
+      expect(find.text('Ventas de Hoy'), findsOneWidget);
+      expect(find.text('Historial Completo'), findsOneWidget);
+      expect(find.text('Todas'), findsOneWidget);
+      expect(find.text('Reservadas'), findsOneWidget);
+      expect(find.text('Pagadas'), findsOneWidget);
+      expect(find.text('Anuladas'), findsOneWidget);
+    });
+  });
+}

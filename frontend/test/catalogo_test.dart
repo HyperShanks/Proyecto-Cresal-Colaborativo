@@ -216,7 +216,7 @@ void main() {
       // Cambiar a pestaña Mis Órdenes
       await tester.tap(find.text('Mis Órdenes'));
       await tester.pump();
-      expect(find.text('Historial y estado de cotizaciones y órdenes de venta.'), findsOneWidget);
+      expect(find.text('Mis Órdenes de Venta'), findsOneWidget);
 
       // Cambiar a pestaña Tasación
       await tester.tap(find.text('Tasación'));
