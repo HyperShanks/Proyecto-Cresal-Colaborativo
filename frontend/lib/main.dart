@@ -12,6 +12,7 @@ import 'features/inventario/presentation/screens/buscador_screen.dart'; // Impor
 import 'features/ventas/presentation/screens/catalogo_screen.dart'; // HU-3.2: Catálogo Dinámico de Ventas
 import 'features/ventas/presentation/screens/ventas_main_screen.dart'; // HU-3.2: Layout Principal Vendedor
 import 'features/ventas/presentation/screens/checkout_crm_screen.dart'; // HU-3.4: Micro-CRM y Checkout
+import 'features/ventas/presentation/screens/bandeja_precios_screen.dart'; // HU-3.8: Bandeja de Precios Jefe de Ventas
 
 void main() {
   runApp(const MyApp());
@@ -55,6 +56,8 @@ class _MyAppState extends State<MyApp> {
             const CatalogoScreen(), // HU-3.2: Catálogo Dinámico con Radar de Stock
         '/checkout_crm': (context) =>
             const CheckoutCrmScreen(), // HU-3.4: Micro-CRM y Flujo de Cobro
+        '/bandeja_precios': (context) =>
+            const BandejaPreciosScreen(), // HU-3.8: Bandeja de Precios Jefe de Ventas
       },
     );
   }

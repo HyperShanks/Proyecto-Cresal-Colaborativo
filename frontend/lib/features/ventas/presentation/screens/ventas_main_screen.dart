@@ -22,6 +22,7 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
   final GlobalKey<CatalogoScreenState> _catalogoKey = GlobalKey<CatalogoScreenState>();
   int _currentIndex = 0;
   String? _userRol;
+  int? _idRol;
 
   @override
   void initState() {
@@ -31,9 +32,11 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
 
   Future<void> _cargarDatosUsuario() async {
     final rol = await AuthService.getRol();
+    final idRol = await AuthService.getIdRol();
     if (mounted) {
       setState(() {
         _userRol = rol;
+        _idRol = idRol;
       });
     }
   }
@@ -158,6 +161,22 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
             },
           ),
 
+          // ── Opción Exclusiva: Jefe de Ventas (HU-3.8) ────────────────────
+          if (_idRol == 6 ||
+              _userRol?.toLowerCase() == 'jefe de ventas' ||
+              _userRol?.toLowerCase() == 'auditor') ...[
+            const Divider(color: Colors.white10, height: 16),
+            _buildDrawerItem(
+              icon: Icons.price_change_outlined,
+              label: 'BANDEJA DE PRECIOS',
+              badgeColor: AppPalette.secondary,
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).pushNamed('/bandeja_precios');
+              },
+            ),
+          ],
+
           const Spacer(),
 
           // ── Botón de Cerrar Sesión (anclado en la parte inferior) ─────────
@@ -196,18 +215,34 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
     required IconData icon,
     required String label,
     required VoidCallback onTap,
+    Color? badgeColor,
   }) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-      leading: Icon(icon, color: AppPalette.textPrimary, size: 22),
+      leading: Icon(
+        icon,
+        color: badgeColor ?? AppPalette.textPrimary,
+        size: 22,
+      ),
       title: Text(
         label,
         style: AppTypography.body.copyWith(
           letterSpacing: 1.0,
           fontWeight: FontWeight.w600,
           fontSize: 14,
+          color: badgeColor ?? AppPalette.textPrimary,
         ),
       ),
+      trailing: badgeColor != null
+          ? Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: badgeColor,
+                shape: BoxShape.circle,
+              ),
+            )
+          : null,
       onTap: onTap,
     );
   }

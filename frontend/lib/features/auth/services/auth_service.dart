@@ -6,6 +6,7 @@ import '../../../core/constants/api_constants.dart';
 // Claves de almacenamiento seguro
 const String _tokenKey = 'access_token';
 const String _rolKey = 'user_rol';
+const String _idRolKey = 'user_id_rol';
 const String _sucursalKey = 'user_sucursal_id';
 const String _nombreUsuarioKey = 'user_nombre_completo';
 
@@ -54,22 +55,27 @@ class AuthService {
         String rolText = usuarioMap?['nombre_rol']?.toString() ??
             usuarioMap?['rol']?['nombre_rol']?.toString() ??
             '';
-        if (rolText.isEmpty && usuarioMap?['id_rol'] != null) {
-          final idRol = usuarioMap!['id_rol'];
+        final dynamic rawIdRol = usuarioMap?['id_rol'] ?? usuarioMap?['rol']?['id_rol'];
+        final int? idRol = rawIdRol is int ? rawIdRol : int.tryParse(rawIdRol?.toString() ?? '');
+
+        if (rolText.isEmpty && idRol != null) {
           if (idRol == 1) rolText = 'Bodeguero';
           if (idRol == 2) rolText = 'Vendedor';
           if (idRol == 3) rolText = 'Caja';
           if (idRol == 4) rolText = 'Gerente';
           if (idRol == 5) rolText = 'Administrador';
-          if (idRol == 6) rolText = 'Auditor';
+          if (idRol == 6) rolText = 'Jefe de Ventas';
         }
         final sucursalId = usuarioMap?['id_sucursal']?.toString();
         final nombres = usuarioMap?['nombres']?.toString() ?? '';
         final apellidos = usuarioMap?['apellidos']?.toString() ?? '';
 
-        // Guardar token, rol y sucursal de forma segura en el dispositivo
+        // Guardar token, rol, id_rol y sucursal de forma segura en el dispositivo
         await _storage.write(key: _tokenKey, value: token);
         await _storage.write(key: _rolKey, value: rolText);
+        if (idRol != null) {
+          await _storage.write(key: _idRolKey, value: idRol.toString());
+        }
         if (sucursalId != null) {
           await _storage.write(key: _sucursalKey, value: sucursalId);
         }
@@ -93,8 +99,23 @@ class AuthService {
   /// Recupera el token almacenado (útil para inyectarlo en peticiones futuras).
   static Future<String?> getToken() => _storage.read(key: _tokenKey);
 
-  /// Recupera el rol textual almacenado (ej. "Bodeguero", "Vendedor").
+  /// Recupera el rol textual almacenado (ej. "Bodeguero", "Vendedor", "Jefe de Ventas").
   static Future<String?> getRol() => _storage.read(key: _rolKey);
+
+  /// Recupera el ID numérico del rol del usuario (ej. 6 para Jefe de Ventas).
+  static Future<int?> getIdRol() async {
+    final val = await _storage.read(key: _idRolKey);
+    return val != null ? int.tryParse(val) : null;
+  }
+
+  /// Verifica si el usuario actual posee permisos de Jefe de Ventas (id_rol == 6).
+  static Future<bool> esJefeDeVentas() async {
+    final idRol = await getIdRol();
+    if (idRol == 6) return true;
+    final rol = await getRol();
+    final rLower = rol?.toLowerCase() ?? '';
+    return rLower == 'jefe de ventas' || rLower == 'auditor';
+  }
 
   /// Recupera el ID de sucursal del usuario autenticado (para Radar de Stock).
   static Future<int?> getSucursalId() async {
@@ -109,6 +130,7 @@ class AuthService {
   static Future<void> clearToken() async {
     await _storage.delete(key: _tokenKey);
     await _storage.delete(key: _rolKey);
+    await _storage.delete(key: _idRolKey);
     await _storage.delete(key: _sucursalKey);
     await _storage.delete(key: _nombreUsuarioKey);
   }
