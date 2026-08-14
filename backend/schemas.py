@@ -364,5 +364,52 @@ class InstruccionesUpdateResponse(BaseModel):
     detalles_actualizados: int
 
 
+# ==========================================
+# ESQUEMAS PARA JEFE DE VENTAS Y ASIGNACIÓN DE PRECIOS (HU-3.8)
+# ==========================================
+
+class ActivoPendientePrecioResponse(BaseModel):
+    """DTO para la bandeja de entrada de activos sin precio asignado."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_activo: UUID
+    sku_qr_fisico: str
+    id_categoria: int
+    nombre_categoria: str
+    id_sucursal_actual: int
+    nombre_sucursal: str
+    ubicacion_pasillo: Optional[str] = None
+    ubicacion_pallet: Optional[str] = None
+    id_vehiculo: Optional[UUID] = None
+    numero_ingreso: Optional[str] = None
+    marca: Optional[str] = None
+    modelo: Optional[str] = None
+    anio: Optional[int] = None
+    traccion: Optional[str] = None
+    cilindrada: Optional[str] = None
+    combustible: Optional[str] = None
+    transmision_tipo: Optional[str] = None
+    titulo_repuesto: str
+    estado_activo: str
+    fecha_creacion: Optional[str] = None
+
+
+class AsignarPrecioRequest(BaseModel):
+    """Payload para fijar o actualizar el precio de referencia de un activo."""
+    precio_referencia: int = Field(..., gt=0, description="Precio de referencia en pesos chilenos (debe ser mayor a 0)")
+
+
+class AsignarPrecioResponse(BaseModel):
+    """DTO de respuesta tras asignar exitosamente el precio."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_activo: UUID
+    sku_qr_fisico: str
+    precio_referencia: int
+    estado_activo: str
+    mensaje: str
+
+
+
 
 

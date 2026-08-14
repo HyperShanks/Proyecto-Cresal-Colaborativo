@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, Query
+from datetime import datetime
+from uuid import UUID
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_, case
 from typing import Dict, List, Optional
@@ -15,8 +17,14 @@ from models import (
     Sucursal,
     Usuario,
 )
-from core.security import get_current_user
-from schemas import CatalogoItemResponse, PaginatedCatalogoResponse
+from core.security import get_current_user, verificar_rol_jefe_ventas
+from schemas import (
+    CatalogoItemResponse,
+    PaginatedCatalogoResponse,
+    ActivoPendientePrecioResponse,
+    AsignarPrecioRequest,
+    AsignarPrecioResponse,
+)
 
 router = APIRouter(prefix="/api/v1/inventario", tags=["Buscador Inventario"])
 
@@ -336,4 +344,147 @@ def obtener_catalogo(
         total_count=total_count,
         limit=limit,
         offset=offset
-    )
+    )
+
+
+# =============================================================================
+# ENDPOINTS PARA JEFE DE VENTAS: ASIGNACIÓN DE PRECIOS (HU-3.8)
+# =============================================================================
+
+@router.get(
+    "/pendientes-precio",
+    response_model=List[ActivoPendientePrecioResponse],
+    summary="Bandeja de Entrada de Activos Pendientes de Precio (HU-3.8)",
+    description="Consulta todos los activos inventariados/paletizados por bodega que tienen "
+                "precio_referencia nulo o igual a 0. Requiere rol de Jefe de Ventas (id_rol == 6)."
+)
+def obtener_pendientes_precio(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(verificar_rol_jefe_ventas),
+):
+    query = (
+        db.query(
+            Activo_Inventariado,
+            Vehiculo_Origen,
+            Categoria_Activo,
+            Estado_Activo,
+            Sucursal,
+            Detalle_Motor,
+            Detalle_Caja_Cambio,
+        )
+        .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
+        .join(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
+        .join(Estado_Activo, Activo_Inventariado.id_estado == Estado_Activo.id_estado)
+        .join(Sucursal, Activo_Inventariado.id_sucursal_actual == Sucursal.id_sucursal)
+        .outerjoin(Detalle_Motor, Activo_Inventariado.id_activo == Detalle_Motor.id_activo)
+        .outerjoin(Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo)
+        .filter(
+            Activo_Inventariado.estado == "Activo",
+            or_(
+                Activo_Inventariado.precio_referencia == None,
+                Activo_Inventariado.precio_referencia == 0,
+            ),
+        )
+        .order_by(Activo_Inventariado.fecha_creacion.desc())
+    )
+
+    resultados = query.all()
+
+    respuesta: List[ActivoPendientePrecioResponse] = []
+    for activo, vehiculo, cat, est, suc, motor, caja in resultados:
+        cilindrada_val = None
+        combustible_val = None
+        transmision_val = None
+
+        if cat.id_categoria == 1 and motor:
+            cilindrada_val = motor.cilindrada
+            combustible_val = motor.combustible
+            transmision_val = motor.transmision_tipo
+        elif cat.id_categoria == 2 and caja:
+            transmision_val = caja.transmision_tipo
+        else:
+            if motor:
+                cilindrada_val = motor.cilindrada
+                combustible_val = motor.combustible
+                transmision_val = motor.transmision_tipo
+            elif caja:
+                transmision_val = caja.transmision_tipo
+
+        nombre_cat = cat.nombre_categoria if cat else "Repuesto"
+        if vehiculo:
+            titulo = f"{nombre_cat} - {vehiculo.marca} {vehiculo.modelo} {vehiculo.anio or ''}".strip()
+        else:
+            titulo = f"{nombre_cat} ({activo.sku_qr_fisico})"
+
+        item = ActivoPendientePrecioResponse(
+            id_activo=activo.id_activo,
+            sku_qr_fisico=activo.sku_qr_fisico,
+            id_categoria=cat.id_categoria,
+            nombre_categoria=cat.nombre_categoria,
+            id_sucursal_actual=suc.id_sucursal,
+            nombre_sucursal=suc.nombre_sucursal,
+            ubicacion_pasillo=activo.ubicacion_pasillo,
+            ubicacion_pallet=activo.ubicacion_pallet,
+            id_vehiculo=vehiculo.id_vehiculo if vehiculo else None,
+            numero_ingreso=vehiculo.numero_ingreso if vehiculo else None,
+            marca=vehiculo.marca if vehiculo else None,
+            modelo=vehiculo.modelo if vehiculo else None,
+            anio=vehiculo.anio if vehiculo else None,
+            traccion=vehiculo.traccion if vehiculo else None,
+            cilindrada=cilindrada_val,
+            combustible=combustible_val,
+            transmision_tipo=transmision_val,
+            titulo_repuesto=titulo,
+            estado_activo=est.nombre_estado,
+            fecha_creacion=activo.fecha_creacion.isoformat() if activo.fecha_creacion else None,
+        )
+        respuesta.append(item)
+
+    return respuesta
+
+
+@router.patch(
+    "/{id_activo}/precio",
+    response_model=AsignarPrecioResponse,
+    summary="Asignar Precio de Referencia a Repuesto (HU-3.8)",
+    description="Fija el precio_referencia de un repuesto y actualiza su estado automáticamente "
+                "a 'Disponible' para habilitar su venta en el catálogo. Requiere rol Jefe de Ventas."
+)
+def asignar_precio_repuesto(
+    id_activo: UUID,
+    payload: AsignarPrecioRequest,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(verificar_rol_jefe_ventas),
+):
+    activo = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == id_activo).first()
+    if not activo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Repuesto inventariado con ID '{id_activo}' no encontrado."
+        )
+
+    # Actualizar precio de referencia
+    activo.precio_referencia = payload.precio_referencia
+    activo.fecha_actualizacion = datetime.now()
+
+    # Transición automática a 'Disponible' (id_estado = 1)
+    estado_disponible = db.query(Estado_Activo).filter(Estado_Activo.nombre_estado == "Disponible").first()
+    if not estado_disponible:
+        estado_disponible = Estado_Activo(id_estado=1, nombre_estado="Disponible")
+        db.add(estado_disponible)
+        db.flush()
+
+    activo.id_estado = estado_disponible.id_estado
+    activo.version_lock = (activo.version_lock or 1) + 1
+
+    db.commit()
+    db.refresh(activo)
+
+    return AsignarPrecioResponse(
+        id_activo=activo.id_activo,
+        sku_qr_fisico=activo.sku_qr_fisico,
+        precio_referencia=activo.precio_referencia,
+        estado_activo="Disponible",
+        mensaje="Precio asignado exitosamente. El repuesto ahora está disponible en el catálogo de ventas.",
+    )
+

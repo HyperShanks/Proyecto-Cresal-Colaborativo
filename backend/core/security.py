@@ -94,4 +94,20 @@ def get_current_user(
     if usuario is None or usuario.estado != "Activo":
         raise credentials_exception
 
-    return usuario
+    return usuario
+
+
+def verificar_rol_jefe_ventas(
+    current_user: Usuario = Depends(get_current_user)
+) -> Usuario:
+    """
+    Valida que el usuario autenticado posea el rol de Jefe de Ventas (id_rol == 6).
+    Lanza 403 Forbidden si el rol no coincide.
+    """
+    if current_user.id_rol != 6:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso restringido: Se requiere rol de Jefe de Ventas para esta operación."
+        )
+    return current_user
+
