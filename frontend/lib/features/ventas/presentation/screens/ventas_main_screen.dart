@@ -6,10 +6,12 @@ import '../../controllers/cart_controller.dart';
 import 'carrito_screen.dart';
 import 'catalogo_screen.dart';
 import 'historial_screen.dart';
+import 'bandeja_precios_screen.dart';
 
-/// Contenedor Principal para el rol de Vendedor.
-/// Implementa un BottomNavigationBar con IndexedStack para navegación fluida
-/// y un Drawer lateral replicando las opciones del sistema (Tickets, Configuración, Cerrar Sesión).
+/// Contenedor Principal para el Mesón de Ventas.
+/// Implementa un BottomNavigationBar con IndexedStack dinámico según el rol:
+///   • Vendedor (id_rol == 2): 3 pestañas (Catálogo, Mis Órdenes, Carrito).
+///   • Jefe de Ventas (id_rol == 6): 4 pestañas (Catálogo, Mis Órdenes, Tasación, Carrito).
 class VentasMainScreen extends StatefulWidget {
   const VentasMainScreen({super.key});
 
@@ -40,6 +42,11 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
       });
     }
   }
+
+  bool get _esJefeVentas =>
+      _idRol == 6 ||
+      _userRol?.toLowerCase() == 'jefe de ventas' ||
+      _userRol?.toLowerCase() == 'auditor';
 
   // ── Cerrar Sesión ──────────────────────────────────────────────────────────
 
@@ -162,9 +169,7 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
           ),
 
           // ── Opción Exclusiva: Jefe de Ventas (HU-3.8) ────────────────────
-          if (_idRol == 6 ||
-              _userRol?.toLowerCase() == 'jefe de ventas' ||
-              _userRol?.toLowerCase() == 'auditor') ...[
+          if (_esJefeVentas) ...[
             const Divider(color: Colors.white10, height: 16),
             _buildDrawerItem(
               icon: Icons.price_change_outlined,
@@ -172,7 +177,8 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
               badgeColor: AppPalette.secondary,
               onTap: () {
                 Navigator.of(context).pop();
-                Navigator.of(context).pushNamed('/bandeja_precios');
+                // Si la pestaña de Tasación está activa, navega al índice 2
+                setState(() => _currentIndex = 2);
               },
             ),
           ],
@@ -247,44 +253,110 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
     );
   }
 
+  // ── Construcción Dinámica de Pestañas ──────────────────────────────────────
+
+  List<Widget> _buildTabs() {
+    final tabs = <Widget>[
+      CatalogoScreen(
+        key: _catalogoKey,
+        onOpenMenuDrawer: () => _scaffoldKey.currentState?.openDrawer(),
+      ),
+      HistorialScreen(
+        onOpenMenuDrawer: () => _scaffoldKey.currentState?.openDrawer(),
+        onRefreshCatalogo: () => _catalogoKey.currentState?.refrescarCatalogo(),
+      ),
+    ];
+
+    if (_esJefeVentas) {
+      tabs.add(
+        BandejaPreciosScreen(
+          onOpenMenuDrawer: () => _scaffoldKey.currentState?.openDrawer(),
+        ),
+      );
+    }
+
+    tabs.add(
+      CarritoScreen(
+        onOpenMenuDrawer: () => _scaffoldKey.currentState?.openDrawer(),
+        onNavigateToCatalogo: () {
+          _catalogoKey.currentState?.refrescarCatalogo();
+          setState(() => _currentIndex = 0);
+        },
+      ),
+    );
+
+    return tabs;
+  }
+
+  List<BottomNavigationBarItem> _buildNavItems(int totalItems) {
+    final items = <BottomNavigationBarItem>[
+      const BottomNavigationBarItem(
+        icon: Icon(Icons.storefront_outlined),
+        activeIcon: Icon(Icons.storefront),
+        label: 'Catálogo',
+      ),
+      const BottomNavigationBarItem(
+        icon: Icon(Icons.receipt_long_outlined),
+        activeIcon: Icon(Icons.receipt_long),
+        label: 'Mis Órdenes',
+      ),
+    ];
+
+    if (_esJefeVentas) {
+      items.add(
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.price_change_outlined),
+          activeIcon: Icon(Icons.price_change),
+          label: 'Tasación',
+        ),
+      );
+    }
+
+    items.add(
+      BottomNavigationBarItem(
+        icon: totalItems > 0
+            ? Badge.count(
+                count: totalItems,
+                backgroundColor: AppPalette.secondary,
+                textColor: AppPalette.background,
+                child: const Icon(Icons.shopping_cart_outlined),
+              )
+            : const Icon(Icons.shopping_cart_outlined),
+        activeIcon: totalItems > 0
+            ? Badge.count(
+                count: totalItems,
+                backgroundColor: AppPalette.secondary,
+                textColor: AppPalette.background,
+                child: const Icon(Icons.shopping_cart),
+              )
+            : const Icon(Icons.shopping_cart),
+        label: 'Carrito',
+      ),
+    );
+
+    return items;
+  }
+
   // ── Construcción de la Vista ──────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
+    final tabs = _buildTabs();
+    final safeIndex = _currentIndex.clamp(0, tabs.length - 1);
+
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: AppPalette.background,
       drawer: _buildDrawer(context),
       body: IndexedStack(
-        index: _currentIndex,
-        children: [
-          CatalogoScreen(
-            key: _catalogoKey,
-            onOpenMenuDrawer: () => _scaffoldKey.currentState?.openDrawer(),
-          ),
-          HistorialScreen(
-            onOpenMenuDrawer: () => _scaffoldKey.currentState?.openDrawer(),
-            onRefreshCatalogo: () => _catalogoKey.currentState?.refrescarCatalogo(),
-          ),
-          _buildPlaceholderTab(
-            title: 'Tasación de Vehículos',
-            icon: Icons.sell_outlined,
-            description: 'Módulo de cálculo de tasación y sugerencia de precios.',
-            onOpenDrawer: () => _scaffoldKey.currentState?.openDrawer(),
-          ),
-          CarritoScreen(
-            onOpenMenuDrawer: () => _scaffoldKey.currentState?.openDrawer(),
-            onNavigateToCatalogo: () {
-              _catalogoKey.currentState?.refrescarCatalogo();
-              setState(() => _currentIndex = 0);
-            },
-          ),
-        ],
+        index: safeIndex,
+        children: tabs,
       ),
       bottomNavigationBar: ListenableBuilder(
         listenable: CartController.instance,
         builder: (context, _) {
           final totalItems = CartController.instance.totalItems;
+          final navItems = _buildNavItems(totalItems);
 
           return Container(
             decoration: const BoxDecoration(
@@ -297,7 +369,7 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
               ),
             ),
             child: BottomNavigationBar(
-              currentIndex: _currentIndex,
+              currentIndex: safeIndex,
               onTap: (index) {
                 setState(() {
                   _currentIndex = index;
@@ -315,120 +387,10 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
               ),
               type: BottomNavigationBarType.fixed,
               elevation: 0,
-              items: [
-                const BottomNavigationBarItem(
-                  icon: Icon(Icons.storefront_outlined),
-                  activeIcon: Icon(Icons.storefront),
-                  label: 'Catálogo',
-                ),
-                const BottomNavigationBarItem(
-                  icon: Icon(Icons.receipt_long_outlined),
-                  activeIcon: Icon(Icons.receipt_long),
-                  label: 'Mis Órdenes',
-                ),
-                const BottomNavigationBarItem(
-                  icon: Icon(Icons.sell_outlined),
-                  activeIcon: Icon(Icons.sell),
-                  label: 'Tasación',
-                ),
-                BottomNavigationBarItem(
-                  icon: totalItems > 0
-                      ? Badge.count(
-                          count: totalItems,
-                          backgroundColor: AppPalette.secondary,
-                          textColor: AppPalette.background,
-                          child: const Icon(Icons.shopping_cart_outlined),
-                        )
-                      : const Icon(Icons.shopping_cart_outlined),
-                  activeIcon: totalItems > 0
-                      ? Badge.count(
-                          count: totalItems,
-                          backgroundColor: AppPalette.secondary,
-                          textColor: AppPalette.background,
-                          child: const Icon(Icons.shopping_cart),
-                        )
-                      : const Icon(Icons.shopping_cart),
-                  label: 'Carrito',
-                ),
-              ],
+              items: navItems,
             ),
           );
         },
-      ),
-    );
-  }
-
-  Widget _buildPlaceholderTab({
-    required String title,
-    required IconData icon,
-    required String description,
-    required VoidCallback onOpenDrawer,
-  }) {
-    return Scaffold(
-      backgroundColor: AppPalette.background,
-      appBar: AppBar(
-        backgroundColor: AppPalette.background,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.menu, color: AppPalette.textPrimary),
-          onPressed: onOpenDrawer,
-          tooltip: 'Menú principal',
-        ),
-        title: Text(title, style: AppTypography.title),
-      ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  color: AppPalette.surface,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Icon(icon, size: 36, color: AppPalette.primary),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                title,
-                style: AppTypography.headline.copyWith(fontSize: 22),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                description,
-                style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: AppPalette.surface,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppPalette.primary.withValues(alpha: 0.3)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.construction, size: 16, color: AppPalette.secondary),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Módulo en desarrollo',
-                      style: AppTypography.small.copyWith(
-                        color: AppPalette.secondary,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

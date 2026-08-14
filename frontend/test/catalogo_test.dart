@@ -199,7 +199,7 @@ void main() {
   });
 
   group('VentasMainScreen Widget Tests', () {
-    testWidgets('Renderiza BottomNavigationBar con 4 pestañas y navega', (tester) async {
+    testWidgets('Renderiza BottomNavigationBar con 3 pestañas para Vendedor y navega', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: VentasMainScreen(),
@@ -207,21 +207,16 @@ void main() {
       );
       await tester.pump();
 
-      // Debe mostrar las 4 pestañas
+      // Debe mostrar las 3 pestañas por defecto para vendedor
       expect(find.text('Catálogo'), findsOneWidget);
       expect(find.text('Mis Órdenes'), findsOneWidget);
-      expect(find.text('Tasación'), findsOneWidget);
+      expect(find.text('Tasación'), findsNothing);
       expect(find.text('Carrito'), findsOneWidget);
 
       // Cambiar a pestaña Mis Órdenes
       await tester.tap(find.text('Mis Órdenes'));
       await tester.pump();
       expect(find.text('Mis Órdenes de Venta'), findsOneWidget);
-
-      // Cambiar a pestaña Tasación
-      await tester.tap(find.text('Tasación'));
-      await tester.pump();
-      expect(find.text('Módulo de cálculo de tasación y sugerencia de precios.'), findsOneWidget);
 
       // Cambiar a pestaña Carrito
       await tester.tap(find.text('Carrito'));

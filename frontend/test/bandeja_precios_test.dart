@@ -297,10 +297,11 @@ void main() {
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // 5. RBAC TESTS: VentasMainScreen Drawer
   // ─────────────────────────────────────────────────────────────────────────────
-  group('VentasMainScreen RBAC Drawer Tests', () {
-    testWidgets('Jefe de Ventas (id_rol == 6) ve opción BANDEJA DE PRECIOS en Drawer', (tester) async {
+  // 5. RBAC TESTS: VentasMainScreen Drawer y BottomNavigationBar
+  // ─────────────────────────────────────────────────────────────────────────────
+  group('VentasMainScreen RBAC Tests', () {
+    testWidgets('Jefe de Ventas (id_rol == 6) ve opción BANDEJA DE PRECIOS en Drawer y 4 pestañas en BottomNav', (tester) async {
       mockStorage['user_id_rol'] = '6';
       mockStorage['user_rol'] = 'Jefe de Ventas';
 
@@ -311,17 +312,28 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      // Verificar 4 pestañas en BottomNavigationBar
+      expect(find.text('Catálogo'), findsOneWidget);
+      expect(find.text('Mis Órdenes'), findsOneWidget);
+      expect(find.text('Tasación'), findsOneWidget);
+      expect(find.text('Carrito'), findsOneWidget);
+
+      // Navegar a Tasación
+      await tester.tap(find.text('Tasación'));
+      await tester.pumpAndSettle();
+      expect(find.text('Bandeja de Precios'), findsOneWidget);
+
       // Abrir Drawer de hamburguesa
-      await tester.tap(find.byTooltip('Menú principal'));
+      await tester.tap(find.byTooltip('Menú principal').first);
       await tester.pumpAndSettle();
 
       expect(find.text('TICKET'), findsOneWidget);
       expect(find.text('CONFIGURACIÓN'), findsOneWidget);
       expect(find.text('BANDEJA DE PRECIOS'), findsOneWidget);
-      expect(find.byIcon(Icons.price_change_outlined), findsOneWidget);
+      expect(find.byIcon(Icons.price_change_outlined), findsWidgets);
     });
 
-    testWidgets('Vendedor regular (id_rol == 2) NO ve opción BANDEJA DE PRECIOS en Drawer', (tester) async {
+    testWidgets('Vendedor regular (id_rol == 2) ve 3 pestañas y NO ve Tasación ni en BottomNav ni en Drawer', (tester) async {
       mockStorage['user_id_rol'] = '2';
       mockStorage['user_rol'] = 'Vendedor';
 
@@ -332,8 +344,14 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      // Verificar exactamente 3 pestañas
+      expect(find.text('Catálogo'), findsOneWidget);
+      expect(find.text('Mis Órdenes'), findsOneWidget);
+      expect(find.text('Tasación'), findsNothing);
+      expect(find.text('Carrito'), findsOneWidget);
+
       // Abrir Drawer de hamburguesa
-      await tester.tap(find.byTooltip('Menú principal'));
+      await tester.tap(find.byTooltip('Menú principal').first);
       await tester.pumpAndSettle();
 
       expect(find.text('TICKET'), findsOneWidget);
