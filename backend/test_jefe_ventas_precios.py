@@ -61,14 +61,17 @@ def db_session(setup_database):
         )
         db.add_all([jefe_user, vendedor_user])
 
-        # Categorías y Estados
+        # Categorías
         cat_motor = Categoria_Activo(id_categoria=1, nombre_categoria="Motor")
         cat_caja = Categoria_Activo(id_categoria=2, nombre_categoria="Caja de Cambio")
         db.add_all([cat_motor, cat_caja])
 
-        est_desarme = Estado_Activo(id_estado=5, nombre_estado="En Desarme")
+        # Estados de Activo (1: Disponible, 4: En Importación, 5: En Desarme, 6: Paletizado)
         est_disp = Estado_Activo(id_estado=1, nombre_estado="Disponible")
-        db.add_all([est_desarme, est_disp])
+        est_import = Estado_Activo(id_estado=4, nombre_estado="En Importación")
+        est_desarme = Estado_Activo(id_estado=5, nombre_estado="En Desarme")
+        est_paletizado = Estado_Activo(id_estado=6, nombre_estado="Paletizado")
+        db.add_all([est_disp, est_import, est_desarme, est_paletizado])
 
         # Vehículo
         v1 = Vehiculo_Origen(
@@ -83,13 +86,13 @@ def db_session(setup_database):
         )
         db.add(v1)
 
-        # Activo 1: Sin Precio (precio_referencia = None) -> Debe aparecer en pendientes
+        # Activo 1: Paletizado, Con Ubicación, Sin Precio (precio_referencia = None) -> SÍ APARECE
         a1_id = uuid.uuid4()
         act1 = Activo_Inventariado(
             id_activo=a1_id,
             sku_qr_fisico="MOT-HYU-ACC-001",
             id_categoria=1,
-            id_estado=5,  # En Desarme / Sin precio
+            id_estado=6,  # Paletizado
             id_sucursal_actual=1,
             id_vehiculo=v1.id_vehiculo,
             precio_referencia=None,
@@ -108,13 +111,13 @@ def db_session(setup_database):
         )
         db.add(motor1)
 
-        # Activo 2: Con precio = 0 -> Debe aparecer en pendientes
+        # Activo 2: Paletizado, Con Ubicación, Con precio = 0 -> SÍ APARECE
         a2_id = uuid.uuid4()
         act2 = Activo_Inventariado(
             id_activo=a2_id,
             sku_qr_fisico="CAJ-HYU-ACC-001",
             id_categoria=2,
-            id_estado=5,
+            id_estado=6,  # Paletizado
             id_sucursal_actual=1,
             id_vehiculo=v1.id_vehiculo,
             precio_referencia=0,
@@ -130,13 +133,13 @@ def db_session(setup_database):
         )
         db.add(caja2)
 
-        # Activo 3: Con precio asignado ($450.000) -> NO debe aparecer en pendientes
+        # Activo 3: Disponible (id_estado = 1), Con precio asignado ($450.000) -> NO APARECE
         a3_id = uuid.uuid4()
         act3 = Activo_Inventariado(
             id_activo=a3_id,
             sku_qr_fisico="MOT-HYU-ACC-002",
             id_categoria=1,
-            id_estado=1,
+            id_estado=1,  # Disponible
             id_sucursal_actual=1,
             id_vehiculo=v1.id_vehiculo,
             precio_referencia=450000,
@@ -146,6 +149,54 @@ def db_session(setup_database):
         )
         db.add(act3)
 
+        # Activo 4: Paletizado pero SIN Ubicación Física (pasillo/pallet nulos) -> NO APARECE
+        a4_id = uuid.uuid4()
+        act4 = Activo_Inventariado(
+            id_activo=a4_id,
+            sku_qr_fisico="MOT-SIN-UBICACION",
+            id_categoria=1,
+            id_estado=6,  # Paletizado
+            id_sucursal_actual=1,
+            id_vehiculo=v1.id_vehiculo,
+            precio_referencia=None,
+            ubicacion_pasillo=None,
+            ubicacion_pallet=None,
+            estado="Activo"
+        )
+        db.add(act4)
+
+        # Activo 5: En Desarme (id_estado = 5) estado temprano -> NO APARECE
+        a5_id = uuid.uuid4()
+        act5 = Activo_Inventariado(
+            id_activo=a5_id,
+            sku_qr_fisico="MOT-EN-DESARME",
+            id_categoria=1,
+            id_estado=5,  # En Desarme
+            id_sucursal_actual=1,
+            id_vehiculo=v1.id_vehiculo,
+            precio_referencia=None,
+            ubicacion_pasillo="P-04",
+            ubicacion_pallet="PL-04",
+            estado="Activo"
+        )
+        db.add(act5)
+
+        # Activo 6: En Importación (id_estado = 4) estado temprano -> NO APARECE
+        a6_id = uuid.uuid4()
+        act6 = Activo_Inventariado(
+            id_activo=a6_id,
+            sku_qr_fisico="MOT-EN-IMPORTACION",
+            id_categoria=1,
+            id_estado=4,  # En Importación
+            id_sucursal_actual=1,
+            id_vehiculo=v1.id_vehiculo,
+            precio_referencia=None,
+            ubicacion_pasillo="P-05",
+            ubicacion_pallet="PL-05",
+            estado="Activo"
+        )
+        db.add(act6)
+
         db.commit()
 
         yield {
@@ -154,6 +205,9 @@ def db_session(setup_database):
             "activo_sin_precio": act1,
             "activo_precio_cero": act2,
             "activo_con_precio": act3,
+            "activo_sin_ubicacion": act4,
+            "activo_en_desarme": act5,
+            "activo_en_importacion": act6,
             "vehiculo": v1,
         }
 
@@ -182,18 +236,21 @@ def test_pendientes_precio_acceso_denegado_para_rol_no_autorizado(client, auth_h
 
 
 # ── TEST 2: Jefe de Ventas consulta bandeja de pendientes de precio ──────────
-def test_pendientes_precio_retorna_activos_sin_precio_para_jefe_ventas(client, db_session, auth_headers_jefe):
+def test_pendientes_precio_retorna_activos_paletizados_sin_precio_para_jefe_ventas(client, db_session, auth_headers_jefe):
     response = client.get("/api/v1/inventario/pendientes-precio", headers=auth_headers_jefe)
     assert response.status_code == 200
 
     data = response.json()
     assert isinstance(data, list)
-    assert len(data) == 2  # activo 1 (None) y activo 2 (0)
+    assert len(data) == 2  # Solo activo 1 (None) y activo 2 (0) con ubicación física
 
     skus = [item["sku_qr_fisico"] for item in data]
     assert "MOT-HYU-ACC-001" in skus
     assert "CAJ-HYU-ACC-001" in skus
     assert "MOT-HYU-ACC-002" not in skus  # Ya tenía precio de $450.000
+    assert "MOT-SIN-UBICACION" not in skus  # Sin pasillo/pallet
+    assert "MOT-EN-DESARME" not in skus  # En Desarme (id_estado = 5)
+    assert "MOT-EN-IMPORTACION" not in skus  # En Importación (id_estado = 4)
 
     # Verificar datos técnicos enriquecidos
     item_motor = next(item for item in data if item["sku_qr_fisico"] == "MOT-HYU-ACC-001")
@@ -203,10 +260,23 @@ def test_pendientes_precio_retorna_activos_sin_precio_para_jefe_ventas(client, d
     assert item_motor["cilindrada"] == "1.4L"
     assert item_motor["combustible"] == "Gasolina"
     assert item_motor["nombre_categoria"] == "Motor"
+    assert item_motor["ubicacion_pasillo"] == "P-03"
+    assert item_motor["ubicacion_pallet"] == "PL-10"
     assert item_motor["titulo_repuesto"] == "Motor - Hyundai Accent 2020"
 
 
-# ── TEST 3: Asignar precio exitoso y transición automática a 'Disponible' ────
+# ── TEST 3: Verificación explícita de filtros de ubicación física y estados tempranos ──
+def test_pendientes_precio_excluye_activos_sin_ubicacion_o_estados_tempranos(client, auth_headers_jefe):
+    response = client.get("/api/v1/inventario/pendientes-precio", headers=auth_headers_jefe)
+    assert response.status_code == 200
+
+    skus = [item["sku_qr_fisico"] for item in response.json()]
+    assert "MOT-SIN-UBICACION" not in skus
+    assert "MOT-EN-DESARME" not in skus
+    assert "MOT-EN-IMPORTACION" not in skus
+
+
+# ── TEST 4: Asignar precio exitoso y transición automática a 'Disponible' (1) ────
 def test_asignar_precio_exitoso_y_transicion_a_disponible(client, db_session, auth_headers_jefe):
     id_activo = str(db_session["activo_sin_precio"].id_activo)
     payload = {"precio_referencia": 580000}
@@ -240,7 +310,7 @@ def test_asignar_precio_exitoso_y_transicion_a_disponible(client, db_session, au
         db.close()
 
 
-# ── TEST 4: Asignar precio inválido (<= 0) retorna 422 ───────────────────────
+# ── TEST 5: Asignar precio inválido (<= 0) retorna 422 ───────────────────────
 def test_asignar_precio_invalido_menor_o_igual_a_cero_retorna_422(client, db_session, auth_headers_jefe):
     id_activo = str(db_session["activo_precio_cero"].id_activo)
     payload = {"precio_referencia": 0}
@@ -253,7 +323,7 @@ def test_asignar_precio_invalido_menor_o_igual_a_cero_retorna_422(client, db_ses
     assert response.status_code == 422
 
 
-# ── TEST 5: Asignar precio a activo inexistente retorna 404 ──────────────────
+# ── TEST 6: Asignar precio a activo inexistente retorna 404 ──────────────────
 def test_asignar_precio_activo_inexistente_retorna_404(client, auth_headers_jefe):
     id_random = str(uuid.uuid4())
     payload = {"precio_referencia": 120000}
@@ -266,7 +336,7 @@ def test_asignar_precio_activo_inexistente_retorna_404(client, auth_headers_jefe
     assert response.status_code == 404
 
 
-# ── TEST 6: Vendedor no tiene permiso para asignar precios (403) ────────────
+# ── TEST 7: Vendedor no tiene permiso para asignar precios (403) ────────────
 def test_asignar_precio_acceso_denegado_para_vendedor(client, db_session, auth_headers_vendedor):
     id_activo = str(db_session["activo_precio_cero"].id_activo)
     payload = {"precio_referencia": 250000}

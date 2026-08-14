@@ -167,12 +167,16 @@ class CatalogoScreenState extends State<CatalogoScreen> {
 
       if (!mounted) return;
 
+      final itemsDisponibles = response.items
+          .where((i) => i.estadoActivo?.toLowerCase() == 'disponible')
+          .toList();
+
       setState(() {
         if (resetPagination) {
-          _items = response.items;
+          _items = itemsDisponibles;
           _offset = 0;
         } else {
-          _items.addAll(response.items);
+          _items.addAll(itemsDisponibles);
           _offset = targetOffset;
         }
         _totalCount = response.totalCount;

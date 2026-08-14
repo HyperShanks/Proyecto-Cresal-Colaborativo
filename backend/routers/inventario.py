@@ -249,10 +249,13 @@ def obtener_catalogo(
         Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo
     )
 
-    # 2. Filtros Base: Borrado lógico y Estado Disponible
+    # 2. Filtros Base: Borrado lógico y Estado Disponible (id_estado = 1)
     query = query.filter(
         Activo_Inventariado.estado == 'Activo',
-        Estado_Activo.nombre_estado == 'Disponible'
+        Activo_Inventariado.id_estado == 1,
+        Estado_Activo.nombre_estado == 'Disponible',
+        Activo_Inventariado.precio_referencia.isnot(None),
+        Activo_Inventariado.precio_referencia > 0
     )
 
     # 3. Filtros Dinámicos Opcionales
@@ -380,10 +383,19 @@ def obtener_pendientes_precio(
         .outerjoin(Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo)
         .filter(
             Activo_Inventariado.estado == "Activo",
+            # Sin precio de referencia asignado o igual a 0
             or_(
                 Activo_Inventariado.precio_referencia == None,
                 Activo_Inventariado.precio_referencia == 0,
             ),
+            # Validación de Ubicación Física (Paletizado por bodega)
+            Activo_Inventariado.ubicacion_pasillo.isnot(None),
+            Activo_Inventariado.ubicacion_pasillo != "",
+            Activo_Inventariado.ubicacion_pallet.isnot(None),
+            Activo_Inventariado.ubicacion_pallet != "",
+            # Exclusión explícita de estados tempranos (4: En Importación, 5: En Desarme) y estados finales (1: Disponible, 3: Vendido)
+            Activo_Inventariado.id_estado.notin_([1, 3, 4, 5]),
+            Estado_Activo.nombre_estado.notin_(["Disponible", "Vendido", "En Importación", "En Desarme"]),
         )
         .order_by(Activo_Inventariado.fecha_creacion.desc())
     )
