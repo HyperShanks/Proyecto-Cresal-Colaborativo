@@ -370,3 +370,25 @@ def test_consultar_orden_por_id(client, db_session, auth_headers):
     assert data["id_orden"] == id_orden
     assert "cliente" in data
     assert "detalles" in data
+
+
+# ── TEST 7: Buscar Cliente por RUT Existente ────────────────────────────────
+def test_buscar_cliente_por_rut_existente(client, db_session, auth_headers):
+    # Cliente creado en los tests anteriores: 18.765.432-1
+    response = client.get("/api/v1/clientes/18.765.432-1", headers=auth_headers)
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["rut_cliente"] == "18.765.432-1"
+    assert data["nombres"] == "Juan"
+    assert "Pérez" in data["apellidos"]
+    assert "comuna" in data
+
+
+# ── TEST 8: Buscar Cliente por RUT No Existente Retorna 404 ─────────────────
+def test_buscar_cliente_por_rut_no_existente_retorna_404(client, db_session, auth_headers):
+    response = client.get("/api/v1/clientes/99.999.999-9", headers=auth_headers)
+    assert response.status_code == 404
+    data = response.json()
+    assert "no encontrado" in data["detail"]
+

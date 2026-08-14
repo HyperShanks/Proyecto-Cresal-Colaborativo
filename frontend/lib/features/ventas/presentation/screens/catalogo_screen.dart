@@ -26,14 +26,20 @@ class CatalogoScreen extends StatefulWidget {
   });
 
   @override
-  State<CatalogoScreen> createState() => _CatalogoScreenState();
+  State<CatalogoScreen> createState() => CatalogoScreenState();
 }
 
-class _CatalogoScreenState extends State<CatalogoScreen> {
+class CatalogoScreenState extends State<CatalogoScreen> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
   Timer? _debounceTimer;
+
+  /// Método público para forzar la recarga del catálogo desde el backend
+  /// (usado tras derivar órdenes a caja para sincronizar stock en tiempo real).
+  Future<void> refrescarCatalogo() async {
+    await _fetchCatalogo(resetPagination: true);
+  }
 
   // Estado del catálogo
   List<CatalogoItem> _items = [];

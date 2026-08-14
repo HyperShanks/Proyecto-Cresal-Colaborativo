@@ -20,6 +20,7 @@ class VentasMainScreen extends StatefulWidget {
 
 class _VentasMainScreenState extends State<VentasMainScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final GlobalKey<CatalogoScreenState> _catalogoKey = GlobalKey<CatalogoScreenState>();
   int _currentIndex = 0;
   String? _userRol;
 
@@ -224,6 +225,7 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
         index: _currentIndex,
         children: [
           CatalogoScreen(
+            key: _catalogoKey,
             onOpenMenuDrawer: () => _scaffoldKey.currentState?.openDrawer(),
           ),
           _buildPlaceholderTab(
@@ -240,7 +242,10 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
           ),
           CarritoScreen(
             onOpenMenuDrawer: () => _scaffoldKey.currentState?.openDrawer(),
-            onNavigateToCatalogo: () => setState(() => _currentIndex = 0),
+            onNavigateToCatalogo: () {
+              _catalogoKey.currentState?.refrescarCatalogo();
+              setState(() => _currentIndex = 0);
+            },
           ),
         ],
       ),

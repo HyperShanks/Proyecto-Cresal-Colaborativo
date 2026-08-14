@@ -5,6 +5,7 @@ import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../controllers/cart_controller.dart';
 import '../../models/cart_item_model.dart';
+import '../../services/ordenes_service.dart';
 import '../widgets/cart_item_tile.dart';
 import '../widgets/venta_libre_dialog.dart';
 
@@ -34,6 +35,7 @@ class _CarritoScreenState extends State<CarritoScreen> {
   final TextEditingController _nombresController = TextEditingController();
   final TextEditingController _apellidosController = TextEditingController();
   final TextEditingController _telefonoController = TextEditingController();
+  final FocusNode _rutFocusNode = FocusNode();
 
   // Controladores de Despacho
   final TextEditingController _direccionDespachoController = TextEditingController();
@@ -47,6 +49,8 @@ class _CarritoScreenState extends State<CarritoScreen> {
   bool _requiereDespacho = false;
   bool _consentimientoLey = false;
   bool _mostrarErrorConsentimiento = false;
+  bool _isSubmitting = false;
+  bool _isSearchingClient = false;
 
   static const List<String> _comunasDisponibles = [
     'Viña del Mar',
@@ -61,7 +65,15 @@ class _CarritoScreenState extends State<CarritoScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _rutFocusNode.addListener(_onRutFocusChange);
+  }
+
+  @override
   void dispose() {
+    _rutFocusNode.removeListener(_onRutFocusChange);
+    _rutFocusNode.dispose();
     _rutController.dispose();
     _nombresController.dispose();
     _apellidosController.dispose();
@@ -71,6 +83,79 @@ class _CarritoScreenState extends State<CarritoScreen> {
     _nombresReceptorController.dispose();
     _telefonoReceptorController.dispose();
     super.dispose();
+  }
+
+  /// Búsqueda y Autocompletado de Cliente por RUT al desenfocar el campo (Micro-CRM)
+  void _onRutFocusChange() async {
+    if (!_rutFocusNode.hasFocus) {
+      final rut = _rutController.text.trim();
+      if (rut.length >= 7) {
+        setState(() {
+          _isSearchingClient = true;
+        });
+
+        final cliente = await OrdenesService.buscarClientePorRut(rut);
+
+        if (!mounted) return;
+
+        setState(() {
+          _isSearchingClient = false;
+        });
+
+        if (cliente != null) {
+          setState(() {
+            _nombresController.text = cliente['nombres']?.toString() ?? '';
+            _apellidosController.text = cliente['apellidos']?.toString() ?? '';
+            if (cliente['telefono'] != null && cliente['telefono'].toString().isNotEmpty) {
+              _telefonoController.text = cliente['telefono'].toString();
+            }
+            final comuna = cliente['comuna']?.toString();
+            if (comuna != null && _comunasDisponibles.contains(comuna)) {
+              _comunaCliente = comuna;
+            }
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: AppPalette.surface,
+              duration: const Duration(seconds: 3),
+              behavior: SnackBarBehavior.floating,
+              content: Row(
+                children: [
+                  const Icon(Icons.person_pin, color: AppPalette.secondary, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Cliente frecuente encontrado: ${cliente['nombres']} ${cliente['apellidos']}',
+                      style: AppTypography.small.copyWith(
+                        color: AppPalette.secondary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  void _limpiarFormulario() {
+    _rutController.clear();
+    _nombresController.clear();
+    _apellidosController.clear();
+    _telefonoController.clear();
+    _direccionDespachoController.clear();
+    _rutReceptorController.clear();
+    _nombresReceptorController.clear();
+    _telefonoReceptorController.clear();
+    setState(() {
+      _requiereDespacho = false;
+      _consentimientoLey = false;
+      _mostrarErrorConsentimiento = false;
+    });
   }
 
   void _confirmarVaciarCarrito(BuildContext context) async {
@@ -115,7 +200,9 @@ class _CarritoScreenState extends State<CarritoScreen> {
     }
   }
 
-  void _onDerivarACaja(BuildContext context) {
+  void _onDerivarACaja(BuildContext context) async {
+    if (_isSubmitting) return;
+
     final cart = CartController.instance;
 
     // 1. Validar que el carrito no esté vacío
@@ -159,122 +246,229 @@ class _CarritoScreenState extends State<CarritoScreen> {
       return;
     }
 
-    // 4. Procesar Derivación con éxito
-    _mostrarModalConfirmacion(context);
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      // 4. Mapear ítems al esquema OrdenCreateRequest
+      final itemsPayload = cart.items.map((item) {
+        if (item is InventariadoCartItem) {
+          return <String, dynamic>{
+            'id_activo': item.catalogoItem.idActivo,
+            'notas_preparacion': item.notasPreparacion,
+            'cantidad': item.cantidad,
+            'precio_unitario': item.catalogoItem.precioReferencia,
+            'precio_final': item.precioFinal,
+          };
+        } else if (item is VentaLibreCartItem) {
+          return <String, dynamic>{
+            'descripcion_manual': item.descripcion,
+            'notas_preparacion': item.observacion,
+            'cantidad': item.cantidad,
+            'precio_unitario': item.monto,
+            'precio_final': item.monto,
+          };
+        }
+        return <String, dynamic>{};
+      }).toList();
+
+      final payload = <String, dynamic>{
+        'cliente': {
+          'rut_cliente': _rutController.text.trim(),
+          'nombres': _nombresController.text.trim(),
+          'apellidos': _apellidosController.text.trim(),
+          'telefono': _telefonoController.text.trim().isNotEmpty
+              ? _telefonoController.text.trim()
+              : null,
+          'comuna': _comunaCliente,
+          'consentimiento_legal': _consentimientoLey,
+        },
+        'requiere_despacho': _requiereDespacho,
+        if (_requiereDespacho)
+          'despacho': {
+            'direccion_envio': _direccionDespachoController.text.trim(),
+            'comuna_destino': _comunaDespacho,
+            'receptor_rut': _rutReceptorController.text.trim(),
+            'receptor_nombres': _nombresReceptorController.text.trim(),
+            'receptor_telefono': _telefonoReceptorController.text.trim(),
+            'costo_envio': 0,
+          },
+        'consentimiento_legal': _consentimientoLey,
+        'items': itemsPayload,
+      };
+
+      // 5. Enviar al Backend Transaccional FastAPI
+      final ordenCreada = await OrdenesService.crearOrden(payload);
+
+      if (!context.mounted) return;
+
+      // 6. Modal de Éxito y Limpieza
+      await _mostrarModalExito(context, ordenCreada);
+
+      CartController.instance.vaciarCarrito();
+      _limpiarFormulario();
+      widget.onNavigateToCatalogo?.call();
+
+    } catch (e) {
+      if (!context.mounted) return;
+      final msg = e.toString().replaceAll('Exception: ', '');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppPalette.error,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
+          content: Text(
+            msg,
+            style: AppTypography.small.copyWith(
+              color: AppPalette.textPrimary,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
   }
 
-  void _mostrarModalConfirmacion(BuildContext context) {
-    final cart = CartController.instance;
+  Future<void> _mostrarModalExito(BuildContext context, OrdenResponseModel orden) async {
+    final folio = orden.qrTransaccionalSalida ??
+        (orden.idOrden.length >= 8
+            ? 'ORD-${orden.idOrden.substring(0, 8).toUpperCase()}'
+            : orden.idOrden);
 
-    showDialog(
+    return showDialog<void>(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppPalette.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: Row(
-          children: [
-            const Icon(Icons.check_circle, color: AppPalette.success, size: 24),
-            const SizedBox(width: 10),
-            Text('Orden Derivada a Caja', style: AppTypography.title.copyWith(fontSize: 18)),
-          ],
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        contentPadding: const EdgeInsets.fromLTRB(24, 28, 24, 16),
         content: SingleChildScrollView(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                'Cliente: ${_nombresController.text} ${_apellidosController.text}',
-                style: AppTypography.body.copyWith(fontWeight: FontWeight.bold),
-              ),
-              Text('RUT: ${_rutController.text}', style: AppTypography.small),
-              Text('Comuna: $_comunaCliente', style: AppTypography.small),
-              if (_requiereDespacho) ...[
-                const SizedBox(height: 8),
-                Text(
-                  '🚚 Despacho a: ${_direccionDespachoController.text}, $_comunaDespacho',
-                  style: AppTypography.small.copyWith(color: AppPalette.secondary),
-                ),
-              ],
-              // Notas de preparación de los activos añadidos (para alerta de bodega)
-              ...() {
-                final itemsConNotas = cart.items.where((i) {
-                  if (i is InventariadoCartItem) {
-                    return i.notasPreparacion != null && i.notasPreparacion!.isNotEmpty;
-                  } else if (i is VentaLibreCartItem) {
-                    return i.observacion != null && i.observacion!.isNotEmpty;
-                  }
-                  return false;
-                }).toList();
-
-                if (itemsConNotas.isEmpty) return <Widget>[];
-
-                return [
-                  const SizedBox(height: 10),
-                  Text(
-                    '⚠️ Alertas de preparación a bodega:',
-                    style: AppTypography.small.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: AppPalette.primary,
-                      fontSize: 12,
-                    ),
+              // Icono de Éxito
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: AppPalette.success.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: AppPalette.success.withValues(alpha: 0.4),
+                    width: 2,
                   ),
-                  const SizedBox(height: 4),
-                  ...itemsConNotas.map((i) {
-                    final nota = i is InventariadoCartItem
-                        ? i.notasPreparacion
-                        : (i as VentaLibreCartItem).observacion;
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 2.0),
-                      child: Text(
-                        '• ${i.titulo}: "$nota"',
-                        style: AppTypography.small.copyWith(
-                          fontSize: 11,
-                          color: AppPalette.textPrimary,
-                        ),
-                      ),
-                    );
-                  }),
-                ];
-              }(),
-              const Divider(color: Colors.white10, height: 20),
+                ),
+                child: const Icon(
+                  Icons.task_alt,
+                  size: 42,
+                  color: AppPalette.success,
+                ),
+              ),
+              const SizedBox(height: 18),
+
+              // Folio de Orden
               Text(
-                'Total a Cobrar: ${cart.totalMontoFormateado}',
+                '¡ORDEN GENERADA!',
                 style: AppTypography.headline.copyWith(
-                  color: AppPalette.secondary,
                   fontSize: 20,
+                  letterSpacing: 0.8,
                   fontWeight: FontWeight.bold,
                 ),
+                textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
-              Text(
-                'La orden ha sido registrada para pago en mesón de caja y alerta de tarea a bodega.',
-                style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                decoration: BoxDecoration(
+                  color: AppPalette.secondary.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppPalette.secondary.withValues(alpha: 0.5)),
+                ),
+                child: Text(
+                  'Folio: $folio',
+                  style: AppTypography.small.copyWith(
+                    color: AppPalette.secondary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Contenedor de Detalle de Cobro y Alerta
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppPalette.background,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white10),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      'Total a Pagar en Caja',
+                      style: AppTypography.small.copyWith(
+                        color: AppPalette.textSecondary,
+                        fontSize: 11,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      orden.totalVentaFormateado,
+                      style: AppTypography.headline.copyWith(
+                        color: AppPalette.secondary,
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const Divider(color: Colors.white10, height: 16),
+                    Text(
+                      'Derive al cliente a la caja para realizar el pago. Se ha emitido la alerta de preparación a bodega.',
+                      style: AppTypography.small.copyWith(
+                        color: AppPalette.textPrimary,
+                        fontSize: 12,
+                        height: 1.3,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
         ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         actions: [
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  backgroundColor: AppPalette.surface,
-                  duration: const Duration(seconds: 2),
-                  content: Text(
-                    'Orden derivada exitosamente por ${cart.totalMontoFormateado}',
-                    style: AppTypography.small.copyWith(color: AppPalette.textPrimary),
-                  ),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton.icon(
+              onPressed: () => Navigator.of(ctx).pop(),
+              icon: const Icon(Icons.storefront, size: 20),
+              label: Text(
+                'Continuar al Catálogo',
+                style: AppTypography.button.copyWith(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
                 ),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppPalette.success,
-              foregroundColor: AppPalette.textPrimary,
-              elevation: 0,
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppPalette.primary,
+                foregroundColor: AppPalette.textPrimary,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                elevation: 0,
+              ),
             ),
-            child: const Text('Entendido'),
           ),
         ],
       ),
@@ -508,10 +702,24 @@ class _CarritoScreenState extends State<CarritoScreen> {
               children: [
                 _buildTextField(
                   controller: _rutController,
+                  focusNode: _rutFocusNode,
                   label: 'RUT Cliente *',
                   hint: '12.345.678-9',
                   isRequired: true,
                   keyboardType: TextInputType.text,
+                  suffixIcon: _isSearchingClient
+                      ? const Padding(
+                          padding: EdgeInsets.all(12.0),
+                          child: SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppPalette.secondary,
+                            ),
+                          ),
+                        )
+                      : null,
                 ),
                 const SizedBox(height: 12),
                 Row(
@@ -771,6 +979,8 @@ class _CarritoScreenState extends State<CarritoScreen> {
     required String hint,
     bool isRequired = false,
     TextInputType keyboardType = TextInputType.text,
+    FocusNode? focusNode,
+    Widget? suffixIcon,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -786,6 +996,7 @@ class _CarritoScreenState extends State<CarritoScreen> {
         const SizedBox(height: 4),
         TextFormField(
           controller: controller,
+          focusNode: focusNode,
           keyboardType: keyboardType,
           style: AppTypography.body.copyWith(fontSize: 13),
           validator: isRequired
@@ -802,6 +1013,7 @@ class _CarritoScreenState extends State<CarritoScreen> {
               color: AppPalette.neutral,
               fontSize: 12,
             ),
+            suffixIcon: suffixIcon,
             filled: true,
             fillColor: AppPalette.background,
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -932,16 +1144,25 @@ class _CarritoScreenState extends State<CarritoScreen> {
             SizedBox(
               height: 48,
               child: ElevatedButton.icon(
-                onPressed: cart.totalMonto > 0
+                onPressed: (!_isSubmitting && cart.totalMonto > 0)
                     ? () => _onDerivarACaja(context)
                     : null,
-                icon: const Icon(
-                  Icons.send,
-                  size: 18,
-                  color: AppPalette.textPrimary,
-                ),
+                icon: _isSubmitting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppPalette.textPrimary,
+                        ),
+                      )
+                    : const Icon(
+                        Icons.send,
+                        size: 18,
+                        color: AppPalette.textPrimary,
+                      ),
                 label: Text(
-                  'Derivar a Caja',
+                  _isSubmitting ? 'Procesando...' : 'Derivar a Caja',
                   style: AppTypography.button.copyWith(
                     color: AppPalette.textPrimary,
                     fontWeight: FontWeight.bold,
