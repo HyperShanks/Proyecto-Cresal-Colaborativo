@@ -1,9 +1,8 @@
-// lib/features/ventas/presentation/widgets/catalogo_item_card.dart
-
 import 'package:flutter/material.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../models/catalogo_model.dart';
+import 'catalogo_item_detail_sheet.dart';
 
 /// Tarjeta de repuesto en Flat Design estricto (sin sombras).
 /// Muestra información técnica, precio y el distintivo (badge) del Radar de Stock.
@@ -23,6 +22,20 @@ class CatalogoItemCard extends StatelessWidget {
 
   bool get _esMismaSucursal =>
       vendedorSucursalId != null && item.idSucursalActual == vendedorSucursalId;
+
+  void _mostrarDetalle(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      builder: (ctx) => CatalogoItemDetailSheet(
+        item: item,
+        vendedorSucursalId: vendedorSucursalId,
+        onAddToCart: onAddToCart,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -44,7 +57,7 @@ class CatalogoItemCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12.0),
         child: InkWell(
           borderRadius: BorderRadius.circular(12.0),
-          onTap: onTap,
+          onTap: onTap ?? () => _mostrarDetalle(context),
           child: Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
@@ -53,8 +66,10 @@ class CatalogoItemCard extends StatelessWidget {
                 // ── Fila Superior: Badge Sucursal + SKU ───────────────────────
                 Row(
                   children: [
-                    _buildSucursalBadge(),
-                    const Spacer(),
+                    Flexible(
+                      child: _buildSucursalBadge(),
+                    ),
+                    const SizedBox(width: 8.0),
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 8.0,
@@ -71,6 +86,8 @@ class CatalogoItemCard extends StatelessWidget {
                           color: AppPalette.textSecondary,
                           fontWeight: FontWeight.w600,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
@@ -155,7 +172,7 @@ class CatalogoItemCard extends StatelessWidget {
   Widget _buildSucursalBadge() {
     if (_esMismaSucursal) {
       return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 4.0),
+        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
         decoration: BoxDecoration(
           color: AppPalette.primary.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(6.0),
@@ -170,12 +187,16 @@ class CatalogoItemCard extends StatelessWidget {
               color: AppPalette.primary,
             ),
             const SizedBox(width: 5),
-            Text(
-              'En tu sucursal (${item.nombreSucursal})',
-              style: AppTypography.small.copyWith(
-                fontSize: 12,
-                color: AppPalette.primary,
-                fontWeight: FontWeight.bold,
+            Flexible(
+              child: Text(
+                'En tu sucursal (${item.nombreSucursal})',
+                style: AppTypography.small.copyWith(
+                  fontSize: 12,
+                  color: AppPalette.primary,
+                  fontWeight: FontWeight.bold,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
@@ -199,11 +220,15 @@ class CatalogoItemCard extends StatelessWidget {
             color: AppPalette.neutral,
           ),
           const SizedBox(width: 5),
-          Text(
-            item.nombreSucursal,
-            style: AppTypography.small.copyWith(
-              fontSize: 12,
-              color: AppPalette.neutral,
+          Flexible(
+            child: Text(
+              item.nombreSucursal,
+              style: AppTypography.small.copyWith(
+                fontSize: 12,
+                color: AppPalette.neutral,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],

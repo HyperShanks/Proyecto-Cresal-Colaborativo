@@ -9,6 +9,7 @@ import '../../../auth/services/auth_service.dart';
 import '../../models/catalogo_model.dart';
 import '../../services/catalogo_service.dart';
 import '../widgets/catalogo_item_card.dart';
+import '../widgets/catalogo_item_detail_sheet.dart';
 import '../widgets/filtros_drawer.dart';
 
 /// Pantalla Principal del Catálogo de Ventas con Radar de Stock (HU-3.2).
@@ -181,6 +182,20 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
   }
 
   // ── Interacciones de Usuario ──────────────────────────────────────────────
+
+  void _showDetalleRepuesto(CatalogoItem item) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      builder: (ctx) => CatalogoItemDetailSheet(
+        item: item,
+        vendedorSucursalId: _vendedorSucursalId,
+        onAddToCart: () => _onAddToCart(item),
+      ),
+    );
+  }
 
   void _onAddToCart(CatalogoItem item) {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -598,9 +613,7 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
             item: item,
             vendedorSucursalId: _vendedorSucursalId,
             onAddToCart: () => _onAddToCart(item),
-            onTap: () {
-              // Navegación o previsualización futura
-            },
+            onTap: () => _showDetalleRepuesto(item),
           );
         },
       ),

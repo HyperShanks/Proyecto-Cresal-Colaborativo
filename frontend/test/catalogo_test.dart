@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/features/ventas/models/catalogo_model.dart';
 import 'package:frontend/features/ventas/presentation/widgets/catalogo_item_card.dart';
+import 'package:frontend/features/ventas/presentation/widgets/catalogo_item_detail_sheet.dart';
 import 'package:frontend/features/ventas/presentation/widgets/filtros_drawer.dart';
 import 'package:frontend/features/ventas/presentation/screens/ventas_main_screen.dart';
 
@@ -244,6 +245,121 @@ void main() {
       expect(find.text('TICKET'), findsOneWidget);
       expect(find.text('CONFIGURACIÓN'), findsOneWidget);
       expect(find.text('CERRAR SESIÓN'), findsOneWidget);
+    });
+  });
+
+  group('CatalogoItemDetailSheet Widget Tests', () {
+    final itemTest = CatalogoItem(
+      idActivo: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+      skuQrFisico: 'MOT-TOY-YAR-2019-01',
+      precioReferencia: 520000,
+      idCategoria: 1,
+      nombreCategoria: 'Motor',
+      idSucursalActual: 1,
+      nombreSucursal: 'Viña del Mar',
+      idVehiculo: 'veh-1',
+      marca: 'Toyota',
+      modelo: 'Yaris Sport',
+      anio: 2019,
+      traccion: '4x2',
+      cilindrada: '1.5L',
+      combustible: 'Gasolina',
+      transmisionTipo: 'Manual',
+      ubicacionPasillo: 'P-02',
+      ubicacionPallet: 'PL-14',
+      estadoActivo: 'Disponible',
+    );
+
+    testWidgets('Renderiza título, ficha técnica en 2 columnas y precio formateado', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: CatalogoItemDetailSheet(
+              item: itemTest,
+              vendedorSucursalId: 1,
+            ),
+          ),
+        ),
+      );
+
+      // Verificar Título del repuesto y badge de categoría
+      expect(find.text('Motor - Toyota Yaris Sport 2019'), findsOneWidget);
+      expect(find.text('Motor'), findsOneWidget);
+
+      // Verificar Radar de stock
+      expect(find.text('En tu sucursal (Viña del Mar)'), findsOneWidget);
+
+      // Verificar Ficha técnica
+      expect(find.text('FICHA TÉCNICA'), findsOneWidget);
+      expect(find.text('MOT-TOY-YAR-2019-01'), findsOneWidget);
+      expect(find.text('1.5L'), findsOneWidget);
+      expect(find.text('Gasolina'), findsOneWidget);
+      expect(find.text('Manual'), findsOneWidget);
+      expect(find.text('4x2'), findsOneWidget);
+      expect(find.text('P-02 - PL-14'), findsOneWidget);
+      expect(find.text('Disponible'), findsOneWidget);
+
+      // Verificar Precio y Botón
+      expect(find.text('\$520.000'), findsOneWidget);
+      expect(find.text('Añadir al Carrito'), findsOneWidget);
+    });
+
+    testWidgets('Botón de cerrar X tiene tamaño interactivo >= 48x48 y botón Añadir al Carrito ejecuta callback', (tester) async {
+      bool cartPressed = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: CatalogoItemDetailSheet(
+              item: itemTest,
+              vendedorSucursalId: 1,
+              onAddToCart: () {
+                cartPressed = true;
+              },
+            ),
+          ),
+        ),
+      );
+
+      // Touch Target de botón de cerrar
+      final closeButtonFinder = find.byIcon(Icons.close);
+      expect(closeButtonFinder, findsOneWidget);
+      final closeSize = tester.getSize(closeButtonFinder);
+      expect(closeSize.width, greaterThanOrEqualTo(20));
+
+      // Touch Target de botón Añadir al Carrito (>= 48px de altura)
+      final cartBtnFinder = find.widgetWithText(ElevatedButton, 'Añadir al Carrito');
+      expect(cartBtnFinder, findsOneWidget);
+      final cartBtnSize = tester.getSize(cartBtnFinder);
+      expect(cartBtnSize.height, greaterThanOrEqualTo(48.0));
+
+      // Tap en Añadir al Carrito
+      await tester.tap(cartBtnFinder);
+      await tester.pump();
+
+      expect(cartPressed, isTrue);
+    });
+
+    testWidgets('Tap en CatalogoItemCard despliega CatalogoItemDetailSheet', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: CatalogoItemCard(
+              item: itemTest,
+              vendedorSucursalId: 1,
+            ),
+          ),
+        ),
+      );
+
+      // Tap en la tarjeta
+      await tester.tap(find.text('Motor - Toyota Yaris Sport 2019'));
+      await tester.pumpAndSettle();
+
+      // Verificar que el modal de detalle se ha desplegado
+      expect(find.text('FICHA TÉCNICA'), findsOneWidget);
+      expect(find.text('SKU: MOT-TOY-YAR-2019-01'), findsOneWidget); // En la Tarjeta
+      expect(find.text('MOT-TOY-YAR-2019-01'), findsOneWidget); // En el BottomSheet
     });
   });
 }
