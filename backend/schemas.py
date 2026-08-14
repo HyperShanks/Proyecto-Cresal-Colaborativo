@@ -210,3 +210,67 @@ class PaginatedCatalogoResponse(BaseModel):
     limit: int
     offset: int
 
+
+# ==========================================
+# ESQUEMAS PARA ÓRDENES Y CHECKOUT (HU-3.4)
+# ==========================================
+
+class ClienteOrdenInput(BaseModel):
+    """Datos de contacto y post-venta del cliente (Micro-CRM)."""
+    rut_cliente: str = Field(..., description="RUT del cliente (ej. 12.345.678-9 o 12345678-9)")
+    nombres: str = Field(..., min_length=1, description="Nombres del cliente")
+    apellidos: str = Field(..., min_length=1, description="Apellidos del cliente")
+    telefono: Optional[str] = Field(None, description="Teléfono de contacto")
+    correo: Optional[str] = Field(None, description="Correo electrónico del cliente")
+    comuna: Optional[str] = Field(None, description="Nombre de la comuna del cliente")
+    consentimiento_legal: bool = Field(True, description="Aceptación de la Ley N° 21.719 de datos personales")
+
+
+class DespachoInput(BaseModel):
+    """Datos de logística y receptor de envío a domicilio."""
+    direccion_envio: str = Field(..., min_length=3, description="Dirección completa de entrega")
+    comuna_destino: Optional[str] = Field(None, description="Nombre de la comuna de destino")
+    id_comuna_destino: Optional[int] = Field(None, description="ID numérico de la comuna de destino")
+    receptor_rut: str = Field(..., description="RUT de quien recibe")
+    receptor_nombres: str = Field(..., min_length=1, description="Nombres y apellidos de quien recibe")
+    receptor_telefono: str = Field(..., description="Teléfono del receptor")
+    empresa_transporte: Optional[str] = Field(None, description="Empresa de transporte (Starken, Chilexpress, etc.)")
+    costo_envio: Optional[int] = Field(0, description="Costo de envío asociado")
+
+
+class ItemOrdenInput(BaseModel):
+    """Línea de producto en la orden (inventariado o misceláneo/venta libre)."""
+    id_activo: Optional[UUID] = Field(None, description="UUID del repuesto inventariado (si aplica)")
+    descripcion_manual: Optional[str] = Field(None, description="Descripción para ítems de venta libre/no inventariados")
+    notas_preparacion: Optional[str] = Field(None, description="Notas técnicas de preparación dirigidas a bodega")
+    cantidad: int = Field(1, ge=1, description="Cantidad de unidades")
+    precio_unitario: Optional[int] = Field(None, description="Precio unitario de referencia")
+    precio_final: int = Field(..., ge=0, description="Precio final acordado / a cobrar")
+
+
+class OrdenCreateRequest(BaseModel):
+    """Payload de creación de orden transaccional derivable a caja."""
+    cliente: ClienteOrdenInput
+    requiere_despacho: bool = Field(False, description="Indica si la orden requiere despacho a domicilio")
+    despacho: Optional[DespachoInput] = Field(None, description="Datos de envío (obligatorio si requiere_despacho es True)")
+    consentimiento_legal: bool = Field(True, description="Consentimiento expreso Ley 21.719")
+    instrucciones_bodega: Optional[str] = Field(None, description="Instrucciones generales para bodega")
+    items: List[ItemOrdenInput] = Field(..., min_length=1, description="Lista de ítems de la orden")
+    id_sucursal: Optional[int] = Field(None, description="ID de la sucursal donde se genera la venta")
+
+
+class OrdenResponse(BaseModel):
+    """DTO de respuesta tras la creación exitosa de la orden."""
+    id_orden: UUID
+    estado_orden: str
+    total_venta: int
+    monto_pendiente: int
+    qr_transaccional_salida: Optional[str] = None
+    mensaje: str
+    fecha_creacion: Optional[str] = None
+    total_items: int
+
+    class Config:
+        from_attributes = True
+
+

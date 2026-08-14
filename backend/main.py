@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from database import engine, Base
-from routers import vehiculos, auth, tickets, bodega, inventario
+from routers import vehiculos, auth, tickets, bodega, inventario, ordenes
 from fastapi.middleware.cors import CORSMiddleware
 import models
 import os
@@ -42,3 +42,4 @@ app.include_router(auth.router)
 app.include_router(tickets.router, prefix="/api/v1/tickets", tags=["Tickets de Soporte"])
 app.include_router(bodega.router)
 app.include_router(inventario.router)
+app.include_router(ordenes.router)
