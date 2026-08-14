@@ -8,6 +8,7 @@ const String _tokenKey = 'access_token';
 const String _rolKey = 'user_rol';
 const String _idRolKey = 'user_id_rol';
 const String _sucursalKey = 'user_sucursal_id';
+const String _sucursalNombreKey = 'user_sucursal_nombre';
 const String _nombreUsuarioKey = 'user_nombre_completo';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -67,6 +68,9 @@ class AuthService {
           if (idRol == 6) rolText = 'Jefe de Ventas';
         }
         final sucursalId = usuarioMap?['id_sucursal']?.toString();
+        final sucursalNombre = usuarioMap?['nombre_sucursal']?.toString() ??
+            usuarioMap?['sucursal']?['nombre_sucursal']?.toString() ??
+            '';
         final nombres = usuarioMap?['nombres']?.toString() ?? '';
         final apellidos = usuarioMap?['apellidos']?.toString() ?? '';
 
@@ -78,6 +82,9 @@ class AuthService {
         }
         if (sucursalId != null) {
           await _storage.write(key: _sucursalKey, value: sucursalId);
+        }
+        if (sucursalNombre.isNotEmpty) {
+          await _storage.write(key: _sucursalNombreKey, value: sucursalNombre);
         }
         if (nombres.isNotEmpty) {
           await _storage.write(
@@ -123,6 +130,10 @@ class AuthService {
     return val != null ? int.tryParse(val) : null;
   }
 
+  /// Recupera el nombre de la sucursal del usuario autenticado.
+  static Future<String?> getNombreSucursal() =>
+      _storage.read(key: _sucursalNombreKey);
+
   /// Recupera el nombre completo del usuario autenticado.
   static Future<String?> getNombreUsuario() => _storage.read(key: _nombreUsuarioKey);
 
@@ -132,6 +143,7 @@ class AuthService {
     await _storage.delete(key: _rolKey);
     await _storage.delete(key: _idRolKey);
     await _storage.delete(key: _sucursalKey);
+    await _storage.delete(key: _sucursalNombreKey);
     await _storage.delete(key: _nombreUsuarioKey);
   }
 }

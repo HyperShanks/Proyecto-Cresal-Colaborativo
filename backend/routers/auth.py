@@ -137,8 +137,11 @@ def login_por_pin(request: LoginPINRequest, db: Session = Depends(get_db)):
     2. Camino Triste: Si no existe o está inactivo → 401 Unauthorized.
     3. Camino Feliz: Si es válido y activo → Genera JWT y retorna TokenResponse.
     """
-    # Consulta: buscar usuario por PIN (cargando relación con Rol)
-    usuario = db.query(Usuario).options(joinedload(Usuario.rol)).filter(
+    # Consulta: buscar usuario por PIN (cargando relación con Rol y Sucursal)
+    usuario = db.query(Usuario).options(
+        joinedload(Usuario.rol),
+        joinedload(Usuario.sucursal)
+    ).filter(
         Usuario.pin_acceso == request.pin
     ).first()
 
@@ -171,6 +174,8 @@ def login_por_pin(request: LoginPINRequest, db: Session = Depends(get_db)):
     usuario_data = UsuarioData.model_validate(usuario)
     if usuario.rol and not usuario_data.nombre_rol:
         usuario_data.nombre_rol = usuario.rol.nombre_rol
+    if usuario.sucursal and not usuario_data.nombre_sucursal:
+        usuario_data.nombre_sucursal = usuario.sucursal.nombre_sucursal
 
     return TokenResponse(
         access_token=access_token,

@@ -15,6 +15,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   String? _userRol;
+  String? _userSucursal;
   DateTime? _pausedTime;
 
   @override
@@ -58,6 +59,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
 
     final rol = await AuthService.getRol();
+    final sucursal = await AuthService.getNombreSucursal();
     if (mounted) {
       if (rol?.toLowerCase() == 'vendedor') {
         Navigator.of(context).pushReplacementNamed('/ventas_main');
@@ -65,6 +67,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
       setState(() {
         _userRol = rol;
+        _userSucursal = sucursal;
       });
     }
   }
@@ -199,7 +202,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ),
                 ),
                 const SizedBox(height: 2),
-                const Text('Zona Norte', style: AppTypography.small),
+                Text(
+                  _userSucursal != null && _userSucursal!.isNotEmpty
+                      ? _userSucursal!
+                      : 'Sucursal Central',
+                  style: AppTypography.small.copyWith(
+                    color: AppPalette.textSecondary,
+                  ),
+                ),
               ],
             ),
           ),

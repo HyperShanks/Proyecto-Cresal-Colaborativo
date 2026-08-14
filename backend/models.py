@@ -86,6 +86,10 @@ class Usuario(Base):
     def nombre_rol(self) -> str | None:
         return self.rol.nombre_rol if self.rol else None
 
+    @property
+    def nombre_sucursal(self) -> str | None:
+        return self.sucursal.nombre_sucursal if self.sucursal else None
+
 # ==========================================
 # SOPORTE TÉCNICO Y MESA DE AYUDA INTERNA
 # ==========================================

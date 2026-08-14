@@ -104,6 +104,14 @@ class RolData(BaseModel):
     class Config:
         from_attributes = True
 
+class SucursalData(BaseModel):
+    """DTO para la información de una sucursal."""
+    id_sucursal: int
+    nombre_sucursal: str
+
+    class Config:
+        from_attributes = True
+
 class UsuarioData(BaseModel):
     """DTO de salida con los datos públicos del usuario autenticado."""
     id_usuario: UUID
@@ -113,7 +121,9 @@ class UsuarioData(BaseModel):
     id_rol: int
     nombre_rol: Optional[str] = None
     id_sucursal: int
+    nombre_sucursal: Optional[str] = None
     rol: Optional[RolData] = None
+    sucursal: Optional[SucursalData] = None
 
     class Config:
         from_attributes = True  # Permite lectura directa desde el modelo SQLAlchemy

@@ -21,10 +21,12 @@ class VentasMainScreen extends StatefulWidget {
 
 class _VentasMainScreenState extends State<VentasMainScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  final GlobalKey<CatalogoScreenState> _catalogoKey = GlobalKey<CatalogoScreenState>();
+  final GlobalKey<CatalogoScreenState> _catalogoKey =
+      GlobalKey<CatalogoScreenState>();
   int _currentIndex = 0;
   String? _userRol;
   int? _idRol;
+  String? _userSucursal;
 
   @override
   void initState() {
@@ -35,10 +37,13 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
   Future<void> _cargarDatosUsuario() async {
     final rol = await AuthService.getRol();
     final idRol = await AuthService.getIdRol();
+    final sucursal = await AuthService.getNombreSucursal();
+
     if (mounted) {
       setState(() {
         _userRol = rol;
         _idRol = idRol;
+        _userSucursal = sucursal;
       });
     }
   }
@@ -141,7 +146,14 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
                   ),
                 ),
                 const SizedBox(height: 2),
-                const Text('Módulo de Ventas', style: AppTypography.small),
+                Text(
+                  _userSucursal != null && _userSucursal!.isNotEmpty
+                      ? _userSucursal!
+                      : 'Sucursal Central',
+                  style: AppTypography.small.copyWith(
+                    color: AppPalette.textSecondary,
+                  ),
+                ),
               ],
             ),
           ),
@@ -348,10 +360,7 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
       key: _scaffoldKey,
       backgroundColor: AppPalette.background,
       drawer: _buildDrawer(context),
-      body: IndexedStack(
-        index: safeIndex,
-        children: tabs,
-      ),
+      body: IndexedStack(index: safeIndex, children: tabs),
       bottomNavigationBar: ListenableBuilder(
         listenable: CartController.instance,
         builder: (context, _) {
@@ -362,10 +371,7 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
             decoration: const BoxDecoration(
               color: AppPalette.surface,
               border: Border(
-                top: BorderSide(
-                  color: Colors.white10,
-                  width: 1.0,
-                ),
+                top: BorderSide(color: Colors.white10, width: 1.0),
               ),
             ),
             child: BottomNavigationBar(
@@ -382,9 +388,7 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
                 fontWeight: FontWeight.bold,
                 fontSize: 12,
               ),
-              unselectedLabelStyle: AppTypography.small.copyWith(
-                fontSize: 11,
-              ),
+              unselectedLabelStyle: AppTypography.small.copyWith(fontSize: 11),
               type: BottomNavigationBarType.fixed,
               elevation: 0,
               items: navItems,
