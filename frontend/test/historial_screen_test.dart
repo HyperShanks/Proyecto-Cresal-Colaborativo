@@ -10,6 +10,7 @@ import 'package:http/testing.dart';
 import 'package:frontend/features/ventas/services/ordenes_service.dart';
 import 'package:frontend/features/ventas/presentation/widgets/orden_card.dart';
 import 'package:frontend/features/ventas/presentation/widgets/orden_detail_sheet.dart';
+import 'package:frontend/features/ventas/presentation/widgets/historial_filtros_drawer.dart';
 import 'package:frontend/features/ventas/presentation/screens/historial_screen.dart';
 
 void main() {
@@ -366,8 +367,69 @@ void main() {
     });
   });
 
+  group('HistorialFiltrosDrawer Widget Tests', () {
+    testWidgets('Renderiza opciones de período, estado y botones de acción', (tester) async {
+      bool periodoVal = false;
+      String? estadoVal;
+      bool aplicado = false;
+      bool limpiado = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            endDrawer: HistorialFiltrosDrawer(
+              verTodas: false,
+              filtroEstado: null,
+              onPeriodoChanged: (val) => periodoVal = val,
+              onEstadoChanged: (val) => estadoVal = val,
+              onAplicar: () => aplicado = true,
+              onLimpiar: () => limpiado = true,
+            ),
+            body: Builder(
+              builder: (ctx) => Center(
+                child: ElevatedButton(
+                  onPressed: () => Scaffold.of(ctx).openEndDrawer(),
+                  child: const Text('Abrir Filtros'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // Abrir endDrawer
+      await tester.tap(find.text('Abrir Filtros'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Filtros de Órdenes'), findsOneWidget);
+      expect(find.text('PERÍODO DE VENTA'), findsOneWidget);
+      expect(find.text('Ventas de Hoy'), findsOneWidget);
+      expect(find.text('Historial Completo'), findsOneWidget);
+      expect(find.text('ESTADO DE LA ORDEN'), findsOneWidget);
+      expect(find.text('Todas'), findsOneWidget);
+      expect(find.text('Reservadas'), findsOneWidget);
+      expect(find.text('Pagadas'), findsOneWidget);
+      expect(find.text('Anuladas'), findsOneWidget);
+      expect(find.text('Limpiar'), findsOneWidget);
+      expect(find.text('Aplicar Filtros'), findsOneWidget);
+
+      // Cambiar a Historial Completo
+      await tester.tap(find.text('Historial Completo'));
+      expect(periodoVal, isTrue);
+
+      // Cambiar a Reservadas
+      await tester.tap(find.text('Reservadas'));
+      expect(estadoVal, 'Reservada');
+
+      // Aplicar filtros
+      await tester.tap(find.text('Aplicar Filtros'));
+      await tester.pumpAndSettle();
+      expect(aplicado, isTrue);
+    });
+  });
+
   group('HistorialScreen Widget Tests', () {
-    testWidgets('Renderiza AppBar, barra de filtros y estado inicial de carga/vacío', (tester) async {
+    testWidgets('Renderiza AppBar con botón de filtro y abre el EndDrawer', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: HistorialScreen(),
@@ -375,12 +437,16 @@ void main() {
       );
 
       expect(find.text('Mis Órdenes de Venta'), findsOneWidget);
-      expect(find.text('Ventas de Hoy'), findsOneWidget);
-      expect(find.text('Historial Completo'), findsOneWidget);
-      expect(find.text('Todas'), findsOneWidget);
-      expect(find.text('Reservadas'), findsOneWidget);
-      expect(find.text('Pagadas'), findsOneWidget);
-      expect(find.text('Anuladas'), findsOneWidget);
+      expect(find.byIcon(Icons.tune), findsOneWidget);
+      expect(find.byIcon(Icons.refresh), findsOneWidget);
+
+      // Tap en botón de filtro abre el endDrawer
+      await tester.tap(find.byIcon(Icons.tune));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Filtros de Órdenes'), findsOneWidget);
+      expect(find.text('PERÍODO DE VENTA'), findsOneWidget);
     });
   });
 }
+

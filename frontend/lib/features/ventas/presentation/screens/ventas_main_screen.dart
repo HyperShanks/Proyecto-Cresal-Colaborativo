@@ -229,6 +229,7 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
           ),
           HistorialScreen(
             onOpenMenuDrawer: () => _scaffoldKey.currentState?.openDrawer(),
+            onRefreshCatalogo: () => _catalogoKey.currentState?.refrescarCatalogo(),
           ),
           _buildPlaceholderTab(
             title: 'Tasación de Vehículos',
