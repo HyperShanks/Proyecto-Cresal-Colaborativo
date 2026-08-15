@@ -26,7 +26,7 @@ router = APIRouter(
 # POST / — Crea un nuevo ticket de soporte
 # ─────────────────────────────────────────────────────────────────────────────
 @router.post(
-    "/",
+    "",
     response_model=TicketResponse,
     status_code=201,
     summary="Crear Ticket de Soporte",

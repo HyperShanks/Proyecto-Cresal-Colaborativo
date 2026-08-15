@@ -109,7 +109,7 @@ class _AuditoriaSalidaScreenState extends State<AuditoriaSalidaScreen>
       });
 
       // Retorno automático tras 3.0s para que el operario visualice la confirmación
-      Future.delayed(const Duration(milliseconds: 4000), () {
+      Future.delayed(const Duration(milliseconds: 5000), () {
         if (mounted) {
           Navigator.of(context).pop(true);
         }

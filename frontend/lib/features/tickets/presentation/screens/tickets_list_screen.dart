@@ -4,6 +4,7 @@ import '../../../../core/theme/tokens/app_typography.dart';
 import '../../models/ticket_model.dart';
 import '../../services/ticket_service.dart';
 import '../widgets/ticket_card.dart';
+import '../widgets/ticket_detail_sheet.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TICKETS LIST SCREEN (HU-2.7) — Historial de tickets del operario autenticado
@@ -64,7 +65,11 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
             itemCount: tickets.length,
             separatorBuilder: (_, __) => const SizedBox(height: 12),
             itemBuilder: (context, index) {
-              return TicketCard(ticket: tickets[index]);
+              final ticket = tickets[index];
+              return TicketCard(
+                ticket: ticket,
+                onTap: () => TicketDetailSheet.mostrar(context, ticket),
+              );
             },
           ),
         );
