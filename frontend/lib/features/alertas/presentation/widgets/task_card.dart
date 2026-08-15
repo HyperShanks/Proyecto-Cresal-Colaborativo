@@ -147,12 +147,16 @@ class TaskCard extends StatelessWidget {
                     // 2. Evaluamos el tipo de alerta
                     if (tarea.tipoAlerta == 'LIBERADA') {
                       // Si está liberada, navegamos a la Barrera de Salida
-                      Navigator.push(
+                      final resultado = await Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const AuditoriaSalidaScreen(),
+                          builder: (context) => AuditoriaSalidaScreen(tarea: tarea),
                         ),
                       );
+
+                      if (resultado == true) {
+                        onActualizar?.call();
+                      }
                     } else if (tarea.tipoAlerta == 'IMPRESION') {
                       if (tarea.etiquetaData != null) {
                         final resultado = await Navigator.pushNamed(
@@ -363,15 +367,19 @@ class TaskCard extends StatelessWidget {
                 width: double.infinity,
                 height: 45,
                 child: ElevatedButton.icon(
-                  onPressed: () {
+                  onPressed: () async {
                     if (tarea.tipoAlerta == 'LIBERADA') {
                       // Navegación directa saltándose el modal
-                      Navigator.push(
+                      final resultado = await Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const AuditoriaSalidaScreen(),
+                          builder: (context) => AuditoriaSalidaScreen(tarea: tarea),
                         ),
                       );
+
+                      if (resultado == true) {
+                        onActualizar?.call();
+                      }
                     } else {
                       // Para el resto (ej. Impresión), abre el modal para confirmar
                       _mostrarDetalleModal(context, accentColor, buttonColor);

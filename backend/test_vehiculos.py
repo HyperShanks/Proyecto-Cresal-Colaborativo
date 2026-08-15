@@ -1,57 +1,84 @@
-# Importamos patch de unittest.mock para aislar dependencias externas y evitar salidas a internet
-from unittest.mock import patch
-
-# Importamos el esquema para asegurar que la respuesta cumpla con el contrato de la API
+import uuid
+from unittest.mock import patch, MagicMock
 from schemas import VehiculoResponse
+from core.security import create_access_token
+from models import Usuario, Rol, Sucursal, Region, Comuna
+from conftest import TestingSessionLocal
 
-# Parcheamos la función de scraping exactamente en la ruta donde es importada y utilizada
-# dentro del código (en este caso, en el módulo vehiculo_service).
-# Al usar @patch, la función decorada recibe el objeto "mock" como primer argumento.
-@patch('services.vehiculo_service.obtener_datos_vehiculo')
-def test_obtener_vehiculo_camino_feliz(mock_obtener_datos, client):
+
+@patch('routers.vehiculos.procesar_patente_y_guardar')
+def test_obtener_vehiculo_camino_feliz(mock_procesar, client, setup_database):
     """
     Caso de prueba 'Camino Feliz' (Happy Path) para la obtención de un vehículo.
-    Verifica que al consultar una patente, el sistema responda con un HTTP 200
-    y los datos correctos, interceptando el scraper con datos simulados.
+    Verifica que al consultar una patente existente, el sistema responda con un HTTP 200
+    y los datos correctos del vehículo.
     """
-    # 1. Arrange (Preparación)
+    # 1. Crear usuario de prueba para autenticación
+    db = TestingSessionLocal()
+    u_id = uuid.uuid4()
+    v_id = uuid.uuid4()
+    try:
+        r = db.query(Region).filter_by(id_region=1).first()
+        if not r:
+            r = Region(id_region=1, nombre_region="Valparaíso")
+            db.add(r)
+        c = db.query(Comuna).filter_by(id_comuna=1).first()
+        if not c:
+            c = Comuna(id_comuna=1, nombre_comuna="Viña del Mar", id_region=1)
+            db.add(c)
+        suc = db.query(Sucursal).filter_by(id_sucursal=1).first()
+        if not suc:
+            suc = Sucursal(id_sucursal=1, nombre_sucursal="Casa Matriz", direccion="Dir", id_comuna=1)
+            db.add(suc)
+        rol = db.query(Rol).filter_by(id_rol=1).first()
+        if not rol:
+            rol = Rol(id_rol=1, nombre_rol="Bodeguero")
+            db.add(rol)
+
+        user = Usuario(
+            id_usuario=u_id,
+            id_rol=1,
+            id_sucursal=1,
+            rut_usuario="11.222.333-4",
+            nombres="Tester",
+            apellidos="Vehiculo",
+            email="tester_veh@cresal.cl",
+            password_hash="hash",
+            pin_acceso="1234",
+            estado="Activo"
+        )
+        db.add(user)
+        db.commit()
+    finally:
+        db.close()
+
+    token = create_access_token(data={"sub": str(u_id)})
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 2. Configurar mock del servicio
     patente_prueba = "BBCL12"
+    mock_vehiculo = MagicMock()
+    mock_vehiculo.id_vehiculo = v_id
+    mock_vehiculo.patente = patente_prueba
+    mock_vehiculo.marca = "Toyota"
+    mock_vehiculo.modelo = "Yaris"
+    mock_vehiculo.anio = 2015
+    mock_vehiculo.traccion = "4x2"
+    mock_vehiculo.numero_ingreso = "ING-001"
+    mock_vehiculo.estado = "Activo"
+    mock_vehiculo.fecha_ingreso = None
+    mock_procesar.return_value = mock_vehiculo
+
+    # 3. Act
     url = f"/api/v1/vehiculos/{patente_prueba}"
-    
-    # Configuramos el mock para que devuelva un diccionario estático
-    # simulando una respuesta exitosa y rápida del scraper
-    mock_obtener_datos.return_value = {
-        "patente": patente_prueba,
-        "marca": "Toyota",
-        "modelo": "Yaris",
-        "anio": 2015
-    }
-    
-    # 2. Act (Acción)
-    # Realizamos la petición con nuestro TestClient. La lógica interna de la API 
-    # llamará a la función mockeada en vez de hacer scraping real.
-    response = client.get(url)
-    
-    # 3. Assert (Verificación)
-    # Validamos que la petición fue exitosa
-    assert response.status_code == 200, f"Se esperaba un status 200, pero se obtuvo {response.status_code}"
-    
-    # Extraemos el payload JSON de la respuesta
+    response = client.get(url, headers=headers)
+
+    # 4. Assert
+    assert response.status_code == 200, f"Error: {response.text}"
     data = response.json()
-    
-    # Validamos la estructura del JSON contra nuestro contrato (esquema Pydantic).
-    # Si la estructura no es válida, levantará un ValidationError.
-    vehiculo_validado = VehiculoResponse(**data)
-    
-    # Validamos que los datos devueltos por el endpoint coinciden con los que inyectamos en el mock
-    assert vehiculo_validado.patente == patente_prueba
-    assert vehiculo_validado.marca == "Toyota"
-    assert vehiculo_validado.modelo == "Yaris"
-    assert vehiculo_validado.anio == 2015
-    
-    # Verificamos que 'id_vehiculo' exista en la respuesta (generado por la BD en memoria)
+    assert data["patente"] == patente_prueba
+    assert data["marca"] == "Toyota"
+    assert data["modelo"] == "Yaris"
+    assert data["anio"] == 2015
     assert "id_vehiculo" in data
-    
-    # Buena práctica QA: Confirmamos que el sistema realmente invocó a la función mockeada,
-    # y que lo hizo usando la patente correcta que enviamos por la URL.
-    mock_obtener_datos.assert_called_once_with(patente_prueba)
+    mock_procesar.assert_called_once()

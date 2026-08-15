@@ -75,12 +75,15 @@ def poblar_catalogo_real():
             db.add(cat_caja)
             db.commit()
 
-        # 4. Estados
+        # 4. Estados de Activo (Asegurar catálogo completo incluyendo 'Entregado' para HU-3.6)
+        estados_catalogo = ["Disponible", "Reservado", "Vendido", "En Desarme", "En Importación", "Entregado"]
+        for est_nombre in estados_catalogo:
+            est_obj = db.query(Estado_Activo).filter_by(nombre_estado=est_nombre).first()
+            if not est_obj:
+                db.add(Estado_Activo(nombre_estado=est_nombre))
+                print(f"  + [seed_catalogo] Estado de activo creado: {est_nombre}")
+        db.commit()
         estado_disp = db.query(Estado_Activo).filter_by(nombre_estado="Disponible").first()
-        if not estado_disp:
-            estado_disp = Estado_Activo(nombre_estado="Disponible")
-            db.add(estado_disp)
-            db.commit()
 
         # 5. Lista de Repuestos Reales
         repuestos_data = [

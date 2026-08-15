@@ -11,7 +11,7 @@ class TareaAlerta {
   final String accionRequerida;
   final EtiquetaData? etiquetaData;
 
-  TareaAlerta({
+  const TareaAlerta({
     required this.idTarea,
     required this.tipoAlerta,
     this.ordenRef,

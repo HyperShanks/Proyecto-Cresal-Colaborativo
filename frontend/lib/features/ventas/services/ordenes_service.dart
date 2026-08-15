@@ -44,6 +44,12 @@ class OrdenResponseModel {
   /// Retorna el monto formateado en pesos chilenos (ej: $520.000)
   String get totalVentaFormateado => _formatearMonto(totalVenta);
 
+  /// Indica si la orden cuenta con código QR transaccional emitido para retiro en bodega (HU-3.6).
+  bool get tieneQrDisponible =>
+      (estadoOrden.toLowerCase() == 'pagada' || estadoOrden.toLowerCase() == 'completada') &&
+      qrTransaccionalSalida != null &&
+      qrTransaccionalSalida!.trim().isNotEmpty;
+
   static String _formatearMonto(int monto) {
     final str = monto.toString();
     final buffer = StringBuffer();
@@ -56,6 +62,51 @@ class OrdenResponseModel {
       }
     }
     return '\$${buffer.toString().split('').reversed.join('')}';
+  }
+}
+
+/// DTO de respuesta para la confirmación de pago y emisión del QR transaccional (HU-3.6).
+class OrdenPagoResponseModel {
+  final String idOrden;
+  final String idPago;
+  final String estadoOrden;
+  final int totalVenta;
+  final int montoPagado;
+  final int montoPendiente;
+  final String metodoPago;
+  final String qrTransaccionalSalida;
+  final String idCajera;
+  final String mensaje;
+  final String fechaPago;
+
+  const OrdenPagoResponseModel({
+    required this.idOrden,
+    required this.idPago,
+    required this.estadoOrden,
+    required this.totalVenta,
+    required this.montoPagado,
+    required this.montoPendiente,
+    required this.metodoPago,
+    required this.qrTransaccionalSalida,
+    required this.idCajera,
+    required this.mensaje,
+    required this.fechaPago,
+  });
+
+  factory OrdenPagoResponseModel.fromJson(Map<String, dynamic> json) {
+    return OrdenPagoResponseModel(
+      idOrden: json['id_orden']?.toString() ?? '',
+      idPago: json['id_pago']?.toString() ?? '',
+      estadoOrden: json['estado_orden']?.toString() ?? 'Pagada',
+      totalVenta: json['total_venta'] as int? ?? 0,
+      montoPagado: json['monto_pagado'] as int? ?? 0,
+      montoPendiente: json['monto_pendiente'] as int? ?? 0,
+      metodoPago: json['metodo_pago']?.toString() ?? 'Efectivo',
+      qrTransaccionalSalida: json['qr_transaccional_salida']?.toString() ?? '',
+      idCajera: json['id_cajera']?.toString() ?? '',
+      mensaje: json['mensaje']?.toString() ?? 'Pago registrado exitosamente',
+      fechaPago: json['fecha_pago']?.toString() ?? '',
+    );
   }
 }
 
@@ -214,11 +265,51 @@ class OrdenHistorialModel {
   bool get esPagada => estadoOrden.toLowerCase() == 'pagada' || estadoOrden.toLowerCase() == 'completada';
   bool get esAnulada => estadoOrden.toLowerCase() == 'anulada';
 
+  /// Indica si la orden cuenta con código QR transaccional emitido para entrega en bodega (HU-3.6).
+  bool get tieneQrDisponible =>
+      esPagada &&
+      qrTransaccionalSalida != null &&
+      qrTransaccionalSalida!.trim().isNotEmpty;
+
+  static const Object _sentinel = Object();
+
+  OrdenHistorialModel copyWith({
+    String? idOrden,
+    String? estadoOrden,
+    int? totalVenta,
+    int? montoPendiente,
+    Object? qrTransaccionalSalida = _sentinel,
+    String? fechaCreacion,
+    String? fechaActualizacion,
+    int? totalItems,
+    ClienteOrdenResumenModel? cliente,
+    DespachoOrdenResumenModel? despacho,
+    List<DetalleOrdenItemModel>? detalles,
+  }) {
+    return OrdenHistorialModel(
+      idOrden: idOrden ?? this.idOrden,
+      estadoOrden: estadoOrden ?? this.estadoOrden,
+      totalVenta: totalVenta ?? this.totalVenta,
+      montoPendiente: montoPendiente ?? this.montoPendiente,
+      qrTransaccionalSalida: identical(qrTransaccionalSalida, _sentinel)
+          ? this.qrTransaccionalSalida
+          : qrTransaccionalSalida as String?,
+      fechaCreacion: fechaCreacion ?? this.fechaCreacion,
+      fechaActualizacion: fechaActualizacion ?? this.fechaActualizacion,
+      totalItems: totalItems ?? this.totalItems,
+      cliente: cliente ?? this.cliente,
+      despacho: despacho ?? this.despacho,
+      detalles: detalles ?? this.detalles,
+    );
+  }
+
   String get totalVentaFormateado => OrdenResponseModel._formatearMonto(totalVenta);
   String get montoPendienteFormateado => OrdenResponseModel._formatearMonto(montoPendiente);
 
   String get folioDisplay {
-    if (qrTransaccionalSalida != null && qrTransaccionalSalida!.isNotEmpty) {
+    if (qrTransaccionalSalida != null &&
+        qrTransaccionalSalida!.startsWith('ORD-') &&
+        qrTransaccionalSalida!.length <= 16) {
       return qrTransaccionalSalida!;
     }
     if (idOrden.length >= 8) {
@@ -586,6 +677,84 @@ class OrdenesService {
     } catch (e) {
       if (e is Exception) rethrow;
       throw Exception('Error inesperado al actualizar instrucciones: $e');
+    } finally {
+      if (client == null) {
+        httpClient.close();
+      }
+    }
+  }
+
+  /// Confirma el pago de una orden y genera el código QR transaccional (HU-3.6).
+  /// Permite especificar método de pago (por defecto 'Efectivo') y monto opcional.
+  static Future<OrdenPagoResponseModel> pagarOrden(
+    String idOrden, {
+    String metodoPago = 'Efectivo',
+    int? monto,
+    String? observaciones,
+    http.Client? client,
+  }) async {
+    final httpClient = client ?? http.Client();
+
+    try {
+      final uri = Uri.parse('${ApiConstants.ordenesEndpoint}/$idOrden/pagar');
+      final token = await AuthService.getToken();
+
+      final headers = {
+        'Content-Type': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
+      final payload = {
+        'metodo_pago': metodoPago,
+        if (monto != null) 'monto': monto,
+        if (observaciones != null && observaciones.isNotEmpty) 'observaciones': observaciones,
+      };
+
+      print('💳 [SERVICE] Enviando confirmación de pago para orden ID: $idOrden ($metodoPago)');
+
+      final response = await httpClient
+          .post(
+            uri,
+            headers: headers,
+            body: jsonEncode(payload),
+          )
+          .timeout(
+            const Duration(seconds: 15),
+            onTimeout: () => throw Exception('Tiempo de espera agotado al procesar el pago.'),
+          );
+
+      dynamic decodedBody;
+      try {
+        decodedBody = jsonDecode(utf8.decode(response.bodyBytes));
+      } catch (_) {
+        try {
+          decodedBody = jsonDecode(response.body);
+        } catch (_) {
+          decodedBody = null;
+        }
+      }
+
+      if (response.statusCode == 200) {
+        if (decodedBody is Map<String, dynamic>) {
+          print('✅ [SERVICE] Pago exitoso recibido. QR: ${decodedBody['qr_transaccional_salida']}');
+          return OrdenPagoResponseModel.fromJson(decodedBody);
+        }
+        throw Exception('Respuesta del servidor no válida al procesar el pago.');
+      } else if (response.statusCode == 400) {
+        final detail = decodedBody is Map ? decodedBody['detail'] : null;
+        throw Exception(detail?.toString() ?? 'No es posible registrar el pago para esta orden.');
+      } else if (response.statusCode == 404) {
+        throw Exception('La orden especificada no fue encontrada.');
+      } else if (response.statusCode == 401) {
+        throw Exception('Sesión expirada. Por favor vuelve a iniciar sesión.');
+      } else {
+        final detail = decodedBody is Map ? decodedBody['detail'] : null;
+        throw Exception(detail?.toString() ?? 'Error al procesar el pago (${response.statusCode}).');
+      }
+    } catch (e) {
+      print('💥 [SERVICE] Error en pagarOrden: $e');
+      if (e is Exception) rethrow;
+      throw Exception('Error inesperado al procesar el pago: $e');
     } finally {
       if (client == null) {
         httpClient.close();

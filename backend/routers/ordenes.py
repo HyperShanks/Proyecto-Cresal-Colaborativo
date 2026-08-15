@@ -12,14 +12,15 @@ from database import get_db
 from models import (
     Usuario, Cliente, Comuna, Orden_Venta, Detalle_Orden,
     Despacho, Activo_Inventariado, Estado_Activo,
-    Vehiculo_Origen, Categoria_Activo
+    Vehiculo_Origen, Categoria_Activo, Transaccion_Pago
 )
 from schemas import (
     OrdenCreateRequest, OrdenResponse,
     ClienteOrdenResumen, DespachoOrdenResumen,
     DetalleOrdenItemResponse, OrdenHistorialItemResponse,
     OrdenAnulacionResponse, InstruccionesUpdateRequest,
-    InstruccionesUpdateResponse
+    InstruccionesUpdateResponse, OrdenPagoRequest,
+    OrdenPagoResponse
 )
 from core.security import get_current_user
 
@@ -400,6 +401,171 @@ def obtener_mis_ventas(
         )
 
     return resultado
+
+
+@router.post(
+    "/{id_orden}/pagar",
+    response_model=OrdenPagoResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Confirmar Pago de Orden y Generar QR Transaccional (HU-3.6)",
+    description="Procesa la confirmación de pago por parte de la cajera. "
+                "Crea el registro en Transaccion_Pago, liquida el monto pendiente, "
+                "actualiza la orden a 'Pagada', asigna la cajera y genera el código "
+                "QR transaccional único para el handshake con bodega."
+)
+@router.post(
+    "/{id_orden}/pagar/",
+    response_model=OrdenPagoResponse,
+    status_code=status.HTTP_200_OK,
+    include_in_schema=False
+)
+def pagar_orden(
+    id_orden: uuid.UUID,
+    pago_in: Optional[OrdenPagoRequest] = None,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """
+    Motor Transaccional de Pago y Generación de QR (ACID):
+    1. Bloqueo y verificación de existencia de la orden.
+    2. Validaciones de negocio:
+       - No permite pagar órdenes en estado 'Pagada', 'Completada' o 'Anulada'.
+       - Valida que la orden tenga saldo pendiente y que esté en estado 'Reservada'.
+    3. Transacción atómica:
+       - Generación del hash criptográfico único `qr_transaccional_salida`.
+       - Registro de la transacción en la tabla `Transaccion_Pago`.
+       - Actualización de `Orden_Venta`: estado_orden='Pagada', monto_pendiente=0, id_cajera, qr_transaccional_salida.
+    4. Commit y emisión de respuesta para la App del Vendedor y habilitación en Bodega.
+    """
+    if pago_in is None:
+        pago_in = OrdenPagoRequest()
+
+    user_ident = f"{current_user.nombres} {current_user.apellidos or ''}".strip()
+    print(f"\n💳 [PAGO] Iniciando procesamiento de pago para orden ID: {id_orden} por usuario: {user_ident} ({current_user.email})")
+
+    orden = db.query(Orden_Venta).filter(Orden_Venta.id_orden == id_orden).first()
+    if not orden:
+        print(f"❌ [PAGO] Error: Orden con ID '{id_orden}' no encontrada.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Orden con ID '{id_orden}' no encontrada."
+        )
+
+    # Validación de estados
+    if orden.estado_orden in ["Pagada", "Completada"]:
+        print(f"⚠️ [PAGO] Rechazo: La orden {id_orden} ya se encuentra en estado '{orden.estado_orden}'.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"La orden ya se encuentra en estado '{orden.estado_orden}' y cuenta con pago confirmado."
+        )
+
+    if orden.estado_orden == "Anulada":
+        print(f"⚠️ [PAGO] Rechazo: La orden {id_orden} está 'Anulada'.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se puede registrar un pago en una orden que ha sido 'Anulada'."
+        )
+
+    if orden.estado_orden != "Reservada":
+        print(f"⚠️ [PAGO] Rechazo: Estado inválido '{orden.estado_orden}'.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"No se puede pagar una orden en estado '{orden.estado_orden}'. Debe estar en estado 'Reservada'."
+        )
+
+    if orden.monto_pendiente <= 0:
+        print(f"⚠️ [PAGO] Rechazo: La orden {id_orden} no tiene saldo pendiente (monto_pendiente={orden.monto_pendiente}).")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La orden no tiene saldo pendiente por pagar."
+        )
+
+    try:
+        monto_a_pagar = pago_in.monto if pago_in.monto is not None else orden.monto_pendiente
+        if monto_a_pagar <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El monto a pagar debe ser mayor a 0."
+            )
+
+        # Generación de token único de alta entropía para el handshake QR
+        # Formato: TX-QR-<ID_ORDEN_8>-<RANDOM_HEX_12>
+        token_entropy = uuid.uuid4().hex[:12].upper()
+        qr_token = f"TX-QR-{str(orden.id_orden)[:8].upper()}-{token_entropy}"
+        print(f"🔑 [PAGO] QR Transaccional generado: {qr_token}")
+
+        # 1. Registrar la transacción de pago en PostgreSQL
+        nuevo_pago = Transaccion_Pago(
+            id_pago=uuid.uuid4(),
+            id_orden=orden.id_orden,
+            monto=monto_a_pagar,
+            metodo_pago=pago_in.metodo_pago or "Efectivo",
+            estado_pago="Procesado",
+            fecha_pago=datetime.now(),
+        )
+        db.add(nuevo_pago)
+        print(f"📝 [PAGO] Registro de Transaccion_Pago creado: ID {nuevo_pago.id_pago} - Monto: ${monto_a_pagar} ({nuevo_pago.metodo_pago})")
+
+        # 2. Actualizar la cabecera de la orden
+        orden.estado_orden = "Pagada"
+        orden.monto_pendiente = max(0, orden.monto_pendiente - monto_a_pagar)
+        orden.id_cajera = current_user.id_usuario
+        orden.qr_transaccional_salida = qr_token
+        orden.fecha_actualizacion = datetime.now()
+
+        # 3. Actualizar los repuestos físicos inventariados a estado 'Vendido' (ID 3)
+        estado_vendido = db.query(Estado_Activo).filter(Estado_Activo.nombre_estado == "Vendido").first()
+        if not estado_vendido:
+            estado_vendido = Estado_Activo(id_estado=3, nombre_estado="Vendido")
+            db.add(estado_vendido)
+            db.flush()
+
+        detalles = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == orden.id_orden).all()
+        activos_vendidos = 0
+
+        for d in detalles:
+            if d.id_activo:
+                activo = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == d.id_activo).first()
+                if activo:
+                    activo.id_estado = estado_vendido.id_estado
+                    activo.version_lock = (activo.version_lock or 1) + 1
+                    activo.fecha_actualizacion = datetime.now()
+                    activos_vendidos += 1
+
+        print(f"📦 [PAGO] {activos_vendidos} repuesto(s) físico(s) actualizados a estado 'Vendido' (ID {estado_vendido.id_estado}).")
+
+        # 4. Confirmación atómica ACID
+        db.commit()
+        db.refresh(orden)
+        db.refresh(nuevo_pago)
+
+        print(f"✅ [PAGO] Pago procesado exitosamente para orden #{str(orden.id_orden)[:8].upper()}. "
+              f"Estado: {orden.estado_orden}, Cajera: {user_ident}, Saldo pendiente: ${orden.monto_pendiente}")
+
+        return OrdenPagoResponse(
+            id_orden=orden.id_orden,
+            id_pago=nuevo_pago.id_pago,
+            estado_orden=orden.estado_orden,
+            total_venta=orden.total_venta,
+            monto_pagado=nuevo_pago.monto,
+            monto_pendiente=orden.monto_pendiente,
+            metodo_pago=nuevo_pago.metodo_pago,
+            qr_transaccional_salida=orden.qr_transaccional_salida,
+            id_cajera=orden.id_cajera,
+            mensaje="Pago registrado exitosamente. Código QR transaccional emitido para entrega en bodega.",
+            fecha_pago=nuevo_pago.fecha_pago.isoformat() if nuevo_pago.fecha_pago else datetime.now().isoformat(),
+        )
+
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        print(f"💥 [PAGO] Error crítico durante la transacción de pago: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error en la transacción de pago de la orden: {str(e)}"
+        )
 
 
 @router.patch(

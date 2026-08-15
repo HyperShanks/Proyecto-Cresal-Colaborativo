@@ -320,6 +320,34 @@ class OrdenResponse(BaseModel):
 
 
 # ==========================================
+# ESQUEMAS PARA CONFIRMACIÓN DE PAGO Y HANDSHAKE QR (HU-3.6)
+# ==========================================
+
+class OrdenPagoRequest(BaseModel):
+    """Payload para registrar la confirmación de pago de una orden en caja."""
+    metodo_pago: str = Field("Efectivo", description="Método de pago: Efectivo, Débito, Crédito, Transferencia")
+    monto: Optional[int] = Field(None, ge=1, description="Monto abonado (opcional, por defecto liquida el total pendiente)")
+    observaciones: Optional[str] = Field(None, description="Notas de caja o número de comprobante/voucher")
+
+
+class OrdenPagoResponse(BaseModel):
+    """DTO de respuesta tras confirmar el pago de la orden y generar el QR transaccional de salida."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_orden: UUID
+    id_pago: UUID
+    estado_orden: str
+    total_venta: int
+    monto_pagado: int
+    monto_pendiente: int
+    metodo_pago: str
+    qr_transaccional_salida: str
+    id_cajera: UUID
+    mensaje: str
+    fecha_pago: str
+
+
+# ==========================================
 # ESQUEMAS PARA HISTORIAL Y MONITOREO DE ÓRDENES (HU-3.5)
 # ==========================================
 
@@ -453,6 +481,70 @@ class AsignarPrecioResponse(BaseModel):
     sku_qr_fisico: str
     precio_referencia: int
     estado_activo: str
+    mensaje: str
+
+
+# ==========================================
+# ESQUEMAS PARA BODEGA: HANDSHAKE DE SALIDA Y DUAL-SCAN (HU-3.6)
+# ==========================================
+
+class ItemSalidaInfo(BaseModel):
+    """Información de cada ítem de la orden para verificación previa de salida."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_detalle: UUID
+    id_activo: Optional[UUID] = None
+    titulo: str
+    sku_qr_fisico: Optional[str] = None
+    es_inventariado: bool
+    ubicacion: str
+    notas_preparacion: Optional[str] = None
+    cantidad: int
+    precio_final: int
+
+
+class VerificarQrSalidaRequest(BaseModel):
+    """Payload para inspeccionar una orden mediante el QR Digital del Vendedor."""
+    qr_transaccional_salida: str = Field(..., description="Token digital del vendedor (TX-QR-...)")
+
+
+class VerificarQrSalidaResponse(BaseModel):
+    """DTO con el detalle completo de la orden para guiar al bodeguero en el despacho."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_orden: UUID
+    folio: str
+    estado_orden: str
+    total_venta: int
+    monto_pendiente: int
+    id_sucursal: int
+    cliente_nombre: str
+    cliente_rut: str
+    cliente_telefono: Optional[str] = None
+    items_requeridos: List[ItemSalidaInfo]
+    total_items_fisicos: int
+    qr_transaccional_salida: str
+
+
+class EscanearSalidaRequest(BaseModel):
+    """Payload para validar el Dual-Scan y completar la entrega en barrera."""
+    qr_transaccional_salida: str = Field(..., description="Token digital del vendedor (TX-QR-...)")
+    skus_escaneados: List[str] = Field(default_factory=list, description="Lista de SKUs escaneados de las piezas físicas")
+    observaciones_entrega: Optional[str] = Field(None, description="Observaciones opcionales del bodeguero al entregar")
+
+
+class EscanearSalidaResponse(BaseModel):
+    """DTO de confirmación inmediata (Cero-Clics) tras la entrega en barrera."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_orden: UUID
+    folio: str
+    estado_orden: str
+    id_bodeguero: UUID
+    bodeguero_nombre: str
+    fecha_entrega: str
+    activos_entregados: List[str]
+    total_entregados: int
     mensaje: str
 
 

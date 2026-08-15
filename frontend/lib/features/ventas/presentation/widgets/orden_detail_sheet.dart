@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import '../../../../core/theme/app_components.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../services/ordenes_service.dart';
+import 'qr_ticket_dialog.dart';
 
 /// Modal inferior para visualizar el detalle técnico completo de una orden de venta (HU-3.5).
-/// Ofrece acciones condicionales de edición de notas y anulación transaccional si está en estado 'Reservada'.
+/// Ofrece acciones condicionales de visualización de QR transaccional (HU-3.6),
+/// simulación de pago en caja para demostraciones (HU-3.6),
+/// edición de notas técnicas y anulación transaccional si está en estado 'Reservada'.
 class OrdenDetailSheet extends StatefulWidget {
   final OrdenHistorialModel orden;
   final VoidCallback? onOrderUpdated;
@@ -316,6 +320,153 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
     }
   }
 
+  /// Simula la confirmación de pago en caja para demostraciones y pruebas del flujo (HU-3.6)
+  Future<void> _simularPagoCaja() async {
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppPalette.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14.0),
+          side: const BorderSide(color: Colors.white10),
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6.0),
+              decoration: BoxDecoration(
+                color: AppPalette.success.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8.0),
+              ),
+              child: const Icon(
+                Icons.point_of_sale_rounded,
+                color: AppPalette.success,
+                size: 22.0,
+              ),
+            ),
+            const SizedBox(width: 10.0),
+            Text(
+              'Simular Pago en Caja',
+              style: AppTypography.title.copyWith(fontSize: 17.0),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '¿Deseas registrar la liquidación total de la orden por ${_orden.totalVentaFormateado}?',
+              style: AppTypography.body.copyWith(fontSize: 14.5),
+            ),
+            const SizedBox(height: 12.0),
+            Container(
+              padding: const EdgeInsets.all(10.0),
+              decoration: BoxDecoration(
+                color: AppPalette.background,
+                borderRadius: BorderRadius.circular(8.0),
+                border: Border.all(color: Colors.white10),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline, size: 16.0, color: AppPalette.secondary),
+                  const SizedBox(width: 8.0),
+                  Expanded(
+                    child: Text(
+                      'Esta acción confirmará el pago en el backend (ACID) y generará el código QR transaccional para retiro en bodega.',
+                      style: AppTypography.small.copyWith(fontSize: 11.5),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(
+              'Cancelar',
+              style: AppTypography.button.copyWith(color: AppPalette.textSecondary),
+            ),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppPalette.success,
+              foregroundColor: AppPalette.textPrimary,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
+            ),
+            icon: const Icon(Icons.check, size: 18.0),
+            label: const Text('CONFIRMAR PAGO'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar != true || !mounted) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final responsePago = await OrdenesService.pagarOrden(
+        _orden.idOrden,
+        metodoPago: 'Efectivo',
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _orden = _orden.copyWith(
+          estadoOrden: responsePago.estadoOrden,
+          montoPendiente: responsePago.montoPendiente,
+          qrTransaccionalSalida: responsePago.qrTransaccionalSalida,
+        );
+        _isLoading = false;
+      });
+
+      widget.onOrderUpdated?.call();
+
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.white, size: 20.0),
+              SizedBox(width: 8.0),
+              Expanded(
+                child: Text(
+                  '¡Pago confirmado exitosamente! Código QR transaccional emitido.',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: AppPalette.success,
+          duration: Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+
+      // Desplegar automáticamente el modal del Ticket Digital QR
+      if (mounted) {
+        QrTicketDialog.mostrar(context, _orden);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: AppPalette.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -578,6 +729,7 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                                         ),
                                       ],
                                       if (detalle.descripcionManual != null &&
+                                          detalle.descripcionManual!.isNotEmpty &&
                                           detalle.descripcionManual != detalle.titulo) ...[
                                         const SizedBox(height: 2.0),
                                         Text(
@@ -660,7 +812,7 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                     decoration: BoxDecoration(
                       color: AppPalette.background,
                       borderRadius: BorderRadius.circular(10.0),
-                      border: Border.all(color: Colors.white10),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -680,13 +832,119 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                     ),
                   ),
 
-                  // ── Sección 4: Acciones Condicionales (Solo si está Reservada) ─
+                  // ── Sección 4.A: Ticket QR Transaccional (Si tiene QR disponible) ─
+                  if (_orden.tieneQrDisponible) ...[
+                    const SizedBox(height: 20.0),
+                    Container(
+                      padding: const EdgeInsets.all(16.0),
+                      decoration: BoxDecoration(
+                        color: AppPalette.success.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12.0),
+                        border: Border.all(color: AppPalette.success.withValues(alpha: 0.5)),
+                      ),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8.0),
+                                decoration: BoxDecoration(
+                                  color: AppPalette.success.withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(8.0),
+                                ),
+                                child: const Icon(
+                                  Icons.qr_code_2_rounded,
+                                  color: AppPalette.success,
+                                  size: 28.0,
+                                ),
+                              ),
+                              const SizedBox(width: 12.0),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Ticket Digital Emitido',
+                                      style: AppTypography.title.copyWith(
+                                        color: AppPalette.success,
+                                        fontSize: 15.0,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    Text(
+                                      'Orden pagada. Lista para Handshake con Bodega.',
+                                      style: AppTypography.small.copyWith(
+                                        color: AppPalette.textSecondary,
+                                        fontSize: 12.0,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 14.0),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppPalette.success,
+                                foregroundColor: AppPalette.textPrimary,
+                                elevation: 0,
+                                minimumSize: const Size(double.infinity, 48.0),
+                                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(AppComponents.defaultBorderRadius),
+                                ),
+                              ),
+                              icon: const Icon(Icons.qr_code, size: 20.0),
+                              label: const Text(
+                                'MOSTRAR QR DE ENTREGA (BODEGA)',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13.5,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              onPressed: () => QrTicketDialog.mostrar(context, _orden),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  // ── Sección 4.B: Acciones Condicionales (Solo si está Reservada) ─
                   if (_orden.esReservada) ...[
                     const SizedBox(height: 20.0),
                     Text(
                       'Acciones de Gestión',
                       style: AppTypography.title.copyWith(fontSize: 15.0),
                     ),
+                    const SizedBox(height: 10.0),
+
+                    // Botón Demo: Simular Pago en Caja
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48.0,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppPalette.primary,
+                          foregroundColor: AppPalette.textPrimary,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10.0),
+                          ),
+                        ),
+                        icon: const Icon(Icons.point_of_sale_rounded, size: 20.0),
+                        label: const Text(
+                          '💳 Simular Pago en Caja (Demo)',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        onPressed: _isLoading ? null : _simularPagoCaja,
+                      ),
+                    ),
+
                     const SizedBox(height: 10.0),
 
                     // Botón Editar Instrucciones a Bodega

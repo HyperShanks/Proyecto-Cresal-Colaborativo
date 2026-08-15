@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../services/ordenes_service.dart';
+import 'qr_ticket_dialog.dart';
 
 /// Tarjeta de orden de venta en Flat Design estricto (HU-3.5).
 /// Muestra el folio, badge de estado con colores semánticos, cliente, fecha y total.
@@ -102,30 +103,37 @@ class OrdenCard extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(6.0),
-                          decoration: BoxDecoration(
-                            color: AppPalette.primary.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(8.0),
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6.0),
+                            decoration: BoxDecoration(
+                              color: AppPalette.primary.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(8.0),
+                            ),
+                            child: const Icon(
+                              Icons.receipt_long_outlined,
+                              size: 18.0,
+                              color: AppPalette.primary,
+                            ),
                           ),
-                          child: const Icon(
-                            Icons.receipt_long_outlined,
-                            size: 18.0,
-                            color: AppPalette.primary,
+                          const SizedBox(width: 8.0),
+                          Expanded(
+                            child: Text(
+                              orden.folioDisplay,
+                              style: AppTypography.title.copyWith(
+                                fontSize: 16.0,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 8.0),
-                        Text(
-                          orden.folioDisplay,
-                          style: AppTypography.title.copyWith(
-                            fontSize: 16.0,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
+                    const SizedBox(width: 8.0),
                     _buildStatusBadge(),
                   ],
                 ),
@@ -253,6 +261,32 @@ class OrdenCard extends StatelessWidget {
                     ),
                     Row(
                       children: [
+                        if (orden.tieneQrDisponible) ...[
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppPalette.success,
+                              side: BorderSide(
+                                color: AppPalette.success.withValues(alpha: 0.6),
+                                width: 1.0,
+                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 4.0),
+                              visualDensity: VisualDensity.compact,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8.0),
+                              ),
+                            ),
+                            icon: const Icon(Icons.qr_code, size: 15.0),
+                            label: const Text(
+                              'Ver QR',
+                              style: TextStyle(
+                                fontSize: 12.0,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            onPressed: () => QrTicketDialog.mostrar(context, orden),
+                          ),
+                          const SizedBox(width: 8.0),
+                        ],
                         Text(
                           'Ver detalle',
                           style: AppTypography.small.copyWith(

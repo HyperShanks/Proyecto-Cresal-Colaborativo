@@ -31,13 +31,14 @@ def seed_data():
         db.commit()
         print("- Categorías creados.")
 
-        # 4. Poblar Estados del Activo
-        estados_base = ["En Desarme", "Disponible", "Reservado", "Vendido", "En Importación"]
+        # 4. Poblar Estados del Activo (HU-3.6: incluye 'Entregado' para cierre de ciclo en barrera)
+        estados_base = ["En Desarme", "Disponible", "Reservado", "Vendido", "En Importación", "Entregado"]
         for est in estados_base:
             if not db.query(Estado_Activo).filter_by(nombre_estado=est).first():
                 db.add(Estado_Activo(nombre_estado=est))
+                print(f"  + Estado creado: {est}")
         db.commit()
-        print("- Estados de activo creados.")
+        print("- Estados de activo verificados y creados.")
 
         # 5. Crear Geografía y Sucursal Casa Matriz (Necesario para el Admin)
         region_valpo = db.query(Region).filter_by(nombre_region="Valparaíso").first()
