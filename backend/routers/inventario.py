@@ -159,6 +159,7 @@ def buscar_inventario(
         query = query.filter(
             or_(
                 func.upper(Activo_Inventariado.sku_qr_fisico).like(q_term),
+                func.upper(Categoria_Activo.nombre_categoria).like(q_term),
                 func.upper(Vehiculo_Origen.marca).like(q_term),
                 func.upper(Vehiculo_Origen.modelo).like(q_term),
                 func.upper(Vehiculo_Origen.numero_ingreso).like(q_term),
@@ -338,6 +339,7 @@ def obtener_catalogo(
         query = query.filter(
             or_(
                 func.upper(Activo_Inventariado.sku_qr_fisico).like(q_term),
+                func.upper(Categoria_Activo.nombre_categoria).like(q_term),
                 func.upper(Vehiculo_Origen.marca).like(q_term),
                 func.upper(Vehiculo_Origen.modelo).like(q_term),
             )

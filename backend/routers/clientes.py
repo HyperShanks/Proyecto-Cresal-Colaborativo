@@ -51,12 +51,29 @@ def buscar_cliente_por_rut(
     4. Si existe, retorna los datos de contacto y el nombre de su comuna.
     """
     rut_limpio = rut.strip()
-    cliente = db.query(Cliente).filter(Cliente.rut_cliente == rut_limpio).first()
+    rut_norm = rut_limpio.replace(".", "").replace("-", "").upper()
 
-    if not cliente:
-        # Probar sin puntos
-        rut_sin_puntos = rut_limpio.replace(".", "")
-        cliente = db.query(Cliente).filter(Cliente.rut_cliente == rut_sin_puntos).first()
+    if rut_norm in ["66666666", "6666666"]:
+        cliente = db.query(Cliente).filter(
+            Cliente.rut_cliente.in_(["6.666.666-6", "66666666-6", "6666666-6"])
+        ).first()
+        if not cliente:
+            cliente = Cliente(
+                rut_cliente="6.666.666-6",
+                nombres="Consumidor",
+                apellidos="Final",
+                consentimiento_legal=True,
+                estado="Activo",
+            )
+            db.add(cliente)
+            db.commit()
+            db.refresh(cliente)
+    else:
+        cliente = db.query(Cliente).filter(Cliente.rut_cliente == rut_limpio).first()
+        if not cliente:
+            # Probar sin puntos
+            rut_sin_puntos = rut_limpio.replace(".", "")
+            cliente = db.query(Cliente).filter(Cliente.rut_cliente == rut_sin_puntos).first()
 
     if not cliente:
         raise HTTPException(

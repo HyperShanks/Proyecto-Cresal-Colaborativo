@@ -420,16 +420,7 @@ def test_traslado_limache_a_vina_asignacion_origen(client, db_session, auth_head
             "comuna": "Viña del Mar",
             "consentimiento_legal": True,
         },
-        "requiere_despacho": True,
-        "despacho": {
-            "direccion_envio": "Sucursal Viña del Mar - Retiro Mostrador",
-            "comuna_destino": "Viña del Mar",
-            "receptor_rut": "16.666.666-6",
-            "receptor_nombres": "Camila Traslados",
-            "receptor_telefono": "+56911112222",
-            "tipo_entrega": "Traslado",
-            "id_sucursal_destino": 1,
-        },
+        "requiere_despacho": False,
         "tipo_entrega": "Traslado",
         "id_sucursal_destino": 1,
         "consentimiento_legal": True,
@@ -448,12 +439,15 @@ def test_traslado_limache_a_vina_asignacion_origen(client, db_session, auth_head
     assert res_orden.status_code == 201, res_orden.text
     id_orden = res_orden.json()["id_orden"]
 
-    # 3. Validar que se generó Tracking_Logistico automático
+    # 3. Validar que se generó Tracking_Logistico automático y NO Despacho
     tracking = db_session.query(Tracking_Logistico).filter_by(id_activo=activo_limache.id_activo).first()
     assert tracking is not None, "Debe generarse un registro de Tracking_Logistico para el traslado"
     assert tracking.id_sucursal_origen == 2, "La sucursal de origen debe ser Limache (2)"
     assert tracking.id_sucursal_destino == 1, "La sucursal de destino debe ser Viña del Mar (1)"
     assert tracking.estado_traslado == "Pendiente"
+
+    desp_db = db_session.query(Despacho).filter_by(id_orden=uuid.UUID(id_orden)).first()
+    assert desp_db is None, "No debe crearse registro en Despacho para traslados internos entre sucursales"
 
     # 4. Validar que la tarea NO aparece en la bodega de Viña (sucursal_id = 1)
     res_bodega_vina = client.get("/api/v1/bodega/tareas-pendientes?sucursal_id=1", headers=auth_headers_bodega_vina)
@@ -567,3 +561,82 @@ def test_traslado_validaciones_sucursales_invalidas(client, db_session, auth_hea
     res_2 = client.post("/api/v1/ordenes", json=payload_invalido_2, headers=auth_headers_vendedor)
     assert res_2.status_code == 400
     assert "La sucursal de origen y destino no pueden ser iguales" in res_2.json()["detail"]
+
+
+def test_alertas_impresion_qr_solo_piezas_paletizadas_y_disponibles(client, db_session, auth_headers_bodega_vina):
+    """
+    Verifica que la bandeja de impresión QR en bodega:
+    - Incluya activos con qr_impreso = False, id_estado = 1 (Disponible) y ubicación física asignada.
+    - Excluya activos con id_estado = 5 (En Desarme) o sin ubicación asignada (S/P o None).
+    """
+    # 1. Crear vehículo
+    veh = Vehiculo_Origen(
+        id_vehiculo=uuid.uuid4(),
+        numero_ingreso=f"ING-QR-{uuid.uuid4().hex[:4].upper()}",
+        patente=f"QR{uuid.uuid4().hex[:4].upper()}",
+        marca="Mazda",
+        modelo="3",
+        anio=2020,
+    )
+    db_session.add(veh)
+    db_session.flush()
+
+    # Activo A: Disponible (1) y Paletizado con qr_impreso = False -> DEBE APARECER
+    act_a = Activo_Inventariado(
+        id_activo=uuid.uuid4(),
+        sku_qr_fisico=f"SKU-QRA-{uuid.uuid4().hex[:4].upper()}",
+        id_categoria=1,
+        id_estado=1,
+        id_sucursal_actual=1,
+        id_vehiculo=veh.id_vehiculo,
+        ubicacion_pasillo="P-03",
+        ubicacion_pallet="PAL-12",
+        precio_referencia=600000,
+        qr_impreso=False,
+        estado="Activo",
+    )
+
+    # Activo B: En Desarme (5) con qr_impreso = False -> NO DEBE APARECER
+    act_b = Activo_Inventariado(
+        id_activo=uuid.uuid4(),
+        sku_qr_fisico=f"SKU-QRB-{uuid.uuid4().hex[:4].upper()}",
+        id_categoria=2,
+        id_estado=5,  # En Desarme / Sin Paletizar
+        id_sucursal_actual=1,
+        id_vehiculo=veh.id_vehiculo,
+        ubicacion_pasillo=None,
+        ubicacion_pallet=None,
+        precio_referencia=450000,
+        qr_impreso=False,
+        estado="Activo",
+    )
+
+    # Activo C: Disponible (1) pero sin pasillo/pallet ("S/P") -> NO DEBE APARECER
+    act_c = Activo_Inventariado(
+        id_activo=uuid.uuid4(),
+        sku_qr_fisico=f"SKU-QRC-{uuid.uuid4().hex[:4].upper()}",
+        id_categoria=1,
+        id_estado=1,
+        id_sucursal_actual=1,
+        id_vehiculo=veh.id_vehiculo,
+        ubicacion_pasillo="S/P",
+        ubicacion_pallet="S/P",
+        precio_referencia=500000,
+        qr_impreso=False,
+        estado="Activo",
+    )
+
+    db_session.add_all([act_a, act_b, act_c])
+    db_session.commit()
+
+    # 2. Consultar tareas pendientes de bodega en Viña
+    res = client.get("/api/v1/bodega/tareas-pendientes?sucursal_id=1", headers=auth_headers_bodega_vina)
+    assert res.status_code == 200
+    tareas = res.json()
+
+    ids_impresion = [t["id_activo"] for t in tareas if t["tipo_alerta"] == "IMPRESION"]
+
+    assert str(act_a.id_activo) in ids_impresion, "El activo A (Disponible y Paletizado) DEBE aparecer en impresión"
+    assert str(act_b.id_activo) not in ids_impresion, "El activo B (En Desarme / estado 5) NO debe aparecer en impresión"
+    assert str(act_c.id_activo) not in ids_impresion, "El activo C (Sin ubicación física) NO debe aparecer en impresión"
+

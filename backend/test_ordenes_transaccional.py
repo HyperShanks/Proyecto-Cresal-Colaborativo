@@ -392,3 +392,65 @@ def test_buscar_cliente_por_rut_no_existente_retorna_404(client, db_session, aut
     data = response.json()
     assert "no encontrado" in data["detail"]
 
+
+# ── TEST 9: Múltiples Órdenes Consecutivas con Consumidor Final (6.666.666-6) ──
+def test_ordenes_multiples_consumidor_final_sin_colision(client, db_session, auth_headers):
+    """Verifica que múltiples órdenes con Consumidor Final (6.666.666-6) reutilicen el mismo cliente sin error de clave única."""
+    payload_1 = {
+        "cliente": {
+            "rut_cliente": "6.666.666-6",
+            "nombres": "Consumidor",
+            "apellidos": "Final",
+            "consentimiento_legal": True,
+        },
+        "requiere_despacho": False,
+        "items": [
+            {
+                "descripcion_manual": "Ampolleta H4 Repuesto Consumidor 1",
+                "cantidad": 1,
+                "precio_final": 5000,
+            }
+        ],
+    }
+
+    res_1 = client.post("/api/v1/ordenes", json=payload_1, headers=auth_headers)
+    assert res_1.status_code == 201, res_1.text
+    id_orden_1 = res_1.json()["id_orden"]
+
+    payload_2 = {
+        "cliente": {
+            "rut_cliente": "6.666.666-6",
+            "nombres": "Consumidor",
+            "apellidos": "Final",
+            "consentimiento_legal": True,
+        },
+        "requiere_despacho": False,
+        "items": [
+            {
+                "descripcion_manual": "Líquido de Frenos DOT4 Consumidor 2",
+                "cantidad": 2,
+                "precio_final": 8000,
+            }
+        ],
+    }
+
+    res_2 = client.post("/api/v1/ordenes", json=payload_2, headers=auth_headers)
+    assert res_2.status_code == 201, res_2.text
+    id_orden_2 = res_2.json()["id_orden"]
+
+    # Verificar que ambas órdenes se crearon exitosamente y apuntan al mismo cliente
+    db = TestingSessionLocal()
+    try:
+        orden_1 = db.query(Orden_Venta).filter_by(id_orden=uuid.UUID(id_orden_1)).first()
+        orden_2 = db.query(Orden_Venta).filter_by(id_orden=uuid.UUID(id_orden_2)).first()
+        assert orden_1 is not None
+        assert orden_2 is not None
+        assert orden_1.id_cliente == orden_2.id_cliente
+
+        clientes_genericos = db.query(Cliente).filter(
+            Cliente.rut_cliente.in_(["6.666.666-6", "66666666-6"])
+        ).all()
+        assert len(clientes_genericos) == 1, "Debe existir exactamente 1 registro de Consumidor Final en BD"
+    finally:
+        db.close()
+

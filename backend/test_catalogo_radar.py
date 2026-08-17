@@ -329,3 +329,28 @@ def test_catalogo_filtro_cilindrada_y_transmision(client, db_session):
     assert data_trans["total_count"] >= 1
     for it in data_trans["items"]:
         assert "Mec" in it["transmision_tipo"] or "Man" in it["transmision_tipo"]
+
+
+def test_buscar_inventario_y_catalogo_por_tipo_pieza(client, db_session):
+    """
+    Verifica que escribir 'motor' o 'caja' en la búsqueda por texto libre (q)
+    devuelva los repuestos correspondientes según su categoría.
+    """
+    headers = {"Authorization": f"Bearer {db_session['token_suc1']}"}
+
+    # 1. Búsqueda en catálogo por 'motor'
+    res_cat_motor = client.get("/api/v1/inventario/catalogo?q=motor", headers=headers)
+    assert res_cat_motor.status_code == 200
+    data_cat = res_cat_motor.json()
+    assert data_cat["total_count"] >= 1
+    for item in data_cat["items"]:
+        assert "MOTOR" in item["nombre_categoria"].upper() or "MOTOR" in (item.get("modelo") or "").upper()
+
+    # 2. Búsqueda en inventario general por 'caja'
+    res_inv_caja = client.get("/api/v1/inventario/buscar?q=caja", headers=headers)
+    assert res_inv_caja.status_code == 200
+    items_inv = res_inv_caja.json()
+    assert len(items_inv) >= 1
+    for item in items_inv:
+        assert "CAJA" in item["categoria"].upper() or "CAJA" in item["modelo"].upper()
+

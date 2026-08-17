@@ -66,7 +66,14 @@ def obtener_tareas_pendientes(
         .outerjoin(Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo)
         .filter(
             Activo_Inventariado.qr_impreso == False,
+            Activo_Inventariado.id_estado == 1,  # Solo piezas Disponibles / ya paletizadas
             Activo_Inventariado.estado == "Activo",
+            Activo_Inventariado.ubicacion_pasillo.isnot(None),
+            Activo_Inventariado.ubicacion_pasillo != "",
+            Activo_Inventariado.ubicacion_pasillo != "S/P",
+            Activo_Inventariado.ubicacion_pallet.isnot(None),
+            Activo_Inventariado.ubicacion_pallet != "",
+            Activo_Inventariado.ubicacion_pallet != "S/P",
             Activo_Inventariado.id_sucursal_actual == sucursal_id,
         )
         .all()
@@ -126,7 +133,7 @@ def obtener_tareas_pendientes(
         .join(Activo_Inventariado, Detalle_Orden.id_activo == Activo_Inventariado.id_activo)
         .join(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
         .filter(
-            Detalle_Orden.preparacion_lista == False,
+            Detalle_Orden.estado_preparacion != "Listo",
             Activo_Inventariado.id_estado.in_([2, 3]),  # 2: Reservado, 3: Vendido
             Activo_Inventariado.id_sucursal_actual == sucursal_id,
             Orden_Venta.estado_orden.in_(["Reservada", "Pagada"]),
@@ -135,18 +142,20 @@ def obtener_tareas_pendientes(
     )
 
     for detalle, orden, activo, vehiculo in detalles_orden:
-        # Detectar si requiere traslado entre sucursales
-        es_traslado = (orden.id_sucursal != activo.id_sucursal_actual)
+        # Detectar si requiere traslado entre sucursales mediante Tracking_Logistico o discrepancia de sucursal
         tracking = db.query(Tracking_Logistico).filter(
             Tracking_Logistico.id_activo == activo.id_activo,
-            Tracking_Logistico.id_sucursal_origen == sucursal_id,
+            Tracking_Logistico.id_orden == orden.id_orden,
         ).first()
 
-        despacho = db.query(Despacho).filter(Despacho.id_orden == orden.id_orden).first()
-        if despacho and despacho.tipo_despacho == "Traslado":
-            es_traslado = True
+        if not tracking:
+            tracking = db.query(Tracking_Logistico).filter(
+                Tracking_Logistico.id_activo == activo.id_activo,
+                Tracking_Logistico.id_sucursal_origen == sucursal_id,
+            ).first()
 
-        sucursal_dest_id = despacho.id_sucursal_destino if despacho and despacho.id_sucursal_destino else orden.id_sucursal
+        es_traslado = (tracking is not None) or (orden.id_sucursal != activo.id_sucursal_actual)
+        sucursal_dest_id = tracking.id_sucursal_destino if tracking else orden.id_sucursal
 
         if es_traslado:
             tipo = "TRASLADO"
@@ -212,7 +221,6 @@ def completar_preentrega(
             detail=f"Línea de detalle con ID '{id_detalle}' no encontrada.",
         )
 
-    detalle.preparacion_lista = True
     detalle.estado_preparacion = "Listo"
     detalle.fecha_preparacion = datetime.now()
 
@@ -232,7 +240,7 @@ def completar_preentrega(
         id_detalle=detalle.id_detalle,
         id_orden=detalle.id_orden,
         id_activo=detalle.id_activo,
-        preparacion_lista=detalle.preparacion_lista,
+        preparacion_lista=True,
         estado_preparacion=detalle.estado_preparacion,
         mensaje="Preparación de pre-entrega marcada como 'Listo' exitosamente.",
         fecha_preparacion=detalle.fecha_preparacion.isoformat() if detalle.fecha_preparacion else None,
@@ -498,3 +506,18 @@ def escanear_salida(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error transaccional al procesar la salida en barrera: {str(e)}"
         )
+
+
+@router.get("/pendientes-paletizado", status_code=200)
+def obtener_pendientes_paletizado_bodega(
+    sucursal_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    usuario_logeado: Usuario = Depends(get_current_user),
+):
+    """
+    Endpoint de consulta de piezas pendientes de paletizado en bodega.
+    Retorna todos los activos de la sucursal activa donde ubicacion_pasillo IS NULL, 'S/P' o id_estado == 5.
+    """
+    from routers.vehiculos import obtener_pendientes_paletizado
+    return obtener_pendientes_paletizado(sucursal_id=sucursal_id, db=db, usuario_logeado=usuario_logeado)
+

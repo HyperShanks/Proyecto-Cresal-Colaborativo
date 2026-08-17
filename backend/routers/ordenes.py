@@ -138,43 +138,64 @@ def crear_orden(
     try:
         # ── Paso A.1: Gestión de Cliente (Upsert / Find or Create) ───────────
         rut_limpio = orden_in.cliente.rut_cliente.strip()
-        cliente = db.query(Cliente).filter(Cliente.rut_cliente == rut_limpio).first()
+        rut_normalizado = rut_limpio.replace(".", "").replace("-", "").upper()
 
-        id_comuna_cliente = None
-        if orden_in.cliente.comuna:
-            comuna_obj = (
-                db.query(Comuna)
-                .filter(Comuna.nombre_comuna.ilike(orden_in.cliente.comuna.strip()))
-                .first()
-            )
-            if comuna_obj:
-                id_comuna_cliente = comuna_obj.id_comuna
+        es_consumidor_final = rut_normalizado in ["66666666", "6666666"] or "CONSUMIDOR" in orden_in.cliente.nombres.upper()
 
-        if not cliente:
-            cliente = Cliente(
-                rut_cliente=rut_limpio,
-                nombres=orden_in.cliente.nombres.strip(),
-                apellidos=orden_in.cliente.apellidos.strip(),
-                telefono=orden_in.cliente.telefono.strip() if orden_in.cliente.telefono else None,
-                correo=orden_in.cliente.correo.strip() if orden_in.cliente.correo else None,
-                id_comuna=id_comuna_cliente,
-                consentimiento_legal=orden_in.consentimiento_legal,
-                estado="Activo"
-            )
-            db.add(cliente)
-            db.flush()
+        if es_consumidor_final:
+            cliente = db.query(Cliente).filter(
+                Cliente.rut_cliente.in_(["6.666.666-6", "66666666-6", "6666666-6"])
+            ).first()
+            if not cliente:
+                cliente = Cliente(
+                    rut_cliente="6.666.666-6",
+                    nombres="Consumidor",
+                    apellidos="Final",
+                    consentimiento_legal=True,
+                    estado="Activo",
+                )
+                db.add(cliente)
+                db.flush()
         else:
-            # Actualizar datos de contacto más recientes
-            cliente.nombres = orden_in.cliente.nombres.strip()
-            cliente.apellidos = orden_in.cliente.apellidos.strip()
-            if orden_in.cliente.telefono:
-                cliente.telefono = orden_in.cliente.telefono.strip()
-            if orden_in.cliente.correo:
-                cliente.correo = orden_in.cliente.correo.strip()
-            if id_comuna_cliente:
-                cliente.id_comuna = id_comuna_cliente
-            cliente.consentimiento_legal = orden_in.consentimiento_legal
-            db.flush()
+            cliente = db.query(Cliente).filter(
+                (Cliente.rut_cliente == rut_limpio) | (Cliente.rut_cliente == rut_limpio.replace(".", ""))
+            ).first()
+
+            id_comuna_cliente = None
+            if orden_in.cliente.comuna:
+                comuna_obj = (
+                    db.query(Comuna)
+                    .filter(Comuna.nombre_comuna.ilike(orden_in.cliente.comuna.strip()))
+                    .first()
+                )
+                if comuna_obj:
+                    id_comuna_cliente = comuna_obj.id_comuna
+
+            if not cliente:
+                cliente = Cliente(
+                    rut_cliente=rut_limpio,
+                    nombres=orden_in.cliente.nombres.strip(),
+                    apellidos=orden_in.cliente.apellidos.strip(),
+                    telefono=orden_in.cliente.telefono.strip() if orden_in.cliente.telefono else None,
+                    correo=orden_in.cliente.correo.strip() if orden_in.cliente.correo else None,
+                    id_comuna=id_comuna_cliente,
+                    consentimiento_legal=orden_in.consentimiento_legal,
+                    estado="Activo",
+                )
+                db.add(cliente)
+                db.flush()
+            else:
+                # Actualizar datos de contacto más recientes
+                cliente.nombres = orden_in.cliente.nombres.strip()
+                cliente.apellidos = orden_in.cliente.apellidos.strip()
+                if orden_in.cliente.telefono:
+                    cliente.telefono = orden_in.cliente.telefono.strip()
+                if orden_in.cliente.correo:
+                    cliente.correo = orden_in.cliente.correo.strip()
+                if id_comuna_cliente:
+                    cliente.id_comuna = id_comuna_cliente
+                cliente.consentimiento_legal = orden_in.consentimiento_legal
+                db.flush()
 
         # ── Paso A.2: Cabecera Orden_Venta ──────────────────────────────────
         qr_salida = f"ORD-{uuid.uuid4().hex[:8].upper()}"
@@ -191,20 +212,16 @@ def crear_orden(
         db.add(nueva_orden)
         db.flush()
 
-        # ── Paso A.3: Despacho (si aplica o si es traslado) ─────────────────
-        if (orden_in.requiere_despacho and orden_in.despacho) or tipo_entrega_final == "Traslado":
+        # ── Paso A.3: Despacho (Exclusivo para envíos a clientes a domicilio/taller) ──
+        if orden_in.requiere_despacho and orden_in.despacho:
             desp_obj = orden_in.despacho
-            dir_envio = (
-                desp_obj.direccion_envio.strip()
-                if desp_obj and desp_obj.direccion_envio
-                else (f"Retiro en Sucursal {'Viña del Mar' if id_sucursal_dest_traslado == 1 else 'Limache'}")
-            )
-            rec_nombres = desp_obj.receptor_nombres.strip() if desp_obj and desp_obj.receptor_nombres else f"{cliente.nombres} {cliente.apellidos}".strip()
-            rec_rut = desp_obj.receptor_rut.strip() if desp_obj and desp_obj.receptor_rut else cliente.rut_cliente
-            rec_tel = desp_obj.receptor_telefono.strip() if desp_obj and desp_obj.receptor_telefono else (cliente.telefono or "S/T")
+            dir_envio = desp_obj.direccion_envio.strip()
+            rec_nombres = desp_obj.receptor_nombres.strip() if desp_obj.receptor_nombres else f"{cliente.nombres} {cliente.apellidos}".strip()
+            rec_rut = desp_obj.receptor_rut.strip() if desp_obj.receptor_rut else cliente.rut_cliente
+            rec_tel = desp_obj.receptor_telefono.strip() if desp_obj.receptor_telefono else (cliente.telefono or "S/T")
 
-            id_comuna_dest = desp_obj.id_comuna_destino if desp_obj else None
-            if not id_comuna_dest and desp_obj and desp_obj.comuna_destino:
+            id_comuna_dest = desp_obj.id_comuna_destino
+            if not id_comuna_dest and desp_obj.comuna_destino:
                 comuna_dest_obj = (
                     db.query(Comuna)
                     .filter(Comuna.nombre_comuna.ilike(desp_obj.comuna_destino.strip()))
@@ -224,11 +241,8 @@ def crear_orden(
                 receptor_nombres=rec_nombres,
                 receptor_rut=rec_rut,
                 receptor_telefono=rec_tel,
-                empresa_transporte=desp_obj.empresa_transporte if desp_obj else None,
-                costo_envio=(desp_obj.costo_envio or 0) if desp_obj else 0,
-                tipo_despacho=tipo_entrega_final,
-                id_sucursal_origen=id_sucursal_orden,
-                id_sucursal_destino=id_sucursal_dest_traslado if tipo_entrega_final == "Traslado" else None,
+                empresa_transporte=desp_obj.empresa_transporte,
+                costo_envio=desp_obj.costo_envio or 0,
                 estado_despacho="Por Enviar",
                 estado="Activo"
             )
@@ -288,7 +302,6 @@ def crear_orden(
                 cantidad=item.cantidad,
                 precio_unitario=item.precio_unitario or item.precio_final,
                 precio_final=item.precio_final,
-                preparacion_lista=False,
                 estado_preparacion="Pendiente",
             )
             db.add(detalle)
@@ -405,8 +418,6 @@ def obtener_mis_ventas(
                 costo_envio=despacho_db.costo_envio or 0,
                 estado_despacho=despacho_db.estado_despacho,
                 comuna_destino=comuna_dest_nombre,
-                tipo_despacho=despacho_db.tipo_despacho,
-                id_sucursal_destino=despacho_db.id_sucursal_destino,
             )
 
         # Detalle de líneas
@@ -815,8 +826,8 @@ def obtener_orden(
             "receptor_rut": despacho.receptor_rut,
             "receptor_telefono": despacho.receptor_telefono,
             "estado_despacho": despacho.estado_despacho,
-            "tipo_despacho": despacho.tipo_despacho,
-            "id_sucursal_destino": despacho.id_sucursal_destino,
+            "empresa_transporte": despacho.empresa_transporte,
+            "costo_envio": despacho.costo_envio,
         } if despacho else None,
         "detalles": [
             {

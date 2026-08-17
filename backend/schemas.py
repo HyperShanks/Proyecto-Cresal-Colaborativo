@@ -39,6 +39,7 @@ class PatenteInput(BaseModel):
 
 class VehiculoCreate(BaseModel):
     # Datos del Vehículo (Autocompletados por scraper o copiados del padrón)
+    correlativo_ingreso: Optional[str] = None
     patente: str = Field(..., description="Patente validada del vehículo")
     marca: str
     modelo: str
@@ -381,8 +382,6 @@ class DespachoOrdenResumen(BaseModel):
     costo_envio: Optional[int] = 0
     estado_despacho: str
     comuna_destino: Optional[str] = None
-    tipo_despacho: Optional[str] = None
-    id_sucursal_destino: Optional[int] = None
 
 
 class DetalleOrdenItemResponse(BaseModel):

@@ -230,9 +230,16 @@ class Detalle_Orden(Base):
     cantidad = Column(Integer, nullable=False, default=1)
     precio_unitario = Column(Integer, nullable=True)
     precio_final = Column(Integer, nullable=False)
-    preparacion_lista = Column(Boolean, nullable=False, server_default=text("false"), default=False)
     estado_preparacion = Column(String(30), nullable=False, server_default="Pendiente", default="Pendiente")
     fecha_preparacion = Column(DateTime, nullable=True)
+
+    @property
+    def preparacion_lista(self) -> bool:
+        return self.estado_preparacion == "Listo"
+
+    @preparacion_lista.setter
+    def preparacion_lista(self, val: bool) -> None:
+        self.estado_preparacion = "Listo" if val else "Pendiente"
 
 class Reservas_Backorder(Base):
     __tablename__ = "Reservas_Backorder"
@@ -305,9 +312,6 @@ class Despacho(Base):
     receptor_telefono = Column(String(20), nullable=False)
     empresa_transporte = Column(String(100), nullable=True)
     costo_envio = Column(Integer, nullable=True)
-    tipo_despacho = Column(String(50), nullable=False, server_default="Despacho")
-    id_sucursal_origen = Column(Integer, ForeignKey("Sucursal.id_sucursal"), nullable=True)
-    id_sucursal_destino = Column(Integer, ForeignKey("Sucursal.id_sucursal"), nullable=True)
     estado_despacho = Column(String(30), nullable=False, server_default="Por Enviar")
     estado = Column(String(20), nullable=False, server_default="Activo")
     fecha_creacion = Column(DateTime, nullable=False, server_default=text("now()"))
