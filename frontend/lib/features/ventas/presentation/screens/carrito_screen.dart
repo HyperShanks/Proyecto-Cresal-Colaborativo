@@ -50,8 +50,6 @@ class _CarritoScreenState extends State<CarritoScreen> {
   String _tipoEntrega = 'Retiro'; // 'Retiro', 'Despacho', 'Traslado'
   int _idSucursalDestino = 1; // 1: Viña del Mar, 2: Limache
   bool get _requiereDespacho => _tipoEntrega != 'Retiro';
-  bool _consentimientoLey = false;
-  bool _mostrarErrorConsentimiento = false;
   bool _isSubmitting = false;
   bool _isSearchingClient = false;
 
@@ -158,8 +156,6 @@ class _CarritoScreenState extends State<CarritoScreen> {
       _esClienteAnonimo = false;
       _tipoEntrega = 'Retiro';
       _idSucursalDestino = 1;
-      _consentimientoLey = false;
-      _mostrarErrorConsentimiento = false;
     });
   }
 
@@ -225,28 +221,15 @@ class _CarritoScreenState extends State<CarritoScreen> {
     }
 
     // 2. Validar Formulario
-    if (_esClienteAnonimo) {
-      _rutController.text = '66666666-6';
-      _nombresController.text = 'Cliente Mostrador';
-      _apellidosController.text = 'Sin RUT';
-      _consentimientoLey = true;
-      _mostrarErrorConsentimiento = false;
+    if (_esClienteAnonimo || _rutController.text.trim() == '6.666.666-6' || _rutController.text.trim() == '66666666-6') {
+      _rutController.text = '6.666.666-6';
+      _nombresController.text = 'Consumidor';
+      _apellidosController.text = 'Final';
     }
 
     final formValido = _esClienteAnonimo ? true : (_formKey.currentState?.validate() ?? false);
 
-    // 3. Validar Consentimiento Ley 21.719
-    if (!_consentimientoLey && !_esClienteAnonimo) {
-      setState(() {
-        _mostrarErrorConsentimiento = true;
-      });
-    } else {
-      setState(() {
-        _mostrarErrorConsentimiento = false;
-      });
-    }
-
-    if (!formValido || (!_consentimientoLey && !_esClienteAnonimo)) {
+    if (!formValido) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: AppPalette.surface,
@@ -330,7 +313,7 @@ class _CarritoScreenState extends State<CarritoScreen> {
               ? _telefonoController.text.trim()
               : null,
           'comuna': _comunaCliente,
-          'consentimiento_legal': _consentimientoLey,
+          'consentimiento_legal': true,
         },
         'requiere_despacho': _requiereDespacho,
         'tipo_entrega': _tipoEntrega,
@@ -338,7 +321,7 @@ class _CarritoScreenState extends State<CarritoScreen> {
           'id_sucursal_destino': _idSucursalDestino,
         if (despachoPayload != null)
           'despacho': despachoPayload,
-        'consentimiento_legal': _consentimientoLey,
+        'consentimiento_legal': true,
         'items': itemsPayload,
       };
 
@@ -744,7 +727,7 @@ class _CarritoScreenState extends State<CarritoScreen> {
               icon: Icons.person_outline,
               title: 'DATOS POST-VENTA CLIENTE',
               children: [
-                // Switch Cliente Anónimo / Sin RUT
+                // Switch / Acción Rápida: Consumidor Final (Sin RUT)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
                   decoration: BoxDecoration(
@@ -764,7 +747,7 @@ class _CarritoScreenState extends State<CarritoScreen> {
                           ),
                           const SizedBox(width: 10),
                           Text(
-                            'Cliente Anónimo / Sin RUT',
+                            'Consumidor Final (Sin RUT)',
                             style: AppTypography.body.copyWith(
                               fontSize: 13,
                               fontWeight: FontWeight.bold,
@@ -781,18 +764,15 @@ class _CarritoScreenState extends State<CarritoScreen> {
                           setState(() {
                             _esClienteAnonimo = val;
                             if (val) {
-                              _rutController.text = '66666666-6';
-                              _nombresController.text = 'Cliente Mostrador';
-                              _apellidosController.text = 'Sin RUT';
+                              _rutController.text = '6.666.666-6';
+                              _nombresController.text = 'Consumidor';
+                              _apellidosController.text = 'Final';
                               _telefonoController.clear();
-                              _consentimientoLey = true;
-                              _mostrarErrorConsentimiento = false;
                             } else {
                               _rutController.clear();
                               _nombresController.clear();
                               _apellidosController.clear();
                               _telefonoController.clear();
-                              _consentimientoLey = false;
                             }
                           });
                         },
@@ -1037,6 +1017,7 @@ class _CarritoScreenState extends State<CarritoScreen> {
                         _buildDropdown(
                           label: 'Sucursal de Destino',
                           value: _idSucursalDestino == 1 ? 'Viña del Mar' : 'Limache',
+                          hint: 'Seleccionar sucursal de destino',
                           items: const ['Viña del Mar', 'Limache'],
                           onChanged: (val) {
                             if (val != null) {
@@ -1064,7 +1045,7 @@ class _CarritoScreenState extends State<CarritoScreen> {
                         child: _buildTextField(
                           controller: _rutReceptorController,
                           label: 'RUT Quien Retira en Destino',
-                          hint: 'Opcional (default: cliente)',
+                          hint: '11.222.333-4',
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -1072,7 +1053,7 @@ class _CarritoScreenState extends State<CarritoScreen> {
                         child: _buildTextField(
                           controller: _nombresReceptorController,
                           label: 'Nombre Quien Retira',
-                          hint: 'Opcional (default: cliente)',
+                          hint: 'Ej: Juan Pérez',
                         ),
                       ),
                     ],
@@ -1081,81 +1062,6 @@ class _CarritoScreenState extends State<CarritoScreen> {
               ],
             ),
             const SizedBox(height: 16),
-
-            // ── 6. Tarjeta 3: CONSENTIMIENTO LEGAL ──────────────────────────
-            Container(
-              padding: const EdgeInsets.all(14.0),
-              decoration: BoxDecoration(
-                color: AppPalette.surface,
-                borderRadius: BorderRadius.circular(12.0),
-                border: Border.all(
-                  color: _mostrarErrorConsentimiento
-                      ? AppPalette.error
-                      : Colors.white.withValues(alpha: 0.06),
-                  width: _mostrarErrorConsentimiento ? 1.5 : 1.0,
-                ),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Checkbox(
-                    value: _consentimientoLey,
-                    activeColor: AppPalette.primary,
-                    side: BorderSide(
-                      color: _mostrarErrorConsentimiento
-                          ? AppPalette.error
-                          : AppPalette.neutral,
-                    ),
-                    onChanged: (val) {
-                      setState(() {
-                        _consentimientoLey = val ?? false;
-                        if (_consentimientoLey) {
-                          _mostrarErrorConsentimiento = false;
-                        }
-                      });
-                    },
-                  ),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 10.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Consentimiento Ley N° 21.719 *',
-                            style: AppTypography.cardTitle.copyWith(
-                              color: _mostrarErrorConsentimiento
-                                  ? AppPalette.error
-                                  : AppPalette.textPrimary,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Autorizo el tratamiento de mis datos de contacto para fines de garantía técnica, post-venta y trazabilidad conforme a la política de privacidad de Cresal Repuestos.',
-                            style: AppTypography.small.copyWith(
-                              color: AppPalette.textSecondary,
-                              fontSize: 11,
-                              height: 1.3,
-                            ),
-                          ),
-                          if (_mostrarErrorConsentimiento) ...[
-                            const SizedBox(height: 6),
-                            Text(
-                              'Debes aceptar el consentimiento para continuar',
-                              style: AppTypography.small.copyWith(
-                                color: AppPalette.error,
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ],
         ),
       ),
@@ -1223,7 +1129,8 @@ class _CarritoScreenState extends State<CarritoScreen> {
           },
           borderRadius: BorderRadius.circular(10),
           child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+            height: 72,
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
@@ -1232,7 +1139,7 @@ class _CarritoScreenState extends State<CarritoScreen> {
               ),
             ),
             child: Column(
-              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
                   icon,
@@ -1240,16 +1147,19 @@ class _CarritoScreenState extends State<CarritoScreen> {
                   color: isSelected ? AppPalette.primary : AppPalette.textSecondary,
                 ),
                 const SizedBox(height: 6),
-                Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  style: AppTypography.small.copyWith(
-                    color: isSelected ? AppPalette.primary : AppPalette.textSecondary,
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                    fontSize: 10,
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    style: AppTypography.small.copyWith(
+                      color: isSelected ? AppPalette.primary : AppPalette.textSecondary,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      fontSize: 11,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
@@ -1335,6 +1245,7 @@ class _CarritoScreenState extends State<CarritoScreen> {
     required String value,
     required List<String> items,
     required ValueChanged<String?> onChanged,
+    String? hint,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1349,7 +1260,16 @@ class _CarritoScreenState extends State<CarritoScreen> {
         ),
         const SizedBox(height: 4),
         DropdownButtonFormField<String>(
-          initialValue: items.contains(value) ? value : items.first,
+          initialValue: items.contains(value) ? value : (hint != null ? null : items.first),
+          hint: hint != null
+              ? Text(
+                  hint,
+                  style: AppTypography.small.copyWith(
+                    color: AppPalette.neutral,
+                    fontSize: 12,
+                  ),
+                )
+              : null,
           dropdownColor: AppPalette.surface,
           style: AppTypography.body.copyWith(fontSize: 13),
           decoration: InputDecoration(

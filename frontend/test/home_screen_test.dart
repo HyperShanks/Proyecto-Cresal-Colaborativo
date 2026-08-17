@@ -125,7 +125,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Recepción de Vehículo'), findsOneWidget);
-      expect(find.text('Ingreso con validación OCR'), findsOneWidget);
+      expect(find.text('Requiere OCR: Fotografiar el N° de ingreso físico del vehículo'), findsOneWidget);
       expect(find.byIcon(Icons.local_shipping_outlined), findsOneWidget);
 
       await tester.tap(find.text('Recepción de Vehículo'));
@@ -139,7 +139,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Paletizado de Piezas'), findsOneWidget);
-      expect(find.text('Asignación física de ubicación'), findsOneWidget);
+      expect(find.text('Validación OCR o selección manual del N° de ingreso'), findsOneWidget);
       expect(find.byIcon(Icons.inventory_2_outlined), findsWidgets);
 
       await tester.tap(find.text('Paletizado de Piezas'));

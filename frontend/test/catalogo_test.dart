@@ -307,10 +307,10 @@ void main() {
 
       // Verificar Precio y Botón
       expect(find.text('\$520.000'), findsOneWidget);
-      expect(find.text('Añadir al Carrito'), findsOneWidget);
+      expect(find.text('Agregar'), findsOneWidget);
     });
 
-    testWidgets('Botón de cerrar X tiene tamaño interactivo >= 48x48 y botón Añadir al Carrito ejecuta callback', (tester) async {
+    testWidgets('Botón de cerrar X tiene tamaño interactivo >= 48x48 y botón Agregar ejecuta callback', (tester) async {
       bool cartPressed = false;
 
       await tester.pumpWidget(
@@ -333,13 +333,13 @@ void main() {
       final closeSize = tester.getSize(closeButtonFinder);
       expect(closeSize.width, greaterThanOrEqualTo(20));
 
-      // Touch Target de botón Añadir al Carrito (>= 48px de altura)
-      final cartBtnFinder = find.widgetWithText(ElevatedButton, 'Añadir al Carrito');
+      // Touch Target de botón Agregar (altura compacta >= 40px)
+      final cartBtnFinder = find.widgetWithText(ElevatedButton, 'Agregar');
       expect(cartBtnFinder, findsOneWidget);
       final cartBtnSize = tester.getSize(cartBtnFinder);
-      expect(cartBtnSize.height, greaterThanOrEqualTo(48.0));
+      expect(cartBtnSize.height, greaterThanOrEqualTo(40.0));
 
-      // Tap en Añadir al Carrito
+      // Tap en Agregar
       await tester.tap(cartBtnFinder);
       await tester.pump();
 
@@ -366,7 +366,7 @@ void main() {
       expect(find.text('Detalle del Repuesto'), findsOneWidget);
       expect(find.text('ESPECIFICACIONES TÉCNICAS'), findsOneWidget);
       expect(find.text('UBICACIÓN FÍSICA EN BODEGA'), findsOneWidget);
-      expect(find.text('Agregar al Carrito'), findsOneWidget);
+      expect(find.text('Agregar'), findsOneWidget);
     });
 
     testWidgets('Buscador en tiempo real en CatalogoScreen permite escribir y limpiar', (tester) async {

@@ -598,25 +598,28 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
           const SizedBox(width: 16),
 
           // Botón Agregar
-          ElevatedButton.icon(
-            key: const Key('btn_agregar_carrito_detalle'),
-            onPressed: _onAddToCart,
-            icon: const Icon(Icons.add_shopping_cart, size: 20),
-            label: const Text(
-              'Agregar al Carrito',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 0.5,
+          SizedBox(
+            height: 42,
+            child: ElevatedButton.icon(
+              key: const Key('btn_agregar_carrito_detalle'),
+              onPressed: _onAddToCart,
+              icon: const Icon(Icons.add_shopping_cart, size: 18),
+              label: const Text(
+                'Agregar',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5,
+                ),
               ),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppPalette.primary,
-              foregroundColor: AppPalette.textPrimary,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10.0),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppPalette.primary,
+                foregroundColor: AppPalette.textPrimary,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 18.0),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                ),
               ),
             ),
           ),

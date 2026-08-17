@@ -356,6 +356,20 @@ void main() {
       expect(find.text('GUARDAR / REGISTRAR INGRESO'), findsOneWidget);
     });
 
+    testWidgets('Muestra banner instructivo de validacion obligatoria OCR encima del boton de guardar', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: RecepcionVehiculoScreen(),
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        find.textContaining('Validación Obligatoria: Al continuar se solicitará fotografiar el N° de ingreso físico'),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('Bloquea guardado con SnackBar si faltan datos obligatorios', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(

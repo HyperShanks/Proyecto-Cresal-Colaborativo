@@ -126,7 +126,7 @@ void main() {
       expect(find.text('B2'), findsOneWidget);
       expect(find.text('Pallet'), findsOneWidget);
       expect(find.text('P-10'), findsOneWidget);
-      expect(find.text('Agregar al Carrito'), findsOneWidget);
+      expect(find.text('Agregar'), findsOneWidget);
     });
   });
 

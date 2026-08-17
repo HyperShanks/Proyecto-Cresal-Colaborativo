@@ -393,9 +393,9 @@ class CatalogoItemDetailSheet extends StatelessWidget {
             ),
             const SizedBox(width: 12),
 
-            // Botón Prominente Añadir al Carrito (>= 48px de alto)
+            // Botón Compacto Agregar
             SizedBox(
-              height: 48,
+              height: 42,
               child: ElevatedButton.icon(
                 onPressed: () {
                   onAddToCart?.call();
@@ -403,11 +403,11 @@ class CatalogoItemDetailSheet extends StatelessWidget {
                 },
                 icon: const Icon(
                   Icons.shopping_cart_outlined,
-                  size: 20,
+                  size: 18,
                   color: AppPalette.textPrimary,
                 ),
                 label: Text(
-                  'Añadir al Carrito',
+                  'Agregar',
                   style: AppTypography.button.copyWith(
                     color: AppPalette.textPrimary,
                     fontWeight: FontWeight.bold,
@@ -421,7 +421,7 @@ class CatalogoItemDetailSheet extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8.0),
                   ),
                   elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  padding: const EdgeInsets.symmetric(horizontal: 18.0),
                 ),
               ),
             ),

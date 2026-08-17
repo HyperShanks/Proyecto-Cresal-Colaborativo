@@ -163,9 +163,16 @@ class PaletizadoService {
   }
 
   /// Consulta la lista de piezas pendientes de paletizado en bodega
-  Future<List<dynamic>> obtenerPendientesPaletizado() async {
+  Future<List<dynamic>> obtenerPendientesPaletizado({int? sucursalId}) async {
     try {
-      final url = Uri.parse('${ApiConstants.vehiculosEndpoint}/pendientes-paletizado');
+      final sucursal = sucursalId ?? await AuthService.getSucursalId();
+      final url = sucursal != null
+          ? Uri.parse(
+              '${ApiConstants.vehiculosEndpoint}/pendientes-paletizado?sucursal_id=$sucursal',
+            )
+          : Uri.parse(
+              '${ApiConstants.vehiculosEndpoint}/pendientes-paletizado',
+            );
       final token = await AuthService.getToken();
       final headers = {
         'Authorization': 'Bearer $token',

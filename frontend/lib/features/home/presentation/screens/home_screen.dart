@@ -405,7 +405,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           child: _buildActionCard(
             context: context,
             title: 'Recepción de Vehículo',
-            subtitle: 'Ingreso con validación OCR',
+            subtitle: 'Requiere OCR: Fotografiar el N° de ingreso físico del vehículo',
             icon: Icons.local_shipping_outlined,
             onTap: () => Navigator.pushNamed(context, '/recepcion'),
           ),
@@ -415,7 +415,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           child: _buildActionCard(
             context: context,
             title: 'Paletizado de Piezas',
-            subtitle: 'Asignación física de ubicación',
+            subtitle: 'Validación OCR o selección manual del N° de ingreso',
             icon: Icons.inventory_2_outlined,
             onTap: () => Navigator.pushNamed(context, '/paletizado'),
           ),

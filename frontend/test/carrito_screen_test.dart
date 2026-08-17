@@ -253,7 +253,6 @@ void main() {
       await tester.pump();
 
       expect(find.text('Campo requerido'), findsWidgets);
-      expect(find.text('Debes aceptar el consentimiento para continuar'), findsOneWidget);
 
       // 2. Llenar campos requeridos
       await tester.enterText(
@@ -269,16 +268,7 @@ void main() {
         'González',
       );
 
-      // 3. Marcar checkbox de consentimiento legal
-      await tester.scrollUntilVisible(
-        find.text('Consentimiento Ley N° 21.719 *'),
-        100,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.tap(find.byType(Checkbox).last);
-      await tester.pump();
-
-      // 4. Presionar Derivar a Caja de nuevo -> Procesa llamada transaccional
+      // 3. Presionar Derivar a Caja -> Procesa llamada transaccional sin fricción de consentimiento
       await tester.tap(btnDerivar);
       await tester.pump();
 
@@ -310,7 +300,7 @@ void main() {
       expect(btnDerivar.onPressed, isNull);
     });
 
-    testWidgets('Switch Cliente Anónimo / Sin RUT oculta campos personales y muestra banner informativo', (tester) async {
+    testWidgets('Switch Consumidor Final / Sin RUT oculta campos personales y muestra banner informativo', (tester) async {
       CartController.instance.agregarInventariado(itemTest1);
 
       await tester.pumpWidget(
@@ -319,7 +309,7 @@ void main() {
         ),
       );
 
-      // El switch de cliente anónimo existe y por defecto está en false
+      // El switch de consumidor final existe y por defecto está en false
       final switchFinder = find.byKey(const Key('switch_cliente_anonimo'));
       await tester.scrollUntilVisible(
         switchFinder,
@@ -327,7 +317,7 @@ void main() {
         scrollable: find.byType(Scrollable).first,
       );
       expect(switchFinder, findsOneWidget);
-      expect(find.text('Cliente Anónimo / Sin RUT'), findsOneWidget);
+      expect(find.text('Consumidor Final (Sin RUT)'), findsOneWidget);
       expect(find.text('RUT Cliente *'), findsOneWidget);
 
       // Activar switch

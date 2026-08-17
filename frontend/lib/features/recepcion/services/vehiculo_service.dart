@@ -246,4 +246,36 @@ class VehiculoService {
       return {'exito': false, 'mensaje': 'Error de conexión: $e'};
     }
   }
+
+  // ==========================================
+  // 4. REGISTRO MANUAL DE CONTINGENCIA (Fallback)
+  // ==========================================
+  Future<Map<String, dynamic>> guardarIngresoManual(
+    Map<String, dynamic> datosVehiculo,
+  ) async {
+    try {
+      final uri = Uri.parse('${ApiConstants.vehiculosEndpoint}/registro-manual');
+      final token = await AuthService.getToken();
+      final headers = {
+        'Content-Type': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      };
+      final response = await http.post(
+        uri,
+        headers: headers,
+        body: jsonEncode(datosVehiculo),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return {'exito': true, 'mensaje': 'Guardado exitoso'};
+      } else {
+        final errorBody = jsonDecode(response.body);
+        final mensajeDetail =
+            errorBody['detail'] ?? 'Error al registrar vehículo manual';
+        return {'exito': false, 'mensaje': mensajeDetail};
+      }
+    } catch (e) {
+      return {'exito': false, 'mensaje': 'Error de conexión: $e'};
+    }
+  }
 }

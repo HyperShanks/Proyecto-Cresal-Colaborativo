@@ -7,6 +7,7 @@ import '../../domain/exceptions/printer_exceptions.dart';
 import '../../domain/models/etiqueta_data.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
+import '../../../auth/services/auth_service.dart';
 
 class PaletizadoScreen extends StatefulWidget {
   const PaletizadoScreen({super.key});
@@ -40,6 +41,7 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
   List<String> _opcionesRepuestos = []; // ⚠️ NUEVA LISTA DINÁMICA
 
   bool _isValidatingOCR = false;
+  int _ocrFailedAttempts = 0;
 
   final ImagePicker _picker = ImagePicker();
   List<XFile> _fotosComerciales = [];
@@ -53,7 +55,9 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
   Future<void> _cargarPendientes() async {
     setState(() => _isLoadingPendientes = true);
     try {
-      final pendientes = await _paletizadoService.obtenerPendientesPaletizado();
+      final sucursalId = await AuthService.getSucursalId();
+      final pendientes =
+          await _paletizadoService.obtenerPendientesPaletizado(sucursalId: sucursalId);
       if (!mounted) return;
       setState(() {
         _pendientesPaletizado = pendientes;
@@ -157,6 +161,7 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
       final String mensaje = resultadoOCR['mensaje'] ?? 'Error desconocido';
 
       if (esMatch) {
+        _ocrFailedAttempts = 0;
         // ¡ÉXITO OCR! Avisamos al usuario que ahora estamos guardando...
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -210,28 +215,205 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
         }
       } else {
         // ERROR: La pieza no coincide.
+        _ocrFailedAttempts++;
         setState(() => _isValidatingOCR = false); // Detenemos la carga
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'ALERTA: $mensaje\nTexto detectado: ${resultadoOCR['texto_detectado']}',
+              'ALERTA: $mensaje (Intento $_ocrFailedAttempts/5)\nTexto detectado: ${resultadoOCR['texto_detectado']}',
             ),
             backgroundColor: AppPalette.error,
-            duration: const Duration(
-              seconds: 5,
-            ), // Le damos más tiempo para leer
+            duration: const Duration(seconds: 4),
           ),
         );
+
+        if (_ocrFailedAttempts >= 5 && mounted) {
+          _mostrarModalIngresoManual(context);
+        }
       }
     } else {
-      // Error de red al intentar conectar con el OCR
+      // Error de red o Google Cloud Vision al intentar conectar con el OCR
+      _ocrFailedAttempts++;
       setState(() => _isValidatingOCR = false); // Detenemos la carga
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Error de conexión al intentar validar el código.'),
+          content: Text('Error de conexión o fallo en servicio OCR.'),
           backgroundColor: AppPalette.error,
         ),
       );
+
+      // Fallo de red / API -> Dispara contingencia manual
+      _mostrarModalIngresoManual(context);
+    }
+  }
+
+  // ── MODALES DE CONTINGENCIA / VALIDACIÓN MANUAL (HU-2.3 Poka-Yoke Fallback) ──
+
+  Future<void> _mostrarModalIngresoManual(BuildContext context) async {
+    final TextEditingController manualIngresoController =
+        TextEditingController(text: _searchController.text.trim());
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppPalette.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: AppPalette.secondary, size: 28),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Validación Manual OCR',
+                style: AppTypography.cardTitle.copyWith(fontSize: 16),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'No logramos detectar el número automáticamente o hubo un problema de conexión. Ingresa manualmente el N° de Ingreso visible en el vehículo o pieza.',
+              style: AppTypography.body.copyWith(fontSize: 13, height: 1.4),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              key: const Key('input_numero_ingreso_manual_paletizado'),
+              controller: manualIngresoController,
+              decoration: const InputDecoration(
+                labelText: 'N° de Ingreso Físico',
+                hintText: 'Ej: 1001',
+                prefixIcon: Icon(Icons.confirmation_number_outlined, color: AppPalette.primary),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            key: const Key('btn_reintentar_camara_paletizado'),
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(
+              'Reintentar con Cámara',
+              style: AppTypography.button.copyWith(color: AppPalette.textSecondary),
+            ),
+          ),
+          ElevatedButton(
+            key: const Key('btn_confirmar_ingreso_manual_paletizado'),
+            onPressed: () {
+              if (manualIngresoController.text.trim().isNotEmpty) {
+                Navigator.of(ctx).pop(true);
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppPalette.primary),
+            child: const Text('Confirmar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      final numeroManual = manualIngresoController.text.trim();
+
+      // Consultar al backend para validar que el numero_ingreso exista en la tabla Vehiculo_Origen
+      setState(() => _isValidatingOCR = true);
+      final vehiculoValido = await _paletizadoService.buscarVehiculoPorIngreso(numeroManual);
+      if (!mounted) return;
+      setState(() => _isValidatingOCR = false);
+
+      if (vehiculoValido == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ El N° de Ingreso $numeroManual no existe en el sistema.'),
+            backgroundColor: AppPalette.error,
+          ),
+        );
+        return;
+      }
+
+      await _mostrarModalDobleConfirmacion(context, numeroManual);
+    }
+  }
+
+  Future<void> _mostrarModalDobleConfirmacion(
+    BuildContext context,
+    String numeroManual,
+  ) async {
+    final doubleConfirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppPalette.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.verified_user_outlined, color: AppPalette.primary, size: 28),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Confirmación de Seguridad',
+                style: AppTypography.cardTitle.copyWith(fontSize: 16),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          '¿Confirmas que el N° de Ingreso $numeroManual corresponde fielmente al vehículo/pieza física?',
+          style: AppTypography.body.copyWith(fontSize: 14, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(
+              'Cancelar',
+              style: AppTypography.button.copyWith(color: AppPalette.textSecondary),
+            ),
+          ),
+          ElevatedButton(
+            key: const Key('btn_aceptar_doble_confirmacion_paletizado'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppPalette.success),
+            child: const Text('Aceptar'),
+          ),
+        ],
+      ),
+    );
+
+    if (doubleConfirmed == true && mounted) {
+      setState(() {
+        _isValidatingOCR = true;
+        _ocrFailedAttempts = 0;
+      });
+
+      List<File> fotosArchivos = _fotosComerciales.map((x) => File(x.path)).toList();
+
+      final resultadoGuardado = await _paletizadoService.guardarPaletizadoDefinitivo(
+        folio: numeroManual,
+        tipoRepuesto: _tipoActivoSeleccionado,
+        galpon: _galponController.text.trim(),
+        pasillo: _pasilloController.text.trim(),
+        pallet: _palletController.text.trim(),
+        observaciones: _observacionController.text.trim(),
+        fotos: fotosArchivos,
+      );
+
+      if (!mounted) return;
+      setState(() => _isValidatingOCR = false);
+
+      if (resultadoGuardado != null) {
+        final etiqueta = EtiquetaData.fromJson(resultadoGuardado);
+        _limpiarFormulario();
+        await _mostrarModalExito(etiqueta);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Error al guardar en el servidor. Revise la consola.'),
+            backgroundColor: AppPalette.error,
+          ),
+        );
+      }
     }
   }
 
@@ -433,88 +615,6 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text('Año: $_anio', style: AppTypography.title),
-                    const SizedBox(height: 16),
-
-                    // ── ESTADO DE LOS COMPONENTES PRINCIPALES ──
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: AppPalette.background,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: _datosMotor['id_estado'] == 5
-                                    ? AppPalette.success
-                                    : AppPalette.neutral.withValues(alpha: 0.3),
-                              ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    const Icon(Icons.settings, size: 16, color: AppPalette.primary),
-                                    const SizedBox(width: 6),
-                                    Text('MOTOR', style: AppTypography.small.copyWith(fontWeight: FontWeight.bold)),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  _datosMotor['id_estado'] == 5
-                                      ? 'Disponible para Paletizar'
-                                      : (_datosMotor.isNotEmpty ? 'Ya Paletizado' : 'No Registrado'),
-                                  style: AppTypography.small.copyWith(
-                                    color: _datosMotor['id_estado'] == 5 ? AppPalette.success : AppPalette.textSecondary,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: AppPalette.background,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: _datosCaja['id_estado'] == 5
-                                    ? AppPalette.success
-                                    : AppPalette.neutral.withValues(alpha: 0.3),
-                              ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    const Icon(Icons.swap_horiz, size: 16, color: AppPalette.primary),
-                                    const SizedBox(width: 6),
-                                    Text('CAJA CAMBIOS', style: AppTypography.small.copyWith(fontWeight: FontWeight.bold)),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  _datosCaja['id_estado'] == 5
-                                      ? 'Disponible para Paletizar'
-                                      : (_datosCaja.isNotEmpty ? 'Ya Paletizada' : 'No Registrada'),
-                                  style: AppTypography.small.copyWith(
-                                    color: _datosCaja['id_estado'] == 5 ? AppPalette.success : AppPalette.textSecondary,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
                   ],
                 ),
               ),
@@ -523,26 +623,103 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
               const Text('Datos del Activo a Paletizar', style: AppTypography.title),
               const SizedBox(height: 16),
 
-              DropdownButtonFormField<String>(
-                value: _tipoActivoSeleccionado,
-                dropdownColor: AppPalette.surface,
-                style: const TextStyle(color: AppPalette.textPrimary),
-                decoration: const InputDecoration(
-                  labelText: 'Seleccionar Repuesto para Etiquetar',
-                  prefixIcon: Icon(
-                    Icons.build_circle_outlined,
-                    color: AppPalette.primary,
+              // ── Selector Segmentado de Tipo de Repuesto ([ Motor ] / [ Caja de Cambios ]) ──
+              if (_opcionesRepuestos.isNotEmpty)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: AppPalette.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                  ),
+                  child: Row(
+                    children: [
+                      if (_opcionesRepuestos.contains('Motor'))
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => setState(() => _tipoActivoSeleccionado = 'Motor'),
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              decoration: BoxDecoration(
+                                color: _tipoActivoSeleccionado == 'Motor'
+                                    ? AppPalette.primary
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              alignment: Alignment.center,
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.settings,
+                                    size: 18,
+                                    color: _tipoActivoSeleccionado == 'Motor'
+                                        ? AppPalette.textPrimary
+                                        : AppPalette.textSecondary,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Motor',
+                                    style: AppTypography.button.copyWith(
+                                      color: _tipoActivoSeleccionado == 'Motor'
+                                          ? AppPalette.textPrimary
+                                          : AppPalette.textSecondary,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      if (_opcionesRepuestos.contains('Caja de Cambios')) ...[
+                        if (_opcionesRepuestos.contains('Motor')) const SizedBox(width: 6),
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => setState(() => _tipoActivoSeleccionado = 'Caja de Cambios'),
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              decoration: BoxDecoration(
+                                color: _tipoActivoSeleccionado == 'Caja de Cambios'
+                                    ? AppPalette.primary
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              alignment: Alignment.center,
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.swap_horiz,
+                                    size: 18,
+                                    color: _tipoActivoSeleccionado == 'Caja de Cambios'
+                                        ? AppPalette.textPrimary
+                                        : AppPalette.textSecondary,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Caja de Cambios',
+                                    style: AppTypography.button.copyWith(
+                                      color: _tipoActivoSeleccionado == 'Caja de Cambios'
+                                          ? AppPalette.textPrimary
+                                          : AppPalette.textSecondary,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
-                items: _opcionesRepuestos.map((String valor) {
-                  return DropdownMenuItem(value: valor, child: Text(valor));
-                }).toList(),
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() => _tipoActivoSeleccionado = value);
-                  }
-                },
-              ),
               const SizedBox(height: 16),
               Container(
                 width: double.infinity,
