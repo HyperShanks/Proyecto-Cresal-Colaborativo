@@ -1,11 +1,13 @@
+// lib/features/ventas/presentation/widgets/catalogo_item_card.dart
+
 import 'package:flutter/material.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../models/catalogo_model.dart';
-import 'catalogo_item_detail_sheet.dart';
+import '../screens/detalle_activo_screen.dart';
 
-/// Tarjeta de repuesto en Flat Design estricto (sin sombras).
-/// Muestra información técnica, precio y el distintivo (badge) del Radar de Stock.
+/// Tarjeta de repuesto en Flat Design para Mesón de Ventas / Catálogo (HU-3.2).
+/// Contenido simplificado y tipografía aumentada para lectura rápida en tablets.
 class CatalogoItemCard extends StatelessWidget {
   final CatalogoItem item;
   final int? vendedorSucursalId;
@@ -23,52 +25,49 @@ class CatalogoItemCard extends StatelessWidget {
   bool get _esMismaSucursal =>
       vendedorSucursalId != null && item.idSucursalActual == vendedorSucursalId;
 
-  void _mostrarDetalle(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      builder: (ctx) => CatalogoItemDetailSheet(
-        item: item,
-        vendedorSucursalId: vendedorSucursalId,
-        onAddToCart: onAddToCart,
+  void _abrirDetalle(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (ctx) => DetalleActivoScreen(
+          item: item,
+          vendedorSucursalId: vendedorSucursalId,
+        ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final bool esMotor = item.nombreCategoria.toLowerCase().contains('motor');
+    final IconData iconoPieza = esMotor ? Icons.engineering : Icons.settings;
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 12.0),
+      margin: const EdgeInsets.only(bottom: 14.0),
       decoration: BoxDecoration(
         color: AppPalette.surface,
-        borderRadius: BorderRadius.circular(12.0),
+        borderRadius: BorderRadius.circular(14.0),
         border: Border.all(
           color: _esMismaSucursal
-              ? AppPalette.primary.withValues(alpha: 0.3)
-              : Colors.white.withValues(alpha: 0.06),
-          width: 1.0,
+              ? AppPalette.primary.withValues(alpha: 0.35)
+              : Colors.white.withValues(alpha: 0.08),
+          width: 1.2,
         ),
-        // REGLA SystemDesignCresal: Cero uso de sombras (Flat Design)
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(12.0),
+        borderRadius: BorderRadius.circular(14.0),
         child: InkWell(
-          borderRadius: BorderRadius.circular(12.0),
-          onTap: onTap ?? () => _mostrarDetalle(context),
+          borderRadius: BorderRadius.circular(14.0),
+          onTap: onTap ?? () => _abrirDetalle(context),
           child: Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Fila Superior: Badge Sucursal + SKU ───────────────────────
+                // ── 1. Fila Superior: Badge Sucursal + SKU + Chip Estado ───
                 Row(
                   children: [
-                    Flexible(
-                      child: _buildSucursalBadge(),
-                    ),
+                    Flexible(child: _buildSucursalBadge()),
                     const SizedBox(width: 8.0),
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -90,45 +89,104 @@ class CatalogoItemCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-
-                // ── Título del Repuesto ──────────────────────────────────────
-                Text(
-                  item.tituloRepuesto,
-                  style: AppTypography.cardTitle,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 8),
-
-                // ── Fila de Especificaciones Técnicas ────────────────────────
-                Wrap(
-                  spacing: 6.0,
-                  runSpacing: 4.0,
-                  children: [
-                    if (item.cilindrada != null && item.cilindrada!.isNotEmpty)
-                      _buildTechChip(item.cilindrada!, Icons.speed),
-                    if (item.combustible != null && item.combustible!.isNotEmpty)
-                      _buildTechChip(item.combustible!, Icons.local_gas_station),
-                    if (item.transmisionTipo != null && item.transmisionTipo!.isNotEmpty)
-                      _buildTechChip(item.transmisionTipo!, Icons.settings),
-                    if (item.traccion != null && item.traccion!.isNotEmpty)
-                      _buildTechChip(item.traccion!, Icons.all_inclusive),
-                    _buildTechChip(
-                      'Ubicación: ${item.ubicacionFormateada}',
-                      Icons.place_outlined,
-                    ),
+                    const Spacer(),
+                    _buildDisponibilidadChip(),
                   ],
                 ),
                 const SizedBox(height: 12),
 
-                // ── Fila Inferior: Precio + Botón de Carrito (Touch Target 48x48) ─
+                // ── 2. Cuerpo Principal: Miniatura + Título Simplificado ────
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Miniatura / Thumbnail
+                    Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        color: AppPalette.background,
+                        borderRadius: BorderRadius.circular(10.0),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.06),
+                        ),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(10.0),
+                        child: item.imagenes.isNotEmpty
+                            ? Image.network(
+                                item.imagenes.first,
+                                width: 64,
+                                height: 64,
+                                fit: BoxFit.cover,
+                                errorBuilder: (ctx, err, stack) => Center(
+                                  child: Icon(
+                                    iconoPieza,
+                                    size: 32,
+                                    color: AppPalette.primary,
+                                  ),
+                                ),
+                                loadingBuilder: (ctx, child, progress) {
+                                  if (progress == null) return child;
+                                  return const Center(
+                                    child: SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: AppPalette.primary,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              )
+                            : Center(
+                                child: Icon(
+                                  iconoPieza,
+                                  size: 32,
+                                  color: AppPalette.primary,
+                                ),
+                              ),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+
+                    // Título (Marca, Modelo, Año y Categoría)
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.tituloRepuesto,
+                            style: AppTypography.headline.copyWith(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              height: 1.25,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${item.nombreCategoria} • ${item.ubicacionFormateada}',
+                            style: AppTypography.small.copyWith(
+                              fontSize: 13,
+                              color: AppPalette.textSecondary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+
+                // ── 3. Fila Inferior: Precio Destacado + Botón de Carrito ──
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // Precio de Referencia
+                    // Precio de Referencia Destacado
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -137,8 +195,9 @@ class CatalogoItemCard extends StatelessWidget {
                             'PRECIO REFERENCIA',
                             style: AppTypography.small.copyWith(
                               fontSize: 10,
-                              letterSpacing: 0.8,
+                              letterSpacing: 1.0,
                               color: AppPalette.textSecondary,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                           const SizedBox(height: 2),
@@ -146,7 +205,7 @@ class CatalogoItemCard extends StatelessWidget {
                             item.precioFormateado,
                             style: AppTypography.headline.copyWith(
                               color: AppPalette.secondary,
-                              fontSize: 20,
+                              fontSize: 22,
                               fontWeight: FontWeight.bold,
                             ),
                             maxLines: 1,
@@ -156,13 +215,33 @@ class CatalogoItemCard extends StatelessWidget {
                       ),
                     ),
 
-                    // Botón de Carrito con Touch Target de 48x48
+                    // Botón de Carrito (Touch Target 48x48)
                     _buildCartButton(),
                   ],
                 ),
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  /// Chip de Disponibilidad
+  Widget _buildDisponibilidadChip() {
+    final estado = item.estadoActivo ?? 'Disponible';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 3.0),
+      decoration: BoxDecoration(
+        color: AppPalette.success.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6.0),
+      ),
+      child: Text(
+        estado.toUpperCase(),
+        style: AppTypography.small.copyWith(
+          fontSize: 11,
+          color: AppPalette.success,
+          fontWeight: FontWeight.bold,
         ),
       ),
     );
@@ -236,31 +315,6 @@ class CatalogoItemCard extends StatelessWidget {
     );
   }
 
-  /// Chip compacto para especificaciones técnicas
-  Widget _buildTechChip(String label, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 3.0),
-      decoration: BoxDecoration(
-        color: AppPalette.background,
-        borderRadius: BorderRadius.circular(4.0),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: AppPalette.textSecondary),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: AppTypography.small.copyWith(
-              fontSize: 11,
-              color: AppPalette.textSecondary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   /// Botón de Carrito con área interactiva mínima de 48x48 px
   Widget _buildCartButton() {
     return SizedBox(
@@ -268,9 +322,9 @@ class CatalogoItemCard extends StatelessWidget {
       height: 48.0,
       child: Material(
         color: AppPalette.primary,
-        borderRadius: BorderRadius.circular(8.0),
+        borderRadius: BorderRadius.circular(10.0),
         child: InkWell(
-          borderRadius: BorderRadius.circular(8.0),
+          borderRadius: BorderRadius.circular(10.0),
           onTap: onAddToCart,
           child: const Center(
             child: Icon(

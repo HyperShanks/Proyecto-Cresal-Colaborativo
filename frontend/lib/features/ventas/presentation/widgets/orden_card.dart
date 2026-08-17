@@ -102,30 +102,37 @@ class OrdenCard extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(6.0),
-                          decoration: BoxDecoration(
-                            color: AppPalette.primary.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(8.0),
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6.0),
+                            decoration: BoxDecoration(
+                              color: AppPalette.primary.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(8.0),
+                            ),
+                            child: const Icon(
+                              Icons.receipt_long_outlined,
+                              size: 18.0,
+                              color: AppPalette.primary,
+                            ),
                           ),
-                          child: const Icon(
-                            Icons.receipt_long_outlined,
-                            size: 18.0,
-                            color: AppPalette.primary,
+                          const SizedBox(width: 8.0),
+                          Expanded(
+                            child: Text(
+                              orden.folioDisplay,
+                              style: AppTypography.title.copyWith(
+                                fontSize: 16.0,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 8.0),
-                        Text(
-                          orden.folioDisplay,
-                          style: AppTypography.title.copyWith(
-                            fontSize: 16.0,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
+                    const SizedBox(width: 8.0),
                     _buildStatusBadge(),
                   ],
                 ),
@@ -162,34 +169,46 @@ class OrdenCard extends StatelessWidget {
                 const SizedBox(height: 6.0),
 
                 // ── Fecha / Hora y Cantidad de Ítems ───────────────────────
-                Row(
+                Wrap(
+                  spacing: 16.0,
+                  runSpacing: 4.0,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    const Icon(
-                      Icons.calendar_today_outlined,
-                      size: 15.0,
-                      color: AppPalette.textSecondary,
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.calendar_today_outlined,
+                          size: 15.0,
+                          color: AppPalette.textSecondary,
+                        ),
+                        const SizedBox(width: 6.0),
+                        Text(
+                          orden.fechaFormateada,
+                          style: AppTypography.small.copyWith(
+                            fontSize: 13.0,
+                            color: AppPalette.textSecondary,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 6.0),
-                    Text(
-                      orden.fechaFormateada,
-                      style: AppTypography.small.copyWith(
-                        fontSize: 13.0,
-                        color: AppPalette.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(width: 16.0),
-                    const Icon(
-                      Icons.inventory_2_outlined,
-                      size: 15.0,
-                      color: AppPalette.textSecondary,
-                    ),
-                    const SizedBox(width: 6.0),
-                    Text(
-                      '${orden.totalItems} ${orden.totalItems == 1 ? 'ítem' : 'ítems'}',
-                      style: AppTypography.small.copyWith(
-                        fontSize: 13.0,
-                        color: AppPalette.textSecondary,
-                      ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.inventory_2_outlined,
+                          size: 15.0,
+                          color: AppPalette.textSecondary,
+                        ),
+                        const SizedBox(width: 6.0),
+                        Text(
+                          '${orden.totalItems} ${orden.totalItems == 1 ? 'ítem' : 'ítems'}',
+                          style: AppTypography.small.copyWith(
+                            fontSize: 13.0,
+                            color: AppPalette.textSecondary,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -228,30 +247,36 @@ class OrdenCard extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          orden.esAnulada ? 'Total Anulado' : 'Total Orden',
-                          style: AppTypography.small.copyWith(
-                            fontSize: 12.0,
-                            color: AppPalette.textSecondary,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            orden.esAnulada ? 'Total Anulado' : 'Total Orden',
+                            style: AppTypography.small.copyWith(
+                              fontSize: 12.0,
+                              color: AppPalette.textSecondary,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 2.0),
-                        Text(
-                          orden.totalVentaFormateado,
-                          style: AppTypography.title.copyWith(
-                            fontSize: 18.0,
-                            fontWeight: FontWeight.bold,
-                            color: orden.esAnulada
-                                ? AppPalette.neutral
-                                : AppPalette.secondary,
+                          const SizedBox(height: 2.0),
+                          Text(
+                            orden.totalVentaFormateado,
+                            style: AppTypography.title.copyWith(
+                              fontSize: 18.0,
+                              fontWeight: FontWeight.bold,
+                              color: orden.esAnulada
+                                  ? AppPalette.neutral
+                                  : AppPalette.secondary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
+                    const SizedBox(width: 8.0),
                     Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
                           'Ver detalle',

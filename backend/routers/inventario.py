@@ -112,6 +112,7 @@ def obtener_opciones_filtros(
 
 @router.get("/buscar")
 def buscar_inventario(
+    q: Optional[str] = Query(None, description="Texto libre para buscar por marca, modelo, SKU o N° Ingreso"),
     categoria: Optional[str] = None,
     pasillo: Optional[str] = None,
     pallet: Optional[str] = None,
@@ -120,6 +121,8 @@ def buscar_inventario(
     cilindrada: Optional[str] = None,
     combustible: Optional[str] = None,
     transmision: Optional[str] = None,
+    limit: Optional[int] = Query(None, ge=1, le=100, description="Límite de elementos por página"),
+    offset: int = Query(0, ge=0, description="Desplazamiento para paginación"),
     db: Session = Depends(get_db),
     usuario_logeado: Usuario = Depends(get_current_user),
 ):
@@ -141,6 +144,18 @@ def buscar_inventario(
 
     # ⚠️ REGLA DE NEGOCIO: Excluir Vendidos (3) y En Desarme (5)
     query = query.filter(Activo_Inventariado.id_estado.notin_([3, 5]))
+
+    # Búsqueda por Texto Libre
+    if q and q.strip():
+        q_term = f"%{q.strip().upper()}%"
+        query = query.filter(
+            or_(
+                func.upper(Activo_Inventariado.sku_qr_fisico).like(q_term),
+                func.upper(Vehiculo_Origen.marca).like(q_term),
+                func.upper(Vehiculo_Origen.modelo).like(q_term),
+                func.upper(Vehiculo_Origen.numero_ingreso).like(q_term),
+            )
+        )
 
     # Filtro de Categoría
     if categoria:
@@ -170,16 +185,27 @@ def buscar_inventario(
             | (func.upper(Detalle_Caja_Cambio.transmision_tipo) == transmision.upper())
         )
 
+    query = query.order_by(Activo_Inventariado.fecha_creacion.desc())
+
+    if limit is not None:
+        query = query.offset(offset).limit(limit)
+
     resultados_db = query.all()
+
+    # Obtener imágenes eficientemente en lote
+    activo_ids = [activo.id_activo for activo, *_ in resultados_db]
+    fotos_db = (
+        db.query(Multimedia_Activo.id_activo, Multimedia_Activo.url_storage)
+        .filter(Multimedia_Activo.id_activo.in_(activo_ids))
+        .all()
+    ) if activo_ids else []
+    fotos_map: Dict[UUID, List[str]] = {}
+    for act_id, url in fotos_db:
+        fotos_map.setdefault(act_id, []).append(url)
 
     respuesta = []
     for activo, vehiculo, motor, caja, cat, est in resultados_db:
-        fotos_db = (
-            db.query(Multimedia_Activo.url_storage)
-            .filter(Multimedia_Activo.id_activo == activo.id_activo)
-            .all()
-        )
-        lista_fotos = [foto[0] for foto in fotos_db] if fotos_db else []
+        lista_fotos = fotos_map.get(activo.id_activo, [])
 
         if cat.id_categoria == 2 and caja:
             transmision_val = caja.transmision_tipo
@@ -222,6 +248,8 @@ def obtener_catalogo(
     id_sucursal: Optional[int] = Query(None, description="Filtro explícito por ID de sucursal"),
     marca: Optional[str] = Query(None, description="Filtro por marca"),
     anio: Optional[int] = Query(None, description="Filtro por año"),
+    cilindrada: Optional[str] = Query(None, description="Filtro por cilindrada"),
+    transmision: Optional[str] = Query(None, description="Filtro por tipo de transmisión"),
     limit: int = Query(15, ge=1, le=100, description="Límite de elementos por página"),
     offset: int = Query(0, ge=0, description="Desplazamiento para paginación"),
     db: Session = Depends(get_db),
@@ -266,6 +294,37 @@ def obtener_catalogo(
     if anio is not None:
         query = query.filter(Vehiculo_Origen.anio == anio)
 
+    if cilindrada and cilindrada.strip():
+        cil_clean = cilindrada.strip().upper().replace("L", "").strip()
+        query = query.filter(func.upper(Detalle_Motor.cilindrada).like(f"%{cil_clean}%"))
+
+    if transmision and transmision.strip():
+        trans_clean = transmision.strip().upper()
+        if "MEC" in trans_clean or "MAN" in trans_clean:
+            query = query.filter(
+                or_(
+                    func.upper(Detalle_Motor.transmision_tipo).like("%MAN%"),
+                    func.upper(Detalle_Motor.transmision_tipo).like("%MEC%"),
+                    func.upper(Detalle_Caja_Cambio.transmision_tipo).like("%MAN%"),
+                    func.upper(Detalle_Caja_Cambio.transmision_tipo).like("%MEC%"),
+                )
+            )
+        elif "AUT" in trans_clean:
+            query = query.filter(
+                or_(
+                    func.upper(Detalle_Motor.transmision_tipo).like("%AUT%"),
+                    func.upper(Detalle_Caja_Cambio.transmision_tipo).like("%AUT%"),
+                )
+            )
+        else:
+            trans_term = f"%{trans_clean}%"
+            query = query.filter(
+                or_(
+                    func.upper(Detalle_Motor.transmision_tipo).like(trans_term),
+                    func.upper(Detalle_Caja_Cambio.transmision_tipo).like(trans_term),
+                )
+            )
+
     if q and q.strip():
         q_term = f"%{q.strip().upper()}%"
         query = query.filter(
@@ -288,6 +347,16 @@ def obtener_catalogo(
         query = query.order_by(Activo_Inventariado.fecha_creacion.desc())
 
     resultados = query.offset(offset).limit(limit).all()
+
+    activo_ids = [activo.id_activo for activo, *_ in resultados]
+    fotos_db = (
+        db.query(Multimedia_Activo.id_activo, Multimedia_Activo.url_storage)
+        .filter(Multimedia_Activo.id_activo.in_(activo_ids))
+        .all()
+    ) if activo_ids else []
+    fotos_map: Dict[UUID, List[str]] = {}
+    for act_id, url in fotos_db:
+        fotos_map.setdefault(act_id, []).append(url)
 
     items: List[CatalogoItemResponse] = []
     for activo, vehiculo, cat, est, suc, motor, caja in resultados:
@@ -329,6 +398,7 @@ def obtener_catalogo(
             ubicacion_pallet=activo.ubicacion_pallet,
             estado_activo=est.nombre_estado,
             qr_impreso=activo.qr_impreso if activo.qr_impreso is not None else False,
+            imagenes=fotos_map.get(activo.id_activo, []),
         )
         items.append(item)
 
@@ -483,4 +553,91 @@ def asignar_precio_repuesto(
         precio_referencia=activo.precio_referencia,
         estado_activo="Disponible",
         mensaje="Precio asignado exitosamente. El repuesto ahora está disponible en el catálogo de ventas.",
+    )
+
+
+@router.get(
+    "/{id_activo}",
+    response_model=CatalogoItemResponse,
+    summary="Detalle Completo de Activo con Imágenes",
+)
+def obtener_detalle_activo(
+    id_activo: UUID,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    resultado = (
+        db.query(
+            Activo_Inventariado,
+            Vehiculo_Origen,
+            Categoria_Activo,
+            Estado_Activo,
+            Sucursal,
+            Detalle_Motor,
+            Detalle_Caja_Cambio,
+        )
+        .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
+        .join(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
+        .join(Estado_Activo, Activo_Inventariado.id_estado == Estado_Activo.id_estado)
+        .join(Sucursal, Activo_Inventariado.id_sucursal_actual == Sucursal.id_sucursal)
+        .outerjoin(Detalle_Motor, Activo_Inventariado.id_activo == Detalle_Motor.id_activo)
+        .outerjoin(Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo)
+        .filter(Activo_Inventariado.id_activo == id_activo)
+        .first()
+    )
+
+    if not resultado:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Activo inventariado con ID '{id_activo}' no encontrado.",
+        )
+
+    activo, vehiculo, cat, est, suc, motor, caja = resultado
+
+    cilindrada_val = None
+    combustible_val = None
+    transmision_val = None
+
+    if cat.id_categoria == 1 and motor:
+        cilindrada_val = motor.cilindrada
+        combustible_val = motor.combustible
+        transmision_val = motor.transmision_tipo
+    elif cat.id_categoria == 2 and caja:
+        transmision_val = caja.transmision_tipo
+    else:
+        if motor:
+            cilindrada_val = motor.cilindrada
+            combustible_val = motor.combustible
+            transmision_val = motor.transmision_tipo
+        elif caja:
+            transmision_val = caja.transmision_tipo
+
+    fotos_db = (
+        db.query(Multimedia_Activo.url_storage)
+        .filter(Multimedia_Activo.id_activo == activo.id_activo)
+        .all()
+    )
+    lista_fotos = [f[0] for f in fotos_db] if fotos_db else []
+
+    return CatalogoItemResponse(
+        id_activo=activo.id_activo,
+        sku_qr_fisico=activo.sku_qr_fisico,
+        precio_referencia=activo.precio_referencia,
+        id_categoria=cat.id_categoria,
+        nombre_categoria=cat.nombre_categoria,
+        id_sucursal_actual=suc.id_sucursal,
+        nombre_sucursal=suc.nombre_sucursal,
+        id_vehiculo=vehiculo.id_vehiculo if vehiculo else None,
+        marca=vehiculo.marca if vehiculo else None,
+        modelo=vehiculo.modelo if vehiculo else None,
+        anio=vehiculo.anio if vehiculo else None,
+        traccion=vehiculo.traccion if vehiculo else None,
+        cilindrada=cilindrada_val,
+        combustible=combustible_val,
+        transmision_tipo=transmision_val,
+        ubicacion_pasillo=activo.ubicacion_pasillo,
+        ubicacion_pallet=activo.ubicacion_pallet,
+        estado_activo=est.nombre_estado,
+        qr_impreso=activo.qr_impreso if activo.qr_impreso is not None else False,
+        imagenes=lista_fotos,
     )

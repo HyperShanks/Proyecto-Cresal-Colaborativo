@@ -130,6 +130,9 @@ class AuthService {
     return val != null ? int.tryParse(val) : null;
   }
 
+  /// Alias de getSucursalId para compatibilidad
+  static Future<int?> getIdSucursal() => getSucursalId();
+
   /// Recupera el nombre de la sucursal del usuario autenticado.
   static Future<String?> getNombreSucursal() =>
       _storage.read(key: _sucursalNombreKey);

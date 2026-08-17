@@ -13,6 +13,7 @@ import '../widgets/catalogo_item_card.dart';
 import '../widgets/catalogo_item_detail_sheet.dart';
 import '../widgets/filtros_drawer.dart';
 import '../widgets/venta_libre_dialog.dart';
+import 'detalle_activo_screen.dart';
 
 /// Pantalla Principal del Catálogo de Ventas con Radar de Stock (HU-3.2).
 /// Incluye buscador con debounce de 500ms, panel lateral de filtros interactivo,
@@ -59,12 +60,16 @@ class CatalogoScreenState extends State<CatalogoScreen> {
   int? _idSucursalFiltro;
   int? _anio;
   String? _marca;
+  String? _cilindrada;
+  String? _transmision;
 
   bool get _tieneFiltrosActivos =>
       _idCategoria != null ||
       _idSucursalFiltro != null ||
       _anio != null ||
-      _marca != null;
+      _marca != null ||
+      _cilindrada != null ||
+      _transmision != null;
 
   @override
   void initState() {
@@ -91,17 +96,19 @@ class CatalogoScreenState extends State<CatalogoScreen> {
     await _fetchCatalogo(resetPagination: true);
   }
 
-  // ── Debounce de Búsqueda (500 ms) ──────────────────────────────────────────
+  // ── Búsqueda en Tiempo Real (Debounce 250 ms) ──────────────────────────────
 
   void _onSearchChanged(String query) {
+    setState(() {}); // Actualiza de inmediato el icono de limpiar / indicador
     _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(milliseconds: 500), () {
+    _debounceTimer = Timer(const Duration(milliseconds: 250), () {
       _fetchCatalogo(resetPagination: true);
     });
   }
 
   void _onClearSearch() {
     _searchController.clear();
+    setState(() {});
     _fetchCatalogo(resetPagination: true);
   }
 
@@ -117,6 +124,8 @@ class CatalogoScreenState extends State<CatalogoScreen> {
       _idSucursalFiltro = null;
       _anio = null;
       _marca = null;
+      _cilindrada = null;
+      _transmision = null;
     });
     _aplicarFiltros();
   }
@@ -161,6 +170,8 @@ class CatalogoScreenState extends State<CatalogoScreen> {
         idSucursal: _idSucursalFiltro,
         marca: _marca,
         anio: _anio,
+        cilindrada: _cilindrada,
+        transmision: _transmision,
         limit: _limit,
         offset: targetOffset,
       );
@@ -196,15 +207,12 @@ class CatalogoScreenState extends State<CatalogoScreen> {
   // ── Interacciones de Usuario ──────────────────────────────────────────────
 
   void _showDetalleRepuesto(CatalogoItem item) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      builder: (ctx) => CatalogoItemDetailSheet(
-        item: item,
-        vendedorSucursalId: _vendedorSucursalId,
-        onAddToCart: () => _onAddToCart(item),
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (ctx) => DetalleActivoScreen(
+          item: item,
+          vendedorSucursalId: _vendedorSucursalId,
+        ),
       ),
     );
   }
@@ -254,6 +262,8 @@ class CatalogoScreenState extends State<CatalogoScreen> {
         idSucursal: _idSucursalFiltro,
         marca: _marca,
         anio: _anio,
+        cilindrada: _cilindrada,
+        transmision: _transmision,
         onCategoriaChanged: (val) {
           setState(() => _idCategoria = val);
           _aplicarFiltros();
@@ -268,6 +278,14 @@ class CatalogoScreenState extends State<CatalogoScreen> {
         },
         onAnioChanged: (val) {
           setState(() => _anio = val);
+          _aplicarFiltros();
+        },
+        onCilindradaChanged: (val) {
+          setState(() => _cilindrada = val);
+          _aplicarFiltros();
+        },
+        onTransmisionChanged: (val) {
+          setState(() => _transmision = val);
           _aplicarFiltros();
         },
         onLimpiarFiltros: () {
@@ -319,37 +337,48 @@ class CatalogoScreenState extends State<CatalogoScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // ── Barra de Búsqueda + Botón de Filtros (48x48 px) ────────────
+            // ── Barra de Búsqueda en Tiempo Real + Botón de Filtros (48x48 px) ────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 8.0),
               child: Row(
                 children: [
                   Expanded(
                     child: TextField(
+                      key: const Key('input_busqueda_catalogo'),
                       controller: _searchController,
                       onChanged: _onSearchChanged,
                       style: AppTypography.body,
                       decoration: InputDecoration(
-                        hintText: 'Buscar por marca, modelo o SKU...',
+                        hintText: 'Buscar repuesto, marca, modelo o SKU...',
                         hintStyle: AppTypography.body.copyWith(
                           color: AppPalette.textSecondary,
+                          fontSize: 14,
                         ),
                         filled: true,
                         fillColor: AppPalette.surface,
                         prefixIcon: const Icon(
                           Icons.search,
-                          color: AppPalette.textSecondary,
+                          color: AppPalette.primary,
                         ),
                         suffixIcon: _searchController.text.isNotEmpty
                             ? IconButton(
                                 icon: const Icon(Icons.clear, color: AppPalette.textSecondary),
                                 onPressed: _onClearSearch,
+                                tooltip: 'Limpiar búsqueda',
                               )
                             : null,
                         contentPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12.0),
-                          borderSide: BorderSide.none,
+                          borderSide: BorderSide(
+                            color: Colors.white.withValues(alpha: 0.08),
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12.0),
+                          borderSide: BorderSide(
+                            color: Colors.white.withValues(alpha: 0.08),
+                          ),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12.0),

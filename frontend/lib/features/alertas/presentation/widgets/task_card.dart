@@ -1,16 +1,65 @@
 import 'package:flutter/material.dart';
 import '../../models/tarea_alerta.dart';
+import '../../services/logistica_service.dart';
 
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
-
 import '../screens/auditoria_salida_screen.dart';
 
-class TaskCard extends StatelessWidget {
+class TaskCard extends StatefulWidget {
   final TareaAlerta tarea;
   final VoidCallback? onActualizar;
 
   const TaskCard({Key? key, required this.tarea, this.onActualizar}) : super(key: key);
+
+  @override
+  State<TaskCard> createState() => _TaskCardState();
+}
+
+class _TaskCardState extends State<TaskCard> {
+  bool _isProcessingListo = false;
+
+  Future<void> _marcarListo(BuildContext context) async {
+    if (widget.tarea.idDetalle == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No se encontró el ID de detalle para marcar como listo.'),
+          backgroundColor: AppPalette.error,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isProcessingListo = true);
+
+    try {
+      final exito = await LogisticaService.completarPreentrega(widget.tarea.idDetalle!);
+      if (!mounted) return;
+
+      if (exito) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '✅ Preparación de ${widget.tarea.tituloPieza} marcada como LISTO.',
+            ),
+            backgroundColor: AppPalette.success,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        widget.onActualizar?.call();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Error al completar preparación: $e'),
+          backgroundColor: AppPalette.error,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isProcessingListo = false);
+    }
+  }
 
   // Método para desplegar el Modal de Acción
   void _mostrarDetalleModal(
@@ -18,6 +67,8 @@ class TaskCard extends StatelessWidget {
     Color accentColor,
     Color buttonColor,
   ) {
+    final tarea = widget.tarea;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: AppPalette.surface,
@@ -25,7 +76,7 @@ class TaskCard extends StatelessWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (BuildContext context) {
+      builder: (BuildContext ctx) {
         return Padding(
           padding: const EdgeInsets.all(24.0),
           child: Column(
@@ -39,19 +90,40 @@ class TaskCard extends StatelessWidget {
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 20),
                   decoration: BoxDecoration(
-                    // CORRECCIÓN: Usamos withValues(alpha:) en lugar del obsoleto withOpacity
                     color: AppPalette.neutral.withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
               ),
 
-              Text(
-                tarea.ordenRef ?? 'TAREA OPERATIVA',
-                style: AppTypography.small.copyWith(
-                  color: accentColor,
-                  fontWeight: FontWeight.bold,
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    tarea.ordenRef ?? 'TAREA OPERATIVA',
+                    style: AppTypography.small.copyWith(
+                      color: accentColor,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if (tarea.esTraslado || tarea.tipoAlerta == 'TRASLADO')
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppPalette.secondary.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: AppPalette.secondary),
+                      ),
+                      child: Text(
+                        'TRASLADO INTER-SUCURSAL',
+                        style: AppTypography.small.copyWith(
+                          color: AppPalette.secondary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 9,
+                        ),
+                      ),
+                    ),
+                ],
               ),
               const SizedBox(height: 8),
 
@@ -133,74 +205,85 @@ class TaskCard extends StatelessWidget {
                 ),
               ],
 
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
 
-              // Botón de Ejecución Final
-              SizedBox(
-                width: double.infinity,
-                height: 55,
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    // 1. Siempre cerramos el modal primero para que no quede estorbando abajo
-                    Navigator.pop(context);
-
-                    // 2. Evaluamos el tipo de alerta
-                    if (tarea.tipoAlerta == 'LIBERADA') {
-                      // Si está liberada, navegamos a la Barrera de Salida
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const AuditoriaSalidaScreen(),
-                        ),
-                      );
-                    } else if (tarea.tipoAlerta == 'IMPRESION') {
-                      if (tarea.etiquetaData != null) {
-                        final resultado = await Navigator.pushNamed(
-                          context,
-                          '/etiqueta-preview',
-                          arguments: tarea.etiquetaData,
-                        );
-
-                        if (resultado == true) {
-                          onActualizar?.call();
-                        }
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'No se encontraron los datos técnicos para previsualizar la etiqueta.',
-                            ),
-                            backgroundColor: AppPalette.error,
-                          ),
-                        );
-                      }
-                    }
-                  },
-                  icon: Icon(
-                    tarea.tipoAlerta == 'IMPRESION'
-                        ? Icons.print
-                        : Icons.check_circle_outline,
-                    color: buttonColor == AppPalette.surface
-                        ? AppPalette.textSecondary
-                        : AppPalette.textPrimary,
-                  ),
-                  label: Text(
-                    tarea.accionRequerida,
-                    style: AppTypography.button.copyWith(
-                      color: buttonColor == AppPalette.surface
-                          ? AppPalette.textSecondary
-                          : AppPalette.textPrimary,
+              // Botón Prominente 'Listo' para tareas de preparación / pre-entrega
+              if (tarea.idDetalle != null) ...[
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton.icon(
+                    onPressed: _isProcessingListo
+                        ? null
+                        : () {
+                            Navigator.pop(ctx);
+                            _marcarListo(context);
+                          },
+                    icon: _isProcessingListo
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.check_circle, color: Colors.white),
+                    label: Text(
+                      'MARCAR COMO LISTO',
+                      style: AppTypography.button.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
                     ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: buttonColor,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppPalette.success,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 16), // Espaciado extra para el notch
+                const SizedBox(height: 12),
+              ],
+
+              // Botón de Ejecución Alternativo (Impresión o Barrera)
+              if (tarea.tipoAlerta == 'IMPRESION' || tarea.tipoAlerta == 'LIBERADA') ...[
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+
+                      if (tarea.tipoAlerta == 'LIBERADA') {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const AuditoriaSalidaScreen(),
+                          ),
+                        );
+                      } else if (tarea.tipoAlerta == 'IMPRESION') {
+                        if (tarea.etiquetaData != null) {
+                          final resultado = await Navigator.pushNamed(
+                            context,
+                            '/etiqueta-preview',
+                            arguments: tarea.etiquetaData,
+                          );
+                          if (resultado == true) {
+                            widget.onActualizar?.call();
+                          }
+                        }
+                      }
+                    },
+                    icon: Icon(
+                      tarea.tipoAlerta == 'IMPRESION' ? Icons.print : Icons.qr_code_scanner,
+                      color: AppPalette.textPrimary,
+                    ),
+                    label: Text(
+                      tarea.tipoAlerta == 'IMPRESION' ? 'GENERAR ETIQUETA QR' : 'ESCANEAR EN BARRERA',
+                      style: AppTypography.button.copyWith(color: AppPalette.textPrimary),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: accentColor),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
             ],
           ),
         );
@@ -210,6 +293,7 @@ class TaskCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tarea = widget.tarea;
     Color accentColor;
     Color buttonColor;
 
@@ -221,6 +305,10 @@ class TaskCard extends StatelessWidget {
       case 'PREPARACION':
         accentColor = AppPalette.secondary;
         buttonColor = AppPalette.surface;
+        break;
+      case 'TRASLADO':
+        accentColor = AppPalette.secondary;
+        buttonColor = AppPalette.secondary;
         break;
       case 'LIBERADA':
         accentColor = AppPalette.success;
@@ -247,13 +335,36 @@ class TaskCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  tarea.ordenRef ?? 'PENDIENTE: IMPRESIÓN',
-                  style: AppTypography.small.copyWith(
-                    color: accentColor,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.0,
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      tarea.ordenRef ?? (tarea.tipoAlerta == 'IMPRESION' ? 'PENDIENTE: IMPRESIÓN' : 'TAREA OPERATIVA'),
+                      style: AppTypography.small.copyWith(
+                        color: accentColor,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                    if (tarea.esTraslado || tarea.tipoAlerta == 'TRASLADO') ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppPalette.secondary.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: AppPalette.secondary, width: 0.8),
+                        ),
+                        child: Text(
+                          'TRASLADO',
+                          style: AppTypography.small.copyWith(
+                            color: AppPalette.secondary,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(
@@ -261,7 +372,6 @@ class TaskCard extends StatelessWidget {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    // CORRECCIÓN: Evita el subrayado azul de VSCode
                     color: buttonColor.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(4),
                   ),
@@ -357,49 +467,88 @@ class TaskCard extends StatelessWidget {
                 ),
               ),
             ],
-            if (tarea.estadoBloqueo == null) ...[
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                height: 45,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    if (tarea.tipoAlerta == 'LIBERADA') {
-                      // Navegación directa saltándose el modal
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const AuditoriaSalidaScreen(),
+
+            // ── BOTONES DE ACCIÓN EN TARJETA ──
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                // Botón 'Listo' prominente para tareas asociadas a una orden
+                if (tarea.idDetalle != null) ...[
+                  Expanded(
+                    flex: 3,
+                    child: SizedBox(
+                      height: 45,
+                      child: ElevatedButton.icon(
+                        key: Key('btn_listo_${tarea.idTarea}'),
+                        onPressed: _isProcessingListo ? null : () => _marcarListo(context),
+                        icon: _isProcessingListo
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              )
+                            : const Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
+                        label: Text(
+                          'LISTO',
+                          style: AppTypography.button.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
                         ),
-                      );
-                    } else {
-                      // Para el resto (ej. Impresión), abre el modal para confirmar
-                      _mostrarDetalleModal(context, accentColor, buttonColor);
-                    }
-                  },
-                  icon: Icon(
-                    tarea.tipoAlerta == 'IMPRESION'
-                        ? Icons.print
-                        : Icons.qr_code_scanner,
-                    color: AppPalette.textPrimary,
-                    size: 20,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppPalette.success,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                  label: Text(
-                    tarea.accionRequerida,
-                    style: AppTypography.button,
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: buttonColor,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(6),
+                  const SizedBox(width: 10),
+                ],
+
+                // Botón Secundario / Detalle
+                Expanded(
+                  flex: tarea.idDetalle != null ? 2 : 5,
+                  child: SizedBox(
+                    height: 45,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        if (tarea.tipoAlerta == 'LIBERADA') {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const AuditoriaSalidaScreen(),
+                            ),
+                          );
+                        } else {
+                          _mostrarDetalleModal(context, accentColor, buttonColor);
+                        }
+                      },
+                      icon: Icon(
+                        tarea.tipoAlerta == 'IMPRESION'
+                            ? Icons.print
+                            : (tarea.tipoAlerta == 'LIBERADA' ? Icons.qr_code_scanner : Icons.visibility_outlined),
+                        color: AppPalette.textPrimary,
+                        size: 18,
+                      ),
+                      label: Text(
+                        tarea.tipoAlerta == 'IMPRESION'
+                            ? 'IMPRIMIR'
+                            : (tarea.tipoAlerta == 'LIBERADA' ? 'BARRERA' : 'DETALLES'),
+                        style: AppTypography.button.copyWith(fontSize: 12),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: accentColor),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ],
         ),
       ),
-    ); // <-- AQUÍ ESTÁ EL CIERRE DEL GESTURE DETECTOR QUE FALTABA
+    );
   }
 }

@@ -231,6 +231,61 @@ def obtener_vehiculo(patente: str, db: Session = Depends(get_db), usuario_logead
     vehiculo = procesar_patente_y_guardar(db=db, patente_limpia=patente_validada)
     return vehiculo
 
+@router.get("/pendientes-paletizado", status_code=200)
+def obtener_pendientes_paletizado(
+    db: Session = Depends(get_db),
+    usuario_logeado: models.Usuario = Depends(get_current_user),
+):
+    """
+    Lista todos los activos de inventario pendientes de paletizado
+    (estado 5 / 'En Desarme' o que no tengan ubicación pasillo/pallet asignada).
+    """
+    from sqlalchemy import or_
+
+    query = (
+        db.query(
+            models.Activo_Inventariado,
+            models.Vehiculo_Origen,
+            models.Categoria_Activo,
+            models.Estado_Activo,
+        )
+        .outerjoin(models.Vehiculo_Origen, models.Activo_Inventariado.id_vehiculo == models.Vehiculo_Origen.id_vehiculo)
+        .join(models.Categoria_Activo, models.Activo_Inventariado.id_categoria == models.Categoria_Activo.id_categoria)
+        .join(models.Estado_Activo, models.Activo_Inventariado.id_estado == models.Estado_Activo.id_estado)
+        .filter(
+            models.Activo_Inventariado.estado == "Activo",
+            or_(
+                models.Activo_Inventariado.id_estado == 5,
+                models.Activo_Inventariado.ubicacion_pasillo == None,
+                models.Activo_Inventariado.ubicacion_pasillo == "",
+                models.Activo_Inventariado.ubicacion_pallet == None,
+                models.Activo_Inventariado.ubicacion_pallet == "",
+            ),
+            models.Activo_Inventariado.id_estado.notin_([1, 3]),
+        )
+        .order_by(models.Activo_Inventariado.fecha_creacion.desc())
+    )
+
+    resultados = query.all()
+
+    respuesta = []
+    for activo, vehiculo, cat, est in resultados:
+        respuesta.append({
+            "id_activo": str(activo.id_activo),
+            "sku_qr_fisico": activo.sku_qr_fisico,
+            "id_categoria": cat.id_categoria,
+            "tipo_repuesto": cat.nombre_categoria,
+            "numero_ingreso": vehiculo.numero_ingreso if vehiculo else "N/A",
+            "marca": vehiculo.marca if vehiculo else "Desconocida",
+            "modelo": vehiculo.modelo if vehiculo else "Desconocido",
+            "anio": vehiculo.anio if vehiculo else 0,
+            "patente": vehiculo.patente if vehiculo else None,
+            "estado": est.nombre_estado,
+            "fecha_creacion": activo.fecha_creacion.isoformat() if activo.fecha_creacion else None,
+        })
+
+    return respuesta
+
 @router.get("/buscar/{numero_ingreso}")
 def buscar_vehiculo_por_ingreso(numero_ingreso: str, db: Session = Depends(get_db), usuario_logeado: models.Usuario = Depends(get_current_user)):
     """

@@ -11,10 +11,14 @@ class FiltrosDrawer extends StatelessWidget {
   final int? idSucursal;
   final String? marca;
   final int? anio;
+  final String? cilindrada;
+  final String? transmision;
   final ValueChanged<int?> onCategoriaChanged;
   final ValueChanged<int?> onSucursalChanged;
   final ValueChanged<String?> onMarcaChanged;
   final ValueChanged<int?> onAnioChanged;
+  final ValueChanged<String?> onCilindradaChanged;
+  final ValueChanged<String?> onTransmisionChanged;
   final VoidCallback onLimpiarFiltros;
 
   const FiltrosDrawer({
@@ -23,10 +27,14 @@ class FiltrosDrawer extends StatelessWidget {
     required this.idSucursal,
     required this.marca,
     required this.anio,
+    this.cilindrada,
+    this.transmision,
     required this.onCategoriaChanged,
     required this.onSucursalChanged,
     required this.onMarcaChanged,
     required this.onAnioChanged,
+    required this.onCilindradaChanged,
+    required this.onTransmisionChanged,
     required this.onLimpiarFiltros,
   });
 
@@ -42,6 +50,21 @@ class FiltrosDrawer extends StatelessWidget {
     'Volkswagen',
     'Honda',
     'Mitsubishi',
+  ];
+
+  static const List<String> _cilindradasDisponibles = [
+    '1.0',
+    '1.2',
+    '1.4',
+    '1.5',
+    '1.6',
+    '1.8',
+    '2.0',
+    '2.2',
+    '2.4',
+    '2.5',
+    '3.0',
+    '3.5',
   ];
 
   static const List<int> _aniosDisponibles = [
@@ -267,6 +290,73 @@ class FiltrosDrawer extends StatelessWidget {
                         ),
                       ],
                       onChanged: onAnioChanged,
+                    ),
+                    const SizedBox(height: 24),
+
+                    // 5. Sección CILINDRADA
+                    _buildSectionHeader('CILINDRADA'),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String?>(
+                      initialValue: cilindrada,
+                      isExpanded: true,
+                      dropdownColor: AppPalette.surface,
+                      style: AppTypography.body,
+                      icon: const Icon(
+                        Icons.arrow_drop_down,
+                        color: AppPalette.textSecondary,
+                      ),
+                      decoration: _buildInputDecoration(hintText: 'Seleccionar cilindrada'),
+                      items: [
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text(
+                            'Todas',
+                            style: AppTypography.body,
+                          ),
+                        ),
+                        ..._cilindradasDisponibles.map(
+                          (c) => DropdownMenuItem<String?>(
+                            value: c,
+                            child: Text(
+                              '$c L',
+                              style: AppTypography.body,
+                            ),
+                          ),
+                        ),
+                      ],
+                      onChanged: onCilindradaChanged,
+                    ),
+                    const SizedBox(height: 24),
+
+                    // 6. Sección TIPO DE TRANSMISIÓN
+                    _buildSectionHeader('TIPO DE TRANSMISIÓN'),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8.0,
+                      runSpacing: 8.0,
+                      children: [
+                        _buildChoiceChip(
+                          label: 'Todas',
+                          isSelected: transmision == null,
+                          onSelected: (selected) {
+                            if (selected) onTransmisionChanged(null);
+                          },
+                        ),
+                        _buildChoiceChip(
+                          label: 'Automática',
+                          isSelected: transmision == 'Automatica' || transmision == 'Automática',
+                          onSelected: (selected) {
+                            onTransmisionChanged(selected ? 'Automatica' : null);
+                          },
+                        ),
+                        _buildChoiceChip(
+                          label: 'Mecánica',
+                          isSelected: transmision == 'Mecanica' || transmision == 'Mecánica' || transmision == 'Manual',
+                          onSelected: (selected) {
+                            onTransmisionChanged(selected ? 'Mecanica' : null);
+                          },
+                        ),
+                      ],
                     ),
                   ],
                 ),
