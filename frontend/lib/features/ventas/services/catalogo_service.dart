@@ -18,6 +18,8 @@ class CatalogoService {
     int? idSucursal,
     String? marca,
     int? anio,
+    String? cilindrada,
+    String? transmision,
     int limit = 15,
     int offset = 0,
   }) async {
@@ -41,6 +43,12 @@ class CatalogoService {
       }
       if (anio != null) {
         queryParams['anio'] = anio.toString();
+      }
+      if (cilindrada != null && cilindrada.trim().isNotEmpty) {
+        queryParams['cilindrada'] = cilindrada.trim();
+      }
+      if (transmision != null && transmision.trim().isNotEmpty) {
+        queryParams['transmision'] = transmision.trim();
       }
 
       final uri = Uri.parse(

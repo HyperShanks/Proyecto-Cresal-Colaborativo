@@ -308,8 +308,7 @@ class OrdenHistorialModel {
 
   String get folioDisplay {
     if (qrTransaccionalSalida != null &&
-        qrTransaccionalSalida!.startsWith('ORD-') &&
-        qrTransaccionalSalida!.length <= 16) {
+        qrTransaccionalSalida!.startsWith('ORD-')) {
       return qrTransaccionalSalida!;
     }
     if (idOrden.length >= 8) {

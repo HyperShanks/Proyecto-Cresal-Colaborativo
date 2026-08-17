@@ -12,7 +12,8 @@ from database import get_db
 from models import (
     Usuario, Cliente, Comuna, Orden_Venta, Detalle_Orden,
     Despacho, Activo_Inventariado, Estado_Activo,
-    Vehiculo_Origen, Categoria_Activo, Transaccion_Pago
+    Vehiculo_Origen, Categoria_Activo, Transaccion_Pago,
+    Tracking_Logistico, Sucursal
 )
 from schemas import (
     OrdenCreateRequest, OrdenResponse,
@@ -80,6 +81,22 @@ def crear_orden(
             detail="Debe proporcionar los datos de despacho si 'requiere_despacho' está activado."
         )
 
+    # Determinar tipo de entrega y sucursales involucradas
+    tipo_entrega_final = orden_in.tipo_entrega or "Retiro"
+    if orden_in.despacho and orden_in.despacho.tipo_entrega:
+        tipo_entrega_final = orden_in.despacho.tipo_entrega
+
+    id_sucursal_orden = orden_in.id_sucursal or getattr(current_user, 'id_sucursal', 1) or 1
+    id_sucursal_dest_traslado = orden_in.id_sucursal_destino or (orden_in.despacho.id_sucursal_destino if orden_in.despacho else None) or id_sucursal_orden
+
+    # Validación de sucursales para traslados (1: Viña del Mar, 2: Limache)
+    if tipo_entrega_final == "Traslado":
+        if id_sucursal_dest_traslado not in [1, 2]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="La sucursal de destino no es válida para traslados inter-sucursal (permitidas: 1 Viña del Mar, 2 Limache)."
+            )
+
     # Calcular monto total
     total_calculado = sum(item.precio_final * item.cantidad for item in orden_in.items)
     if total_calculado <= 0:
@@ -109,6 +126,12 @@ def crear_orden(
                     status_code=status.HTTP_409_CONFLICT,
                     detail=f"El repuesto '{activo.sku_qr_fisico}' no está disponible para venta. "
                            f"Estado actual: {estado.nombre_estado}."
+                )
+
+            if tipo_entrega_final == "Traslado" and orden_in.id_sucursal_destino and activo.id_sucursal_actual == id_sucursal_dest_traslado:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="La sucursal de origen y destino no pueden ser iguales para un traslado."
                 )
 
     # ── 2. Bloque Transaccional ACID ─────────────────────────────────────────
@@ -154,7 +177,6 @@ def crear_orden(
             db.flush()
 
         # ── Paso A.2: Cabecera Orden_Venta ──────────────────────────────────
-        id_sucursal_orden = orden_in.id_sucursal or getattr(current_user, 'id_sucursal', 1) or 1
         qr_salida = f"ORD-{uuid.uuid4().hex[:8].upper()}"
 
         nueva_orden = Orden_Venta(
@@ -169,32 +191,44 @@ def crear_orden(
         db.add(nueva_orden)
         db.flush()
 
-        # ── Paso A.3: Despacho (si aplica) ───────────────────────────────────
-        if orden_in.requiere_despacho and orden_in.despacho:
-            id_comuna_dest = orden_in.despacho.id_comuna_destino
-            if not id_comuna_dest and orden_in.despacho.comuna_destino:
+        # ── Paso A.3: Despacho (si aplica o si es traslado) ─────────────────
+        if (orden_in.requiere_despacho and orden_in.despacho) or tipo_entrega_final == "Traslado":
+            desp_obj = orden_in.despacho
+            dir_envio = (
+                desp_obj.direccion_envio.strip()
+                if desp_obj and desp_obj.direccion_envio
+                else (f"Retiro en Sucursal {'Viña del Mar' if id_sucursal_dest_traslado == 1 else 'Limache'}")
+            )
+            rec_nombres = desp_obj.receptor_nombres.strip() if desp_obj and desp_obj.receptor_nombres else f"{cliente.nombres} {cliente.apellidos}".strip()
+            rec_rut = desp_obj.receptor_rut.strip() if desp_obj and desp_obj.receptor_rut else cliente.rut_cliente
+            rec_tel = desp_obj.receptor_telefono.strip() if desp_obj and desp_obj.receptor_telefono else (cliente.telefono or "S/T")
+
+            id_comuna_dest = desp_obj.id_comuna_destino if desp_obj else None
+            if not id_comuna_dest and desp_obj and desp_obj.comuna_destino:
                 comuna_dest_obj = (
                     db.query(Comuna)
-                    .filter(Comuna.nombre_comuna.ilike(orden_in.despacho.comuna_destino.strip()))
+                    .filter(Comuna.nombre_comuna.ilike(desp_obj.comuna_destino.strip()))
                     .first()
                 )
                 if comuna_dest_obj:
                     id_comuna_dest = comuna_dest_obj.id_comuna
 
             if not id_comuna_dest:
-                # Default a la primera comuna disponible o 1
                 comuna_fallback = db.query(Comuna).first()
                 id_comuna_dest = comuna_fallback.id_comuna if comuna_fallback else 1
 
             despacho = Despacho(
                 id_orden=nueva_orden.id_orden,
                 id_comuna_destino=id_comuna_dest,
-                direccion_envio=orden_in.despacho.direccion_envio.strip(),
-                receptor_nombres=orden_in.despacho.receptor_nombres.strip(),
-                receptor_rut=orden_in.despacho.receptor_rut.strip(),
-                receptor_telefono=orden_in.despacho.receptor_telefono.strip(),
-                empresa_transporte=orden_in.despacho.empresa_transporte,
-                costo_envio=orden_in.despacho.costo_envio or 0,
+                direccion_envio=dir_envio,
+                receptor_nombres=rec_nombres,
+                receptor_rut=rec_rut,
+                receptor_telefono=rec_tel,
+                empresa_transporte=desp_obj.empresa_transporte if desp_obj else None,
+                costo_envio=(desp_obj.costo_envio or 0) if desp_obj else 0,
+                tipo_despacho=tipo_entrega_final,
+                id_sucursal_origen=id_sucursal_orden,
+                id_sucursal_destino=id_sucursal_dest_traslado if tipo_entrega_final == "Traslado" else None,
                 estado_despacho="Por Enviar",
                 estado="Activo"
             )
@@ -204,12 +238,47 @@ def crear_orden(
         # ── Paso B: Líneas en Detalle_Orden & Paso C: Update Activos ─────────
         estado_reservado = db.query(Estado_Activo).filter(Estado_Activo.nombre_estado == "Reservado").first()
         if not estado_reservado:
-            estado_reservado = Estado_Activo(nombre_estado="Reservado")
+            estado_reservado = Estado_Activo(id_estado=2, nombre_estado="Reservado")
             db.add(estado_reservado)
             db.flush()
 
         for item in orden_in.items:
             nota_final = item.notas_preparacion or orden_in.instrucciones_bodega
+            activo = None
+
+            # Si es inventariado, verificar si requiere traslado entre sucursales
+            if item.id_activo:
+                activo = (
+                    db.query(Activo_Inventariado)
+                    .filter(Activo_Inventariado.id_activo == item.id_activo)
+                    .first()
+                )
+                if activo:
+                    # Regla Traslado: Activo ubicado en Limache (2) vendido en Viña (1), o tipo_entrega='Traslado'
+                    if (activo.id_sucursal_actual == 2 and id_sucursal_orden == 1) or tipo_entrega_final == "Traslado" or (activo.id_sucursal_actual != id_sucursal_orden):
+                        dest_suc = (
+                            id_sucursal_dest_traslado
+                            if id_sucursal_dest_traslado != activo.id_sucursal_actual
+                            else (1 if activo.id_sucursal_actual == 2 else 2)
+                        )
+                        tracking = Tracking_Logistico(
+                            id_activo=activo.id_activo,
+                            id_sucursal_origen=activo.id_sucursal_actual,
+                            id_sucursal_destino=dest_suc,
+                            id_usuario_gestor=current_user.id_usuario,
+                            id_orden=nueva_orden.id_orden,
+                            estado_traslado="Pendiente",
+                        )
+                        db.add(tracking)
+
+                        nombre_origen = "Limache" if activo.id_sucursal_actual == 2 else "Viña del Mar"
+                        nombre_dest = "Viña del Mar" if dest_suc == 1 else "Limache"
+                        prefijo = f"[TRASLADO DESDE {nombre_origen.upper()} A {nombre_dest.upper()}] "
+                        if nota_final:
+                            if prefijo not in nota_final:
+                                nota_final = f"{prefijo}{nota_final}"
+                        else:
+                            nota_final = f"{prefijo}Preparar repuesto para traslado inter-sucursal."
 
             detalle = Detalle_Orden(
                 id_orden=nueva_orden.id_orden,
@@ -219,19 +288,15 @@ def crear_orden(
                 cantidad=item.cantidad,
                 precio_unitario=item.precio_unitario or item.precio_final,
                 precio_final=item.precio_final,
+                preparacion_lista=False,
+                estado_preparacion="Pendiente",
             )
             db.add(detalle)
 
             # Paso C: Bloquear y actualizar estado de repuesto inventariado
-            if item.id_activo:
-                activo = (
-                    db.query(Activo_Inventariado)
-                    .filter(Activo_Inventariado.id_activo == item.id_activo)
-                    .first()
-                )
-                if activo:
-                    activo.id_estado = estado_reservado.id_estado
-                    activo.version_lock = (activo.version_lock or 1) + 1
+            if item.id_activo and activo:
+                activo.id_estado = estado_reservado.id_estado
+                activo.version_lock = (activo.version_lock or 1) + 1
 
         # ── 3. Commit Transaccional Atómico ─────────────────────────────────
         db.commit()
@@ -340,6 +405,8 @@ def obtener_mis_ventas(
                 costo_envio=despacho_db.costo_envio or 0,
                 estado_despacho=despacho_db.estado_despacho,
                 comuna_destino=comuna_dest_nombre,
+                tipo_despacho=despacho_db.tipo_despacho,
+                id_sucursal_destino=despacho_db.id_sucursal_destino,
             )
 
         # Detalle de líneas
@@ -381,6 +448,8 @@ def obtener_mis_ventas(
                     precio_final=d.precio_final,
                     subtotal=d.precio_final * d.cantidad,
                     es_inventariado=es_inv,
+                    preparacion_lista=d.preparacion_lista,
+                    estado_preparacion=d.estado_preparacion,
                 )
             )
 
@@ -746,6 +815,8 @@ def obtener_orden(
             "receptor_rut": despacho.receptor_rut,
             "receptor_telefono": despacho.receptor_telefono,
             "estado_despacho": despacho.estado_despacho,
+            "tipo_despacho": despacho.tipo_despacho,
+            "id_sucursal_destino": despacho.id_sucursal_destino,
         } if despacho else None,
         "detalles": [
             {
@@ -756,6 +827,8 @@ def obtener_orden(
                 "cantidad": d.cantidad,
                 "precio_unitario": d.precio_unitario,
                 "precio_final": d.precio_final,
+                "preparacion_lista": d.preparacion_lista,
+                "estado_preparacion": d.estado_preparacion,
             }
             for d in detalles
         ],

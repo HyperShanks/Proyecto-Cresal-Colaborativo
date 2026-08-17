@@ -306,3 +306,26 @@ def test_catalogo_paginacion(client, db_session):
     assert data_p2["total_count"] == 3
     assert len(data_p2["items"]) == 1
     assert data_p2["offset"] == 2
+
+
+def test_catalogo_filtro_cilindrada_y_transmision(client, db_session):
+    """
+    Verifica los filtros por cilindrada y tipo de transmisión en el catálogo.
+    """
+    headers = {"Authorization": f"Bearer {db_session['token_suc1']}"}
+
+    # Filtro Cilindrada 1.5L
+    response_cil = client.get("/api/v1/inventario/catalogo?cilindrada=1.5L", headers=headers)
+    assert response_cil.status_code == 200
+    data_cil = response_cil.json()
+    assert data_cil["total_count"] >= 1
+    for it in data_cil["items"]:
+        assert it["cilindrada"] == "1.5L"
+
+    # Filtro Transmisión Mecánica
+    response_trans = client.get("/api/v1/inventario/catalogo?transmision=Mecanica", headers=headers)
+    assert response_trans.status_code == 200
+    data_trans = response_trans.json()
+    assert data_trans["total_count"] >= 1
+    for it in data_trans["items"]:
+        assert "Mec" in it["transmision_tipo"] or "Man" in it["transmision_tipo"]

@@ -36,7 +36,6 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
 
   // Variables para la cámara
   final ImagePicker _picker = ImagePicker();
-  XFile? _fotoPuerta;
 
   // Variable para manejar la pantalla de carga del OCR y Scraping
   bool _isUploading = false;
@@ -266,195 +265,55 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
             ),
 
             const SizedBox(height: 32),
-            const Text(
-              'Poka-Yoke: Validación Física',
-              style: AppTypography.title, // ⚠️ Tipografía unificada
-            ),
-            const SizedBox(height: 16),
 
-            // 4. ZONA DE CÁMARA PARA OCR
-            InkWell(
-              onTap: () async {
-                final XFile? foto = await _picker.pickImage(
-                  source: ImageSource.camera,
-                );
-                if (foto != null) {
-                  setState(() {
-                    _fotoPuerta = foto;
-                  });
-                }
-              },
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(24.0),
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    color: AppPalette.primary,
-                    width: 2,
-                    style: BorderStyle.solid,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                  color: _fotoPuerta != null
-                      ? AppPalette.primary.withValues(alpha: 0.1)
-                      : AppPalette.surface, // ⚠️ Fondo integrado con el tema
-                ),
-                child: Column(
-                  children: [
-                    Icon(
-                      _fotoPuerta != null
-                          ? Icons.photo_camera_front
-                          : Icons.camera_alt,
-                      size: 48,
-                      color: AppPalette.primary,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _fotoPuerta != null
-                          ? '📸 Foto Adjunta (Pendiente de envío)'
-                          : 'Tomar foto a la puerta',
-                      style: AppTypography.body.copyWith(
-                        color: AppPalette.textPrimary,
-                        fontWeight: _fotoPuerta != null
-                            ? FontWeight.bold
-                            : FontWeight.normal,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _fotoPuerta != null
-                          ? 'Presiona "Guardar Ingreso" para validar con IA'
-                          : 'El OCR validará el código escrito en la puerta',
-                      style: AppTypography.small,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 32),
-
-            // 5. EL BOTÓN GUARDAR
+            // 4. EL BOTÓN GUARDAR / REGISTRAR CON OCR ATÓMICO
             GradientButton(
-              onPressed: _isUploading
-                  ? null // Se deshabilita y se torna gris automáticamente
-                  : () async {
-                      if (_patenteController.text.trim().isEmpty ||
-                          _marcaController.text.trim().isEmpty ||
-                          _fotoPuerta == null) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Bloqueo: Faltan datos o la foto de validación.',
-                            ),
-                            backgroundColor: AppPalette.error,
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                        return;
-                      }
-
-                      setState(() {
-                        _isUploading = true;
-                      });
-
-                      final datosNuevos = {
-                        "correlativo_ingreso": numeroIngreso,
-                        "patente": _patenteController.text,
-                        "marca": _marcaController.text,
-                        "modelo": _modeloController.text,
-                        "anio": int.tryParse(_anoController.text) ?? 2000,
-                        "cilindrada": _cilindradaController.text,
-                        "numero_motor": _motorController.text,
-                        "traccion": traccionSeleccionada ?? "",
-                        "transmision": transmisionSeleccionada ?? "",
-                        "combustible": combustibleSeleccionado ?? "",
-                        "estado": "EN_PATIO",
-                      };
-
-                      try {
-                        // ⚠️ Ajuste: Asegúrate de tener guardarIngresoConRespuesta en vehiculo_service.dart
-                        final resultado = await _vehiculoService
-                            .guardarIngresoConRespuesta(
-                              datosNuevos,
-                              _fotoPuerta!,
-                            );
-
-                        if (resultado['exito'] == true && context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                '✅ Poka-Yoke Superado: ¡Vehículo ingresado con éxito!',
-                              ),
-                              backgroundColor: AppPalette.success,
-                              duration: Duration(seconds: 4),
-                            ),
-                          );
-
-                          _patenteController.clear();
-                          _marcaController.clear();
-                          _modeloController.clear();
-                          _anoController.clear();
-                          _cilindradaController.clear();
-                          _motorController.clear();
-                          setState(() {
-                            traccionSeleccionada = null;
-                            transmisionSeleccionada = null;
-                            combustibleSeleccionado = null;
-                            numeroIngreso = "Cargando...";
-                            _fotoPuerta = null;
-                          });
-
-                          _cargarFolioDesdeBackend();
-                        } else if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('❌ ${resultado['mensaje']}'),
-                              backgroundColor: AppPalette.error,
-                              duration: const Duration(seconds: 6),
-                            ),
-                          );
-                        }
-                      } catch (e) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                '❌ Error de conexión con el servidor.',
-                              ),
-                              backgroundColor: AppPalette.error,
-                            ),
-                          );
-                        }
-                      } finally {
-                        if (context.mounted) {
-                          setState(() {
-                            _isUploading = false;
-                          });
-                        }
-                      }
-                    },
+              key: const Key('btn_guardar_ingreso_ocr'),
+              onPressed: _isUploading ? null : _ejecutarGuardadoConOCR,
               gradient: const LinearGradient(
                 colors: [AppPalette.primary, AppPalette.primary],
                 begin: Alignment.centerLeft,
                 end: Alignment.centerRight,
               ),
               child: _isUploading
-                  ? const SizedBox(
-                      height: 24,
-                      width: 24,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 3,
-                      ),
+                  ? const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2.5,
+                          ),
+                        ),
+                        SizedBox(width: 12),
+                        Text(
+                          'VALIDANDO OCR Y GUARDANDO...',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            letterSpacing: 1.0,
+                          ),
+                        ),
+                      ],
                     )
-                  : const Text(
-                      'GUARDAR INGRESO',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.5,
-                      ),
+                  : const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.camera_alt, color: Colors.white, size: 22),
+                        SizedBox(width: 10),
+                        Text(
+                          'GUARDAR / REGISTRAR INGRESO',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                            letterSpacing: 1.0,
+                          ),
+                        ),
+                      ],
                     ),
             ),
             const SizedBox(height: 40),
@@ -462,6 +321,130 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _ejecutarGuardadoConOCR() async {
+    // 1. Validar campos manuales obligatorios
+    if (_patenteController.text.trim().isEmpty ||
+        _marcaController.text.trim().isEmpty ||
+        _modeloController.text.trim().isEmpty ||
+        _anoController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            '⚠️ Bloqueo: Completa los datos obligatorios (Patente, Marca, Modelo y Año) antes de registrar.',
+          ),
+          backgroundColor: AppPalette.secondary,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    // 2. Abrir automáticamente la cámara para capturar la foto física Poka-Yoke
+    final XFile? foto = await _picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 80,
+    );
+
+    if (foto == null) {
+      // El usuario canceló la cámara
+      return;
+    }
+
+    setState(() {
+      _isUploading = true;
+    });
+
+    final datosNuevos = {
+      "correlativo_ingreso": numeroIngreso,
+      "patente": _patenteController.text.trim().toUpperCase(),
+      "marca": _marcaController.text.trim(),
+      "modelo": _modeloController.text.trim(),
+      "anio": int.tryParse(_anoController.text.trim()) ?? 2000,
+      "cilindrada": _cilindradaController.text.trim(),
+      "numero_motor": _motorController.text.trim(),
+      "traccion": traccionSeleccionada ?? "",
+      "transmision": transmisionSeleccionada ?? "",
+      "combustible": combustibleSeleccionado ?? "",
+      "estado": "EN_PATIO",
+    };
+
+    try {
+      final resultado = await _vehiculoService.guardarIngresoConRespuesta(
+        datosNuevos,
+        foto,
+      );
+
+      if (!mounted) return;
+
+      if (resultado['exito'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              '✅ Poka-Yoke Superado: ¡Vehículo ingresado con éxito!',
+            ),
+            backgroundColor: AppPalette.success,
+            duration: Duration(seconds: 4),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+
+        _patenteController.clear();
+        _marcaController.clear();
+        _modeloController.clear();
+        _anoController.clear();
+        _cilindradaController.clear();
+        _motorController.clear();
+        setState(() {
+          traccionSeleccionada = null;
+          transmisionSeleccionada = null;
+          combustibleSeleccionado = null;
+          numeroIngreso = "Cargando...";
+        });
+
+        _cargarFolioDesdeBackend();
+      } else {
+        final mensajeError = resultado['mensaje']?.toString() ?? '';
+        final String feedback;
+        if (mensajeError.toLowerCase().contains('poka-yoke') ||
+            mensajeError.toLowerCase().contains('ocr') ||
+            mensajeError.toLowerCase().contains('foto') ||
+            mensajeError.toLowerCase().contains('texto') ||
+            mensajeError.toLowerCase().contains('corresponde')) {
+          feedback = 'No se pudo validar el OCR de la pieza. Por favor, reintente con una foto más clara';
+        } else {
+          feedback = mensajeError.isNotEmpty
+              ? mensajeError
+              : 'No se pudo validar el OCR de la pieza. Por favor, reintente con una foto más clara';
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ $feedback'),
+            backgroundColor: AppPalette.error,
+            duration: const Duration(seconds: 6),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('❌ Error de conexión con el servidor.'),
+            backgroundColor: AppPalette.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploading = false;
+        });
+      }
+    }
   }
 
   // ── WIDGETS REUTILIZABLES PARA FORMULARIOS ──

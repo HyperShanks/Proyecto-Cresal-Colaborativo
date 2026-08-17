@@ -19,6 +19,7 @@ class CatalogoItem {
   final String? ubicacionPasillo;
   final String? ubicacionPallet;
   final String? estadoActivo;
+  final List<String> imagenes;
 
   const CatalogoItem({
     required this.idActivo,
@@ -39,6 +40,7 @@ class CatalogoItem {
     this.ubicacionPasillo,
     this.ubicacionPallet,
     this.estadoActivo,
+    this.imagenes = const [],
   });
 
   factory CatalogoItem.fromJson(Map<String, dynamic> json) {
@@ -61,6 +63,7 @@ class CatalogoItem {
       ubicacionPasillo: json['ubicacion_pasillo']?.toString(),
       ubicacionPallet: json['ubicacion_pallet']?.toString(),
       estadoActivo: json['estado_activo']?.toString(),
+      imagenes: (json['imagenes'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? const [],
     );
   }
 
@@ -84,6 +87,7 @@ class CatalogoItem {
       'ubicacion_pasillo': ubicacionPasillo,
       'ubicacion_pallet': ubicacionPallet,
       'estado_activo': estadoActivo,
+      'imagenes': imagenes,
     };
   }
 

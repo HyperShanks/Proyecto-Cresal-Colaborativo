@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../../auth/services/auth_service.dart';
+import '../../services/inventario_service.dart';
 import '../../controllers/cart_controller.dart';
 import 'carrito_screen.dart';
 import 'catalogo_screen.dart';
@@ -27,6 +28,7 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
   String? _userRol;
   int? _idRol;
   String? _userSucursal;
+  int _pendientesTasacionCount = 0;
 
   @override
   void initState() {
@@ -45,6 +47,21 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
         _idRol = idRol;
         _userSucursal = sucursal;
       });
+      _actualizarPendientesTasacion();
+    }
+  }
+
+  Future<void> _actualizarPendientesTasacion() async {
+    if (!_esJefeVentas) return;
+    try {
+      final pendientes = await InventarioService.obtenerPendientesPrecio();
+      if (mounted) {
+        setState(() {
+          _pendientesTasacionCount = pendientes.length;
+        });
+      }
+    } catch (_) {
+      // Ignorar errores transitorios de red
     }
   }
 
@@ -186,7 +203,7 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
             _buildDrawerItem(
               icon: Icons.price_change_outlined,
               label: 'BANDEJA DE PRECIOS',
-              badgeColor: AppPalette.secondary,
+              badgeColor: _pendientesTasacionCount > 0 ? AppPalette.secondary : null,
               onTap: () {
                 Navigator.of(context).pop();
                 // Si la pestaña de Tasación está activa, navega al índice 2
@@ -316,9 +333,23 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
 
     if (_esJefeVentas) {
       items.add(
-        const BottomNavigationBarItem(
-          icon: Icon(Icons.price_change_outlined),
-          activeIcon: Icon(Icons.price_change),
+        BottomNavigationBarItem(
+          icon: _pendientesTasacionCount > 0
+              ? Badge.count(
+                  count: _pendientesTasacionCount,
+                  backgroundColor: AppPalette.secondary,
+                  textColor: AppPalette.background,
+                  child: const Icon(Icons.price_change_outlined),
+                )
+              : const Icon(Icons.price_change_outlined),
+          activeIcon: _pendientesTasacionCount > 0
+              ? Badge.count(
+                  count: _pendientesTasacionCount,
+                  backgroundColor: AppPalette.secondary,
+                  textColor: AppPalette.background,
+                  child: const Icon(Icons.price_change),
+                )
+              : const Icon(Icons.price_change),
           label: 'Tasación',
         ),
       );
@@ -380,6 +411,7 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
                 setState(() {
                   _currentIndex = index;
                 });
+                _actualizarPendientesTasacion();
               },
               backgroundColor: AppPalette.surface,
               selectedItemColor: AppPalette.primary,

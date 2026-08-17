@@ -26,6 +26,8 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
 
   bool _isLoading = false;
   bool _vehiculoEncontrado = false;
+  bool _isLoadingPendientes = false;
+  List<dynamic> _pendientesPaletizado = [];
 
   String _marca = "";
   String _modelo = "";
@@ -41,6 +43,29 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
 
   final ImagePicker _picker = ImagePicker();
   List<XFile> _fotosComerciales = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarPendientes();
+  }
+
+  Future<void> _cargarPendientes() async {
+    setState(() => _isLoadingPendientes = true);
+    try {
+      final pendientes = await _paletizadoService.obtenerPendientesPaletizado();
+      if (!mounted) return;
+      setState(() {
+        _pendientesPaletizado = pendientes;
+      });
+    } catch (e) {
+      debugPrint('Error al cargar pendientes de paletizado: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingPendientes = false);
+      }
+    }
+  }
 
   Future<void> _tomarFotoComercial() async {
     if (_fotosComerciales.length >= 10) {
@@ -222,6 +247,7 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
       _fotosComerciales.clear();
       _tipoActivoSeleccionado = 'Motor';
     });
+    _cargarPendientes();
   }
 
   // ── HU-2.4: Modal Bottom Sheet con 3 acciones post-guardado ──────────────
@@ -317,8 +343,7 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
     return Scaffold(
       backgroundColor: AppPalette.background,
       appBar: AppBar(
-        backgroundColor:
-            AppPalette.background, // Alineado al estilo de Recepción
+        backgroundColor: AppPalette.background,
         title: const Text(
           'Paletizado y Enriquecimiento',
           style: AppTypography.title,
@@ -340,6 +365,7 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
                       hintText: 'Buscar N° Ingreso...',
                       prefixIcon: Icon(Icons.search, color: AppPalette.primary),
                     ),
+                    onSubmitted: (_) => _buscarVehiculo(),
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -366,13 +392,13 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
 
             const SizedBox(height: 32),
 
-            // ── 2. FORMULARIO LOGÍSTICO (Estilo Plano) ────────────
+            // ── 2. FORMULARIO LOGÍSTICO ───────────────────────────
             if (_vehiculoEncontrado) ...[
-              // Banner de información destacada (Similar a Recepción)
+              // Banner de información destacada
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(
-                  vertical: 24,
+                  vertical: 20,
                   horizontal: 16,
                 ),
                 decoration: BoxDecoration(
@@ -381,7 +407,22 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
                 ),
                 child: Column(
                   children: [
-                    const Text('VEHÍCULO ORIGEN', style: AppTypography.small),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('VEHÍCULO ORIGEN', style: AppTypography.small),
+                        InkWell(
+                          onTap: _limpiarFormulario,
+                          child: Text(
+                            'Volver a la lista',
+                            style: AppTypography.small.copyWith(
+                              color: AppPalette.secondary,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 8),
                     Text(
                       '$_marca $_modelo',
@@ -392,12 +433,94 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text('Año: $_anio', style: AppTypography.title),
+                    const SizedBox(height: 16),
+
+                    // ── ESTADO DE LOS COMPONENTES PRINCIPALES ──
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: AppPalette.background,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: _datosMotor['id_estado'] == 5
+                                    ? AppPalette.success
+                                    : AppPalette.neutral.withValues(alpha: 0.3),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(Icons.settings, size: 16, color: AppPalette.primary),
+                                    const SizedBox(width: 6),
+                                    Text('MOTOR', style: AppTypography.small.copyWith(fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  _datosMotor['id_estado'] == 5
+                                      ? 'Disponible para Paletizar'
+                                      : (_datosMotor.isNotEmpty ? 'Ya Paletizado' : 'No Registrado'),
+                                  style: AppTypography.small.copyWith(
+                                    color: _datosMotor['id_estado'] == 5 ? AppPalette.success : AppPalette.textSecondary,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: AppPalette.background,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: _datosCaja['id_estado'] == 5
+                                    ? AppPalette.success
+                                    : AppPalette.neutral.withValues(alpha: 0.3),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(Icons.swap_horiz, size: 16, color: AppPalette.primary),
+                                    const SizedBox(width: 6),
+                                    Text('CAJA CAMBIOS', style: AppTypography.small.copyWith(fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  _datosCaja['id_estado'] == 5
+                                      ? 'Disponible para Paletizar'
+                                      : (_datosCaja.isNotEmpty ? 'Ya Paletizada' : 'No Registrada'),
+                                  style: AppTypography.small.copyWith(
+                                    color: _datosCaja['id_estado'] == 5 ? AppPalette.success : AppPalette.textSecondary,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
 
               const SizedBox(height: 32),
-              const Text('Datos del Activo', style: AppTypography.title),
+              const Text('Datos del Activo a Paletizar', style: AppTypography.title),
               const SizedBox(height: 16),
 
               DropdownButtonFormField<String>(
@@ -405,13 +528,12 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
                 dropdownColor: AppPalette.surface,
                 style: const TextStyle(color: AppPalette.textPrimary),
                 decoration: const InputDecoration(
-                  labelText: 'Tipo de Repuesto',
+                  labelText: 'Seleccionar Repuesto para Etiquetar',
                   prefixIcon: Icon(
                     Icons.build_circle_outlined,
                     color: AppPalette.primary,
                   ),
                 ),
-                // ⚠️ Usamos nuestra lista dinámica filtrada
                 items: _opcionesRepuestos.map((String valor) {
                   return DropdownMenuItem(value: valor, child: Text(valor));
                 }).toList(),
@@ -422,7 +544,6 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
                 },
               ),
               const SizedBox(height: 16),
-              // <-- Pega esto justo debajo del DropdownButtonFormField y su SizedBox(height: 24) -->
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
@@ -444,7 +565,6 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
                     ),
                     const SizedBox(height: 8),
 
-                    // Si seleccionó Motor, mostramos sus datos
                     if (_tipoActivoSeleccionado == 'Motor') ...[
                       Text(
                         'N° Motor: ${_datosMotor['numero_motor'] ?? '-'}',
@@ -494,17 +614,12 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
               ),
 
               const SizedBox(height: 32),
-              const Text(
-                'Catálogo Comercial (Max. 10)',
-                style: AppTypography.title,
-              ),
-              const SizedBox(height: 16),
 
               // ── C. CATÁLOGO COMERCIAL ──
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Catálogo Comercial', style: AppTypography.title),
+                  const Text('Catálogo Comercial (Max. 10)', style: AppTypography.title),
                   Text(
                     '${_fotosComerciales.length}/10',
                     style: AppTypography.small.copyWith(
@@ -522,11 +637,8 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
                 height: 140,
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
-                  itemCount:
-                      _fotosComerciales.length +
-                      1, // +1 para el botón de agregar
+                  itemCount: _fotosComerciales.length + 1,
                   itemBuilder: (context, index) {
-                    // El primer elemento siempre es el botón para tomar foto
                     if (index == 0) {
                       return Padding(
                         padding: const EdgeInsets.only(right: 12),
@@ -560,7 +672,6 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
                       );
                     }
 
-                    // Los siguientes elementos son las fotos que el operario ya tomó
                     final fotoIndex = index - 1;
                     return Padding(
                       padding: const EdgeInsets.only(right: 12),
@@ -575,7 +686,6 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
                               fit: BoxFit.cover,
                             ),
                           ),
-                          // Botón para eliminar la foto (una pequeña 'X' en la esquina)
                           Positioned(
                             top: 4,
                             right: 4,
@@ -604,7 +714,7 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
 
               const SizedBox(height: 40),
 
-              // Botón Final sin restricción estricta de altura
+              // Botón Final
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
@@ -629,6 +739,212 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
                   ),
                 ),
               ),
+            ] else ...[
+              // ── 2. SECCIÓN DE PIEZAS PENDIENTES O EMPTY STATE ────
+              if (_isLoadingPendientes)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 48.0),
+                    child: CircularProgressIndicator(color: AppPalette.primary),
+                  ),
+                )
+              else if (_pendientesPaletizado.isEmpty)
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 48.0, horizontal: 16.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(
+                            color: AppPalette.surface,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: AppPalette.success.withValues(alpha: 0.3),
+                              width: 2,
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.check_circle_outline,
+                            size: 56,
+                            color: AppPalette.success,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Text(
+                          'No hay piezas pendientes para paletizar',
+                          style: AppTypography.title.copyWith(fontSize: 18),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Todos los activos ingresados cuentan con ubicación física asignada en bodega.',
+                          style: AppTypography.small.copyWith(
+                            color: AppPalette.textSecondary,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 24),
+                        OutlinedButton.icon(
+                          onPressed: _cargarPendientes,
+                          icon: const Icon(Icons.refresh, color: AppPalette.primary, size: 18),
+                          label: const Text(
+                            'Actualizar Lista',
+                            style: TextStyle(color: AppPalette.primary),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: AppPalette.primary),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Piezas Disponibles para Paletizar (${_pendientesPaletizado.length})',
+                      style: AppTypography.title.copyWith(fontSize: 16),
+                    ),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.refresh,
+                        color: AppPalette.primary,
+                        size: 20,
+                      ),
+                      onPressed: _cargarPendientes,
+                      tooltip: 'Actualizar lista',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Selecciona una pieza para autocompletar o busca por Folio arriba.',
+                  style: AppTypography.small.copyWith(
+                    color: AppPalette.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: _pendientesPaletizado.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    final item = _pendientesPaletizado[index];
+                    final folio = item['numero_ingreso']?.toString() ?? 'S/F';
+                    final marca = item['marca']?.toString() ?? 'Desconocida';
+                    final modelo = item['modelo']?.toString() ?? 'Desconocido';
+                    final anio = item['anio']?.toString() ?? '';
+                    final categoria = item['tipo_repuesto']?.toString() ?? 'Repuesto';
+                    final sku = item['sku_qr_fisico']?.toString() ?? '';
+
+                    return InkWell(
+                      key: Key('item_pendiente_paletizado_$index'),
+                      onTap: () {
+                        _searchController.text = folio;
+                        _buscarVehiculo();
+                      },
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppPalette.surface,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.08),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: AppPalette.primary.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(
+                                categoria.toUpperCase().contains('MOTOR')
+                                    ? Icons.settings
+                                    : Icons.swap_horiz,
+                                color: AppPalette.primary,
+                                size: 26,
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: AppPalette.primary.withValues(alpha: 0.2),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          'Folio: $folio',
+                                          style: const TextStyle(
+                                            color: AppPalette.primary,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        categoria,
+                                        style: AppTypography.small.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    '$marca $modelo $anio'.trim(),
+                                    style: AppTypography.body.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  if (sku.isNotEmpty) ...[
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'SKU: $sku',
+                                      style: AppTypography.small.copyWith(
+                                        color: AppPalette.textSecondary,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            const Icon(
+                              Icons.arrow_forward_ios,
+                              color: AppPalette.textSecondary,
+                              size: 16,
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
             ],
           ],
         ),

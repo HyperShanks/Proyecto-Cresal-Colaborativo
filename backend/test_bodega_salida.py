@@ -541,7 +541,7 @@ def test_rechazo_dual_scan_sku_incorrecto(client, db_session, auth_headers_bodeg
         headers=auth_headers_bodeguero
     )
     assert response.status_code == 400
-    assert "no pertenece a esta orden" in response.json()["detail"].lower()
+    assert "no pertenecen a esta orden" in response.json()["detail"].lower() or "no pertenece a esta orden" in response.json()["detail"].lower()
 
 
 def test_rechazo_dual_scan_faltan_skus(client, db_session, auth_headers_bodeguero):

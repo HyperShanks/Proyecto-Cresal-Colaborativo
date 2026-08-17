@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../../auth/services/auth_service.dart';
+import '../../../alertas/services/logistica_service.dart';
+import '../../../alertas/services/bodega_polling_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HOME SCREEN — Panel principal protegido por sesión
@@ -17,18 +19,37 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   String? _userRol;
   String? _userSucursal;
   DateTime? _pausedTime;
+  int _conteoTareas = 0;
+  bool _tieneTraslados = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+
+    // Escuchar notificaciones reactivas de BodegaPollingService
+    BodegaPollingService.instance.totalPendientesNotifier.addListener(_actualizarEstadoTareas);
+    BodegaPollingService.instance.tieneTrasladosNotifier.addListener(_actualizarEstadoTareas);
+
     // Blindaje de ruta: si se accede directo por URL sin token, redirige a login
     _guardRoute();
+  }
+
+  void _actualizarEstadoTareas() {
+    if (mounted) {
+      setState(() {
+        _conteoTareas = BodegaPollingService.instance.totalPendientesNotifier.value;
+        _tieneTraslados = BodegaPollingService.instance.tieneTrasladosNotifier.value;
+      });
+    }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    BodegaPollingService.instance.totalPendientesNotifier.removeListener(_actualizarEstadoTareas);
+    BodegaPollingService.instance.tieneTrasladosNotifier.removeListener(_actualizarEstadoTareas);
+    BodegaPollingService.instance.detenerPolling();
     super.dispose();
   }
 
@@ -41,10 +62,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         final difference = DateTime.now().difference(_pausedTime!);
         if (difference.inMinutes >= 5) {
           _pausedTime = null;
+          BodegaPollingService.instance.reset();
           AuthService.clearToken();
           Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
         } else {
           _pausedTime = null;
+          // Reactivar polling si fue reanudado
+          BodegaPollingService.instance.procesarCiclo();
         }
       }
     }
@@ -69,7 +93,49 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _userRol = rol;
         _userSucursal = sucursal;
       });
+      _iniciarServicioPolling();
     }
+  }
+
+  Future<void> _iniciarServicioPolling() async {
+    final sucursalId = await AuthService.getSucursalId();
+    BodegaPollingService.instance.onNotificacion = (titulo, cuerpo) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppPalette.surface,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+              side: const BorderSide(color: AppPalette.secondary, width: 1.5),
+            ),
+            content: Row(
+              children: [
+                const Icon(Icons.notifications_active, color: AppPalette.secondary, size: 24),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(titulo, style: AppTypography.title.copyWith(fontSize: 14, color: AppPalette.secondary)),
+                      const SizedBox(height: 2),
+                      Text(cuerpo, style: AppTypography.small.copyWith(fontSize: 12, color: AppPalette.textPrimary)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+    };
+    BodegaPollingService.instance.iniciarPolling(sucursalId: sucursalId);
+  }
+
+  Future<void> _cargarConteoTareas() async {
+    await BodegaPollingService.instance.procesarCiclo();
   }
 
   // ── Logout ────────────────────────────────────────────────────────────────
@@ -110,6 +176,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     if (confirmed != true || !mounted) return;
 
+    BodegaPollingService.instance.reset();
     await AuthService.clearToken();
 
     if (!mounted) return;
@@ -321,7 +388,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             title: 'RECEPCIÓN DE VEHÍCULO',
             icon: Icons.local_shipping_outlined,
             onTap: () {
-              // Enlace hacia HU-2.2
               Navigator.pushNamed(context, '/recepcion');
             },
           ),
@@ -331,31 +397,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             title: 'PALETIZADO DE PIEZAS',
             icon: Icons.inventory_2_outlined,
             onTap: () {
-              // Enlace hacia HU-2.3
               Navigator.pushNamed(context, '/paletizado');
             },
           ),
           const SizedBox(height: 16),
-        ],
-
-        // 💵 Si el rol es Caja -> (Futura implementación)
-        if (_userRol == 'Caja') ...[
-          // TODO: Implementar módulos de Caja (ej. Cobro de Órdenes, Arqueo de Caja)
-        ],
-
-        // 👔 Si el rol es Gerente -> (Futura implementación)
-        if (_userRol == 'Gerente') ...[
-          // TODO: Implementar módulos de Gerencia (ej. Dashboard Ejecutivo, Reportes Financieros)
-        ],
-
-        // 🛠️ Si el rol es Administrador -> (Futura implementación)
-        if (_userRol == 'Administrador') ...[
-          // TODO: Implementar módulos de Administración (ej. Gestión de Usuarios, Parámetros)
-        ],
-
-        // 📋 Si el rol es Auditor -> (Futura implementación)
-        if (_userRol == 'Auditor') ...[
-          // TODO: Implementar módulos de Auditoría (ej. Registro de Actividades, Trazabilidad)
         ],
 
         // 🔍 Módulos compartidos por todos
@@ -371,10 +416,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _buildModuleCard(
           context: context,
           title: 'ALERTA TAREAS',
-          icon: Icons.notifications_none,
-          onTap: () {
-            // Conexión hacia la nueva vista del tablero
-            Navigator.pushNamed(context, '/alertas');
+          icon: _tieneTraslados ? Icons.warning_amber_rounded : Icons.notifications_none,
+          badgeCount: _conteoTareas,
+          isHighlighted: _tieneTraslados,
+          highlightTag: _tieneTraslados ? 'TRASLADO PENDIENTE' : null,
+          onTap: () async {
+            // Conexión hacia la vista del tablero y refresco al regresar
+            await Navigator.pushNamed(context, '/alertas');
+            _cargarConteoTareas();
           },
         ),
       ],
@@ -386,7 +435,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     required String title,
     required IconData icon,
     required VoidCallback onTap,
+    int? badgeCount,
+    bool isHighlighted = false,
+    String? highlightTag,
   }) {
+    final borderColor = isHighlighted ? AppPalette.secondary : AppPalette.primary;
+
     return Material(
       color: AppPalette.surface,
       borderRadius: BorderRadius.circular(12),
@@ -394,19 +448,59 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       child: InkWell(
         onTap: onTap,
         child: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             border: Border(
-              left: BorderSide(color: AppPalette.primary, width: 4),
+              left: BorderSide(color: borderColor, width: isHighlighted ? 6 : 4),
             ),
+            color: isHighlighted ? AppPalette.secondary.withValues(alpha: 0.05) : null,
           ),
-          // ⚠️ FIX: Aumentamos el padding vertical (de 24 a 32) para hacer la tarjeta más alta
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
           child: Row(
             children: [
-              // ⚠️ FIX: Aumentamos un poco el tamaño del ícono para que no se pierda en el nuevo espacio
-              Icon(icon, size: 36, color: AppPalette.primary),
+              Icon(
+                icon,
+                size: 36,
+                color: isHighlighted ? AppPalette.secondary : AppPalette.primary,
+              ),
               const SizedBox(width: 16),
-              Expanded(child: Text(title, style: AppTypography.cardTitle)),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: AppTypography.cardTitle),
+                    if (highlightTag != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        highlightTag,
+                        style: AppTypography.small.copyWith(
+                          color: AppPalette.secondary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (badgeCount != null && badgeCount > 0) ...[
+                const SizedBox(width: 8),
+                Container(
+                  key: const Key('home_badge_alertas'),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: isHighlighted ? AppPalette.secondary : AppPalette.primary,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Text(
+                    badgeCount.toString(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),

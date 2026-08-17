@@ -161,4 +161,29 @@ class PaletizadoService {
       return false;
     }
   }
+
+  /// Consulta la lista de piezas pendientes de paletizado en bodega
+  Future<List<dynamic>> obtenerPendientesPaletizado() async {
+    try {
+      final url = Uri.parse('${ApiConstants.vehiculosEndpoint}/pendientes-paletizado');
+      final token = await AuthService.getToken();
+      final headers = {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      };
+      final response = await http.get(url, headers: headers);
+
+      if (response.statusCode == 200) {
+        return jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
+      } else {
+        debugPrint(
+          '📌 [PALETIZADO_SERVICE] ❌ Error ${response.statusCode} al obtener pendientes: ${response.body}',
+        );
+        return [];
+      }
+    } catch (e) {
+      debugPrint('📌 [PALETIZADO_SERVICE] ❌ Excepción al obtener pendientes: $e');
+      return [];
+    }
+  }
 }

@@ -91,7 +91,10 @@ void main() {
 
       // Tarjetas Micro-CRM
       expect(find.text('DATOS POST-VENTA CLIENTE'), findsOneWidget);
-      expect(find.text('REQUIERE DESPACHO'), findsOneWidget);
+      expect(find.text('MODALIDAD DE ENTREGA'), findsOneWidget);
+      expect(find.text('Retiro en Tienda'), findsOneWidget);
+      expect(find.text('Despacho a Domicilio'), findsOneWidget);
+      expect(find.text('Traslado a otra sucursal'), findsOneWidget);
 
       // Barra inferior de Checkout
       expect(find.text('TOTAL CARRITO:'), findsOneWidget);
@@ -103,7 +106,7 @@ void main() {
       expect(find.byTooltip('Vaciar carrito'), findsOneWidget);
     });
 
-    testWidgets('Checkbox Requiere Despacho despliega campos adicionales', (tester) async {
+    testWidgets('Selector de Modalidad de Entrega despliega campos de Despacho y Traslado', (tester) async {
       CartController.instance.agregarInventariado(itemTest1);
 
       await tester.pumpWidget(
@@ -112,21 +115,23 @@ void main() {
         ),
       );
 
-      // Al inicio no se muestran campos de despacho
-      expect(find.text('Dirección de Envío *'), findsNothing);
-
-      // Scroll hasta REQUIERE DESPACHO y marcar checkbox
+      // Scroll hasta MODALIDAD DE ENTREGA
       await tester.scrollUntilVisible(
-        find.text('REQUIERE DESPACHO'),
+        find.text('MODALIDAD DE ENTREGA'),
         100,
         scrollable: find.byType(Scrollable).first,
       );
-      expect(find.text('REQUIERE DESPACHO'), findsOneWidget);
+      expect(find.text('MODALIDAD DE ENTREGA'), findsOneWidget);
 
-      await tester.tap(find.byType(Checkbox).first);
+      // Al inicio está en 'Retiro en Tienda' por defecto
+      expect(find.text('El cliente retirará los repuestos directamente en el mesón de atención tras completar el pago en caja.'), findsOneWidget);
+      expect(find.text('Dirección de Envío *'), findsNothing);
+      expect(find.text('SELECCIONA SUCURSAL DESTINO *'), findsNothing);
+
+      // Seleccionar 'Despacho a Domicilio'
+      await tester.tap(find.byKey(const Key('chip_entrega_Despacho')));
       await tester.pumpAndSettle();
 
-      // Ahora se despliegan los campos de despacho
       await tester.scrollUntilVisible(
         find.text('Dirección de Envío *'),
         100,
@@ -137,6 +142,24 @@ void main() {
       expect(find.text('RUT Receptor *'), findsOneWidget);
       expect(find.text('Nombres Receptor *'), findsOneWidget);
       expect(find.text('Teléfono Receptor *'), findsOneWidget);
+
+      // Seleccionar 'Traslado a otra sucursal'
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('chip_entrega_Traslado')),
+        100,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.byKey(const Key('chip_entrega_Traslado')));
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(
+        find.text('SELECCIONA SUCURSAL DESTINO *'),
+        100,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('SELECCIONA SUCURSAL DESTINO *'), findsOneWidget);
+      expect(find.text('Sucursal de Destino'), findsOneWidget);
+      expect(find.text('Viña del Mar'), findsWidgets);
     });
 
     testWidgets('Edición in-line de precio recalcula subtotal y total en tiempo real', (tester) async {
@@ -285,6 +308,45 @@ void main() {
         find.widgetWithText(ElevatedButton, 'Derivar a Caja'),
       );
       expect(btnDerivar.onPressed, isNull);
+    });
+
+    testWidgets('Switch Cliente Anónimo / Sin RUT oculta campos personales y muestra banner informativo', (tester) async {
+      CartController.instance.agregarInventariado(itemTest1);
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: CarritoScreen(),
+        ),
+      );
+
+      // El switch de cliente anónimo existe y por defecto está en false
+      final switchFinder = find.byKey(const Key('switch_cliente_anonimo'));
+      await tester.scrollUntilVisible(
+        switchFinder,
+        100,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(switchFinder, findsOneWidget);
+      expect(find.text('Cliente Anónimo / Sin RUT'), findsOneWidget);
+      expect(find.text('RUT Cliente *'), findsOneWidget);
+
+      // Activar switch
+      await tester.tap(switchFinder);
+      await tester.pumpAndSettle();
+
+      // Campos personales deben ocultarse y el banner informativo debe ser visible
+      expect(find.text('RUT Cliente *'), findsNothing);
+      expect(
+        find.text('Aviso: El cliente solo podrá pagar y retirar en caja presentando su Número de Orden.'),
+        findsOneWidget,
+      );
+
+      // Desactivar switch
+      await tester.tap(switchFinder);
+      await tester.pumpAndSettle();
+
+      // Campos personales reaparecen
+      expect(find.text('RUT Cliente *'), findsOneWidget);
     });
   });
 }

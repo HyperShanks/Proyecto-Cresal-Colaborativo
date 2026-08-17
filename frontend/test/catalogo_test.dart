@@ -5,6 +5,7 @@ import 'package:frontend/features/ventas/presentation/widgets/catalogo_item_card
 import 'package:frontend/features/ventas/presentation/widgets/catalogo_item_detail_sheet.dart';
 import 'package:frontend/features/ventas/presentation/widgets/filtros_drawer.dart';
 import 'package:frontend/features/ventas/presentation/screens/ventas_main_screen.dart';
+import 'package:frontend/features/ventas/presentation/screens/catalogo_screen.dart';
 
 void main() {
   group('CatalogoItem Model Tests', () {
@@ -131,6 +132,8 @@ void main() {
       int? selectedSucursal;
       String? selectedMarca;
       int? selectedAnio;
+      String? selectedCilindrada;
+      String? selectedTransmision;
       bool limpiarPressed = false;
 
       await tester.pumpWidget(
@@ -141,10 +144,14 @@ void main() {
               idSucursal: selectedSucursal,
               marca: selectedMarca,
               anio: selectedAnio,
+              cilindrada: selectedCilindrada,
+              transmision: selectedTransmision,
               onCategoriaChanged: (val) => selectedCategoria = val,
               onSucursalChanged: (val) => selectedSucursal = val,
               onMarcaChanged: (val) => selectedMarca = val,
               onAnioChanged: (val) => selectedAnio = val,
+              onCilindradaChanged: (val) => selectedCilindrada = val,
+              onTransmisionChanged: (val) => selectedTransmision = val,
               onLimpiarFiltros: () => limpiarPressed = true,
             ),
             body: Builder(
@@ -174,6 +181,8 @@ void main() {
       expect(find.text('Limache'), findsOneWidget);
       expect(find.text('MARCA DEL VEHÍCULO'), findsOneWidget);
       expect(find.text('AÑO DEL MOTOR'), findsOneWidget);
+      expect(find.text('CILINDRADA'), findsOneWidget);
+      expect(find.text('TIPO DE TRANSMISIÓN'), findsOneWidget);
       expect(find.text('Limpiar filtros'), findsOneWidget);
 
       // Probar tap en "Cajas"
@@ -335,7 +344,7 @@ void main() {
       expect(cartPressed, isTrue);
     });
 
-    testWidgets('Tap en CatalogoItemCard despliega CatalogoItemDetailSheet', (tester) async {
+    testWidgets('Tap en CatalogoItemCard navega a DetalleActivoScreen', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -351,10 +360,41 @@ void main() {
       await tester.tap(find.text('Motor - Toyota Yaris Sport 2019'));
       await tester.pumpAndSettle();
 
-      // Verificar que el modal de detalle se ha desplegado
-      expect(find.text('FICHA TÉCNICA'), findsOneWidget);
-      expect(find.text('SKU: MOT-TOY-YAR-2019-01'), findsOneWidget); // En la Tarjeta
-      expect(find.text('MOT-TOY-YAR-2019-01'), findsOneWidget); // En el BottomSheet
+      // Verificar que DetalleActivoScreen se ha abierto
+      expect(find.text('Detalle del Repuesto'), findsOneWidget);
+      expect(find.text('ESPECIFICACIONES TÉCNICAS'), findsOneWidget);
+      expect(find.text('UBICACIÓN FÍSICA EN BODEGA'), findsOneWidget);
+      expect(find.text('Agregar al Carrito'), findsOneWidget);
+    });
+
+    testWidgets('Buscador en tiempo real en CatalogoScreen permite escribir y limpiar', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: CatalogoScreen(),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final searchFieldFinder = find.byKey(const Key('input_busqueda_catalogo'));
+      expect(searchFieldFinder, findsOneWidget);
+
+      // Escribir término de búsqueda
+      await tester.enterText(searchFieldFinder, 'Toyota');
+      await tester.pump();
+
+      // Debe mostrar el botón de limpiar búsqueda
+      expect(find.byTooltip('Limpiar búsqueda'), findsOneWidget);
+
+      // Tap en limpiar búsqueda
+      await tester.tap(find.byTooltip('Limpiar búsqueda'));
+      await tester.pump();
+
+      // El campo queda vacío y el botón de limpiar desaparece
+      final textField = tester.widget<TextField>(searchFieldFinder);
+      expect(textField.controller?.text, isEmpty);
+      expect(find.byTooltip('Limpiar búsqueda'), findsNothing);
     });
   });
 }

@@ -77,12 +77,12 @@ class VerificarQrSalidaResponseModel {
     return VerificarQrSalidaResponseModel(
       idOrden: json['id_orden']?.toString() ?? '',
       folio: json['folio'] ?? '',
-      estadoOrden: json['estado_orden'] ?? '',
+      estadoOrden: json['estado_orden'] ?? 'Pagada',
       totalVenta: json['total_venta'] ?? 0,
       montoPendiente: json['monto_pendiente'] ?? 0,
       idSucursal: json['id_sucursal'] ?? 1,
       clienteNombre: json['cliente_nombre'] ?? 'Cliente General',
-      clienteRut: json['cliente_rut'] ?? '',
+      clienteRut: json['cliente_rut'] ?? 'N/A',
       clienteTelefono: json['cliente_telefono'],
       itemsRequeridos: (json['items_requeridos'] as List<dynamic>? ?? [])
           .map((item) => ItemSalidaInfoModel.fromJson(item as Map<String, dynamic>))
@@ -93,7 +93,7 @@ class VerificarQrSalidaResponseModel {
   }
 }
 
-/// DTO de respuesta tras completar exitosamente el Dual-Scan en barrera
+/// DTO de confirmación tras el Dual-Scan match exitoso
 class EscanearSalidaResponseModel {
   final String idOrden;
   final String folio;
@@ -136,8 +136,8 @@ class EscanearSalidaResponseModel {
 
 /// Servicio para operaciones logísticas, tareas de bodega y Handshake de Salida (HU-3.6)
 class LogisticaService {
-  /// Obtiene la lista de tareas operativas pendientes de bodega
-  static Future<List<TareaAlerta>> obtenerAlertas({http.Client? client}) async {
+  /// Obtiene la lista de tareas operativas pendientes de bodega para la sucursal del usuario
+  static Future<List<TareaAlerta>> obtenerAlertas({int? sucursalId, http.Client? client}) async {
     final httpClient = client ?? http.Client();
     try {
       final token = await AuthService.getToken();
@@ -145,8 +145,12 @@ class LogisticaService {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
       };
+
+      int targetSucursal = sucursalId ?? 1;
+      final uri = Uri.parse('${ApiConstants.bodegaEndpoint}/tareas-pendientes?sucursal_id=$targetSucursal');
+
       final response = await httpClient.get(
-        Uri.parse('${ApiConstants.bodegaEndpoint}/tareas-pendientes'),
+        uri,
         headers: headers,
       );
 
@@ -253,6 +257,29 @@ class LogisticaService {
       if (client == null) {
         httpClient.close();
       }
+    }
+  }
+
+  /// Marca la preparación de pre-entrega de una pieza como 'Listo'
+  static Future<bool> completarPreentrega(String idDetalle) async {
+    try {
+      final token = await AuthService.getToken();
+      final headers = {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      };
+
+      final uri = Uri.parse('${ApiConstants.bodegaEndpoint}/tareas/$idDetalle/completar-preentrega');
+      final response = await http.patch(uri, headers: headers);
+
+      if (response.statusCode == 200) {
+        return true;
+      } else {
+        final errorData = jsonDecode(utf8.decode(response.bodyBytes));
+        throw Exception(errorData['detail'] ?? 'Error al completar pre-entrega: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error al marcar listo: $e');
     }
   }
 }

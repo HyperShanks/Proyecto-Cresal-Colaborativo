@@ -1,84 +1,105 @@
 import uuid
-from unittest.mock import patch, MagicMock
-from schemas import VehiculoResponse
-from core.security import create_access_token
-from models import Usuario, Rol, Sucursal, Region, Comuna
+import pytest
 from conftest import TestingSessionLocal
+import models
+from core.security import create_access_token
 
 
-@patch('routers.vehiculos.procesar_patente_y_guardar')
-def test_obtener_vehiculo_camino_feliz(mock_procesar, client, setup_database):
-    """
-    Caso de prueba 'Camino Feliz' (Happy Path) para la obtención de un vehículo.
-    Verifica que al consultar una patente existente, el sistema responda con un HTTP 200
-    y los datos correctos del vehículo.
-    """
-    # 1. Crear usuario de prueba para autenticación
+@pytest.fixture
+def auth_headers():
     db = TestingSessionLocal()
-    u_id = uuid.uuid4()
-    v_id = uuid.uuid4()
     try:
-        r = db.query(Region).filter_by(id_region=1).first()
-        if not r:
-            r = Region(id_region=1, nombre_region="Valparaíso")
-            db.add(r)
-        c = db.query(Comuna).filter_by(id_comuna=1).first()
-        if not c:
-            c = Comuna(id_comuna=1, nombre_comuna="Viña del Mar", id_region=1)
-            db.add(c)
-        suc = db.query(Sucursal).filter_by(id_sucursal=1).first()
-        if not suc:
-            suc = Sucursal(id_sucursal=1, nombre_sucursal="Casa Matriz", direccion="Dir", id_comuna=1)
-            db.add(suc)
-        rol = db.query(Rol).filter_by(id_rol=1).first()
-        if not rol:
-            rol = Rol(id_rol=1, nombre_rol="Bodeguero")
-            db.add(rol)
+        # 1. Region y Comuna
+        reg = db.query(models.Region).filter(models.Region.id_region == 1).first()
+        if not reg:
+            reg = models.Region(id_region=1, nombre_region="Valparaíso")
+            db.add(reg)
+            db.commit()
 
-        user = Usuario(
-            id_usuario=u_id,
-            id_rol=1,
-            id_sucursal=1,
-            rut_usuario="11.222.333-4",
-            nombres="Tester",
-            apellidos="Vehiculo",
-            email="tester_veh@cresal.cl",
-            password_hash="hash",
-            pin_acceso="1234",
-            estado="Activo"
-        )
-        db.add(user)
+        com = db.query(models.Comuna).filter(models.Comuna.id_comuna == 1).first()
+        if not com:
+            com = models.Comuna(id_comuna=1, nombre_comuna="Viña del Mar", id_region=1)
+            db.add(com)
+            db.commit()
+
+        # 2. Sucursal y Rol
+        sucursal = db.query(models.Sucursal).filter(models.Sucursal.id_sucursal == 1).first()
+        if not sucursal:
+            sucursal = models.Sucursal(
+                id_sucursal=1,
+                nombre_sucursal="Casa Matriz - Viña",
+                direccion="Calle 1",
+                id_comuna=1,
+            )
+            db.add(sucursal)
+
+        rol = db.query(models.Rol).filter(models.Rol.id_rol == 1).first()
+        if not rol:
+            rol = models.Rol(id_rol=1, nombre_rol="Bodeguero")
+            db.add(rol)
         db.commit()
+
+        # 3. Usuario
+        usuario = db.query(models.Usuario).filter(models.Usuario.rut_usuario == "11.111.111-1").first()
+        if not usuario:
+            usuario = models.Usuario(
+                id_usuario=uuid.uuid4(),
+                rut_usuario="11.111.111-1",
+                nombres="Test",
+                apellidos="Bodeguero",
+                email="bodeguero@cresal.cl",
+                password_hash="fakehash",
+                pin_acceso="1234",
+                id_rol=1,
+                id_sucursal=1,
+                estado="Activo",
+            )
+            db.add(usuario)
+            db.commit()
+            db.refresh(usuario)
+
+        token = create_access_token(data={"sub": str(usuario.id_usuario), "id_rol": usuario.id_rol, "id_sucursal": usuario.id_sucursal})
+        return {"Authorization": f"Bearer {token}"}
     finally:
         db.close()
 
-    token = create_access_token(data={"sub": str(u_id)})
-    headers = {"Authorization": f"Bearer {token}"}
 
-    # 2. Configurar mock del servicio
+def test_obtener_vehiculo_existente(client, auth_headers):
+    """
+    Verifica que al consultar una patente existente en BD, el sistema
+    responda con HTTP 200 y los datos correctos.
+    """
+    db = TestingSessionLocal()
     patente_prueba = "BBCL12"
-    mock_vehiculo = MagicMock()
-    mock_vehiculo.id_vehiculo = v_id
-    mock_vehiculo.patente = patente_prueba
-    mock_vehiculo.marca = "Toyota"
-    mock_vehiculo.modelo = "Yaris"
-    mock_vehiculo.anio = 2015
-    mock_vehiculo.traccion = "4x2"
-    mock_vehiculo.numero_ingreso = "ING-001"
-    mock_vehiculo.estado = "Activo"
-    mock_vehiculo.fecha_ingreso = None
-    mock_procesar.return_value = mock_vehiculo
+    try:
+        vehiculo = db.query(models.Vehiculo_Origen).filter(models.Vehiculo_Origen.patente == patente_prueba).first()
+        if not vehiculo:
+            vehiculo = models.Vehiculo_Origen(
+                numero_ingreso="ING-2026-TEST",
+                patente=patente_prueba,
+                marca="Toyota",
+                modelo="Yaris",
+                anio=2015,
+                estado="Activo",
+            )
+            db.add(vehiculo)
+            db.commit()
+    finally:
+        db.close()
 
-    # 3. Act
-    url = f"/api/v1/vehiculos/{patente_prueba}"
-    response = client.get(url, headers=headers)
-
-    # 4. Assert
-    assert response.status_code == 200, f"Error: {response.text}"
+    response = client.get(f"/api/v1/vehiculos/{patente_prueba}", headers=auth_headers)
+    assert response.status_code == 200
     data = response.json()
     assert data["patente"] == patente_prueba
     assert data["marca"] == "Toyota"
     assert data["modelo"] == "Yaris"
     assert data["anio"] == 2015
-    assert "id_vehiculo" in data
-    mock_procesar.assert_called_once()
+
+
+def test_obtener_vehiculo_no_existente_retorna_404(client, auth_headers):
+    """
+    Verifica que al consultar una patente no registrada, retorne 404 para que la PDA
+    haga scraping nativo.
+    """
+    response = client.get("/api/v1/vehiculos/ZZZZ99", headers=auth_headers)
+    assert response.status_code == 404

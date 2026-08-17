@@ -44,9 +44,12 @@ class _CarritoScreenState extends State<CarritoScreen> {
   final TextEditingController _telefonoReceptorController = TextEditingController();
 
   // Variables de Selección y Switches
+  bool _esClienteAnonimo = false;
   String _comunaCliente = 'Viña del Mar';
   String _comunaDespacho = 'Viña del Mar';
-  bool _requiereDespacho = false;
+  String _tipoEntrega = 'Retiro'; // 'Retiro', 'Despacho', 'Traslado'
+  int _idSucursalDestino = 1; // 1: Viña del Mar, 2: Limache
+  bool get _requiereDespacho => _tipoEntrega != 'Retiro';
   bool _consentimientoLey = false;
   bool _mostrarErrorConsentimiento = false;
   bool _isSubmitting = false;
@@ -152,7 +155,9 @@ class _CarritoScreenState extends State<CarritoScreen> {
     _nombresReceptorController.clear();
     _telefonoReceptorController.clear();
     setState(() {
-      _requiereDespacho = false;
+      _esClienteAnonimo = false;
+      _tipoEntrega = 'Retiro';
+      _idSucursalDestino = 1;
       _consentimientoLey = false;
       _mostrarErrorConsentimiento = false;
     });
@@ -220,10 +225,18 @@ class _CarritoScreenState extends State<CarritoScreen> {
     }
 
     // 2. Validar Formulario
-    final formValido = _formKey.currentState?.validate() ?? false;
+    if (_esClienteAnonimo) {
+      _rutController.text = '66666666-6';
+      _nombresController.text = 'Cliente Mostrador';
+      _apellidosController.text = 'Sin RUT';
+      _consentimientoLey = true;
+      _mostrarErrorConsentimiento = false;
+    }
+
+    final formValido = _esClienteAnonimo ? true : (_formKey.currentState?.validate() ?? false);
 
     // 3. Validar Consentimiento Ley 21.719
-    if (!_consentimientoLey) {
+    if (!_consentimientoLey && !_esClienteAnonimo) {
       setState(() {
         _mostrarErrorConsentimiento = true;
       });
@@ -233,7 +246,7 @@ class _CarritoScreenState extends State<CarritoScreen> {
       });
     }
 
-    if (!formValido || !_consentimientoLey) {
+    if (!formValido || (!_consentimientoLey && !_esClienteAnonimo)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: AppPalette.surface,
@@ -273,6 +286,41 @@ class _CarritoScreenState extends State<CarritoScreen> {
         return <String, dynamic>{};
       }).toList();
 
+      Map<String, dynamic>? despachoPayload;
+      if (_tipoEntrega == 'Despacho') {
+        despachoPayload = {
+          'direccion_envio': _direccionDespachoController.text.trim(),
+          'comuna_destino': _comunaDespacho,
+          'receptor_rut': _rutReceptorController.text.trim(),
+          'receptor_nombres': _nombresReceptorController.text.trim(),
+          'receptor_telefono': _telefonoReceptorController.text.trim(),
+          'tipo_entrega': 'Despacho',
+          'costo_envio': 0,
+        };
+      } else if (_tipoEntrega == 'Traslado') {
+        final nombreDestino = _idSucursalDestino == 1 ? 'Viña del Mar' : 'Limache';
+        final receptorRut = _rutReceptorController.text.trim().isNotEmpty
+            ? _rutReceptorController.text.trim()
+            : _rutController.text.trim();
+        final receptorNom = _nombresReceptorController.text.trim().isNotEmpty
+            ? _nombresReceptorController.text.trim()
+            : '${_nombresController.text.trim()} ${_apellidosController.text.trim()}'.trim();
+        final receptorTel = _telefonoReceptorController.text.trim().isNotEmpty
+            ? _telefonoReceptorController.text.trim()
+            : _telefonoController.text.trim();
+
+        despachoPayload = {
+          'direccion_envio': 'Traslado a Sucursal $nombreDestino',
+          'comuna_destino': nombreDestino,
+          'receptor_rut': receptorRut.isNotEmpty ? receptorRut : 'S/R',
+          'receptor_nombres': receptorNom.isNotEmpty ? receptorNom : 'Cliente',
+          'receptor_telefono': receptorTel.isNotEmpty ? receptorTel : '+56900000000',
+          'tipo_entrega': 'Traslado',
+          'id_sucursal_destino': _idSucursalDestino,
+          'costo_envio': 0,
+        };
+      }
+
       final payload = <String, dynamic>{
         'cliente': {
           'rut_cliente': _rutController.text.trim(),
@@ -285,15 +333,11 @@ class _CarritoScreenState extends State<CarritoScreen> {
           'consentimiento_legal': _consentimientoLey,
         },
         'requiere_despacho': _requiereDespacho,
-        if (_requiereDespacho)
-          'despacho': {
-            'direccion_envio': _direccionDespachoController.text.trim(),
-            'comuna_destino': _comunaDespacho,
-            'receptor_rut': _rutReceptorController.text.trim(),
-            'receptor_nombres': _nombresReceptorController.text.trim(),
-            'receptor_telefono': _telefonoReceptorController.text.trim(),
-            'costo_envio': 0,
-          },
+        'tipo_entrega': _tipoEntrega,
+        if (_tipoEntrega == 'Traslado')
+          'id_sucursal_destino': _idSucursalDestino,
+        if (despachoPayload != null)
+          'despacho': despachoPayload,
         'consentimiento_legal': _consentimientoLey,
         'items': itemsPayload,
       };
@@ -700,101 +744,222 @@ class _CarritoScreenState extends State<CarritoScreen> {
               icon: Icons.person_outline,
               title: 'DATOS POST-VENTA CLIENTE',
               children: [
-                _buildTextField(
-                  controller: _rutController,
-                  focusNode: _rutFocusNode,
-                  label: 'RUT Cliente *',
-                  hint: '12.345.678-9',
-                  isRequired: true,
-                  keyboardType: TextInputType.text,
-                  suffixIcon: _isSearchingClient
-                      ? const Padding(
-                          padding: EdgeInsets.all(12.0),
-                          child: SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: AppPalette.secondary,
+                // Switch Cliente Anónimo / Sin RUT
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
+                  decoration: BoxDecoration(
+                    color: AppPalette.background,
+                    borderRadius: BorderRadius.circular(8.0),
+                    border: Border.all(color: Colors.white10),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.no_accounts_outlined,
+                            size: 20,
+                            color: _esClienteAnonimo ? AppPalette.secondary : AppPalette.textSecondary,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            'Cliente Anónimo / Sin RUT',
+                            style: AppTypography.body.copyWith(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: _esClienteAnonimo ? AppPalette.secondary : AppPalette.textPrimary,
                             ),
                           ),
-                        )
-                      : null,
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildTextField(
-                        controller: _nombresController,
-                        label: 'Nombres *',
-                        hint: 'Juan',
-                        isRequired: true,
+                        ],
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildTextField(
-                        controller: _apellidosController,
-                        label: 'Apellidos *',
-                        hint: 'Pérez',
-                        isRequired: true,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildTextField(
-                        controller: _telefonoController,
-                        label: 'Teléfono',
-                        hint: '+56 9 1234 5678',
-                        keyboardType: TextInputType.phone,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildDropdown(
-                        label: 'Comuna',
-                        value: _comunaCliente,
-                        items: _comunasDisponibles,
+                      Switch(
+                        key: const Key('switch_cliente_anonimo'),
+                        value: _esClienteAnonimo,
+                        activeColor: AppPalette.secondary,
                         onChanged: (val) {
-                          if (val != null) {
-                            setState(() => _comunaCliente = val);
-                          }
+                          setState(() {
+                            _esClienteAnonimo = val;
+                            if (val) {
+                              _rutController.text = '66666666-6';
+                              _nombresController.text = 'Cliente Mostrador';
+                              _apellidosController.text = 'Sin RUT';
+                              _telefonoController.clear();
+                              _consentimientoLey = true;
+                              _mostrarErrorConsentimiento = false;
+                            } else {
+                              _rutController.clear();
+                              _nombresController.clear();
+                              _apellidosController.clear();
+                              _telefonoController.clear();
+                              _consentimientoLey = false;
+                            }
+                          });
                         },
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
+                const SizedBox(height: 12),
+
+                if (_esClienteAnonimo) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12.0),
+                    decoration: BoxDecoration(
+                      color: AppPalette.secondary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8.0),
+                      border: Border.all(
+                        color: AppPalette.secondary.withValues(alpha: 0.4),
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.info_outline,
+                          color: AppPalette.secondary,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Aviso: El cliente solo podrá pagar y retirar en caja presentando su Número de Orden.',
+                            style: AppTypography.small.copyWith(
+                              color: AppPalette.secondary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                              height: 1.3,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ] else ...[
+                  _buildTextField(
+                    controller: _rutController,
+                    focusNode: _rutFocusNode,
+                    label: 'RUT Cliente *',
+                    hint: '12.345.678-9',
+                    isRequired: !_esClienteAnonimo,
+                    keyboardType: TextInputType.text,
+                    suffixIcon: _isSearchingClient
+                        ? const Padding(
+                            padding: EdgeInsets.all(12.0),
+                            child: SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppPalette.secondary,
+                              ),
+                            ),
+                          )
+                        : null,
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildTextField(
+                          controller: _nombresController,
+                          label: 'Nombres *',
+                          hint: 'Juan',
+                          isRequired: !_esClienteAnonimo,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildTextField(
+                          controller: _apellidosController,
+                          label: 'Apellidos *',
+                          hint: 'Pérez',
+                          isRequired: !_esClienteAnonimo,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildTextField(
+                          controller: _telefonoController,
+                          label: 'Teléfono',
+                          hint: '+56 9 1234 5678',
+                          keyboardType: TextInputType.phone,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildDropdown(
+                          label: 'Comuna',
+                          value: _comunaCliente,
+                          items: _comunasDisponibles,
+                          onChanged: (val) {
+                            if (val != null) {
+                              setState(() => _comunaCliente = val);
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
             const SizedBox(height: 16),
 
-            // ── 5. Tarjeta 2: REQUIERE DESPACHO ─────────────────────────────
+            // ── 5. Tarjeta 2: MODALIDAD DE ENTREGA / DESPACHO ───────────────
             _buildCardContainer(
               icon: Icons.local_shipping_outlined,
-              title: 'REQUIERE DESPACHO',
-              trailing: Checkbox(
-                value: _requiereDespacho,
-                activeColor: AppPalette.primary,
-                side: const BorderSide(color: AppPalette.neutral),
-                onChanged: (val) {
-                  setState(() {
-                    _requiereDespacho = val ?? false;
-                  });
-                },
-              ),
+              title: 'MODALIDAD DE ENTREGA',
               children: [
-                if (_requiereDespacho) ...[
+                // Selector de 3 Opciones: Retiro, Despacho, Traslado
+                Row(
+                  children: [
+                    _buildDeliveryOptionChip('Retiro en Tienda', 'Retiro', Icons.storefront_outlined),
+                    const SizedBox(width: 8),
+                    _buildDeliveryOptionChip('Despacho a Domicilio', 'Despacho', Icons.local_shipping_outlined),
+                    const SizedBox(width: 8),
+                    _buildDeliveryOptionChip('Traslado a otra sucursal', 'Traslado', Icons.sync_alt_outlined),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                if (_tipoEntrega == 'Retiro') ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12.0),
+                    decoration: BoxDecoration(
+                      color: AppPalette.background,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.white10),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.info_outline, size: 18, color: AppPalette.primary),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'El cliente retirará los repuestos directamente en el mesón de atención tras completar el pago en caja.',
+                            style: AppTypography.small.copyWith(
+                              color: AppPalette.textSecondary,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ] else if (_tipoEntrega == 'Despacho') ...[
                   const Divider(color: Colors.white10, height: 16),
                   _buildTextField(
                     controller: _direccionDespachoController,
                     label: 'Dirección de Envío *',
                     hint: 'Av. Libertad 1234, Depto 402',
-                    isRequired: _requiereDespacho,
+                    isRequired: true,
                   ),
                   const SizedBox(height: 12),
                   _buildDropdown(
@@ -815,7 +980,7 @@ class _CarritoScreenState extends State<CarritoScreen> {
                           controller: _rutReceptorController,
                           label: 'RUT Receptor *',
                           hint: '12.345.678-9',
-                          isRequired: _requiereDespacho,
+                          isRequired: true,
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -824,7 +989,7 @@ class _CarritoScreenState extends State<CarritoScreen> {
                           controller: _nombresReceptorController,
                           label: 'Nombres Receptor *',
                           hint: 'Pedro González',
-                          isRequired: _requiereDespacho,
+                          isRequired: true,
                         ),
                       ),
                     ],
@@ -834,17 +999,85 @@ class _CarritoScreenState extends State<CarritoScreen> {
                     controller: _telefonoReceptorController,
                     label: 'Teléfono Receptor *',
                     hint: '+56 9 8765 4321',
-                    isRequired: _requiereDespacho,
+                    isRequired: true,
                     keyboardType: TextInputType.phone,
                   ),
-                ] else
-                  Text(
-                    'Marca la casilla si el cliente solicita despacho a domicilio de los repuestos.',
-                    style: AppTypography.small.copyWith(
-                      color: AppPalette.textSecondary,
-                      fontSize: 12,
+                ] else if (_tipoEntrega == 'Traslado') ...[
+                  const Divider(color: Colors.white10, height: 16),
+                  // Selector de Sucursal Destino (Viña del Mar / Limache)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14.0),
+                    decoration: BoxDecoration(
+                      color: AppPalette.background,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: AppPalette.secondary.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.swap_horiz, size: 18, color: AppPalette.secondary),
+                            const SizedBox(width: 8),
+                            Text(
+                              'SELECCIONA SUCURSAL DESTINO *',
+                              style: AppTypography.small.copyWith(
+                                color: AppPalette.secondary,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                                letterSpacing: 0.8,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        _buildDropdown(
+                          label: 'Sucursal de Destino',
+                          value: _idSucursalDestino == 1 ? 'Viña del Mar' : 'Limache',
+                          items: const ['Viña del Mar', 'Limache'],
+                          onChanged: (val) {
+                            if (val != null) {
+                              setState(() {
+                                _idSucursalDestino = val == 'Viña del Mar' ? 1 : 2;
+                              });
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          'ℹ️ Se generará la tarea de traslado logístico asignada a bodega para el envío a ${_idSucursalDestino == 1 ? "Viña del Mar" : "Limache"}.',
+                          style: AppTypography.small.copyWith(
+                            color: AppPalette.textSecondary,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildTextField(
+                          controller: _rutReceptorController,
+                          label: 'RUT Quien Retira en Destino',
+                          hint: 'Opcional (default: cliente)',
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildTextField(
+                          controller: _nombresReceptorController,
+                          label: 'Nombre Quien Retira',
+                          hint: 'Opcional (default: cliente)',
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
             const SizedBox(height: 16),
@@ -968,6 +1201,60 @@ class _CarritoScreenState extends State<CarritoScreen> {
           const SizedBox(height: 12),
           ...children,
         ],
+      ),
+    );
+  }
+
+  /// Chip interactivo para selección de Modalidad de Entrega (Retiro, Despacho, Traslado)
+  Widget _buildDeliveryOptionChip(String label, String value, IconData icon) {
+    final bool isSelected = _tipoEntrega == value;
+    return Expanded(
+      child: Material(
+        color: isSelected
+            ? AppPalette.primary.withValues(alpha: 0.15)
+            : AppPalette.background,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          key: Key('chip_entrega_$value'),
+          onTap: () {
+            setState(() {
+              _tipoEntrega = value;
+            });
+          },
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: isSelected ? AppPalette.primary : Colors.white10,
+                width: isSelected ? 1.5 : 1.0,
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 20,
+                  color: isSelected ? AppPalette.primary : AppPalette.textSecondary,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: AppTypography.small.copyWith(
+                    color: isSelected ? AppPalette.primary : AppPalette.textSecondary,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    fontSize: 10,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -53,6 +53,7 @@ class InventarioService {
   }
 
   static Future<List<dynamic>> buscarRepuestos({
+    String? q,
     String? categoria,
     String? pasillo,
     String? pallet,
@@ -61,11 +62,14 @@ class InventarioService {
     String? cilindrada,
     String? combustible,
     String? transmision,
+    int? limit,
+    int? offset,
   }) async {
     try {
       // 1. Armar los Query Parameters dinámicamente solo con lo que no sea nulo
       final Map<String, String> queryParams = {};
 
+      if (q != null && q.trim().isNotEmpty) queryParams['q'] = q.trim();
       if (categoria != null) queryParams['categoria'] = categoria;
       if (pasillo != null) queryParams['pasillo'] = pasillo;
       if (pallet != null) queryParams['pallet'] = pallet;
@@ -74,6 +78,8 @@ class InventarioService {
       if (cilindrada != null) queryParams['cilindrada'] = cilindrada;
       if (combustible != null) queryParams['combustible'] = combustible;
       if (transmision != null) queryParams['transmision'] = transmision;
+      if (limit != null) queryParams['limit'] = limit.toString();
+      if (offset != null) queryParams['offset'] = offset.toString();
 
       // 2. Construir la URI con los parámetros
       final uri = Uri.parse(

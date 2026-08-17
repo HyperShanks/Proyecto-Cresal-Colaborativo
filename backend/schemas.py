@@ -244,6 +244,7 @@ class CatalogoItemResponse(BaseModel):
     ubicacion_pallet: Optional[str] = None
     estado_activo: Optional[str] = None
     qr_impreso: bool = False
+    imagenes: List[str] = []
 
     class Config:
         from_attributes = True
@@ -273,7 +274,7 @@ class ClienteOrdenInput(BaseModel):
 
 
 class DespachoInput(BaseModel):
-    """Datos de logística y receptor de envío a domicilio."""
+    """Datos de logística y receptor de envío a domicilio o traslado."""
     direccion_envio: str = Field(..., min_length=3, description="Dirección completa de entrega")
     comuna_destino: Optional[str] = Field(None, description="Nombre de la comuna de destino")
     id_comuna_destino: Optional[int] = Field(None, description="ID numérico de la comuna de destino")
@@ -282,6 +283,8 @@ class DespachoInput(BaseModel):
     receptor_telefono: str = Field(..., description="Teléfono del receptor")
     empresa_transporte: Optional[str] = Field(None, description="Empresa de transporte (Starken, Chilexpress, etc.)")
     costo_envio: Optional[int] = Field(0, description="Costo de envío asociado")
+    tipo_entrega: Optional[str] = Field("Despacho", description="Tipo de entrega: 'Despacho', 'Traslado', 'Retiro'")
+    id_sucursal_destino: Optional[int] = Field(None, description="ID de la sucursal de destino si es Traslado (1: Viña, 2: Limache)")
 
 
 class ItemOrdenInput(BaseModel):
@@ -303,6 +306,8 @@ class OrdenCreateRequest(BaseModel):
     instrucciones_bodega: Optional[str] = Field(None, description="Instrucciones generales para bodega")
     items: List[ItemOrdenInput] = Field(..., min_length=1, description="Lista de ítems de la orden")
     id_sucursal: Optional[int] = Field(None, description="ID de la sucursal donde se genera la venta")
+    tipo_entrega: Optional[str] = Field("Retiro", description="Tipo de entrega: 'Retiro', 'Despacho', 'Traslado'")
+    id_sucursal_destino: Optional[int] = Field(None, description="ID de sucursal destino si aplica traslado (1: Viña, 2: Limache)")
 
 
 class OrdenResponse(BaseModel):
@@ -376,6 +381,8 @@ class DespachoOrdenResumen(BaseModel):
     costo_envio: Optional[int] = 0
     estado_despacho: str
     comuna_destino: Optional[str] = None
+    tipo_despacho: Optional[str] = None
+    id_sucursal_destino: Optional[int] = None
 
 
 class DetalleOrdenItemResponse(BaseModel):
@@ -393,6 +400,8 @@ class DetalleOrdenItemResponse(BaseModel):
     precio_final: int
     subtotal: int
     es_inventariado: bool
+    preparacion_lista: Optional[bool] = False
+    estado_preparacion: Optional[str] = "Pendiente"
 
 
 class OrdenHistorialItemResponse(BaseModel):
@@ -546,6 +555,42 @@ class EscanearSalidaResponse(BaseModel):
     activos_entregados: List[str]
     total_entregados: int
     mensaje: str
+
+
+# ==========================================
+# ESQUEMAS PARA BODEGA Y PRE-ENTREGA (HU-BODEGA)
+# ==========================================
+
+class TareaAlertaResponse(BaseModel):
+    """DTO para tareas operativas en el tablero de bodega."""
+    id_tarea: str
+    tipo_alerta: str
+    orden_ref: Optional[str] = None
+    titulo_pieza: str
+    ubicacion: str
+    nota_especial: Optional[str] = None
+    estado_bloqueo: Optional[str] = None
+    accion_requerida: str
+    etiqueta_data: Optional[dict] = None
+    id_detalle: Optional[UUID] = None
+    id_activo: Optional[UUID] = None
+    id_sucursal_origen: Optional[int] = None
+    id_sucursal_destino: Optional[int] = None
+    es_traslado: bool = False
+    estado_preparacion: Optional[str] = "Pendiente"
+
+
+class CompletarPreentregaResponse(BaseModel):
+    """DTO de respuesta al marcar una pre-entrega como 'Listo'."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_detalle: UUID
+    id_orden: UUID
+    id_activo: Optional[UUID] = None
+    preparacion_lista: bool
+    estado_preparacion: str
+    mensaje: str
+    fecha_preparacion: Optional[str] = None
 
 
 

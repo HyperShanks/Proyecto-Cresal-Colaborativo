@@ -2,7 +2,7 @@ import '../../paletizado/domain/models/etiqueta_data.dart';
 
 class TareaAlerta {
   final String idTarea;
-  final String tipoAlerta; // 'IMPRESION', 'PREPARACION', 'LIBERADA'
+  final String tipoAlerta; // 'IMPRESION', 'PREPARACION', 'LIBERADA', 'TRASLADO'
   final String? ordenRef;
   final String tituloPieza;
   final String ubicacion;
@@ -10,6 +10,12 @@ class TareaAlerta {
   final String? estadoBloqueo;
   final String accionRequerida;
   final EtiquetaData? etiquetaData;
+  final String? idDetalle;
+  final String? idActivo;
+  final int? idSucursalOrigen;
+  final int? idSucursalDestino;
+  final bool esTraslado;
+  final String? estadoPreparacion;
 
   const TareaAlerta({
     required this.idTarea,
@@ -21,6 +27,12 @@ class TareaAlerta {
     this.estadoBloqueo,
     required this.accionRequerida,
     this.etiquetaData,
+    this.idDetalle,
+    this.idActivo,
+    this.idSucursalOrigen,
+    this.idSucursalDestino,
+    this.esTraslado = false,
+    this.estadoPreparacion,
   });
 
   factory TareaAlerta.fromJson(Map<String, dynamic> json) {
@@ -36,6 +48,12 @@ class TareaAlerta {
       etiquetaData: json['etiqueta_data'] != null
           ? EtiquetaData.fromJson(json['etiqueta_data'])
           : null,
+      idDetalle: json['id_detalle']?.toString(),
+      idActivo: json['id_activo']?.toString(),
+      idSucursalOrigen: json['id_sucursal_origen'] as int?,
+      idSucursalDestino: json['id_sucursal_destino'] as int?,
+      esTraslado: json['es_traslado'] == true,
+      estadoPreparacion: json['estado_preparacion']?.toString(),
     );
   }
 }
