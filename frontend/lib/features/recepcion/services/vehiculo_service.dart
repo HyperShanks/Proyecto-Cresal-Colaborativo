@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:crypto/crypto.dart'; // ⚠️ NUEVO: Para el cifrado HMAC-SHA256
@@ -25,7 +26,7 @@ class VehiculoService {
       }
       return "ERROR";
     } catch (e) {
-      print("Error de conexión: $e");
+      debugPrint("Error de conexión: $e");
       return "ERROR";
     }
   }
@@ -50,18 +51,34 @@ class VehiculoService {
           .replaceAll(RegExp(r'[^A-Za-z0-9]'), '')
           .toUpperCase();
 
+      // Headers estándar de navegador web moderno para evitar bloqueos por User-Agent
       final Map<String, String> headers = {
-        "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "es-ES,es;q=0.9",
+        'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept':
+            'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'es-CL,es;q=0.9,en;q=0.8',
+        'Sec-Ch-Ua':
+            '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+        'Sec-Ch-Ua-Mobile': '?0',
+        'Sec-Ch-Ua-Platform': '"Windows"',
       };
 
       // PASO 1: Obtener las Cookies iniciales
+      const homeUrl = 'https://www.patentechile.com/';
       final homeRes = await http.get(
-        Uri.parse('https://www.patentechile.com/'),
+        Uri.parse(homeUrl),
         headers: headers,
       );
+
+      debugPrint('=== [SCRAPING DEBUG - PASO 1: HOME] ===');
+      debugPrint('URL consultada: $homeUrl');
+      debugPrint('Status Code: ${homeRes.statusCode}');
+      debugPrint('Headers: ${homeRes.headers}');
+      debugPrint(
+          'Body preview (primeros 1000 chars): ${homeRes.body.substring(0, homeRes.body.length > 1000 ? 1000 : homeRes.body.length)}');
+      debugPrint('========================');
+
       final rawCookie = homeRes.headers['set-cookie'];
       if (rawCookie != null) {
         // Extraemos solo la primera parte de la cookie de sesión
@@ -85,11 +102,20 @@ class VehiculoService {
         "z": valorCifrado,
       };
 
+      const tokenUrl = 'https://www.patentechile.com/v3/token';
       final tokenRes = await http.post(
-        Uri.parse('https://www.patentechile.com/v3/token'),
+        Uri.parse(tokenUrl),
         headers: headers,
         body: jsonEncode(payload),
       );
+
+      debugPrint('=== [SCRAPING DEBUG - PASO 2: TOKEN] ===');
+      debugPrint('URL consultada: $tokenUrl');
+      debugPrint('Status Code: ${tokenRes.statusCode}');
+      debugPrint('Headers: ${tokenRes.headers}');
+      debugPrint(
+          'Body preview (primeros 1000 chars): ${tokenRes.body.substring(0, tokenRes.body.length > 1000 ? 1000 : tokenRes.body.length)}');
+      debugPrint('========================');
 
       if (tokenRes.statusCode == 200) {
         final rpta = jsonDecode(tokenRes.body);
@@ -100,58 +126,82 @@ class VehiculoService {
           final payloadToken = 'q=$token';
 
           // PASO 3: Obtener el HTML con los resultados reales
+          const dataUrl = 'https://www.patentechile.com/resultados/';
           final dataRes = await http.post(
-            Uri.parse('https://www.patentechile.com/resultados/'),
+            Uri.parse(dataUrl),
             headers: headers,
             body: payloadToken,
           );
 
+          debugPrint('=== [SCRAPING DEBUG] ===');
+          debugPrint('URL consultada: $dataUrl');
+          debugPrint('Status Code: ${dataRes.statusCode}');
+          debugPrint('Headers: ${dataRes.headers}');
+          debugPrint(
+              'Body preview (primeros 1000 chars): ${dataRes.body.substring(0, dataRes.body.length > 1000 ? 1000 : dataRes.body.length)}');
+          debugPrint('========================');
+
           if (dataRes.statusCode == 200) {
-            // Analizamos el HTML como lo hacía BeautifulSoup en Python
-            final document = html_parser.parse(dataRes.body);
-            final filas = document.querySelectorAll('tr');
+            try {
+              // Analizamos el HTML como lo hacía BeautifulSoup en Python
+              final document = html_parser.parse(dataRes.body);
+              final filas = document.querySelectorAll('tr');
 
-            Map<String, dynamic> datosVehiculo = {
-              "marca": "",
-              "modelo": "",
-              "anio": "",
-              "cilindrada": "",
-              "numero_motor": "",
-            };
+              Map<String, dynamic> datosVehiculo = {
+                "marca": "",
+                "modelo": "",
+                "anio": "",
+                "cilindrada": "",
+                "numero_motor": "",
+              };
 
-            for (var fila in filas) {
-              final celdas = fila.querySelectorAll('th, td');
-              if (celdas.length >= 2) {
-                final etiqueta = celdas[0].text.trim().toLowerCase();
-                final valorCelda = celdas[1].text.trim();
+              for (var fila in filas) {
+                final celdas = fila.querySelectorAll('th, td');
+                if (celdas.length >= 2) {
+                  final etiqueta = celdas[0].text.trim().toLowerCase();
+                  final valorCelda = celdas[1].text.trim();
 
-                if (etiqueta.contains('marca')) {
-                  datosVehiculo['marca'] = valorCelda;
-                } else if (etiqueta.contains('modelo')) {
-                  datosVehiculo['modelo'] = valorCelda;
-                  // Extraemos la cilindrada usando Regex (Ej: "1.6" de "PEUGEOT 208 1.6")
-                  final match = RegExp(r'(\d\.\d)').firstMatch(valorCelda);
-                  if (match != null)
-                    datosVehiculo['cilindrada'] = match.group(1);
-                } else if (etiqueta.contains('año') ||
-                    etiqueta.contains('ano')) {
-                  datosVehiculo['anio'] = valorCelda;
-                } else if (etiqueta.contains('motor')) {
-                  datosVehiculo['numero_motor'] = valorCelda;
+                  if (etiqueta.contains('marca')) {
+                    datosVehiculo['marca'] = valorCelda;
+                  } else if (etiqueta.contains('modelo')) {
+                    datosVehiculo['modelo'] = valorCelda;
+                    // Extraemos la cilindrada usando Regex (Ej: "1.6" de "PEUGEOT 208 1.6")
+                    final match = RegExp(r'(\d\.\d)').firstMatch(valorCelda);
+                    if (match != null) {
+                      datosVehiculo['cilindrada'] = match.group(1);
+                    }
+                  } else if (etiqueta.contains('año') ||
+                      etiqueta.contains('ano')) {
+                    datosVehiculo['anio'] = valorCelda;
+                  } else if (etiqueta.contains('motor')) {
+                    datosVehiculo['numero_motor'] = valorCelda;
+                  }
                 }
               }
-            }
 
-            // Si encontró al menos la marca, consideramos que el scraping fue exitoso
-            if (datosVehiculo['marca'] != "") {
-              return datosVehiculo;
+              debugPrint('=== [SCRAPING PARSING RESULT] ===');
+              debugPrint('Datos parseados: $datosVehiculo');
+              debugPrint('================================');
+
+              // Si encontró al menos la marca, consideramos que el scraping fue exitoso
+              if (datosVehiculo['marca'] != "") {
+                return datosVehiculo;
+              }
+            } catch (e, stackTrace) {
+              debugPrint('=== [SCRAPING HTML PARSING ERROR] ===');
+              debugPrint('Error al procesar selectores HTML: $e');
+              debugPrint('StackTrace: $stackTrace');
+              debugPrint('=====================================');
             }
           }
         }
       }
       return null;
-    } catch (e) {
-      print("Error en scraping nativo: $e");
+    } catch (e, stackTrace) {
+      debugPrint("=== [SCRAPING ERROR GENERAL] ===");
+      debugPrint("Error en scraping nativo: $e");
+      debugPrint("StackTrace: $stackTrace");
+      debugPrint("================================");
       return null;
     }
   }
