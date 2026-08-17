@@ -26,14 +26,20 @@ class ResultadoCard extends StatelessWidget {
     final pallet = (itemCompleto['pallet']?.toString() ?? '').trim();
     final galpon = (itemCompleto['galpon']?.toString() ?? '').trim();
 
-    if (pasillo.isNotEmpty || pallet.isNotEmpty || galpon.isNotEmpty) {
-      final pStr = pasillo.isNotEmpty ? pasillo : 'S/P';
-      final paStr = pallet.isNotEmpty ? pallet : 'S/P';
-      final gStr = galpon.isNotEmpty ? galpon : 'S/G';
+    final bool tienePasillo = pasillo.isNotEmpty && pasillo != 'S/P' && pasillo != 'null';
+    final bool tienePallet = pallet.isNotEmpty && pallet != 'S/P' && pallet != 'null';
+    final bool tieneGalpon = galpon.isNotEmpty && galpon != 'S/G' && galpon != 'null';
+
+    if (tienePasillo || tienePallet || tieneGalpon) {
+      final pStr = tienePasillo ? pasillo : 'S/P';
+      final paStr = tienePallet ? pallet : 'S/P';
+      final gStr = tieneGalpon ? galpon : 'S/G';
       return 'Pasillo: $pStr | Pallet: $paStr | Galpón: $gStr';
     }
 
-    return ubicacion.isNotEmpty ? ubicacion : 'Sin ubicación asignada';
+    return ubicacion.isNotEmpty && ubicacion != 'S/P - S/P' && ubicacion != 'No asignada' && ubicacion != 'null'
+        ? ubicacion
+        : 'Sin Paletizar / Sin Ubicación Asignada';
   }
 
   @override

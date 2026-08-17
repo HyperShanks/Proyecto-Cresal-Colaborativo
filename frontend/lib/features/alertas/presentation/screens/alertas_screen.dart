@@ -33,15 +33,19 @@ class _AlertasScreenState extends State<AlertasScreen> {
     return Scaffold(
       backgroundColor: AppPalette.background,
       appBar: AppBar(
-        title: Text(
-          'ALERTAS TAREAS',
-          style: AppTypography.headline.copyWith(
-            color: AppPalette.textPrimary,
-            letterSpacing: 1.5,
-          ),
-        ),
         backgroundColor: AppPalette.surface,
-        iconTheme: const IconThemeData(color: AppPalette.primary),
+        foregroundColor: AppPalette.textPrimary,
+        elevation: 0,
+        centerTitle: false,
+        title: Text(
+          'Alertas Tareas',
+          style: AppTypography.title.copyWith(fontSize: 18),
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: AppPalette.textPrimary),
+          onPressed: () => Navigator.of(context).pop(),
+          tooltip: 'Volver',
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh, color: AppPalette.primary),
@@ -110,7 +114,7 @@ class _AlertasScreenState extends State<AlertasScreen> {
             final trasladosCount = tareas.where((t) => t.esTraslado || t.tipoAlerta == 'TRASLADO').length;
 
             return ListView.builder(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
               itemCount: tareas.length + 1,
               itemBuilder: (context, index) {
                 if (index == 0) {

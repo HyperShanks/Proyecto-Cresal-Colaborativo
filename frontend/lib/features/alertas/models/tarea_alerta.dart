@@ -16,6 +16,8 @@ class TareaAlerta {
   final int? idSucursalDestino;
   final bool esTraslado;
   final String? estadoPreparacion;
+  final String? categoria;
+  final String? tipoRepuesto;
 
   TareaAlerta({
     required this.idTarea,
@@ -33,9 +35,12 @@ class TareaAlerta {
     this.idSucursalDestino,
     this.esTraslado = false,
     this.estadoPreparacion,
+    this.categoria,
+    this.tipoRepuesto,
   });
 
   factory TareaAlerta.fromJson(Map<String, dynamic> json) {
+    final cat = json['categoria']?.toString() ?? json['tipo_repuesto']?.toString();
     return TareaAlerta(
       idTarea: json['id_tarea'] ?? '',
       tipoAlerta: json['tipo_alerta'] ?? '',
@@ -54,6 +59,8 @@ class TareaAlerta {
       idSucursalDestino: json['id_sucursal_destino'] as int?,
       esTraslado: json['es_traslado'] == true,
       estadoPreparacion: json['estado_preparacion']?.toString(),
+      categoria: cat,
+      tipoRepuesto: json['tipo_repuesto']?.toString() ?? cat,
     );
   }
 }
