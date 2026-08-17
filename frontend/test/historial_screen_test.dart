@@ -429,6 +429,35 @@ void main() {
   });
 
   group('HistorialScreen Widget Tests', () {
+    final orden1 = ordenMock; // Carlos González, 18.765.432-1, Motor - Toyota Yaris 2018, ORD-TEST-001
+    final orden2 = OrdenHistorialModel(
+      idOrden: '7bb85f64-9999-4562-b3fc-2c963f66bb77',
+      estadoOrden: 'Pagada',
+      totalVenta: 780000,
+      montoPendiente: 0,
+      qrTransaccionalSalida: 'ORD-PAGADA-002',
+      fechaCreacion: '2026-08-15T12:00:00',
+      totalItems: 1,
+      cliente: const ClienteOrdenResumenModel(
+        rutCliente: '11.222.333-4',
+        nombres: 'Andrea',
+        apellidos: 'Valenzuela',
+        telefono: '+56911223344',
+      ),
+      detalles: [
+        DetalleOrdenItemModel(
+          idDetalle: 'det-201',
+          idActivo: 'act-201',
+          titulo: 'Caja de Cambios - Nissan Versa 2021',
+          skuQrFisico: 'CAJ-NIS-VER-001',
+          cantidad: 1,
+          precioFinal: 780000,
+          subtotal: 780000,
+          esInventariado: true,
+        ),
+      ],
+    );
+
     testWidgets('Renderiza AppBar con botón de filtro y abre el EndDrawer', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
@@ -446,6 +475,58 @@ void main() {
 
       expect(find.text('Filtros de Órdenes'), findsOneWidget);
       expect(find.text('PERÍODO DE VENTA'), findsOneWidget);
+    });
+
+    testWidgets('Barra de búsqueda filtra reactivamente por Folio, Cliente, RUT y Repuesto', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: HistorialScreen(
+            initialOrdenes: [orden1, orden2],
+          ),
+        ),
+      );
+
+      // Ambas órdenes visibles inicialmente
+      expect(find.text('ORD-TEST-001'), findsOneWidget);
+      expect(find.text('ORD-PAGADA-002'), findsOneWidget);
+      expect(find.byKey(const Key('buscador_ordenes_textfield')), findsOneWidget);
+
+      // 1. Filtrar por Nombre de Cliente "Andrea"
+      await tester.enterText(find.byKey(const Key('buscador_ordenes_textfield')), 'Andrea');
+      await tester.pump();
+      expect(find.text('ORD-PAGADA-002'), findsOneWidget);
+      expect(find.text('ORD-TEST-001'), findsNothing);
+
+      // 2. Filtrar por RUT "18.765.432-1"
+      await tester.enterText(find.byKey(const Key('buscador_ordenes_textfield')), '18765432-1');
+      await tester.pump();
+      expect(find.text('ORD-TEST-001'), findsOneWidget);
+      expect(find.text('ORD-PAGADA-002'), findsNothing);
+
+      // 3. Filtrar por Repuesto "Nissan Versa"
+      await tester.enterText(find.byKey(const Key('buscador_ordenes_textfield')), 'Nissan Versa');
+      await tester.pump();
+      expect(find.text('ORD-PAGADA-002'), findsOneWidget);
+      expect(find.text('ORD-TEST-001'), findsNothing);
+
+      // 4. Filtrar por Folio "#PAGADA"
+      await tester.enterText(find.byKey(const Key('buscador_ordenes_textfield')), '#PAGADA');
+      await tester.pump();
+      expect(find.text('ORD-PAGADA-002'), findsOneWidget);
+      expect(find.text('ORD-TEST-001'), findsNothing);
+
+      // 5. Búsqueda sin coincidencias despliega estado vacío descriptivo
+      await tester.enterText(find.byKey(const Key('buscador_ordenes_textfield')), 'INEXISTENTE_999');
+      await tester.pump();
+      expect(find.text('ORD-TEST-001'), findsNothing);
+      expect(find.text('ORD-PAGADA-002'), findsNothing);
+      expect(find.text('No se encontraron órdenes que coincidan con la búsqueda'), findsOneWidget);
+
+      // 6. Tap en botón limpiar restablece ambas órdenes
+      await tester.tap(find.byKey(const Key('btn_limpiar_busqueda_ordenes')));
+      await tester.pump();
+      expect(find.text('ORD-TEST-001'), findsOneWidget);
+      expect(find.text('ORD-PAGADA-002'), findsOneWidget);
     });
   });
 }

@@ -72,11 +72,13 @@ void main() {
         ),
       );
 
-      // Debe mostrar el texto del radar local
-      expect(find.text('En tu sucursal (Casa Matriz - Santiago)'), findsOneWidget);
+      // Debe mostrar el texto del radar local legible con emoji de pin
+      expect(find.text('📍 Casa Matriz - Santiago (Tu sucursal)'), findsOneWidget);
       expect(find.byIcon(Icons.my_location), findsOneWidget);
       expect(find.text('Motor - Toyota Corolla 2020'), findsOneWidget);
       expect(find.text('\$600.000'), findsOneWidget);
+      // El badge de SKU ya no está en la fila superior
+      expect(find.text('SKU: SKU-TOYOTA-1'), findsNothing);
     });
 
     testWidgets('Radar Badge muestra sucursal remota cuando NO coincide id_sucursal', (tester) async {
@@ -91,9 +93,9 @@ void main() {
         ),
       );
 
-      // Debe mostrar sucursal neutra
-      expect(find.text('Casa Matriz - Santiago'), findsOneWidget);
-      expect(find.byIcon(Icons.storefront_outlined), findsOneWidget);
+      // Debe mostrar sucursal neutra legible
+      expect(find.text('📍 Casa Matriz - Santiago'), findsOneWidget);
+      expect(find.byIcon(Icons.location_on_outlined), findsOneWidget);
     });
 
     testWidgets('Botón de carrito tiene tamaño mínimo interactivo de 48x48', (tester) async {

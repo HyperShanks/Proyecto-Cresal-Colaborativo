@@ -84,7 +84,8 @@ void main() {
         ),
       );
 
-      expect(find.text('SKU: MOT-YAR-001'), findsOneWidget);
+      expect(find.text('📍 Viña del Mar'), findsOneWidget);
+      expect(find.text('SKU: MOT-YAR-001'), findsNothing);
       expect(find.text('Motores - Toyota Yaris 2020'), findsOneWidget);
       expect(find.text('\$750.000'), findsOneWidget);
     });

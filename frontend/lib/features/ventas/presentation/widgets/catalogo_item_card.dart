@@ -64,32 +64,17 @@ class CatalogoItemCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── 1. Fila Superior: Badge Sucursal + SKU + Chip Estado ───
+                // ── 1. Fila Superior: Badge Sucursal Completo + Chip Estado ───
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Flexible(child: _buildSucursalBadge()),
-                    const SizedBox(width: 8.0),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8.0,
-                        vertical: 4.0,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppPalette.background,
-                        borderRadius: BorderRadius.circular(6.0),
-                      ),
-                      child: Text(
-                        'SKU: ${item.skuQrFisico}',
-                        style: AppTypography.small.copyWith(
-                          fontSize: 12,
-                          color: AppPalette.textSecondary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: _buildSucursalBadge(),
                       ),
                     ),
-                    const Spacer(),
+                    const SizedBox(width: 8.0),
                     _buildDisponibilidadChip(),
                   ],
                 ),
@@ -230,28 +215,34 @@ class CatalogoItemCard extends StatelessWidget {
   /// Chip de Disponibilidad
   Widget _buildDisponibilidadChip() {
     final estado = item.estadoActivo ?? 'Disponible';
+    final bool esDisponible = estado.toLowerCase() == 'disponible';
+    final colorChip = esDisponible ? AppPalette.success : AppPalette.secondary;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 3.0),
+      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
       decoration: BoxDecoration(
-        color: AppPalette.success.withValues(alpha: 0.12),
+        color: colorChip.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(6.0),
+        border: Border.all(color: colorChip.withValues(alpha: 0.4), width: 1.0),
       ),
       child: Text(
         estado.toUpperCase(),
         style: AppTypography.small.copyWith(
           fontSize: 11,
-          color: AppPalette.success,
+          color: colorChip,
           fontWeight: FontWeight.bold,
         ),
       ),
     );
   }
 
-  /// Distintivo de Sucursal según algoritmo Radar de Stock
+  /// Distintivo de Sucursal con visibilidad completa y limpia
   Widget _buildSucursalBadge() {
+    final nombreSuc = item.nombreSucursal.isNotEmpty ? item.nombreSucursal : 'Sucursal';
+
     if (_esMismaSucursal) {
       return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+        padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 4.0),
         decoration: BoxDecoration(
           color: AppPalette.primary.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(6.0),
@@ -265,10 +256,10 @@ class CatalogoItemCard extends StatelessWidget {
               size: 14,
               color: AppPalette.primary,
             ),
-            const SizedBox(width: 5),
+            const SizedBox(width: 6),
             Flexible(
               child: Text(
-                'En tu sucursal (${item.nombreSucursal})',
+                '📍 $nombreSuc (Tu sucursal)',
                 style: AppTypography.small.copyWith(
                   fontSize: 12,
                   color: AppPalette.primary,
@@ -284,7 +275,7 @@ class CatalogoItemCard extends StatelessWidget {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+      padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 4.0),
       decoration: BoxDecoration(
         color: AppPalette.background,
         borderRadius: BorderRadius.circular(6.0),
@@ -294,17 +285,18 @@ class CatalogoItemCard extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           const Icon(
-            Icons.storefront_outlined,
+            Icons.location_on_outlined,
             size: 14,
             color: AppPalette.neutral,
           ),
-          const SizedBox(width: 5),
+          const SizedBox(width: 6),
           Flexible(
             child: Text(
-              item.nombreSucursal,
+              '📍 $nombreSuc',
               style: AppTypography.small.copyWith(
                 fontSize: 12,
-                color: AppPalette.neutral,
+                color: AppPalette.textPrimary,
+                fontWeight: FontWeight.w600,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,

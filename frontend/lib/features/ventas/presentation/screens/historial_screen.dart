@@ -10,11 +10,13 @@ import '../widgets/historial_filtros_drawer.dart';
 class HistorialScreen extends StatefulWidget {
   final VoidCallback? onOpenMenuDrawer;
   final VoidCallback? onRefreshCatalogo;
+  final List<OrdenHistorialModel>? initialOrdenes;
 
   const HistorialScreen({
     super.key,
     this.onOpenMenuDrawer,
     this.onRefreshCatalogo,
+    this.initialOrdenes,
   });
 
   @override
@@ -23,9 +25,12 @@ class HistorialScreen extends StatefulWidget {
 
 class _HistorialScreenState extends State<HistorialScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final TextEditingController _searchController = TextEditingController();
+
   List<OrdenHistorialModel> _ordenes = [];
   bool _isLoading = true;
   String? _errorMessage;
+  String _searchQuery = '';
 
   // Filtros aplicados
   bool _verTodas = false;
@@ -40,7 +45,19 @@ class _HistorialScreenState extends State<HistorialScreen> {
     super.initState();
     _tempVerTodas = _verTodas;
     _tempFiltroEstado = _filtroEstado;
-    _cargarOrdenes();
+
+    if (widget.initialOrdenes != null) {
+      _ordenes = List.from(widget.initialOrdenes!);
+      _isLoading = false;
+    } else {
+      _cargarOrdenes();
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _cargarOrdenes() async {
@@ -70,6 +87,59 @@ class _HistorialScreenState extends State<HistorialScreen> {
     }
   }
 
+  /// Lista filtrada reactivamente según el término de búsqueda ingresado
+  List<OrdenHistorialModel> get _ordenesFiltradas {
+    if (_searchQuery.trim().isEmpty) {
+      return _ordenes;
+    }
+
+    final query = _searchQuery.trim().toLowerCase();
+    final cleanQuery = query.replaceAll('#', '').trim();
+
+    return _ordenes.where((orden) {
+      // 1. Folio / ID de Orden / Token QR
+      final idMatch = orden.idOrden.toLowerCase().contains(cleanQuery);
+      final folioMatch = orden.folioDisplay.toLowerCase().contains(cleanQuery) ||
+          orden.folioDisplay.toLowerCase().contains(query);
+      final qrMatch = orden.qrTransaccionalSalida != null &&
+          orden.qrTransaccionalSalida!.toLowerCase().contains(cleanQuery);
+
+      // 2. Cliente: Nombre Completo y RUT
+      final cliente = orden.cliente;
+      final clienteNombreMatch = cliente != null &&
+          cliente.nombreCompleto.toLowerCase().contains(cleanQuery);
+      final clienteRutMatch = cliente != null &&
+          (cliente.rutCliente.toLowerCase().contains(cleanQuery) ||
+              cliente.rutCliente.replaceAll('.', '').replaceAll('-', '').toLowerCase().contains(cleanQuery.replaceAll('.', '').replaceAll('-', '')));
+
+      // 3. Despacho: Receptor y RUT
+      final despacho = orden.despacho;
+      final receptorNombreMatch = despacho != null &&
+          despacho.receptorNombres.toLowerCase().contains(cleanQuery);
+      final receptorRutMatch = despacho != null &&
+          despacho.receptorRut.toLowerCase().contains(cleanQuery);
+
+      // 4. Marca / Modelo / Título o SKU del Repuesto en líneas de detalle
+      final repuestosMatch = orden.detalles.any((detalle) {
+        final titulo = detalle.titulo.toLowerCase();
+        final desc = (detalle.descripcionManual ?? '').toLowerCase();
+        final sku = (detalle.skuQrFisico ?? '').toLowerCase();
+        return titulo.contains(cleanQuery) ||
+            desc.contains(cleanQuery) ||
+            sku.contains(cleanQuery);
+      });
+
+      return idMatch ||
+          folioMatch ||
+          qrMatch ||
+          clienteNombreMatch ||
+          clienteRutMatch ||
+          receptorNombreMatch ||
+          receptorRutMatch ||
+          repuestosMatch;
+    }).toList();
+  }
+
   void _abrirDetalleOrden(OrdenHistorialModel orden) {
     showModalBottomSheet(
       context: context,
@@ -82,6 +152,126 @@ class _HistorialScreenState extends State<HistorialScreen> {
           _cargarOrdenes();
           widget.onRefreshCatalogo?.call();
         },
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16.0, 10.0, 16.0, 6.0),
+      child: TextField(
+        key: const Key('buscador_ordenes_textfield'),
+        controller: _searchController,
+        onChanged: (val) {
+          setState(() {
+            _searchQuery = val;
+          });
+        },
+        style: AppTypography.body.copyWith(color: AppPalette.textPrimary, fontSize: 14),
+        cursorColor: AppPalette.primary,
+        decoration: InputDecoration(
+          hintText: 'Buscar por Folio, Cliente, RUT o Repuesto...',
+          hintStyle: AppTypography.body.copyWith(
+            color: AppPalette.textSecondary.withValues(alpha: 0.65),
+            fontSize: 13,
+          ),
+          prefixIcon: const Icon(
+            Icons.search,
+            color: AppPalette.textSecondary,
+            size: 20,
+          ),
+          suffixIcon: _searchQuery.isNotEmpty
+              ? IconButton(
+                  key: const Key('btn_limpiar_busqueda_ordenes'),
+                  icon: const Icon(
+                    Icons.clear,
+                    color: AppPalette.textSecondary,
+                    size: 20,
+                  ),
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() {
+                      _searchQuery = '';
+                    });
+                  },
+                  tooltip: 'Limpiar búsqueda',
+                )
+              : null,
+          filled: true,
+          fillColor: AppPalette.surface,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14.0,
+            vertical: 10.0,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10.0),
+            borderSide: BorderSide(
+              color: Colors.white.withValues(alpha: 0.08),
+              width: 1.0,
+            ),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10.0),
+            borderSide: const BorderSide(
+              color: AppPalette.primary,
+              width: 1.5,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNoSearchResultsState() {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20.0),
+              decoration: BoxDecoration(
+                color: AppPalette.surface,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white10),
+              ),
+              child: const Icon(
+                Icons.search_off,
+                size: 50.0,
+                color: AppPalette.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 20.0),
+            Text(
+              'No se encontraron órdenes que coincidan con la búsqueda',
+              style: AppTypography.title.copyWith(fontSize: 16.0),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8.0),
+            Text(
+              'No hay resultados para "$_searchQuery". Verifica el folio (#...), cliente, RUT o nombre del repuesto.',
+              style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20.0),
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppPalette.primary,
+                side: const BorderSide(color: AppPalette.primary),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
+              ),
+              icon: const Icon(Icons.clear, size: 18.0),
+              label: const Text('Limpiar Búsqueda'),
+              onPressed: () {
+                _searchController.clear();
+                setState(() {
+                  _searchQuery = '';
+                });
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -195,6 +385,7 @@ class _HistorialScreenState extends State<HistorialScreen> {
   @override
   Widget build(BuildContext context) {
     final hayFiltrosActivos = _verTodas || _filtroEstado != null;
+    final ordenesMostradas = _ordenesFiltradas;
 
     return Scaffold(
       key: _scaffoldKey,
@@ -241,7 +432,6 @@ class _HistorialScreenState extends State<HistorialScreen> {
                     color: hayFiltrosActivos ? AppPalette.secondary : AppPalette.textPrimary,
                   ),
                   onPressed: () {
-                    // Sincronizar valores temporales antes de abrir drawer
                     setState(() {
                       _tempVerTodas = _verTodas;
                       _tempFiltroEstado = _filtroEstado;
@@ -299,47 +489,69 @@ class _HistorialScreenState extends State<HistorialScreen> {
           _cargarOrdenes();
         },
       ),
-      body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppPalette.primary),
-            )
-          : _errorMessage != null
-              ? _buildErrorState()
-              : _ordenes.isEmpty
-                  ? RefreshIndicator(
-                      onRefresh: _cargarOrdenes,
-                      color: AppPalette.primary,
-                      backgroundColor: AppPalette.surface,
-                      child: ListView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        children: [
-                          SizedBox(
-                            height: MediaQuery.of(context).size.height * 0.7,
-                            child: _buildEmptyState(),
-                          ),
-                        ],
-                      ),
-                    )
-                  : RefreshIndicator(
-                      onRefresh: _cargarOrdenes,
-                      color: AppPalette.primary,
-                      backgroundColor: AppPalette.surface,
-                      child: ListView.builder(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16.0,
-                          vertical: 12.0,
-                        ),
-                        itemCount: _ordenes.length,
-                        itemBuilder: (context, index) {
-                          final orden = _ordenes[index];
-                          return OrdenCard(
-                            orden: orden,
-                            onTap: () => _abrirDetalleOrden(orden),
-                          );
-                        },
-                      ),
-                    ),
+      body: Column(
+        children: [
+          _buildSearchBar(),
+          Expanded(
+            child: _isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(color: AppPalette.primary),
+                  )
+                : _errorMessage != null
+                    ? _buildErrorState()
+                    : _ordenes.isEmpty
+                        ? RefreshIndicator(
+                            onRefresh: _cargarOrdenes,
+                            color: AppPalette.primary,
+                            backgroundColor: AppPalette.surface,
+                            child: ListView(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              children: [
+                                SizedBox(
+                                  height: MediaQuery.of(context).size.height * 0.65,
+                                  child: _buildEmptyState(),
+                                ),
+                              ],
+                            ),
+                          )
+                        : ordenesMostradas.isEmpty
+                            ? RefreshIndicator(
+                                onRefresh: _cargarOrdenes,
+                                color: AppPalette.primary,
+                                backgroundColor: AppPalette.surface,
+                                child: ListView(
+                                  physics: const AlwaysScrollableScrollPhysics(),
+                                  children: [
+                                    SizedBox(
+                                      height: MediaQuery.of(context).size.height * 0.65,
+                                      child: _buildNoSearchResultsState(),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : RefreshIndicator(
+                                onRefresh: _cargarOrdenes,
+                                color: AppPalette.primary,
+                                backgroundColor: AppPalette.surface,
+                                child: ListView.builder(
+                                  physics: const AlwaysScrollableScrollPhysics(),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16.0,
+                                    vertical: 8.0,
+                                  ),
+                                  itemCount: ordenesMostradas.length,
+                                  itemBuilder: (context, index) {
+                                    final orden = ordenesMostradas[index];
+                                    return OrdenCard(
+                                      orden: orden,
+                                      onTap: () => _abrirDetalleOrden(orden),
+                                    );
+                                  },
+                                ),
+                              ),
+          ),
+        ],
+      ),
     );
   }
 }
