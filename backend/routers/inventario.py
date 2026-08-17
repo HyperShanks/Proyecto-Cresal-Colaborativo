@@ -50,7 +50,11 @@ def obtener_opciones_filtros(
         .outerjoin(Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo)
     )
 
-    query = query.filter(Activo_Inventariado.id_estado.notin_([3, 5]))
+    # ⚠️ REGLA DE NEGOCIO: Filtrar únicamente repuestos físicamente en bodega (1: Disponible, 2: Reservado)
+    query = query.filter(
+        Activo_Inventariado.id_estado.in_([1, 2]),
+        Activo_Inventariado.estado == "Activo",
+    )
 
     # 2. Aplicamos los filtros actuales que el usuario ya seleccionó
     if categoria:
@@ -142,8 +146,12 @@ def buscar_inventario(
         .join(Estado_Activo, Activo_Inventariado.id_estado == Estado_Activo.id_estado)
     )
 
-    # ⚠️ REGLA DE NEGOCIO: Excluir Vendidos (3) y En Desarme (5)
-    query = query.filter(Activo_Inventariado.id_estado.notin_([3, 5]))
+    # ⚠️ REGLA DE NEGOCIO: Filtrar únicamente repuestos físicamente en bodega (1: Disponible, 2: Reservado)
+    # Excluye explícitamente Entregado (4), Vendido (3) y De Baja / En Desarme (5)
+    query = query.filter(
+        Activo_Inventariado.id_estado.in_([1, 2]),
+        Activo_Inventariado.estado == "Activo",
+    )
 
     # Búsqueda por Texto Libre
     if q and q.strip():

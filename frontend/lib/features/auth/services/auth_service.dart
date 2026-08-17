@@ -1,7 +1,11 @@
 import 'dart:convert';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../core/constants/api_constants.dart';
+import '../../../core/theme/tokens/app_palette.dart';
+import '../../../core/services/api_service.dart';
+import '../../alertas/services/bodega_polling_service.dart';
 
 // Claves de almacenamiento seguro
 const String _tokenKey = 'access_token';
@@ -148,6 +152,39 @@ class AuthService {
     await _storage.delete(key: _sucursalKey);
     await _storage.delete(key: _sucursalNombreKey);
     await _storage.delete(key: _nombreUsuarioKey);
+  }
+
+  /// Alias de clearToken para logout explícito
+  static Future<void> logout() => clearToken();
+
+  /// Manejador global invocado cuando se detecta un 401 Unauthorized
+  static Future<void> manejarSesionExpirada() async {
+    await logout();
+    BodegaPollingService.instance.reset();
+
+    // Redirigir a login
+    final navigator = ApiService.navigatorKey.currentState;
+    if (navigator != null) {
+      navigator.pushNamedAndRemoveUntil('/login', (route) => false);
+    }
+
+    // Mostrar SnackBar explicativo
+    final messenger = ApiService.scaffoldMessengerKey.currentState;
+    if (messenger != null) {
+      messenger.clearSnackBars();
+      messenger.showSnackBar(
+        SnackBar(
+          content: const Text(
+            'Tu sesión ha expirado. Ingresa tu PIN nuevamente',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          ),
+          backgroundColor: AppPalette.error,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    }
   }
 }
 

@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/features/alertas/models/tarea_alerta.dart';
 import 'package:frontend/features/alertas/presentation/widgets/task_card.dart';
 import 'package:frontend/features/inventario/presentation/widgets/resultado_card.dart';
+import 'package:frontend/features/inventario/presentation/screens/detalle_activo_screen.dart';
 import 'package:frontend/features/recepcion/presentation/screens/recepcion_vehiculo_screen.dart';
 
 void main() {
@@ -82,17 +83,18 @@ void main() {
   // 2. WIDGET TESTS: TaskCard
   // ─────────────────────────────────────────────────────────────────────────────
   group('TaskCard Widget Tests', () {
-    testWidgets('Renderiza boton LISTO para tareas con id_detalle y muestra badge TRASLADO', (tester) async {
+    testWidgets('Renderiza boton LISTO para tareas con id_detalle, título explícito Motor y TRASLADO', (tester) async {
       final tarea = TareaAlerta(
         idTarea: 'T-001',
         tipoAlerta: 'TRASLADO',
         ordenRef: 'ORD-2026-0001',
-        tituloPieza: 'Motor Hyundai Accent 2020',
+        tituloPieza: 'Repuesto de Hyundai Accent 2020',
         ubicacion: 'Galpón 1 - Pasillo 2',
         notaEspecial: '[TRASLADO A VIÑA]',
         accionRequerida: 'PREPARAR Y TRASLADAR',
         idDetalle: '11111111-1111-1111-1111-111111111111',
         esTraslado: true,
+        categoria: 'Motor',
       );
 
       await tester.pumpWidget(
@@ -103,23 +105,26 @@ void main() {
         ),
       );
 
-      // Verificaciones en la UI
+      // Verificaciones en la UI: título reformateado con Motor, TRASLADO, LISTO visible, BARRERA oculto
       expect(find.text('ORD-2026-0001'), findsOneWidget);
       expect(find.text('TRASLADO'), findsOneWidget);
-      expect(find.text('Motor Hyundai Accent 2020'), findsOneWidget);
+      expect(find.text('Motor - Hyundai Accent 2020'), findsOneWidget);
       expect(find.text('LISTO'), findsOneWidget);
+      expect(find.text('DETALLES'), findsOneWidget);
+      expect(find.text('BARRERA'), findsNothing);
       expect(find.byKey(const Key('btn_listo_T-001')), findsOneWidget);
     });
 
-    testWidgets('Abre modal de detalle al tocar la tarjeta y muestra acciones', (tester) async {
+    testWidgets('Renderiza título explícito Caja de Cambios y modal sin chips redundantes', (tester) async {
       final tarea = TareaAlerta(
         idTarea: 'T-002',
         tipoAlerta: 'PREPARACION',
         ordenRef: 'ORD-2026-0002',
-        tituloPieza: 'Caja de Cambios Toyota Yaris',
+        tituloPieza: 'Repuesto de Toyota Yaris',
         ubicacion: 'P-03 | Pallet 12',
         accionRequerida: 'PREPARAR PARA ENTREGA',
         idDetalle: '22222222-2222-2222-2222-222222222222',
+        categoria: 'Caja de Cambios',
       );
 
       await tester.pumpWidget(
@@ -129,6 +134,11 @@ void main() {
           ),
         ),
       );
+
+      expect(find.text('Caja de Cambios - Toyota Yaris'), findsOneWidget);
+      expect(find.text('LISTO'), findsOneWidget);
+      expect(find.text('DETALLES'), findsOneWidget);
+      expect(find.text('BARRERA'), findsNothing);
 
       // Tap en DETALLES
       await tester.tap(find.text('DETALLES'));
@@ -137,6 +147,34 @@ void main() {
       // Modal desplegado
       expect(find.text('UBICACIÓN EXACTA'), findsOneWidget);
       expect(find.text('MARCAR COMO LISTO'), findsOneWidget);
+      expect(find.text('ESCANEAR EN BARRERA'), findsNothing);
+    });
+
+    testWidgets('Estado LIBERADA muestra exclusivamente botón BARRERA y oculta LISTO', (tester) async {
+      final tarea = TareaAlerta(
+        idTarea: 'T-003',
+        tipoAlerta: 'LIBERADA',
+        ordenRef: 'ORD-2026-0003',
+        tituloPieza: 'Motor Nissan Versa 2021',
+        ubicacion: 'G2 - P1 - Pa03',
+        accionRequerida: 'ESCANEAR EN BARRERA',
+        idDetalle: '33333333-3333-3333-3333-333333333333',
+        categoria: 'Motor',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TaskCard(tarea: tarea),
+          ),
+        ),
+      );
+
+      // Verificaciones: BARRERA presente, LISTO ausente
+      expect(find.text('BARRERA'), findsOneWidget);
+      expect(find.byKey(const Key('btn_barrera_T-003')), findsOneWidget);
+      expect(find.text('LISTO'), findsNothing);
+      expect(find.byKey(const Key('btn_listo_T-003')), findsNothing);
     });
   });
 
@@ -180,17 +218,17 @@ void main() {
       expect(find.text('Pasillo: P-05 | Pallet: PL-18 | Galpón: G-02'), findsOneWidget);
     });
 
-    testWidgets('Aplica borde y estilo distintivo para estado RESERVADO', (tester) async {
-      final itemCompleto = {
-        'id_activo': 'res-999',
-        'categoria': 'Caja de Cambios',
-        'marca': 'Chevrolet',
-        'modelo': 'Sail',
-        'sku': 'CAJ-CHE-SAI-002',
-        'pasillo': 'P-01',
-        'pallet': 'PL-01',
-        'galpon': 'G-01',
-        'estado': 'RESERVADO',
+    testWidgets('Muestra Sin Paletizar / Sin Ubicación Asignada cuando no hay pasillo ni pallet', (tester) async {
+      final itemSinUbicacion = {
+        'id_activo': 'sin-001',
+        'categoria': 'Accesorio',
+        'marca': 'Kia',
+        'modelo': 'Rio',
+        'sku': 'ACC-KIA-RIO-001',
+        'pasillo': '',
+        'pallet': '',
+        'galpon': '',
+        'estado': 'DISPONIBLE',
         'imagenes': [],
       };
 
@@ -198,19 +236,102 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: ResultadoCard(
-              itemCompleto: itemCompleto,
-              marca: 'Chevrolet',
-              modelo: 'Sail',
-              sku: 'CAJ-CHE-SAI-002',
-              ubicacion: 'P-01 - PL-01',
-              estado: 'RESERVADO',
+              itemCompleto: itemSinUbicacion,
+              marca: 'Kia',
+              modelo: 'Rio',
+              sku: 'ACC-KIA-RIO-001',
+              ubicacion: '',
+              estado: 'DISPONIBLE',
             ),
           ),
         ),
       );
 
-      expect(find.text('RESERVADO'), findsOneWidget);
-      expect(find.text('Pasillo: P-01 | Pallet: PL-01 | Galpón: G-01'), findsOneWidget);
+      expect(find.text('Sin Paletizar / Sin Ubicación Asignada'), findsOneWidget);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // 3.5. WIDGET TESTS: DetalleActivoScreen (Bodega Inventario)
+  // ─────────────────────────────────────────────────────────────────────────────
+  group('DetalleActivoScreen (Bodega Inventario) Widget Tests', () {
+    testWidgets('Renderiza AppBar limpio, ID en pill y UBICACIÓN ACTUAL estructurada', (tester) async {
+      final activoData = {
+        'id_activo': 'act-1010',
+        'categoria': 'Motor',
+        'marca': 'Toyota',
+        'modelo': 'Hilux',
+        'sku': 'MOT-1010',
+        'estado': 'DISPONIBLE',
+        'ubicacion': 'P-03 - PL-09',
+        'pasillo': 'P-03',
+        'pallet': 'PL-09',
+        'galpon': 'G-01',
+        'numero_ingreso': 'ING-2026-088',
+        'cilindrada': '2.8L',
+        'combustible': 'DIESEL',
+        'transmision': 'AUTOMÁTICA',
+        'observacion': 'Motor en óptimas condiciones.',
+        'qr_impreso': false,
+        'imagenes': [],
+      };
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: DetalleActivoScreen(activo: activoData),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 1. AppBar limpio
+      expect(find.text('Detalle de Motor'), findsOneWidget);
+      expect(find.byTooltip('Volver'), findsOneWidget);
+
+      // 2. ID en pill y estado
+      expect(find.text('ID: MOT-1010'), findsOneWidget);
+      expect(find.text('DISPONIBLE'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate((widget) => widget is RichText && widget.text.toPlainText().contains('Toyota Hilux')),
+        findsOneWidget,
+      );
+
+      // 3. Ubicación Actual estructurada y legible
+      expect(find.text('UBICACIÓN ACTUAL'), findsOneWidget);
+      expect(find.text('Pasillo: P-03 | Pallet: PL-09 | Galpón: G-01'), findsOneWidget);
+
+      // 4. Especificaciones técnicas
+      expect(find.text('Nº DE INGRESO VEHÍCULO'), findsOneWidget);
+      expect(find.text('ING-2026-088'), findsOneWidget);
+      expect(find.text('2.8L'), findsOneWidget);
+    });
+
+    testWidgets('Renderiza Sin Paletizar / Sin Ubicación Asignada cuando no tiene ubicación', (tester) async {
+      final activoSinUbicacion = {
+        'id_activo': 'act-2020',
+        'categoria': 'Caja de Cambios',
+        'marca': 'Nissan',
+        'modelo': 'Kicks',
+        'sku': 'CAJ-2020',
+        'estado': 'DISPONIBLE',
+        'ubicacion': 'No asignada',
+        'pasillo': '',
+        'pallet': '',
+        'galpon': '',
+        'numero_ingreso': 'ING-2026-099',
+        'transmision': 'CVT',
+        'qr_impreso': false,
+        'imagenes': [],
+      };
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: DetalleActivoScreen(activo: activoSinUbicacion),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Detalle de Caja de Cambios'), findsOneWidget);
+      expect(find.text('Sin Paletizar / Sin Ubicación Asignada'), findsOneWidget);
     });
   });
 

@@ -25,6 +25,33 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
     _qrImpreso = widget.activo['qr_impreso'] as bool? ?? false;
   }
 
+  String _formatearUbicacionHumana() {
+    final pasillo = widget.activo['pasillo']?.toString().trim() ?? '';
+    final pallet = widget.activo['pallet']?.toString().trim() ?? '';
+    final galpon = widget.activo['galpon']?.toString().trim() ?? '';
+
+    final bool tienePasillo = pasillo.isNotEmpty && pasillo != 'S/P' && pasillo != 'null';
+    final bool tienePallet = pallet.isNotEmpty && pallet != 'S/P' && pallet != 'null';
+    final bool tieneGalpon = galpon.isNotEmpty && galpon != 'S/G' && galpon != 'null';
+
+    if (!tienePasillo && !tienePallet && !tieneGalpon) {
+      final rawUbicacion = widget.activo['ubicacion']?.toString().trim() ?? '';
+      if (rawUbicacion.isNotEmpty &&
+          rawUbicacion != 'S/P - S/P' &&
+          rawUbicacion != 'No asignada' &&
+          rawUbicacion != 'null') {
+        return rawUbicacion;
+      }
+      return 'Sin Paletizar / Sin Ubicación Asignada';
+    }
+
+    final pStr = tienePasillo ? pasillo : 'S/P';
+    final paStr = tienePallet ? pallet : 'S/P';
+    final gStr = tieneGalpon ? galpon : 'S/G';
+
+    return 'Pasillo: $pStr | Pallet: $paStr | Galpón: $gStr';
+  }
+
   @override
   Widget build(BuildContext context) {
     final String categoria = widget.activo['categoria']?.toString() ?? 'Activo';
@@ -36,10 +63,7 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
     final String modelo = widget.activo['modelo']?.toString() ?? 'Desconocido';
     final String sku = widget.activo['sku']?.toString() ?? 'S/N';
     final String estado = widget.activo['estado']?.toString() ?? 'DISPONIBLE';
-    final String ubicacion =
-        widget.activo['ubicacion']?.toString() ?? 'No asignada';
 
-    // ⚠️ NUEVO: Extraemos el número de ingreso
     final String numeroIngreso =
         widget.activo['numero_ingreso']?.toString() ?? 'N/A';
 
@@ -53,12 +77,10 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
         'Sin observaciones registradas.';
 
     final List<dynamic> rawImages = widget.activo['imagenes'] ?? [];
-    // Si no hay fotos, metemos un string identificador para renderizar el fallback nativo
     final List<String> imagenesReales = rawImages.isNotEmpty
         ? rawImages.map((e) => e.toString()).toList()
         : ['NO_IMAGE'];
 
-    // ── Construimos el EtiquetaData para pasarlo a EtiquetaPreviewScreen ──
     final etiqueta = EtiquetaData(
       idActivo: widget.activo['id_activo']?.toString() ?? '',
       numeroIngreso: numeroIngreso,
@@ -78,18 +100,25 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
       backgroundColor: AppPalette.background,
       appBar: AppBar(
         title: Text(
-          // ⚠️ TÍTULO DINÁMICO
           'Detalle de $categoria',
-          style: AppTypography.title.copyWith(color: AppPalette.textPrimary),
+          style: AppTypography.title.copyWith(color: AppPalette.textPrimary, fontSize: 18),
         ),
-        backgroundColor: Colors.transparent,
+        backgroundColor: AppPalette.surface,
+        foregroundColor: AppPalette.textPrimary,
         elevation: 0,
-        iconTheme: const IconThemeData(color: AppPalette.primary),
+        centerTitle: false,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: AppPalette.textPrimary),
+          onPressed: () => Navigator.of(context).pop(),
+          tooltip: 'Volver',
+        ),
       ),
       body: SingleChildScrollView(
+        padding: const EdgeInsets.only(bottom: 32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            const SizedBox(height: 16),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: Column(
@@ -99,19 +128,28 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       _buildBadgeEstado(estado),
-                      Text(
-                        'ID: $sku',
-                        style: AppTypography.small.copyWith(
-                          color: AppPalette.textSecondary,
-                          fontWeight: FontWeight.bold,
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppPalette.surface,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: AppPalette.neutral.withValues(alpha: 0.2)),
+                        ),
+                        child: Text(
+                          'ID: $sku',
+                          style: AppTypography.small.copyWith(
+                            color: AppPalette.textSecondary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 14),
                   RichText(
                     text: TextSpan(
-                      style: AppTypography.headline.copyWith(fontSize: 28),
+                      style: AppTypography.headline.copyWith(fontSize: 26, fontWeight: FontWeight.bold),
                       children: [
                         TextSpan(
                           text: '$marca ',
@@ -140,7 +178,6 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
                   });
                 },
                 itemBuilder: (context, index) {
-                  // Si tiene una URL válida, dibuja la foto
                   if (imagenesReales[index].startsWith('http')) {
                     return Container(
                       margin: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -152,9 +189,7 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
                         ),
                       ),
                     );
-                  }
-                  // Si no hay foto, dibuja un contenedor gris con un ícono
-                  else {
+                  } else {
                     return Container(
                       margin: const EdgeInsets.symmetric(horizontal: 16.0),
                       decoration: BoxDecoration(
@@ -219,53 +254,68 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
                     decoration: BoxDecoration(
                       color: AppPalette.surface,
                       borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppPalette.primary.withValues(alpha: 0.2)),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'UBICACIÓN ACTUAL',
-                              style: AppTypography.small.copyWith(
-                                color: AppPalette.textSecondary,
-                                letterSpacing: 1.2,
-                                fontSize: 10,
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'UBICACIÓN ACTUAL',
+                                style: AppTypography.small.copyWith(
+                                  color: AppPalette.textSecondary,
+                                  letterSpacing: 1.2,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              ubicacion,
-                              style: AppTypography.title.copyWith(
-                                color: AppPalette.primary,
-                                fontSize: 22,
+                              const SizedBox(height: 8),
+                              Text(
+                                _formatearUbicacionHumana(),
+                                style: AppTypography.title.copyWith(
+                                  color: AppPalette.primary,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  height: 1.3,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                        const Icon(
-                          Icons.location_on_outlined,
-                          color: AppPalette.primary,
-                          size: 32,
+                        const SizedBox(width: 12),
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppPalette.primary.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.location_on_rounded,
+                            color: AppPalette.primary,
+                            size: 26,
+                          ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 28),
 
                   Text(
                     'ESPECIFICACIONES TÉCNICAS',
                     style: AppTypography.small.copyWith(
                       color: AppPalette.textSecondary,
                       letterSpacing: 1.2,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
 
                   _buildSpecCard('Nº DE INGRESO VEHÍCULO', numeroIngreso),
 
-                  // ⚠️ OCULTAMOS ESTOS DATOS SI ES UNA CAJA DE CAMBIO O ACCESORIO
                   if (esMotor) ...[
                     _buildSpecCard('CILINDRADA', cilindrada),
                     _buildSpecCard('COMBUSTIBLE', combustible),
@@ -274,7 +324,7 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
                   _buildSpecCard('TRANSMISIÓN', transmision),
 
                   Container(
-                    margin: const EdgeInsets.only(bottom: 32),
+                    margin: const EdgeInsets.only(bottom: 28),
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: AppPalette.surface,
@@ -322,25 +372,17 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
                   ),
 
                   // ── Botón de Impresión / Reimpresión (HU-2.4 Fase 4) ──
-                  // Regla de Negocio: el botón NUNCA se oculta.
-                  // Si qr_impreso=false → "IMPRIMIR". Si qr_impreso=true → "REIMPRIMIR".
                   SizedBox(
                     width: double.infinity,
-                    height: 55,
+                    height: 52,
                     child: ElevatedButton.icon(
                       onPressed: () async {
-                        // Navega a la Vista Previa pasando el EtiquetaData construido
                         final resultado = await Navigator.of(
                           context,
                         ).pushNamed('/etiqueta-preview', arguments: etiqueta);
 
-                        // Si la pantalla retornó true → la etiqueta fue impresa
-                        // Actualizamos el estado local del botón sin ir al backend de nuevo
                         if (resultado == true && mounted) {
                           setState(() => _qrImpreso = true);
-                          debugPrint(
-                            '📌 [DETALLE_SCREEN] ✅ Retorno exitoso de EtiquetaPreview. qr_impreso → true',
-                          );
                         }
                       },
                       icon: Icon(
@@ -353,10 +395,10 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
                             : 'IMPRIMIR ETIQUETA QR',
                         style: AppTypography.button.copyWith(
                           color: Colors.white,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                       style: ElevatedButton.styleFrom(
-                        // Verde para primera impresión, ámbar para reimpresión
                         backgroundColor: _qrImpreso
                             ? AppPalette.secondary
                             : AppPalette.primary,
@@ -369,10 +411,10 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
                   const SizedBox(height: 12),
                   SizedBox(
                     width: double.infinity,
-                    height: 55,
+                    height: 50,
                     child: OutlinedButton.icon(
                       onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.list_alt, color: Colors.white),
+                      icon: const Icon(Icons.list_alt, color: Colors.white, size: 18),
                       label: Text(
                         'VOLVER AL LISTADO',
                         style: AppTypography.button.copyWith(
@@ -390,7 +432,6 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 32),
                 ],
               ),
             ),

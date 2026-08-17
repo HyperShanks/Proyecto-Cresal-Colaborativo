@@ -1,10 +1,10 @@
+import uuid
+from datetime import datetime
+from uuid import UUID
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from typing import List, Optional
-from datetime import datetime
-import uuid
-from uuid import UUID
 
 from database import get_db
 from models import (
@@ -80,6 +80,9 @@ def obtener_tareas_pendientes(
         else:
             transmision_val = None
 
+        cat_nombre = "Motor" if activo.id_categoria == 1 else ("Caja de Cambios" if activo.id_categoria == 2 else "Repuesto")
+        titulo = f"{cat_nombre} - {vehiculo.marca} {vehiculo.modelo}" if vehiculo else cat_nombre
+
         etiqueta_data = {
             "id_activo": str(activo.id_activo),
             "numero_ingreso": vehiculo.numero_ingreso if vehiculo else "N/A",
@@ -100,7 +103,9 @@ def obtener_tareas_pendientes(
             TareaAlertaResponse(
                 id_tarea=f"IMP-{str(activo.id_activo)[:8]}",
                 tipo_alerta="IMPRESION",
-                titulo_pieza=f"Repuesto de {vehiculo.marca} {vehiculo.modelo}",
+                titulo_pieza=titulo,
+                categoria=cat_nombre,
+                tipo_repuesto=cat_nombre,
                 ubicacion=f"{activo.ubicacion_pasillo or 'S/P'} - {activo.ubicacion_pallet or 'S/P'}",
                 nota_especial="GENERAR Y PEGAR ETIQUETA QR",
                 accion_requerida="GENERAR QR AHORA",
@@ -161,12 +166,17 @@ def obtener_tareas_pendientes(
                 bloqueo = None
                 accion = "ESCANEAR EN BARRERA"
 
+        cat_nombre = "Motor" if activo.id_categoria == 1 else ("Caja de Cambios" if activo.id_categoria == 2 else "Repuesto")
+        titulo = f"{cat_nombre} - {vehiculo.marca} {vehiculo.modelo}" if vehiculo else cat_nombre
+
         alertas.append(
             TareaAlertaResponse(
                 id_tarea=f"ORD-{str(detalle.id_detalle)[:8]}",
                 tipo_alerta=tipo,
                 orden_ref=f"ORDEN #{str(orden.id_orden)[:8].upper()}",
-                titulo_pieza=f"Repuesto de {vehiculo.marca} {vehiculo.modelo}",
+                titulo_pieza=titulo,
+                categoria=cat_nombre,
+                tipo_repuesto=cat_nombre,
                 ubicacion=f"{activo.ubicacion_pasillo or 'S/P'} - {activo.ubicacion_pallet or 'S/P'}",
                 nota_especial=detalle.notas_preparacion,
                 estado_bloqueo=bloqueo,

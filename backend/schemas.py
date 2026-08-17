@@ -578,6 +578,8 @@ class TareaAlertaResponse(BaseModel):
     id_sucursal_destino: Optional[int] = None
     es_traslado: bool = False
     estado_preparacion: Optional[str] = "Pendiente"
+    categoria: Optional[str] = None
+    tipo_repuesto: Optional[str] = None
 
 
 class CompletarPreentregaResponse(BaseModel):

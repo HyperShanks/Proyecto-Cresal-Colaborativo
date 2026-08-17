@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'core/theme/app_theme.dart';
+import 'core/services/api_service.dart';
 import 'features/auth/presentation/screens/splash_screen.dart';
 import 'features/auth/presentation/screens/pin_login_screen.dart';
 import 'features/home/presentation/screens/home_screen.dart';
@@ -31,6 +32,8 @@ class _MyAppState extends State<MyApp> {
     return MaterialApp(
       title: 'Cresal Capstone',
       debugShowCheckedModeBanner: false,
+      navigatorKey: ApiService.navigatorKey,
+      scaffoldMessengerKey: ApiService.scaffoldMessengerKey,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.dark, // Oscuro por defecto industrial
