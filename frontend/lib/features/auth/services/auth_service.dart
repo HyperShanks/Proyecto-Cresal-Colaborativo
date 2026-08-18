@@ -70,6 +70,7 @@ class AuthService {
           if (idRol == 4) rolText = 'Gerente';
           if (idRol == 5) rolText = 'Administrador';
           if (idRol == 6) rolText = 'Jefe de Ventas';
+          if (idRol == 7) rolText = 'Vendedor Online';
         }
         final sucursalId = usuarioMap?['id_sucursal']?.toString();
         final sucursalNombre = usuarioMap?['nombre_sucursal']?.toString() ??
@@ -110,13 +111,35 @@ class AuthService {
   /// Recupera el token almacenado (útil para inyectarlo en peticiones futuras).
   static Future<String?> getToken() => _storage.read(key: _tokenKey);
 
-  /// Recupera el rol textual almacenado (ej. "Bodeguero", "Vendedor", "Jefe de Ventas").
+  /// Recupera el rol textual almacenado (ej. "Bodeguero", "Vendedor", "Jefe de Ventas", "Vendedor Online").
   static Future<String?> getRol() => _storage.read(key: _rolKey);
 
-  /// Recupera el ID numérico del rol del usuario (ej. 6 para Jefe de Ventas).
+  /// Recupera el ID numérico del rol del usuario (ej. 2 para Vendedor, 6 para Jefe de Ventas, 7 para VendedorOnline).
   static Future<int?> getIdRol() async {
     final val = await _storage.read(key: _idRolKey);
     return val != null ? int.tryParse(val) : null;
+  }
+
+  /// Verifica si el usuario actual pertenece al módulo de ventas (Vendedor [2], Jefe de Ventas [6], Vendedor Online [7]).
+  static Future<bool> esModuloVentas() async {
+    final idRol = await getIdRol();
+    if (idRol != null && (idRol == 2 || idRol == 6 || idRol == 7)) return true;
+    final rol = await getRol();
+    final rLower = rol?.toLowerCase() ?? '';
+    return rLower == 'vendedor' ||
+        rLower == 'vendedoronline' ||
+        rLower == 'vendedor online' ||
+        rLower == 'jefe de ventas' ||
+        rLower == 'auditor';
+  }
+
+  /// Verifica si el usuario actual es VendedorOnline (id_rol == 7).
+  static Future<bool> esVendedorOnline() async {
+    final idRol = await getIdRol();
+    if (idRol == 7) return true;
+    final rol = await getRol();
+    final rLower = rol?.toLowerCase() ?? '';
+    return rLower == 'vendedoronline' || rLower == 'vendedor online';
   }
 
   /// Verifica si el usuario actual posee permisos de Jefe de Ventas (id_rol == 6).

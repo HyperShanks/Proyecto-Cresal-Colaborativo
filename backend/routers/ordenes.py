@@ -3,9 +3,10 @@
 # registrar datos de Micro-CRM, gestionar despacho y asegurar la consistencia ACID del inventario.
 
 import uuid
-from datetime import datetime, time as datetime_time
+from datetime import datetime, time as datetime_time, timezone, timedelta
+from zoneinfo import ZoneInfo
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -21,7 +22,9 @@ from schemas import (
     DetalleOrdenItemResponse, OrdenHistorialItemResponse,
     OrdenAnulacionResponse, InstruccionesUpdateRequest,
     InstruccionesUpdateResponse, OrdenPagoRequest,
-    OrdenPagoResponse
+    OrdenPagoResponse, EntregaEnvioItemResponse,
+    EntregaConfirmacionResponse, DespachoEnvioResponse,
+    VendedorResumenResponse
 )
 from core.security import get_current_user
 
@@ -200,17 +203,37 @@ def crear_orden(
         # ── Paso A.2: Cabecera Orden_Venta ──────────────────────────────────
         qr_salida = f"ORD-{uuid.uuid4().hex[:8].upper()}"
 
+        monto_abono_val = orden_in.monto_abono if (orden_in.monto_abono is not None and orden_in.monto_abono > 0) else 0
+        if monto_abono_val > total_calculado:
+            monto_abono_val = total_calculado
+
+        monto_pendiente_calc = total_calculado - monto_abono_val
+        estado_inicial = "Pagada" if monto_pendiente_calc == 0 else "Reservada"
+
         nueva_orden = Orden_Venta(
             id_cliente=cliente.id_cliente,
             id_vendedor=current_user.id_usuario,
+            id_vendedor_asignado=orden_in.id_vendedor_asignado,
             id_sucursal=id_sucursal_orden,
-            estado_orden="Reservada",
+            estado_orden=estado_inicial,
             qr_transaccional_salida=qr_salida,
             total_venta=total_calculado,
-            monto_pendiente=total_calculado,
+            monto_pendiente=monto_pendiente_calc,
         )
         db.add(nueva_orden)
         db.flush()
+
+        if monto_abono_val > 0:
+            transaccion_abono = Transaccion_Pago(
+                id_pago=uuid.uuid4(),
+                id_orden=nueva_orden.id_orden,
+                monto=monto_abono_val,
+                metodo_pago="Abono Inicial",
+                estado_pago="Procesado",
+                fecha_pago=datetime.now(),
+            )
+            db.add(transaccion_abono)
+            db.flush()
 
         # ── Paso A.3: Despacho (Exclusivo para envíos a clientes a domicilio/taller) ──
         if orden_in.requiere_despacho and orden_in.despacho:
@@ -356,22 +379,31 @@ def obtener_mis_ventas(
 
     # Filtro de Rendimiento: Por defecto solo órdenes de hoy
     if not todas:
+        try:
+            tz_chile = ZoneInfo("America/Santiago")
+        except Exception:
+            tz_chile = timezone(timedelta(hours=-4))
+
         if fecha and fecha.strip():
             try:
                 target_date = datetime.strptime(fecha.strip(), "%Y-%m-%d").date()
+                dt_start_chile = datetime.combine(target_date, datetime_time.min, tzinfo=tz_chile)
+                dt_end_chile = datetime.combine(target_date, datetime_time.max, tzinfo=tz_chile)
+                inicio_utc = dt_start_chile.astimezone(timezone.utc).replace(tzinfo=None)
+                fin_utc = dt_end_chile.astimezone(timezone.utc).replace(tzinfo=None)
             except ValueError:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Formato de fecha no válido. Use 'YYYY-MM-DD'."
                 )
         else:
-            target_date = datetime.now().date()
+            ahora_chile = datetime.now(tz_chile)
+            inicio_utc = ahora_chile.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc).replace(tzinfo=None)
+            fin_utc = ahora_chile.replace(hour=23, minute=59, second=59, microsecond=999999).astimezone(timezone.utc).replace(tzinfo=None)
 
-        start_dt = datetime.combine(target_date, datetime_time.min)
-        end_dt = datetime.combine(target_date, datetime_time.max)
         query = query.filter(
-            Orden_Venta.fecha_creacion >= start_dt,
-            Orden_Venta.fecha_creacion <= end_dt
+            Orden_Venta.fecha_creacion >= inicio_utc,
+            Orden_Venta.fecha_creacion <= fin_utc
         )
 
     if estado and estado.strip():
@@ -481,6 +513,416 @@ def obtener_mis_ventas(
         )
 
     return resultado
+
+
+@router.get(
+    "/vendedores",
+    response_model=List[VendedorResumenResponse],
+    summary="Listado de Vendedores Activos por Sucursal",
+    description="Retorna los vendedores activos para la delegación de entregas o ventas online.",
+)
+def listar_vendedores_sucursal(
+    sucursal_id: Optional[int] = Query(None, description="ID de la sucursal activa (opcional)"),
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    query = db.query(Usuario).filter(Usuario.estado == "Activo")
+    if sucursal_id is not None:
+        query = query.filter(Usuario.id_sucursal == sucursal_id)
+    usuarios = query.order_by(Usuario.nombres).all()
+    return [
+        VendedorResumenResponse(
+            id_usuario=u.id_usuario,
+            nombre_completo=f"{u.nombres} {u.apellidos or ''}".strip(),
+            rut=u.rut_usuario,
+            id_sucursal=u.id_sucursal,
+            correo=u.email,
+        )
+        for u in usuarios
+    ]
+
+
+# ==========================================
+# MÓDULO: ENTREGAS Y ENVÍOS (VENTAS PRESENCIALES Y ONLINE)
+# ==========================================
+
+@router.get(
+    "/entregas-envios",
+    response_model=List[EntregaEnvioItemResponse],
+    summary="Listado Colaborativo de Entregas en Tienda y Despachos Externos",
+    description="Consulta colaborativa de pedidos con filtros por cliente, vendedor, tipo y reglas de privacidad.",
+)
+def listar_entregas_envios(
+    sucursal_id: int = Query(1, description="ID de la sucursal activa"),
+    tipo: Optional[str] = Query(None, description="Filtro por tipo: 'retiro' o 'despacho'"),
+    busqueda_cliente: Optional[str] = Query(None, description="Filtro por Nombre, RUT o Teléfono del cliente"),
+    busqueda_vendedor: Optional[str] = Query(None, description="Filtro por Vendedor creador o asignado"),
+    busqueda: Optional[str] = Query(None, description="Término general de búsqueda"),
+    estado_pago: Optional[str] = Query(None, description="Filtro de pago: 'todos', 'pagados', 'pendientes'"),
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    tipo_filtro = (tipo.strip().lower() if tipo else None)
+
+    ordenes_resultado = []
+
+    # A. Consulta de Retiros en Tienda (sin registro en Despacho)
+    if tipo_filtro in [None, "retiro", "todos", ""]:
+        q_retiros = (
+            db.query(Orden_Venta)
+            .outerjoin(Despacho, Orden_Venta.id_orden == Despacho.id_orden)
+            .filter(
+                Orden_Venta.id_sucursal == sucursal_id,
+                Orden_Venta.estado_orden.in_(["Reservada", "Pagada"]),
+                Despacho.id_despacho == None,
+            )
+        )
+        ordenes_resultado.extend([("Retiro", o) for o in q_retiros.all()])
+
+    # B. Consulta de Despachos Externos (con registro en Despacho y estado Por Enviar)
+    if tipo_filtro in [None, "despacho", "todos", ""]:
+        q_despachos = (
+            db.query(Orden_Venta)
+            .join(Despacho, Orden_Venta.id_orden == Despacho.id_orden)
+            .filter(
+                Orden_Venta.id_sucursal == sucursal_id,
+                Orden_Venta.estado_orden.in_(["Reservada", "Pagada"]),
+                Despacho.estado_despacho.in_(["Por Enviar", "En Preparacion"]),
+            )
+        )
+        ordenes_resultado.extend([("Despacho", o) for o in q_despachos.all()])
+
+    # Ordenar cronológicamente descendente
+    ordenes_resultado.sort(key=lambda x: x[1].fecha_creacion, reverse=True)
+
+    items_response = []
+    term_busqueda = busqueda.strip().upper() if busqueda and busqueda.strip() else None
+    es_admin_o_jefe = current_user.id_rol in [1, 5, 6]
+
+    for tipo_entrega_item, orden in ordenes_resultado:
+        # 1. Regla de Privacidad y Visibilidad:
+        # - Admin/Jefe: ve todo.
+        # - id_vendedor_asignado IS NULL (Mesón General / Presencial): visible para toda la sucursal.
+        # - id_vendedor_asignado IS NOT NULL (Venta Online asignada): visible para el asignado o el creador.
+        if not es_admin_o_jefe and orden.id_vendedor_asignado is not None:
+            if orden.id_vendedor_asignado != current_user.id_usuario and orden.id_vendedor != current_user.id_usuario:
+                continue
+
+        # 2. Filtro por Estado de Pago
+        if estado_pago:
+            ep = estado_pago.strip().lower()
+            if ep == "pagados" and orden.monto_pendiente > 0:
+                continue
+            elif ep in ["pendientes", "con saldo pendiente"] and orden.monto_pendiente == 0:
+                continue
+
+        # Cliente
+        cliente_db = db.query(Cliente).filter(Cliente.id_cliente == orden.id_cliente).first()
+        cliente_resumen = None
+        if cliente_db:
+            comuna_nombre = None
+            if cliente_db.id_comuna:
+                c_obj = db.query(Comuna).filter(Comuna.id_comuna == cliente_db.id_comuna).first()
+                if c_obj:
+                    comuna_nombre = c_obj.nombre_comuna
+            cliente_resumen = ClienteOrdenResumen(
+                rut_cliente=cliente_db.rut_cliente,
+                nombres=cliente_db.nombres,
+                apellidos=cliente_db.apellidos,
+                telefono=cliente_db.telefono,
+                correo=cliente_db.correo,
+                comuna=comuna_nombre,
+            )
+
+        # Despacho
+        despacho_db = db.query(Despacho).filter(Despacho.id_orden == orden.id_orden).first()
+        despacho_resumen = None
+        if despacho_db:
+            comuna_dest_nombre = None
+            if despacho_db.id_comuna_destino:
+                c_dest = db.query(Comuna).filter(Comuna.id_comuna == despacho_db.id_comuna_destino).first()
+                if c_dest:
+                    comuna_dest_nombre = c_dest.nombre_comuna
+            despacho_resumen = DespachoOrdenResumen(
+                id_despacho=despacho_db.id_despacho,
+                direccion_envio=despacho_db.direccion_envio,
+                receptor_nombres=despacho_db.receptor_nombres,
+                receptor_rut=despacho_db.receptor_rut,
+                receptor_telefono=despacho_db.receptor_telefono,
+                empresa_transporte=despacho_db.empresa_transporte,
+                costo_envio=despacho_db.costo_envio or 0,
+                estado_despacho=despacho_db.estado_despacho,
+                comuna_destino=comuna_dest_nombre,
+            )
+
+        # Detalles (repuestos inventariados + misceláneos)
+        detalles_db = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == orden.id_orden).all()
+        detalles_resumen = []
+        for d in detalles_db:
+            sku_fisico = None
+            titulo_item = d.descripcion_manual or "Repuesto Misceláneo"
+            es_inv = False
+
+            if d.id_activo:
+                es_inv = True
+                activo_db = (
+                    db.query(Activo_Inventariado, Vehiculo_Origen, Categoria_Activo)
+                    .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
+                    .join(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
+                    .filter(Activo_Inventariado.id_activo == d.id_activo)
+                    .first()
+                )
+                if activo_db:
+                    act, veh, cat = activo_db
+                    sku_fisico = act.sku_qr_fisico
+                    nombre_cat = cat.nombre_categoria if cat else "Repuesto"
+                    if veh:
+                        titulo_item = f"{nombre_cat} - {veh.marca} {veh.modelo} {veh.anio or ''}".strip()
+                    else:
+                        titulo_item = f"{nombre_cat} ({sku_fisico})"
+
+            detalles_resumen.append(
+                DetalleOrdenItemResponse(
+                    id_detalle=d.id_detalle,
+                    id_activo=d.id_activo,
+                    titulo=titulo_item,
+                    sku_qr_fisico=sku_fisico,
+                    descripcion_manual=d.descripcion_manual,
+                    notas_preparacion=d.notas_preparacion,
+                    cantidad=d.cantidad,
+                    precio_unitario=d.precio_unitario,
+                    precio_final=d.precio_final,
+                    subtotal=d.precio_final * d.cantidad,
+                    es_inventariado=es_inv,
+                    preparacion_lista=d.preparacion_lista,
+                    estado_preparacion=d.estado_preparacion or "Pendiente",
+                )
+            )
+
+        # Vendedor Responsable (Creador)
+        vendedor_db = db.query(Usuario).filter(Usuario.id_usuario == orden.id_vendedor).first()
+        vendedor_nombre = (
+            f"{vendedor_db.nombres} {vendedor_db.apellidos or ''}".strip()
+            if vendedor_db
+            else "Vendedor Central"
+        )
+
+        # Vendedor Asignado
+        vendedor_asignado_nombre = "Mesón General (Todos)"
+        if orden.id_vendedor_asignado:
+            v_asig_db = db.query(Usuario).filter(Usuario.id_usuario == orden.id_vendedor_asignado).first()
+            if v_asig_db:
+                vendedor_asignado_nombre = f"{v_asig_db.nombres} {v_asig_db.apellidos or ''}".strip()
+
+        todos_listos = all(d.estado_preparacion == "Listo" for d in detalles_resumen) if detalles_resumen else True
+        folio = orden.qr_transaccional_salida or f"ORD-{str(orden.id_orden)[:8].upper()}"
+
+        # Filtro Específico: Cliente (Nombre, RUT, Teléfono)
+        if busqueda_cliente and busqueda_cliente.strip():
+            bc = busqueda_cliente.strip().upper()
+            rut_c = (cliente_resumen.rut_cliente if cliente_resumen else "").upper()
+            nom_c = f"{cliente_resumen.nombres if cliente_resumen else ''} {cliente_resumen.apellidos if cliente_resumen else ''}".upper()
+            tel_c = (cliente_resumen.telefono if cliente_resumen else "").upper()
+            rec_rut = (despacho_resumen.receptor_rut if despacho_resumen else "").upper()
+            rec_nom = (despacho_resumen.receptor_nombres if despacho_resumen else "").upper()
+            rec_tel = (despacho_resumen.receptor_telefono if despacho_resumen else "").upper()
+
+            if not (bc in rut_c or bc in nom_c or bc in tel_c or bc in rec_rut or bc in rec_nom or bc in rec_tel):
+                continue
+
+        # Filtro Específico: Vendedor (Creador o Asignado)
+        if busqueda_vendedor and busqueda_vendedor.strip():
+            bv = busqueda_vendedor.strip().upper()
+            vend_c = vendedor_nombre.upper()
+            vend_a = (vendedor_asignado_nombre or "").upper()
+            if not (bv in vend_c or bv in vend_a):
+                continue
+
+        # Filtro General (Compatibilidad)
+        if term_busqueda:
+            folio_upper = folio.upper()
+            rut_upper = (cliente_resumen.rut_cliente if cliente_resumen else "").upper()
+            nom_upper = f"{cliente_resumen.nombres if cliente_resumen else ''} {cliente_resumen.apellidos if cliente_resumen else ''}".upper()
+            rec_rut_upper = (despacho_resumen.receptor_rut if despacho_resumen else "").upper()
+            rec_nom_upper = (despacho_resumen.receptor_nombres if despacho_resumen else "").upper()
+            vend_upper = vendedor_nombre.upper()
+            vend_asig_upper = (vendedor_asignado_nombre or "").upper()
+
+            matches = (
+                term_busqueda in folio_upper
+                or term_busqueda in rut_upper
+                or term_busqueda in nom_upper
+                or term_busqueda in rec_rut_upper
+                or term_busqueda in rec_nom_upper
+                or term_busqueda in vend_upper
+                or term_busqueda in vend_asig_upper
+                or any(term_busqueda in (d.titulo or "").upper() for d in detalles_resumen)
+            )
+            if not matches:
+                continue
+
+        items_response.append(
+            EntregaEnvioItemResponse(
+                id_orden=orden.id_orden,
+                folio=folio,
+                tipo_entrega=tipo_entrega_item,
+                estado_orden=orden.estado_orden,
+                total_venta=orden.total_venta,
+                monto_pendiente=orden.monto_pendiente,
+                qr_transaccional_salida=orden.qr_transaccional_salida,
+                fecha_creacion=orden.fecha_creacion.isoformat() if orden.fecha_creacion else None,
+                fecha_actualizacion=orden.fecha_actualizacion.isoformat() if orden.fecha_actualizacion else None,
+                total_items=len(detalles_resumen),
+                cliente=cliente_resumen,
+                despacho=despacho_resumen,
+                detalles=detalles_resumen,
+                vendedor_nombre=vendedor_nombre,
+                id_vendedor_asignado=orden.id_vendedor_asignado,
+                vendedor_asignado_nombre=vendedor_asignado_nombre,
+                preparacion_lista=todos_listos,
+                todos_preparados=todos_listos,
+            )
+        )
+
+    return items_response
+
+
+@router.patch(
+    "/{id_orden}/entregar",
+    response_model=EntregaConfirmacionResponse,
+    status_code=200,
+    summary="Confirmar Entrega de Pedido en Tienda (Cierre de Ciclo)",
+)
+def confirmar_entrega_tienda(
+    id_orden: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    orden = db.query(Orden_Venta).filter(Orden_Venta.id_orden == id_orden).first()
+    if not orden:
+        raise HTTPException(status_code=404, detail="Orden de venta no encontrada.")
+
+    if orden.monto_pendiente > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No se puede confirmar la entrega. La orden presenta un saldo pendiente de ${orden.monto_pendiente} que debe ser saldado en caja."
+        )
+
+    if orden.estado_orden in ["Despachada", "Completada"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"La orden ya fue entregada anteriormente (Estado: {orden.estado_orden})."
+        )
+
+    # Actualizar Orden a 'Despachada'
+    orden.estado_orden = "Despachada"
+    orden.fecha_actualizacion = datetime.now()
+
+    # Obtener o crear estado 'Entregado' / 'Finalizado'
+    estado_final = db.query(Estado_Activo).filter(
+        Estado_Activo.nombre_estado.in_(["Entregado", "Finalizado"])
+    ).first()
+    if not estado_final:
+        estado_final = Estado_Activo(id_estado=6, nombre_estado="Entregado")
+        db.add(estado_final)
+        db.flush()
+
+    detalles = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == orden.id_orden).all()
+    activos_actualizados = 0
+
+    for d in detalles:
+        d.estado_preparacion = "Listo"
+        d.fecha_preparacion = datetime.now()
+        if d.id_activo:
+            activo = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == d.id_activo).first()
+            if activo:
+                activo.id_estado = estado_final.id_estado
+                activo.ubicacion_pasillo = None
+                activo.ubicacion_pallet = None
+                activo.ubicacion_galpon = None
+                activo.observacion_estado = f"Entregado en tienda por {current_user.nombres} {current_user.apellidos} - Orden #{str(orden.id_orden)[:8].upper()}"
+                activo.fecha_actualizacion = datetime.now()
+                activos_actualizados += 1
+
+    db.commit()
+    db.refresh(orden)
+
+    folio = orden.qr_transaccional_salida or f"ORD-{str(orden.id_orden)[:8].upper()}"
+    return EntregaConfirmacionResponse(
+        id_orden=orden.id_orden,
+        folio=folio,
+        estado_orden=orden.estado_orden,
+        mensaje="¡Entrega en tienda confirmada exitosamente! Orden actualizada a Despachada.",
+        activos_finalizados=activos_actualizados,
+        fecha_entrega=datetime.now().isoformat(),
+    )
+
+
+@router.patch(
+    "/despachos/{id_despacho}/enviar",
+    response_model=DespachoEnvioResponse,
+    status_code=200,
+    summary="Marcar Despacho como Enviado (Cierre de Ciclo)",
+)
+def marcar_despacho_enviado(
+    id_despacho: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    despacho = db.query(Despacho).filter(Despacho.id_despacho == id_despacho).first()
+    if not despacho:
+        raise HTTPException(status_code=404, detail="Registro de despacho no encontrado.")
+
+    orden = db.query(Orden_Venta).filter(Orden_Venta.id_orden == despacho.id_orden).first()
+    if not orden:
+        raise HTTPException(status_code=404, detail="Orden asociada al despacho no encontrada.")
+
+    despacho.estado_despacho = "Enviado"
+    despacho.fecha_actualizacion = datetime.now()
+
+    orden.estado_orden = "Despachada"
+    orden.fecha_actualizacion = datetime.now()
+
+    estado_final = db.query(Estado_Activo).filter(
+        Estado_Activo.nombre_estado.in_(["Entregado", "Finalizado"])
+    ).first()
+    if not estado_final:
+        estado_final = Estado_Activo(id_estado=6, nombre_estado="Entregado")
+        db.add(estado_final)
+        db.flush()
+
+    detalles = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == orden.id_orden).all()
+    activos_actualizados = 0
+
+    for d in detalles:
+        d.estado_preparacion = "Listo"
+        d.fecha_preparacion = datetime.now()
+        if d.id_activo:
+            activo = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == d.id_activo).first()
+            if activo:
+                activo.id_estado = estado_final.id_estado
+                activo.ubicacion_pasillo = None
+                activo.ubicacion_pallet = None
+                activo.ubicacion_galpon = None
+                activo.observacion_estado = f"Despachado con transporte '{despacho.empresa_transporte or 'Externo'}' - Orden #{str(orden.id_orden)[:8].upper()}"
+                activo.fecha_actualizacion = datetime.now()
+                activos_actualizados += 1
+
+    db.commit()
+    db.refresh(despacho)
+    db.refresh(orden)
+
+    folio = orden.qr_transaccional_salida or f"ORD-{str(orden.id_orden)[:8].upper()}"
+    return DespachoEnvioResponse(
+        id_despacho=despacho.id_despacho,
+        id_orden=orden.id_orden,
+        folio=folio,
+        estado_despacho=despacho.estado_despacho,
+        estado_orden=orden.estado_orden,
+        mensaje=f"¡Despacho #{str(despacho.id_despacho)[:8].upper()} marcado como Enviado exitosamente!",
+        activos_finalizados=activos_actualizados,
+        fecha_envio=datetime.now().isoformat(),
+    )
 
 
 @router.post(

@@ -50,8 +50,16 @@ class ActivoPendientePrecioModel {
     DateTime? fecha;
     if (json['fecha_creacion'] != null) {
       try {
-        fecha = DateTime.parse(json['fecha_creacion'].toString());
-      } catch (_) {}
+        final raw = json['fecha_creacion'].toString().trim();
+        final formattedIso = raw.contains('Z') || raw.contains('+')
+            ? raw
+            : '${raw.replaceAll(' ', 'T')}Z';
+        fecha = DateTime.parse(formattedIso).toLocal();
+      } catch (_) {
+        try {
+          fecha = DateTime.parse(json['fecha_creacion'].toString()).toLocal();
+        } catch (_) {}
+      }
     }
 
     return ActivoPendientePrecioModel(
@@ -104,7 +112,7 @@ class ActivoPendientePrecioModel {
   /// Retorna la fecha de ingreso formateada en formato "dd/MM/yyyy HH:mm"
   String get fechaCreacionFormateada {
     if (fechaCreacion == null) return 'Fecha no registrada';
-    final dt = fechaCreacion!;
+    final dt = fechaCreacion!.toLocal();
     final dia = dt.day.toString().padLeft(2, '0');
     final mes = dt.month.toString().padLeft(2, '0');
     final anio = dt.year;

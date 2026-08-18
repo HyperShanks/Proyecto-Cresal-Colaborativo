@@ -57,14 +57,8 @@ class _SplashScreenState extends State<SplashScreen>
     if (!mounted) return;
 
     if (token != null && token.isNotEmpty) {
-      final rol = await AuthService.getRol();
-      final idRol = await AuthService.getIdRol();
+      final esVentas = await AuthService.esModuloVentas();
       if (!mounted) return;
-      final esVentas = idRol == 2 ||
-          idRol == 6 ||
-          rol?.toLowerCase() == 'vendedor' ||
-          rol?.toLowerCase() == 'jefe de ventas' ||
-          rol?.toLowerCase() == 'auditor';
       if (esVentas) {
         Navigator.of(context).pushReplacementNamed('/ventas_main');
       } else {

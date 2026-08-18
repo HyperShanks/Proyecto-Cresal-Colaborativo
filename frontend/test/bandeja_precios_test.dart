@@ -327,13 +327,14 @@ void main() {
       await tester.tap(find.byTooltip('Menú principal').first);
       await tester.pumpAndSettle();
 
+      expect(find.text('ENTREGAS Y ENVÍOS'), findsOneWidget);
       expect(find.text('TICKET'), findsOneWidget);
       expect(find.text('CONFIGURACIÓN'), findsOneWidget);
       expect(find.text('BANDEJA DE PRECIOS'), findsOneWidget);
       expect(find.byIcon(Icons.price_change_outlined), findsWidgets);
     });
 
-    testWidgets('Vendedor regular (id_rol == 2) ve 3 pestañas y NO ve Tasación ni en BottomNav ni en Drawer', (tester) async {
+    testWidgets('Vendedor regular (id_rol == 2) ve 3 pestañas, ENTREGAS Y ENVÍOS y NO ve Tasación', (tester) async {
       mockStorage['user_id_rol'] = '2';
       mockStorage['user_rol'] = 'Vendedor';
 
@@ -354,6 +355,35 @@ void main() {
       await tester.tap(find.byTooltip('Menú principal').first);
       await tester.pumpAndSettle();
 
+      expect(find.text('ENTREGAS Y ENVÍOS'), findsOneWidget);
+      expect(find.text('TICKET'), findsOneWidget);
+      expect(find.text('CONFIGURACIÓN'), findsOneWidget);
+      expect(find.text('BANDEJA DE PRECIOS'), findsNothing);
+    });
+
+    testWidgets('VendedorOnline (id_rol == 7) ve 3 pestañas, NO ve ENTREGAS Y ENVÍOS ni Tasación', (tester) async {
+      mockStorage['user_id_rol'] = '7';
+      mockStorage['user_rol'] = 'Vendedor Online';
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: VentasMainScreen(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Verificar exactamente 3 pestañas
+      expect(find.text('Catálogo'), findsOneWidget);
+      expect(find.text('Mis Órdenes'), findsOneWidget);
+      expect(find.text('Tasación'), findsNothing);
+      expect(find.text('Carrito'), findsOneWidget);
+
+      // Abrir Drawer de hamburguesa
+      await tester.tap(find.byTooltip('Menú principal').first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('VENDEDOR ONLINE'), findsOneWidget);
+      expect(find.text('ENTREGAS Y ENVÍOS'), findsNothing);
       expect(find.text('TICKET'), findsOneWidget);
       expect(find.text('CONFIGURACIÓN'), findsOneWidget);
       expect(find.text('BANDEJA DE PRECIOS'), findsNothing);

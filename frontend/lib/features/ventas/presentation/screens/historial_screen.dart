@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../services/ordenes_service.dart';
+import '../../services/ordenes_sync_notifier.dart';
 import '../widgets/orden_card.dart';
 import '../widgets/orden_detail_sheet.dart';
 import '../widgets/historial_filtros_drawer.dart';
@@ -46,6 +47,8 @@ class _HistorialScreenState extends State<HistorialScreen> {
     _tempVerTodas = _verTodas;
     _tempFiltroEstado = _filtroEstado;
 
+    OrdenesSyncNotifier.instance.addListener(_onSyncNotification);
+
     if (widget.initialOrdenes != null) {
       _ordenes = List.from(widget.initialOrdenes!);
       _isLoading = false;
@@ -54,8 +57,15 @@ class _HistorialScreenState extends State<HistorialScreen> {
     }
   }
 
+  void _onSyncNotification() {
+    if (mounted) {
+      _cargarOrdenes();
+    }
+  }
+
   @override
   void dispose() {
+    OrdenesSyncNotifier.instance.removeListener(_onSyncNotification);
     _searchController.dispose();
     super.dispose();
   }

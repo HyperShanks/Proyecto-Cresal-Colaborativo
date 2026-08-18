@@ -309,6 +309,8 @@ class OrdenCreateRequest(BaseModel):
     id_sucursal: Optional[int] = Field(None, description="ID de la sucursal donde se genera la venta")
     tipo_entrega: Optional[str] = Field("Retiro", description="Tipo de entrega: 'Retiro', 'Despacho', 'Traslado'")
     id_sucursal_destino: Optional[int] = Field(None, description="ID de sucursal destino si aplica traslado (1: Viña, 2: Limache)")
+    monto_abono: Optional[int] = Field(None, ge=0, description="Monto abonado al registrar la venta (opcional para abonos parciales)")
+    id_vendedor_asignado: Optional[UUID] = Field(None, description="ID del vendedor asignado para entregar/despachar la orden (None = Mesón General)")
 
 
 class OrdenResponse(BaseModel):
@@ -418,6 +420,67 @@ class OrdenHistorialItemResponse(BaseModel):
     cliente: Optional[ClienteOrdenResumen] = None
     despacho: Optional[DespachoOrdenResumen] = None
     detalles: List[DetalleOrdenItemResponse] = []
+
+
+class EntregaEnvioItemResponse(BaseModel):
+    """DTO para la vista colaborativa de Entregas en Tienda y Despachos Externos."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_orden: UUID
+    folio: str
+    tipo_entrega: str
+    estado_orden: str
+    total_venta: int
+    monto_pendiente: int
+    qr_transaccional_salida: Optional[str] = None
+    fecha_creacion: Optional[str] = None
+    fecha_actualizacion: Optional[str] = None
+    total_items: int
+    cliente: Optional[ClienteOrdenResumen] = None
+    despacho: Optional[DespachoOrdenResumen] = None
+    detalles: List[DetalleOrdenItemResponse] = []
+    vendedor_nombre: Optional[str] = None
+    id_vendedor_asignado: Optional[UUID] = None
+    vendedor_asignado_nombre: Optional[str] = None
+    preparacion_lista: bool = False
+    todos_preparados: bool = False
+
+
+class VendedorResumenResponse(BaseModel):
+    """DTO para listar vendedores de una sucursal para asignación de entrega."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_usuario: UUID
+    nombre_completo: str
+    rut: str
+    id_sucursal: int
+    correo: Optional[str] = None
+
+
+class EntregaConfirmacionResponse(BaseModel):
+    """DTO de respuesta tras confirmar la entrega de un pedido en tienda."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_orden: UUID
+    folio: str
+    estado_orden: str
+    mensaje: str
+    activos_finalizados: int
+    fecha_entrega: str
+
+
+class DespachoEnvioResponse(BaseModel):
+    """DTO de respuesta tras marcar un despacho como enviado."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_despacho: UUID
+    id_orden: UUID
+    folio: str
+    estado_despacho: str
+    estado_orden: str
+    mensaje: str
+    activos_finalizados: int
+    fecha_envio: str
 
 
 class OrdenAnulacionResponse(BaseModel):

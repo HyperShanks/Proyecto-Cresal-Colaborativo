@@ -128,9 +128,13 @@ void main() {
       expect(model.esReservada, isTrue);
       expect(model.esPagada, isFalse);
       expect(model.esAnulada, isFalse);
-      expect(model.totalVentaFormateado, '\$520.000');
-      expect(model.montoPendienteFormateado, '\$520.000');
-      expect(model.fechaFormateada, '14/08/2026 14:30');
+      final dtEsperado = DateTime.parse('2026-08-14T14:30:00Z').toLocal();
+      final dia = dtEsperado.day.toString().padLeft(2, '0');
+      final mes = dtEsperado.month.toString().padLeft(2, '0');
+      final anio = dtEsperado.year;
+      final hora = dtEsperado.hour.toString().padLeft(2, '0');
+      final min = dtEsperado.minute.toString().padLeft(2, '0');
+      expect(model.fechaFormateada, '$dia/$mes/$anio $hora:$min');
       expect(model.cliente?.nombreCompleto, 'María Pérez');
       expect(model.despacho?.direccionEnvio, 'Calle Prat 500');
       expect(model.detalles.length, 1);

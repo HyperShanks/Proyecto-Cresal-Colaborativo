@@ -356,3 +356,41 @@ def test_actualizar_instrucciones_falla_si_esta_anulada(client, db_session, auth
 
     data = response.json()
     assert "No se pueden modificar instrucciones en una orden con estado 'Anulada'" in data["detail"]
+
+
+# ── TEST 9: Orden Creada en Horario Nocturno Local Chile (UTC-4) ────────────
+def test_obtener_mis_ventas_orden_nocturna_chile(client, db_session, auth_headers_vendedor1):
+    db = TestingSessionLocal()
+    try:
+        from zoneinfo import ZoneInfo
+        from datetime import timezone
+        tz_chile = ZoneInfo("America/Santiago")
+        ahora_chile = datetime.now(tz_chile)
+        # Simular orden creada a las 23:30 hrs de Chile de hoy (03:30 UTC del día siguiente)
+        fecha_nocturna_chile = ahora_chile.replace(hour=23, minute=30, second=0, microsecond=0)
+        fecha_nocturna_utc = fecha_nocturna_chile.astimezone(timezone.utc).replace(tzinfo=None)
+
+        orden_nocturna = Orden_Venta(
+            id_orden=uuid.uuid4(),
+            id_cliente=db_session["orden_1"].id_cliente,
+            id_vendedor=db_session["vendedor_1"].id_usuario,
+            id_sucursal=1,
+            estado_orden="Reservada",
+            qr_transaccional_salida="ORD-NOCT001",
+            total_venta=75000,
+            monto_pendiente=75000,
+            fecha_creacion=fecha_nocturna_utc,
+        )
+        db.add(orden_nocturna)
+        db.commit()
+
+        # Consultar mis ventas por defecto (filtro solo hoy)
+        response = client.get("/api/v1/ordenes/mis-ventas", headers=auth_headers_vendedor1)
+        assert response.status_code == 200
+        data = response.json()
+        ids = [item["id_orden"] for item in data]
+        assert str(orden_nocturna.id_orden) in ids
+    finally:
+        db.close()
+
+

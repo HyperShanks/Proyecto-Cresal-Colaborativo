@@ -210,6 +210,7 @@ class Orden_Venta(Base):
     id_orden = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     id_cliente = Column(UUID(as_uuid=True), ForeignKey("Cliente.id_cliente"), nullable=False)
     id_vendedor = Column(UUID(as_uuid=True), ForeignKey("Usuario.id_usuario"), nullable=False)
+    id_vendedor_asignado = Column(UUID(as_uuid=True), ForeignKey("Usuario.id_usuario"), nullable=True)
     id_cajera = Column(UUID(as_uuid=True), ForeignKey("Usuario.id_usuario"), nullable=True)
     id_sucursal = Column(Integer, ForeignKey("Sucursal.id_sucursal"), nullable=False)
     estado_orden = Column(String(30), nullable=False, server_default="Reservada")

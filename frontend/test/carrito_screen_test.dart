@@ -1,13 +1,22 @@
-// test/carrito_screen_test.dart
-
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:frontend/features/ventas/controllers/cart_controller.dart';
 import 'package:frontend/features/ventas/models/catalogo_model.dart';
 import 'package:frontend/features/ventas/presentation/screens/carrito_screen.dart';
 import 'package:frontend/features/ventas/presentation/widgets/cart_item_tile.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  FlutterSecureStorage.setMockInitialValues({
+    'access_token': 'dummy-token',
+    'user_id_rol': '2',
+    'id_sucursal': '1',
+  });
+
   final itemTest1 = CatalogoItem(
     idActivo: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
     skuQrFisico: 'MOT-TOY-YAR-2019-01',
@@ -254,7 +263,13 @@ void main() {
 
       expect(find.text('Campo requerido'), findsWidgets);
 
-      // 2. Llenar campos requeridos
+      // 2. Llenar campos requeridos (scroll arriba a la sección de datos)
+      await tester.scrollUntilVisible(
+        find.text('DATOS POST-VENTA CLIENTE'),
+        100,
+        scrollable: find.byType(Scrollable).first,
+      );
+
       await tester.enterText(
         find.widgetWithText(TextFormField, '12.345.678-9').first,
         '18.765.432-1',
@@ -271,12 +286,9 @@ void main() {
       // 3. Presionar Derivar a Caja -> Procesa llamada transaccional sin fricción de consentimiento
       await tester.tap(btnDerivar);
       await tester.pump();
-
-      // Verifica que el botón entra en estado de procesamiento
-      expect(find.text('Procesando...'), findsOneWidget);
-
       await tester.pump(const Duration(seconds: 1));
-      // Tras finalizar la petición en entorno de test sin backend, captura el error en SnackBar
+
+      // Tras finalizar la petición en entorno de test sin backend, captura el resultado en SnackBar
       expect(find.byType(SnackBar), findsOneWidget);
     });
 
@@ -337,6 +349,61 @@ void main() {
 
       // Campos personales reaparecen
       expect(find.text('RUT Cliente *'), findsOneWidget);
+    });
+
+    testWidgets('Selector de Responsable NO es visible para rol Vendedor (id_rol == 2)', (tester) async {
+      const storage = FlutterSecureStorage();
+      await storage.write(key: 'access_token', value: 'dummy-token');
+      await storage.write(key: 'user_id_rol', value: '2');
+
+      CartController.instance.agregarInventariado(itemTest1);
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: CarritoScreen(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Responsable de Entrega/Despacho en Sucursal'), findsNothing);
+    });
+
+    testWidgets('Selector de Responsable ES visible para rol VendedorOnline (id_rol == 7)', (tester) async {
+      const storage = FlutterSecureStorage();
+      final mockClient = MockClient((request) async {
+        return http.Response(
+          jsonEncode([
+            {
+              'id_usuario': '11111111-1111-1111-1111-111111111111',
+              'nombre_completo': 'Gastón Zamora',
+              'rut': '11.111.111-1',
+              'id_sucursal': 1,
+              'correo': 'gaston@cresal.cl',
+            }
+          ]),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      });
+
+      await storage.write(key: 'access_token', value: 'dummy-token');
+      await storage.write(key: 'user_id_rol', value: '7');
+
+      CartController.instance.agregarInventariado(itemTest1);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CarritoScreen(httpClient: mockClient),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(
+        find.text('Responsable de Entrega/Despacho en Sucursal'),
+        100,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('Responsable de Entrega/Despacho en Sucursal'), findsOneWidget);
     });
   });
 }

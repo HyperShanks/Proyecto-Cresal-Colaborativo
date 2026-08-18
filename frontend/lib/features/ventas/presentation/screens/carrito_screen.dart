@@ -1,8 +1,8 @@
-// lib/features/ventas/presentation/screens/carrito_screen.dart
-
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../auth/services/auth_service.dart';
 import '../../controllers/cart_controller.dart';
 import '../../models/cart_item_model.dart';
 import '../../services/ordenes_service.dart';
@@ -16,11 +16,13 @@ import '../widgets/venta_libre_dialog.dart';
 class CarritoScreen extends StatefulWidget {
   final VoidCallback? onOpenMenuDrawer;
   final VoidCallback? onNavigateToCatalogo;
+  final http.Client? httpClient;
 
   const CarritoScreen({
     super.key,
     this.onOpenMenuDrawer,
     this.onNavigateToCatalogo,
+    this.httpClient,
   });
 
   @override
@@ -37,11 +39,13 @@ class _CarritoScreenState extends State<CarritoScreen> {
   final TextEditingController _telefonoController = TextEditingController();
   final FocusNode _rutFocusNode = FocusNode();
 
-  // Controladores de Despacho
+  // Controladores de Despacho y Entrega
   final TextEditingController _direccionDespachoController = TextEditingController();
   final TextEditingController _rutReceptorController = TextEditingController();
   final TextEditingController _nombresReceptorController = TextEditingController();
   final TextEditingController _telefonoReceptorController = TextEditingController();
+  final TextEditingController _empresaTransporteController = TextEditingController(text: 'Chilexpress');
+  final TextEditingController _montoAbonoController = TextEditingController();
 
   // Variables de Selección y Switches
   bool _esClienteAnonimo = false;
@@ -52,6 +56,10 @@ class _CarritoScreenState extends State<CarritoScreen> {
   bool get _requiereDespacho => _tipoEntrega != 'Retiro';
   bool _isSubmitting = false;
   bool _isSearchingClient = false;
+  int? _userRolId;
+  bool get _esVendedorOnline => _userRolId == 7;
+  List<VendedorModel> _vendedoresDisponibles = [];
+  String? _idVendedorAsignado; // null => Mesón General (Todos)
 
   static const List<String> _comunasDisponibles = [
     'Viña del Mar',
@@ -69,6 +77,26 @@ class _CarritoScreenState extends State<CarritoScreen> {
   void initState() {
     super.initState();
     _rutFocusNode.addListener(_onRutFocusChange);
+    _cargarVendedores();
+  }
+
+  Future<void> _cargarVendedores() async {
+    try {
+      final rolId = await AuthService.getIdRol();
+      if (mounted) {
+        setState(() {
+          _userRolId = rolId;
+        });
+      }
+      if (_esVendedorOnline) {
+        final vends = await OrdenesService.obtenerVendedores(client: widget.httpClient);
+        if (mounted) {
+          setState(() {
+            _vendedoresDisponibles = vends;
+          });
+        }
+      }
+    } catch (_) {}
   }
 
   @override
@@ -83,6 +111,8 @@ class _CarritoScreenState extends State<CarritoScreen> {
     _rutReceptorController.dispose();
     _nombresReceptorController.dispose();
     _telefonoReceptorController.dispose();
+    _empresaTransporteController.dispose();
+    _montoAbonoController.dispose();
     super.dispose();
   }
 
@@ -95,7 +125,7 @@ class _CarritoScreenState extends State<CarritoScreen> {
           _isSearchingClient = true;
         });
 
-        final cliente = await OrdenesService.buscarClientePorRut(rut);
+        final cliente = await OrdenesService.buscarClientePorRut(rut, client: widget.httpClient);
 
         if (!mounted) return;
 
@@ -152,6 +182,8 @@ class _CarritoScreenState extends State<CarritoScreen> {
     _rutReceptorController.clear();
     _nombresReceptorController.clear();
     _telefonoReceptorController.clear();
+    _empresaTransporteController.text = 'Chilexpress';
+    _montoAbonoController.clear();
     setState(() {
       _esClienteAnonimo = false;
       _tipoEntrega = 'Retiro';
@@ -269,6 +301,30 @@ class _CarritoScreenState extends State<CarritoScreen> {
         return <String, dynamic>{};
       }).toList();
 
+      // Validar datos de Despacho si aplica
+      if (_tipoEntrega == 'Despacho') {
+        if (_direccionDespachoController.text.trim().isEmpty ||
+            _rutReceptorController.text.trim().isEmpty ||
+            _nombresReceptorController.text.trim().isEmpty ||
+            _telefonoReceptorController.text.trim().isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              backgroundColor: AppPalette.surface,
+              content: Text(
+                'Por favor completa todos los datos obligatorios del despacho (*)',
+                style: TextStyle(color: AppPalette.error),
+              ),
+            ),
+          );
+          return;
+        }
+      }
+
+      int? abonoNum;
+      if (_tipoEntrega == 'Retiro' && _montoAbonoController.text.trim().isNotEmpty) {
+        abonoNum = int.tryParse(_montoAbonoController.text.trim());
+      }
+
       Map<String, dynamic>? despachoPayload;
       if (_tipoEntrega == 'Despacho') {
         despachoPayload = {
@@ -277,6 +333,9 @@ class _CarritoScreenState extends State<CarritoScreen> {
           'receptor_rut': _rutReceptorController.text.trim(),
           'receptor_nombres': _nombresReceptorController.text.trim(),
           'receptor_telefono': _telefonoReceptorController.text.trim(),
+          'empresa_transporte': _empresaTransporteController.text.trim().isNotEmpty
+              ? _empresaTransporteController.text.trim()
+              : 'Chilexpress',
           'tipo_entrega': 'Despacho',
           'costo_envio': 0,
         };
@@ -317,6 +376,10 @@ class _CarritoScreenState extends State<CarritoScreen> {
         },
         'requiere_despacho': _requiereDespacho,
         'tipo_entrega': _tipoEntrega,
+        if (_esVendedorOnline && _idVendedorAsignado != null)
+          'id_vendedor_asignado': _idVendedorAsignado,
+        if (abonoNum != null && abonoNum > 0)
+          'monto_abono': abonoNum,
         if (_tipoEntrega == 'Traslado')
           'id_sucursal_destino': _idSucursalDestino,
         if (despachoPayload != null)
@@ -326,7 +389,7 @@ class _CarritoScreenState extends State<CarritoScreen> {
       };
 
       // 5. Enviar al Backend Transaccional FastAPI
-      final ordenCreada = await OrdenesService.crearOrden(payload);
+      final ordenCreada = await OrdenesService.crearOrden(payload, client: widget.httpClient);
 
       if (!context.mounted) return;
 
@@ -933,6 +996,13 @@ class _CarritoScreenState extends State<CarritoScreen> {
                       ],
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  _buildTextField(
+                    controller: _montoAbonoController,
+                    label: 'Monto de Abono / Anticipo (Opcional)',
+                    hint: 'Ej: 50000 (Dejar vacío si liquidará el 100% en caja)',
+                    keyboardType: TextInputType.number,
+                  ),
                 ] else if (_tipoEntrega == 'Despacho') ...[
                   const Divider(color: Colors.white10, height: 16),
                   _buildTextField(
@@ -942,15 +1012,30 @@ class _CarritoScreenState extends State<CarritoScreen> {
                     isRequired: true,
                   ),
                   const SizedBox(height: 12),
-                  _buildDropdown(
-                    label: 'Comuna Destino',
-                    value: _comunaDespacho,
-                    items: _comunasDisponibles,
-                    onChanged: (val) {
-                      if (val != null) {
-                        setState(() => _comunaDespacho = val);
-                      }
-                    },
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildDropdown(
+                          label: 'Comuna Destino',
+                          value: _comunaDespacho,
+                          items: _comunasDisponibles,
+                          onChanged: (val) {
+                            if (val != null) {
+                              setState(() => _comunaDespacho = val);
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildTextField(
+                          controller: _empresaTransporteController,
+                          label: 'Empresa de Transporte *',
+                          hint: 'Chilexpress / Starken',
+                          isRequired: true,
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 12),
                   Row(
@@ -1057,6 +1142,51 @@ class _CarritoScreenState extends State<CarritoScreen> {
                         ),
                       ),
                     ],
+                  ),
+                ],
+                if (_esVendedorOnline) ...[
+                  const SizedBox(height: 14),
+                  // Selector de Responsable de Entrega / Despacho (Solo VendedorOnline)
+                  Text(
+                    'Responsable de Entrega/Despacho en Sucursal',
+                    style: AppTypography.small.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: AppPalette.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: AppPalette.background,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.white10),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String?>(
+                        value: _idVendedorAsignado,
+                        dropdownColor: AppPalette.surface,
+                        isExpanded: true,
+                        icon: const Icon(Icons.arrow_drop_down, color: AppPalette.primary),
+                        items: [
+                          const DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text('Mesón General (Todos los vendedores)'),
+                          ),
+                          ..._vendedoresDisponibles.map(
+                            (v) => DropdownMenuItem<String?>(
+                              value: v.idUsuario,
+                              child: Text('Vendedor: ${v.nombreCompleto} (${v.rut})'),
+                            ),
+                          ),
+                        ],
+                        onChanged: (val) {
+                          setState(() {
+                            _idVendedorAsignado = val;
+                          });
+                        },
+                      ),
+                    ),
                   ),
                 ],
               ],

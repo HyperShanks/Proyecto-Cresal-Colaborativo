@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../../../core/constants/api_constants.dart';
 import '../../auth/services/auth_service.dart';
+import 'ordenes_sync_notifier.dart';
 
 /// DTO de respuesta para la creación y consulta de órdenes de venta.
 class OrdenResponseModel {
@@ -194,6 +195,8 @@ class DetalleOrdenItemModel {
   final int precioFinal;
   final int subtotal;
   final bool esInventariado;
+  final bool preparacionLista;
+  final String? estadoPreparacion;
 
   DetalleOrdenItemModel({
     required this.idDetalle,
@@ -207,10 +210,13 @@ class DetalleOrdenItemModel {
     required this.precioFinal,
     required this.subtotal,
     required this.esInventariado,
+    this.preparacionLista = false,
+    this.estadoPreparacion = 'Pendiente',
   });
 
   String get precioFinalFormateado => OrdenResponseModel._formatearMonto(precioFinal);
   String get subtotalFormateado => OrdenResponseModel._formatearMonto(subtotal);
+  String get tituloDisplay => titulo.isNotEmpty ? titulo : (descripcionManual ?? 'Repuesto Misceláneo');
 
   factory DetalleOrdenItemModel.fromJson(Map<String, dynamic> json) {
     final cant = json['cantidad'] as int? ?? 1;
@@ -229,6 +235,8 @@ class DetalleOrdenItemModel {
       precioFinal: pFinal,
       subtotal: sub,
       esInventariado: json['es_inventariado'] as bool? ?? (json['id_activo'] != null),
+      preparacionLista: json['preparacion_lista'] as bool? ?? false,
+      estadoPreparacion: json['estado_preparacion']?.toString() ?? 'Pendiente',
     );
   }
 }
@@ -317,19 +325,39 @@ class OrdenHistorialModel {
     return 'ORD-$idOrden';
   }
 
-  String get fechaFormateada {
-    if (fechaCreacion == null) return '--:--';
+  DateTime? get fechaLocal {
+    if (fechaCreacion == null || fechaCreacion!.trim().isEmpty) return null;
     try {
-      final dt = DateTime.parse(fechaCreacion!);
-      final dia = dt.day.toString().padLeft(2, '0');
-      final mes = dt.month.toString().padLeft(2, '0');
-      final anio = dt.year;
-      final hora = dt.hour.toString().padLeft(2, '0');
-      final min = dt.minute.toString().padLeft(2, '0');
-      return '$dia/$mes/$anio $hora:$min';
+      final raw = fechaCreacion!.trim();
+      final formattedIso = raw.contains('Z') || raw.contains('+')
+          ? raw
+          : '${raw.replaceAll(' ', 'T')}Z';
+      return DateTime.parse(formattedIso).toLocal();
     } catch (_) {
-      return fechaCreacion!;
+      try {
+        return DateTime.parse(fechaCreacion!).toLocal();
+      } catch (_) {
+        return null;
+      }
     }
+  }
+
+  bool get esDeHoy {
+    final local = fechaLocal;
+    if (local == null) return false;
+    final now = DateTime.now();
+    return local.year == now.year && local.month == now.month && local.day == now.day;
+  }
+
+  String get fechaFormateada {
+    final dt = fechaLocal;
+    if (dt == null) return fechaCreacion ?? '--:--';
+    final dia = dt.day.toString().padLeft(2, '0');
+    final mes = dt.month.toString().padLeft(2, '0');
+    final anio = dt.year;
+    final hora = dt.hour.toString().padLeft(2, '0');
+    final min = dt.minute.toString().padLeft(2, '0');
+    return '$dia/$mes/$anio $hora:$min';
   }
 
   factory OrdenHistorialModel.fromJson(Map<String, dynamic> json) {
@@ -400,7 +428,9 @@ class OrdenesService {
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         if (decodedBody is Map<String, dynamic>) {
-          return OrdenResponseModel.fromJson(decodedBody);
+          final orden = OrdenResponseModel.fromJson(decodedBody);
+          OrdenesSyncNotifier.instance.notificarCambio();
+          return orden;
         }
         throw Exception('Formato de respuesta no válido del servidor.');
       } else if (response.statusCode == 409) {
@@ -759,5 +789,351 @@ class OrdenesService {
         httpClient.close();
       }
     }
+  }
+
+  /// Obtiene los vendedores activos de una sucursal para asignación.
+  static Future<List<VendedorModel>> obtenerVendedores({
+    int? sucursalId,
+    http.Client? client,
+  }) async {
+    final httpClient = client ?? http.Client();
+    try {
+      final sucursal = sucursalId ?? await AuthService.getSucursalId() ?? 1;
+      final uri = Uri.parse('${ApiConstants.ordenesEndpoint}/vendedores')
+          .replace(queryParameters: {'sucursal_id': sucursal.toString()});
+      final token = await AuthService.getToken();
+      final headers = {
+        'Content-Type': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
+      final response = await httpClient.get(uri, headers: headers).timeout(
+            const Duration(seconds: 10),
+            onTimeout: () => throw Exception('Tiempo de espera agotado.'),
+          );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> body =
+            jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
+        return body
+            .map((v) => VendedorModel.fromJson(v as Map<String, dynamic>))
+            .toList();
+      } else {
+        throw Exception('Error al obtener lista de vendedores (${response.statusCode})');
+      }
+    } finally {
+      if (client == null) httpClient.close();
+    }
+  }
+
+  /// Consulta el listado colaborativo de entregas en tienda y despachos externos.
+  static Future<List<EntregaEnvioModel>> obtenerEntregasEnvios({
+    int? sucursalId,
+    String? tipo,
+    String? busquedaCliente,
+    String? busquedaVendedor,
+    String? busqueda,
+    String? estadoPago,
+    http.Client? client,
+  }) async {
+    final httpClient = client ?? http.Client();
+    try {
+      final sucursal = sucursalId ?? await AuthService.getSucursalId() ?? 1;
+      final queryParams = <String, String>{
+        'sucursal_id': sucursal.toString(),
+        if (tipo != null && tipo.isNotEmpty) 'tipo': tipo,
+        if (busquedaCliente != null && busquedaCliente.isNotEmpty)
+          'busqueda_cliente': busquedaCliente,
+        if (busquedaVendedor != null && busquedaVendedor.isNotEmpty)
+          'busqueda_vendedor': busquedaVendedor,
+        if (busqueda != null && busqueda.isNotEmpty) 'busqueda': busqueda,
+        if (estadoPago != null && estadoPago.isNotEmpty)
+          'estado_pago': estadoPago,
+      };
+
+      final uri = Uri.parse('${ApiConstants.ordenesEndpoint}/entregas-envios')
+          .replace(queryParameters: queryParams);
+      final token = await AuthService.getToken();
+      final headers = {
+        'Content-Type': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
+      final response = await httpClient.get(uri, headers: headers).timeout(
+            const Duration(seconds: 12),
+            onTimeout: () => throw Exception(
+              'Tiempo de espera agotado al consultar entregas.',
+            ),
+          );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> body =
+            jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
+        return body
+            .map((item) =>
+                EntregaEnvioModel.fromJson(item as Map<String, dynamic>))
+            .toList();
+      } else {
+        throw Exception('Error al consultar entregas: ${response.statusCode}');
+      }
+    } finally {
+      if (client == null) httpClient.close();
+    }
+  }
+
+  /// Confirma la entrega presencial de un pedido en tienda (cierre de ciclo).
+  static Future<bool> confirmarEntregaTienda(
+    String idOrden, {
+    http.Client? client,
+  }) async {
+    final httpClient = client ?? http.Client();
+    try {
+      final uri = Uri.parse('${ApiConstants.ordenesEndpoint}/$idOrden/entregar');
+      final token = await AuthService.getToken();
+      final headers = {
+        'Content-Type': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
+      final response = await httpClient.patch(uri, headers: headers).timeout(
+            const Duration(seconds: 10),
+            onTimeout: () => throw Exception('Tiempo de espera agotado.'),
+          );
+
+      if (response.statusCode == 200) {
+        OrdenesSyncNotifier.instance.notificarCambio();
+        return true;
+      } else {
+        final body = jsonDecode(utf8.decode(response.bodyBytes));
+        final detail = body is Map ? body['detail'] : 'Error al confirmar entrega';
+        throw Exception(detail);
+      }
+    } finally {
+      if (client == null) httpClient.close();
+    }
+  }
+
+  /// Marca un despacho externo como enviado (cierre de ciclo).
+  static Future<bool> marcarDespachoEnviado(
+    String idDespacho, {
+    http.Client? client,
+  }) async {
+    final httpClient = client ?? http.Client();
+    try {
+      final uri =
+          Uri.parse('${ApiConstants.baseUrl}/api/v1/despachos/$idDespacho/enviar');
+      final token = await AuthService.getToken();
+      final headers = {
+        'Content-Type': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
+      final response = await httpClient.patch(uri, headers: headers).timeout(
+            const Duration(seconds: 10),
+            onTimeout: () => throw Exception('Tiempo de espera agotado.'),
+          );
+
+      if (response.statusCode == 200) {
+        OrdenesSyncNotifier.instance.notificarCambio();
+        return true;
+      } else {
+        final body = jsonDecode(utf8.decode(response.bodyBytes));
+        final detail =
+            body is Map ? body['detail'] : 'Error al marcar despacho enviado';
+        throw Exception(detail);
+      }
+    } finally {
+      if (client == null) httpClient.close();
+    }
+  }
+}
+
+/// DTO de resumen de vendedor para asignación.
+class VendedorModel {
+  final String idUsuario;
+  final String nombreCompleto;
+  final String rut;
+  final int idSucursal;
+  final String? correo;
+
+  const VendedorModel({
+    required this.idUsuario,
+    required this.nombreCompleto,
+    required this.rut,
+    required this.idSucursal,
+    this.correo,
+  });
+
+  factory VendedorModel.fromJson(Map<String, dynamic> json) {
+    return VendedorModel(
+      idUsuario: json['id_usuario']?.toString() ?? '',
+      nombreCompleto: json['nombre_completo']?.toString() ?? '',
+      rut: json['rut']?.toString() ?? '',
+      idSucursal: json['id_sucursal'] as int? ?? 1,
+      correo: json['correo']?.toString(),
+    );
+  }
+}
+
+/// DTO para la vista de Entregas en Tienda y Despachos Externos.
+class EntregaEnvioModel {
+  final String idOrden;
+  final String folio;
+  final String tipoEntrega; // 'Retiro' o 'Despacho'
+  final String estadoOrden;
+  final int totalVenta;
+  final int montoPendiente;
+  final String? qrTransaccionalSalida;
+  final String? fechaCreacion;
+  final String? fechaActualizacion;
+  final int totalItems;
+  final ClienteOrdenResumenModel? cliente;
+  final DespachoOrdenResumenModel? despacho;
+  final List<DetalleOrdenItemModel> detalles;
+  final String? vendedorNombre;
+  final String? idVendedorAsignado;
+  final String? vendedorAsignadoNombre;
+  final bool preparacionLista;
+  final bool todosPreparados;
+
+  const EntregaEnvioModel({
+    required this.idOrden,
+    required this.folio,
+    required this.tipoEntrega,
+    required this.estadoOrden,
+    required this.totalVenta,
+    required this.montoPendiente,
+    this.qrTransaccionalSalida,
+    this.fechaCreacion,
+    this.fechaActualizacion,
+    required this.totalItems,
+    this.cliente,
+    this.despacho,
+    required this.detalles,
+    this.vendedorNombre,
+    this.idVendedorAsignado,
+    this.vendedorAsignadoNombre,
+    required this.preparacionLista,
+    required this.todosPreparados,
+  });
+
+  bool get estaPagada => montoPendiente == 0;
+  bool get tieneSaldoPendiente => montoPendiente > 0;
+  String get totalVentaFormateado => OrdenResponseModel._formatearMonto(totalVenta);
+  String get montoPendienteFormateado =>
+      OrdenResponseModel._formatearMonto(montoPendiente);
+
+  String get folioDisplay {
+    if (folio.isNotEmpty) return folio;
+    if (qrTransaccionalSalida != null && qrTransaccionalSalida!.isNotEmpty) {
+      return qrTransaccionalSalida!;
+    }
+    return idOrden.length >= 8
+        ? 'ORD-${idOrden.substring(0, 8).toUpperCase()}'
+        : 'ORD-$idOrden';
+  }
+
+  bool get esConsumidorFinal {
+    final rut = cliente?.rutCliente.trim() ?? '';
+    final nombre = cliente?.nombres.trim().toLowerCase() ?? '';
+    final apellido = cliente?.apellidos.trim().toLowerCase() ?? '';
+    return rut == '6.666.666-6' ||
+        rut == '66666666' ||
+        rut == '66666666-6' ||
+        nombre == 'consumidor' ||
+        nombre == 'cliente mostrador sin rut' ||
+        (nombre.isEmpty && apellido.isEmpty);
+  }
+
+  String get clienteDisplay {
+    if (esConsumidorFinal) {
+      return 'Orden: #$folioDisplay';
+    }
+    final nombre = '${cliente?.nombres ?? ""} ${cliente?.apellidos ?? ""}'.trim();
+    return nombre.isNotEmpty ? nombre : 'Orden: #$folioDisplay';
+  }
+
+  DateTime? get fechaLocal {
+    if (fechaCreacion == null || fechaCreacion!.trim().isEmpty) return null;
+    try {
+      final raw = fechaCreacion!.trim();
+      final formattedIso = raw.contains('Z') || raw.contains('+')
+          ? raw
+          : '${raw.replaceAll(' ', 'T')}Z';
+      return DateTime.parse(formattedIso).toLocal();
+    } catch (_) {
+      try {
+        return DateTime.parse(fechaCreacion!).toLocal();
+      } catch (_) {
+        return null;
+      }
+    }
+  }
+
+  bool get esDeHoy {
+    final local = fechaLocal;
+    if (local == null) return false;
+    final now = DateTime.now();
+    return local.year == now.year && local.month == now.month && local.day == now.day;
+  }
+
+  String get fechaFormateada {
+    final dt = fechaLocal;
+    if (dt == null) return fechaCreacion ?? '--:--';
+    final dia = dt.day.toString().padLeft(2, '0');
+    final mes = dt.month.toString().padLeft(2, '0');
+    final anio = dt.year;
+    final hora = dt.hour.toString().padLeft(2, '0');
+    final min = dt.minute.toString().padLeft(2, '0');
+    return '$dia/$mes/$anio $hora:$min';
+  }
+
+  OrdenHistorialModel toHistorialModel() {
+    return OrdenHistorialModel(
+      idOrden: idOrden,
+      estadoOrden: estadoOrden,
+      totalVenta: totalVenta,
+      montoPendiente: montoPendiente,
+      qrTransaccionalSalida: qrTransaccionalSalida,
+      fechaCreacion: fechaCreacion,
+      fechaActualizacion: fechaActualizacion,
+      totalItems: totalItems,
+      cliente: cliente,
+      despacho: despacho,
+      detalles: detalles,
+    );
+  }
+
+  factory EntregaEnvioModel.fromJson(Map<String, dynamic> json) {
+    return EntregaEnvioModel(
+      idOrden: json['id_orden']?.toString() ?? '',
+      folio: json['folio']?.toString() ?? '',
+      tipoEntrega: json['tipo_entrega']?.toString() ?? 'Retiro',
+      estadoOrden: json['estado_orden']?.toString() ?? 'Reservada',
+      totalVenta: json['total_venta'] as int? ?? 0,
+      montoPendiente: json['monto_pendiente'] as int? ?? 0,
+      qrTransaccionalSalida: json['qr_transaccional_salida']?.toString(),
+      fechaCreacion: json['fecha_creacion']?.toString(),
+      fechaActualizacion: json['fecha_actualizacion']?.toString(),
+      totalItems: json['total_items'] as int? ?? 0,
+      cliente: json['cliente'] != null
+          ? ClienteOrdenResumenModel.fromJson(
+              json['cliente'] as Map<String, dynamic>)
+          : null,
+      despacho: json['despacho'] != null
+          ? DespachoOrdenResumenModel.fromJson(
+              json['despacho'] as Map<String, dynamic>)
+          : null,
+      detalles: (json['detalles'] as List<dynamic>?)
+              ?.map((d) =>
+                  DetalleOrdenItemModel.fromJson(d as Map<String, dynamic>))
+              .toList() ??
+          [],
+      vendedorNombre: json['vendedor_nombre']?.toString(),
+      idVendedorAsignado: json['id_vendedor_asignado']?.toString(),
+      vendedorAsignadoNombre: json['vendedor_asignado_nombre']?.toString(),
+      preparacionLista: json['preparacion_lista'] as bool? ?? false,
+      todosPreparados: json['todos_preparados'] as bool? ?? false,
+    );
   }
 }

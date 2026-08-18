@@ -27,4 +27,5 @@ abstract class AppPalette {
   // Estados de Operación
   static const Color error = Color(0xFFD32F2F);
   static const Color success = Color(0xFF2E7D32);
+  static const Color warning = Color(0xFFFFB800);
 }

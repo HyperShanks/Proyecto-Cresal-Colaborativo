@@ -70,6 +70,38 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
       _userRol?.toLowerCase() == 'jefe de ventas' ||
       _userRol?.toLowerCase() == 'auditor';
 
+  bool get _esVendedor =>
+      _idRol == 2 ||
+      _idRol == 7 ||
+      _userRol?.toLowerCase() == 'vendedor' ||
+      _userRol?.toLowerCase() == 'vendedoronline' ||
+      _userRol?.toLowerCase() == 'vendedor online';
+
+  bool get _puedeGestionarEntregas {
+    if (_idRol == 7) return false;
+    final rLower = _userRol?.trim().toLowerCase() ?? '';
+    if (rLower == 'vendedoronline' || rLower == 'vendedor online') return false;
+
+    return _idRol == 2 ||
+        _idRol == 6 ||
+        rLower == 'vendedor' ||
+        rLower == 'jefe de ventas' ||
+        rLower == 'auditor';
+  }
+
+  String get _rolLabel {
+    if (_userRol != null && _userRol!.trim().isNotEmpty) {
+      final rLower = _userRol!.trim().toLowerCase();
+      if (rLower == 'vendedoronline' || rLower == 'vendedor online') {
+        return 'VENDEDOR ONLINE';
+      }
+      return _userRol!.toUpperCase();
+    }
+    if (_idRol == 7) return 'VENDEDOR ONLINE';
+    if (_idRol == 6) return 'JEFE DE VENTAS';
+    return 'VENDEDOR';
+  }
+
   // ── Cerrar Sesión ──────────────────────────────────────────────────────────
 
   Future<void> _logout() async {
@@ -154,9 +186,7 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  _userRol != null && _userRol!.isNotEmpty
-                      ? _userRol!.toUpperCase()
-                      : 'VENDEDOR',
+                  _rolLabel,
                   style: AppTypography.title.copyWith(
                     fontSize: 15,
                     letterSpacing: 1.2,
@@ -176,6 +206,15 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
           ),
 
           // ── Opciones de menú ─────────────────────────────────────────────
+          if (_puedeGestionarEntregas)
+            _buildDrawerItem(
+              icon: Icons.local_shipping_outlined,
+              label: 'ENTREGAS Y ENVÍOS',
+              onTap: () {
+                Navigator.of(context).pop(); // Cierra el Drawer
+                Navigator.of(context).pushNamed('/entregas-envios');
+              },
+            ),
           _buildDrawerItem(
             icon: Icons.confirmation_number_outlined,
             label: 'TICKET',

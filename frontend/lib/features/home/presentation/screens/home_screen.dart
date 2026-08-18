@@ -63,16 +63,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       return;
     }
 
+    final esVentas = await AuthService.esModuloVentas();
+    if (mounted && esVentas) {
+      Navigator.of(context).pushReplacementNamed('/ventas_main');
+      return;
+    }
+
     final rol = await AuthService.getRol();
     final sucursal = await AuthService.getNombreSucursal();
     final nombre = await AuthService.getNombreUsuario();
     final sucursalId = await AuthService.getSucursalId();
 
     if (mounted) {
-      if (rol?.toLowerCase() == 'vendedor') {
-        Navigator.of(context).pushReplacementNamed('/ventas_main');
-        return;
-      }
       setState(() {
         _userRol = rol;
         _userSucursal = sucursal;
