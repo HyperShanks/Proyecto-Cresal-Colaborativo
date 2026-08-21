@@ -22,6 +22,7 @@ class _PinLoginScreenState extends State<PinLoginScreen>
   String _pin = '';
   bool _isLoading = false;
   String? _errorMessage;
+  int _failedAttempts = 0;
 
   // Animación de sacudida para feedback de error
   late AnimationController _shakeController;
@@ -71,8 +72,6 @@ class _PinLoginScreenState extends State<PinLoginScreen>
     });
   }
 
-  // ── Llamada al servicio de autenticación ──────────────────────────────────
-
   Future<void> _submitPin() async {
     setState(() {
       _isLoading = true;
@@ -84,17 +83,67 @@ class _PinLoginScreenState extends State<PinLoginScreen>
     if (!mounted) return;
 
     if (result.success) {
-      // Navegar al HomeScreen y reemplazar la pantalla de login en el stack
-      Navigator.of(context).pushReplacementNamed('/home');
+      _failedAttempts = 0;
+      final esVentas = await AuthService.esModuloVentas();
+      if (!mounted) return;
+      if (esVentas) {
+        Navigator.of(context).pushReplacementNamed('/ventas_main');
+      } else {
+        Navigator.of(context).pushReplacementNamed('/home');
+      }
     } else {
-      // Camino triste: limpiar PIN, animar error y mostrar mensaje
+      _failedAttempts++;
       _shakeController.forward(from: 0);
-      setState(() {
-        _isLoading = false;
-        _pin = '';
-        _errorMessage = result.errorMessage;
-      });
+
+      if (_failedAttempts >= 10) {
+        await AuthService.clearToken();
+        setState(() {
+          _isLoading = false;
+          _pin = '';
+          _errorMessage = 'Acceso bloqueado por seguridad tras 10 intentos fallidos.';
+        });
+        _showFatalErrorDialog();
+      } else {
+        setState(() {
+          _isLoading = false;
+          _pin = '';
+          _errorMessage = '${result.errorMessage} (Intento $_failedAttempts de 10)';
+        });
+      }
     }
+  }
+
+  void _showFatalErrorDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: AppPalette.surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Text(
+            'Acceso Bloqueado',
+            style: AppTypography.title.copyWith(color: AppPalette.error),
+          ),
+          content: const Text(
+            'Se ha superado el número máximo de intentos de PIN permitidos (10 intentos). '
+            'Por motivos de seguridad, el acceso ha sido bloqueado.',
+            style: AppTypography.small,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+              },
+              child: Text(
+                'REINICIAR',
+                style: AppTypography.button.copyWith(color: AppPalette.primary),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   // ── Construcción de la UI ─────────────────────────────────────────────────

@@ -1,15 +1,8 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../auth/services/auth_service.dart';
+import '../../../core/constants/api_constants.dart';
 import '../models/ticket_model.dart';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CONFIGURACIÓN DE URL BASE
-//   • localhost → Windows / Web / macOS desktop
-//   • 10.0.2.2  → Emulador Android (apunta al localhost del PC host)
-// ─────────────────────────────────────────────────────────────────────────────
-const String baseUrl = 'https://cresal-backend-dev.onrender.com/api/v1/tickets';
-//const String baseUrl = 'http://192.168.1.4:8000/api/v1/tickets';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RESULTADO TIPADO DE OPERACIONES DE TICKET
@@ -65,7 +58,7 @@ class TicketService {
   }) async {
     try {
       final headers = await _buildAuthHeaders();
-      final uri = Uri.parse(baseUrl);
+      final uri = Uri.parse(ApiConstants.ticketsEndpoint);
 
       final body = jsonEncode({
         'tipo_ticket': tipoTicket,
@@ -108,7 +101,7 @@ class TicketService {
   static Future<List<TicketModel>> obtenerMisTickets() async {
     try {
       final headers = await _buildAuthHeaders();
-      final uri = Uri.parse('$baseUrl/mis-tickets');
+      final uri = Uri.parse('${ApiConstants.ticketsEndpoint}/mis-tickets');
 
       final response = await http
           .get(uri, headers: headers)

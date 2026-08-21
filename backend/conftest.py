@@ -27,13 +27,14 @@ def add_sqlite_now(dbapi_connection, connection_record):
 
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# 2. Fixture (scope="session") para levantar y destruir la estructura de la DB
-@pytest.fixture(scope="session")
+# 2. Fixture (scope="module") para levantar y destruir la estructura de la DB por módulo
+@pytest.fixture(scope="module", autouse=True)
 def setup_database():
     """
-    Crea las tablas en la BD en memoria al iniciar la sesión de pruebas
+    Crea las tablas en la BD en memoria al iniciar cada módulo de pruebas
     y las destruye al finalizar.
     """
+    Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)

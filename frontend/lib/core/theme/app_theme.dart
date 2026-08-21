@@ -27,6 +27,11 @@ class AppTheme {
           AppPalette.background, // Obligamos al fondo #0F1416
       fontFamily: AppTypography.fontFamily,
 
+      // Eliminación global de InkSparkle (ruido procedural con shaders pesados)
+      splashFactory: InkRipple.splashFactory,
+      highlightColor: Colors.transparent,
+      splashColor: AppPalette.primary.withValues(alpha: 0.12),
+
       // 3. Mapeo de tipografías nativas de Flutter
       textTheme: const TextTheme(
         headlineLarge: AppTypography.headline,
@@ -38,6 +43,8 @@ class AppTheme {
 
       // 4. Inyección de componentes modulares
       elevatedButtonTheme: AppComponents.elevatedButtonTheme,
+      outlinedButtonTheme: AppComponents.outlinedButtonTheme,
+      iconButtonTheme: AppComponents.iconButtonTheme,
       cardTheme: AppComponents.cardTheme,
       inputDecorationTheme: AppComponents.inputDecorationTheme,
     );
@@ -63,6 +70,11 @@ class AppTheme {
       scaffoldBackgroundColor: AppPalette.backgroundLight,
       fontFamily: AppTypography.fontFamily,
 
+      // Eliminación global de InkSparkle
+      splashFactory: InkRipple.splashFactory,
+      highlightColor: Colors.transparent,
+      splashColor: AppPalette.primary.withValues(alpha: 0.12),
+
       // 3. Mapeo de tipografías nativas de Flutter
       textTheme: TextTheme(
         headlineLarge: AppTypography.headline.copyWith(
@@ -84,6 +96,8 @@ class AppTheme {
 
       // 4. Inyección de componentes modulares
       elevatedButtonTheme: AppComponents.elevatedButtonTheme,
+      outlinedButtonTheme: AppComponents.outlinedButtonTheme,
+      iconButtonTheme: AppComponents.iconButtonTheme,
       cardTheme: AppComponents.cardThemeLight,
       inputDecorationTheme: AppComponents.inputDecorationThemeLight,
     );

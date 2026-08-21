@@ -1,7 +1,7 @@
-# Este archivo contiene los esquemas de Pydantic para la validación de datos de entrada y salida en la API.
+    # Este archivo contiene los esquemas de Pydantic para la validación de datos de entrada y salida en la API.
 
-from pydantic import BaseModel, Field, field_validator
-from typing import Optional
+from pydantic import BaseModel, Field, field_validator, ConfigDict
+from typing import Optional, List
 from uuid import UUID
 import re
 
@@ -39,6 +39,7 @@ class PatenteInput(BaseModel):
 
 class VehiculoCreate(BaseModel):
     # Datos del Vehículo (Autocompletados por scraper o copiados del padrón)
+    correlativo_ingreso: Optional[str] = None
     patente: str = Field(..., description="Patente validada del vehículo")
     marca: str
     modelo: str
@@ -54,12 +55,63 @@ class VehiculoCreate(BaseModel):
     transmision: str = Field(..., description="Ej: mec, at")
 
 # ==========================================
+# ESQUEMAS PARA PALETIZADO / IMPRESIÓN (HU-2.4)
+# ==========================================
+
+class ActualizarQrImpresoRequest(BaseModel):
+    """Payload para marcar un activo inventariado como impreso en la BD."""
+    qr_impreso: bool = True
+
+# ==========================================
 # ESQUEMAS PARA AUTENTICACIÓN (HU-2.1 LOGIN-PIN)
 # ==========================================
 
 class LoginPINRequest(BaseModel):
     """Payload de entrada para el login por PIN de operario."""
     pin: str
+
+class RegisterUserRequest(BaseModel):
+    """Payload de entrada para el registro de nuevos usuarios."""
+    rut_usuario: str = Field(..., min_length=3, max_length=12, description="RUT chileno del usuario (ej: 12.345.678-9)")
+    nombres: str = Field(..., min_length=1, max_length=100, description="Nombres del usuario")
+    apellidos: str = Field(..., min_length=1, max_length=100, description="Apellidos del usuario")
+    email: str = Field(..., description="Correo electrónico corporativo único")
+    password: str = Field(..., min_length=4, description="Contraseña en texto plano a ser encriptada con bcrypt")
+    id_rol: int = Field(..., description="ID del rol a asignar")
+    id_sucursal: Optional[int] = Field(1, description="ID de la sucursal del usuario (default: 1)")
+    pin_acceso: Optional[str] = Field(None, min_length=4, max_length=4, description="PIN numérico de 4 dígitos (opcional, auto-generado si no se provee)")
+
+class RegisterUserResponse(BaseModel):
+    """DTO de respuesta tras registrar exitosamente un usuario."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_usuario: UUID
+    rut_usuario: str
+    nombres: str
+    apellidos: str
+    email: str
+    id_rol: int
+    nombre_rol: Optional[str] = None
+    id_sucursal: int
+    pin_acceso: str
+    estado: str
+    mensaje: str
+
+class RolData(BaseModel):
+    """DTO para la información de un rol."""
+    id_rol: int
+    nombre_rol: str
+
+    class Config:
+        from_attributes = True
+
+class SucursalData(BaseModel):
+    """DTO para la información de una sucursal."""
+    id_sucursal: int
+    nombre_sucursal: str
+
+    class Config:
+        from_attributes = True
 
 class UsuarioData(BaseModel):
     """DTO de salida con los datos públicos del usuario autenticado."""
@@ -68,7 +120,11 @@ class UsuarioData(BaseModel):
     apellidos: str
     rut_usuario: str
     id_rol: int
+    nombre_rol: Optional[str] = None
     id_sucursal: int
+    nombre_sucursal: Optional[str] = None
+    rol: Optional[RolData] = None
+    sucursal: Optional[SucursalData] = None
 
     class Config:
         from_attributes = True  # Permite lectura directa desde el modelo SQLAlchemy
@@ -154,4 +210,453 @@ class VehiculoInventarioResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+
+# ==========================================
+# ESQUEMAS PARA CATÁLOGO Y RADAR (HU-3.2)
+# ==========================================
+
+class CatalogoItemResponse(BaseModel):
+    """DTO de salida para un elemento individual del catálogo de inventario."""
+    id_activo: UUID
+    sku_qr_fisico: str
+    precio_referencia: Optional[int] = None
+    
+    # Categoría y Sucursal
+    id_categoria: int
+    nombre_categoria: str
+    id_sucursal_actual: int
+    nombre_sucursal: str
+    
+    # Datos del Vehículo de Origen (opcional si es repuesto sin vehículo directo)
+    id_vehiculo: Optional[UUID] = None
+    marca: Optional[str] = None
+    modelo: Optional[str] = None
+    anio: Optional[int] = None
+    traccion: Optional[str] = None
+    
+    # Especificaciones Técnicas (Motor / Caja)
+    cilindrada: Optional[str] = None
+    combustible: Optional[str] = None
+    transmision_tipo: Optional[str] = None
+    
+    # Ubicación y estado
+    ubicacion_pasillo: Optional[str] = None
+    ubicacion_pallet: Optional[str] = None
+    estado_activo: Optional[str] = None
+    qr_impreso: bool = False
+    imagenes: List[str] = []
+
+    class Config:
+        from_attributes = True
+
+
+class PaginatedCatalogoResponse(BaseModel):
+    """DTO de respuesta paginada para el catálogo de activos con Radar de Stock."""
+    items: List[CatalogoItemResponse]
+    total_count: int
+    limit: int
+    offset: int
+
+
+# ==========================================
+# ESQUEMAS PARA ÓRDENES Y CHECKOUT (HU-3.4)
+# ==========================================
+
+class ClienteOrdenInput(BaseModel):
+    """Datos de contacto y post-venta del cliente (Micro-CRM)."""
+    rut_cliente: str = Field(..., description="RUT del cliente (ej. 12.345.678-9 o 12345678-9)")
+    nombres: str = Field(..., min_length=1, description="Nombres del cliente")
+    apellidos: str = Field(..., min_length=1, description="Apellidos del cliente")
+    telefono: Optional[str] = Field(None, description="Teléfono de contacto")
+    correo: Optional[str] = Field(None, description="Correo electrónico del cliente")
+    comuna: Optional[str] = Field(None, description="Nombre de la comuna del cliente")
+    consentimiento_legal: bool = Field(True, description="Aceptación de la Ley N° 21.719 de datos personales")
+
+
+class DespachoInput(BaseModel):
+    """Datos de logística y receptor de envío a domicilio o traslado."""
+    direccion_envio: str = Field(..., min_length=3, description="Dirección completa de entrega")
+    comuna_destino: Optional[str] = Field(None, description="Nombre de la comuna de destino")
+    id_comuna_destino: Optional[int] = Field(None, description="ID numérico de la comuna de destino")
+    receptor_rut: str = Field(..., description="RUT de quien recibe")
+    receptor_nombres: str = Field(..., min_length=1, description="Nombres y apellidos de quien recibe")
+    receptor_telefono: str = Field(..., description="Teléfono del receptor")
+    empresa_transporte: Optional[str] = Field(None, description="Empresa de transporte (Starken, Chilexpress, etc.)")
+    costo_envio: Optional[int] = Field(0, description="Costo de envío asociado")
+    tipo_entrega: Optional[str] = Field("Despacho", description="Tipo de entrega: 'Despacho', 'Traslado', 'Retiro'")
+    id_sucursal_destino: Optional[int] = Field(None, description="ID de la sucursal de destino si es Traslado (1: Viña, 2: Limache)")
+
+
+class ItemOrdenInput(BaseModel):
+    """Línea de producto en la orden (inventariado o misceláneo/venta libre)."""
+    id_activo: Optional[UUID] = Field(None, description="UUID del repuesto inventariado (si aplica)")
+    descripcion_manual: Optional[str] = Field(None, description="Descripción para ítems de venta libre/no inventariados")
+    notas_preparacion: Optional[str] = Field(None, description="Notas técnicas de preparación dirigidas a bodega")
+    cantidad: int = Field(1, ge=1, description="Cantidad de unidades")
+    precio_unitario: Optional[int] = Field(None, description="Precio unitario de referencia")
+    precio_final: int = Field(..., ge=0, description="Precio final acordado / a cobrar")
+
+
+class OrdenCreateRequest(BaseModel):
+    """Payload de creación de orden transaccional derivable a caja."""
+    cliente: ClienteOrdenInput
+    requiere_despacho: bool = Field(False, description="Indica si la orden requiere despacho a domicilio")
+    despacho: Optional[DespachoInput] = Field(None, description="Datos de envío (obligatorio si requiere_despacho es True)")
+    consentimiento_legal: bool = Field(True, description="Consentimiento expreso Ley 21.719")
+    instrucciones_bodega: Optional[str] = Field(None, description="Instrucciones generales para bodega")
+    items: List[ItemOrdenInput] = Field(..., min_length=1, description="Lista de ítems de la orden")
+    id_sucursal: Optional[int] = Field(None, description="ID de la sucursal donde se genera la venta")
+    tipo_entrega: Optional[str] = Field("Retiro", description="Tipo de entrega: 'Retiro', 'Despacho', 'Traslado'")
+    id_sucursal_destino: Optional[int] = Field(None, description="ID de sucursal destino si aplica traslado (1: Viña, 2: Limache)")
+    monto_abono: Optional[int] = Field(None, ge=0, description="Monto abonado al registrar la venta (opcional para abonos parciales)")
+    id_vendedor_asignado: Optional[UUID] = Field(None, description="ID del vendedor asignado para entregar/despachar la orden (None = Mesón General)")
+
+
+class OrdenResponse(BaseModel):
+    """DTO de respuesta tras la creación exitosa de la orden."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_orden: UUID
+    estado_orden: str
+    total_venta: int
+    monto_pendiente: int
+    qr_transaccional_salida: Optional[str] = None
+    mensaje: str
+    fecha_creacion: Optional[str] = None
+    total_items: int
+
+
+# ==========================================
+# ESQUEMAS PARA CONFIRMACIÓN DE PAGO Y HANDSHAKE QR (HU-3.6)
+# ==========================================
+
+class OrdenPagoRequest(BaseModel):
+    """Payload para registrar la confirmación de pago de una orden en caja."""
+    metodo_pago: str = Field("Efectivo", description="Método de pago: Efectivo, Débito, Crédito, Transferencia")
+    monto: Optional[int] = Field(None, ge=1, description="Monto abonado (opcional, por defecto liquida el total pendiente)")
+    observaciones: Optional[str] = Field(None, description="Notas de caja o número de comprobante/voucher")
+
+
+class OrdenPagoResponse(BaseModel):
+    """DTO de respuesta tras confirmar el pago de la orden y generar el QR transaccional de salida."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_orden: UUID
+    id_pago: UUID
+    estado_orden: str
+    total_venta: int
+    monto_pagado: int
+    monto_pendiente: int
+    metodo_pago: str
+    qr_transaccional_salida: str
+    id_cajera: UUID
+    mensaje: str
+    fecha_pago: str
+
+
+# ==========================================
+# ESQUEMAS PARA HISTORIAL Y MONITOREO DE ÓRDENES (HU-3.5)
+# ==========================================
+
+class ClienteOrdenResumen(BaseModel):
+    """Resumen de datos del cliente para el historial de ventas."""
+    model_config = ConfigDict(from_attributes=True)
+
+    rut_cliente: str
+    nombres: str
+    apellidos: str
+    telefono: Optional[str] = None
+    correo: Optional[str] = None
+    comuna: Optional[str] = None
+
+
+class DespachoOrdenResumen(BaseModel):
+    """Resumen de datos de despacho para el historial de ventas."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_despacho: UUID
+    direccion_envio: str
+    receptor_nombres: str
+    receptor_rut: str
+    receptor_telefono: str
+    empresa_transporte: Optional[str] = None
+    costo_envio: Optional[int] = 0
+    estado_despacho: str
+    comuna_destino: Optional[str] = None
+
+
+class DetalleOrdenItemResponse(BaseModel):
+    """DTO de detalle de línea de producto en el historial de órdenes."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_detalle: UUID
+    id_activo: Optional[UUID] = None
+    titulo: str
+    sku_qr_fisico: Optional[str] = None
+    descripcion_manual: Optional[str] = None
+    notas_preparacion: Optional[str] = None
+    cantidad: int
+    precio_unitario: Optional[int] = None
+    precio_final: int
+    subtotal: int
+    es_inventariado: bool
+    preparacion_lista: Optional[bool] = False
+    estado_preparacion: Optional[str] = "Pendiente"
+
+
+class OrdenHistorialItemResponse(BaseModel):
+    """DTO completo de orden de venta para el historial y monitoreo del vendedor."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_orden: UUID
+    estado_orden: str
+    total_venta: int
+    monto_pendiente: int
+    qr_transaccional_salida: Optional[str] = None
+    fecha_creacion: Optional[str] = None
+    fecha_actualizacion: Optional[str] = None
+    total_items: int
+    cliente: Optional[ClienteOrdenResumen] = None
+    despacho: Optional[DespachoOrdenResumen] = None
+    detalles: List[DetalleOrdenItemResponse] = []
+
+
+class EntregaEnvioItemResponse(BaseModel):
+    """DTO para la vista colaborativa de Entregas en Tienda y Despachos Externos."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_orden: UUID
+    folio: str
+    tipo_entrega: str
+    estado_orden: str
+    total_venta: int
+    monto_pendiente: int
+    qr_transaccional_salida: Optional[str] = None
+    fecha_creacion: Optional[str] = None
+    fecha_actualizacion: Optional[str] = None
+    total_items: int
+    cliente: Optional[ClienteOrdenResumen] = None
+    despacho: Optional[DespachoOrdenResumen] = None
+    detalles: List[DetalleOrdenItemResponse] = []
+    vendedor_nombre: Optional[str] = None
+    id_vendedor_asignado: Optional[UUID] = None
+    vendedor_asignado_nombre: Optional[str] = None
+    preparacion_lista: bool = False
+    todos_preparados: bool = False
+
+
+class VendedorResumenResponse(BaseModel):
+    """DTO para listar vendedores de una sucursal para asignación de entrega."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_usuario: UUID
+    nombre_completo: str
+    rut: str
+    id_sucursal: int
+    correo: Optional[str] = None
+
+
+class EntregaConfirmacionResponse(BaseModel):
+    """DTO de respuesta tras confirmar la entrega de un pedido en tienda."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_orden: UUID
+    folio: str
+    estado_orden: str
+    mensaje: str
+    activos_finalizados: int
+    fecha_entrega: str
+
+
+class DespachoEnvioResponse(BaseModel):
+    """DTO de respuesta tras marcar un despacho como enviado."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_despacho: UUID
+    id_orden: UUID
+    folio: str
+    estado_despacho: str
+    estado_orden: str
+    mensaje: str
+    activos_finalizados: int
+    fecha_envio: str
+
+
+class OrdenAnulacionResponse(BaseModel):
+    """DTO de respuesta tras anular una orden y liberar stock."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_orden: UUID
+    estado_orden: str
+    mensaje: str
+    activos_liberados: int
+
+
+class InstruccionesUpdateRequest(BaseModel):
+    """Payload para actualizar notas técnicas o instrucciones a bodega."""
+    notas_preparacion: str = Field(..., min_length=1, description="Texto de notas técnicas de preparación para bodega")
+    id_detalle: Optional[UUID] = Field(None, description="ID del detalle específico si solo se actualiza una línea")
+
+
+class InstruccionesUpdateResponse(BaseModel):
+    """DTO de respuesta tras actualizar instrucciones de preparación."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_orden: UUID
+    mensaje: str
+    notas_preparacion: str
+    detalles_actualizados: int
+
+
+# ==========================================
+# ESQUEMAS PARA JEFE DE VENTAS Y ASIGNACIÓN DE PRECIOS (HU-3.8)
+# ==========================================
+
+class ActivoPendientePrecioResponse(BaseModel):
+    """DTO para la bandeja de entrada de activos sin precio asignado."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_activo: UUID
+    sku_qr_fisico: str
+    id_categoria: int
+    nombre_categoria: str
+    id_sucursal_actual: int
+    nombre_sucursal: str
+    ubicacion_pasillo: Optional[str] = None
+    ubicacion_pallet: Optional[str] = None
+    id_vehiculo: Optional[UUID] = None
+    numero_ingreso: Optional[str] = None
+    marca: Optional[str] = None
+    modelo: Optional[str] = None
+    anio: Optional[int] = None
+    traccion: Optional[str] = None
+    cilindrada: Optional[str] = None
+    combustible: Optional[str] = None
+    transmision_tipo: Optional[str] = None
+    titulo_repuesto: str
+    estado_activo: str
+    fecha_creacion: Optional[str] = None
+
+
+class AsignarPrecioRequest(BaseModel):
+    """Payload para fijar o actualizar el precio de referencia de un activo."""
+    precio_referencia: int = Field(..., gt=0, description="Precio de referencia en pesos chilenos (debe ser mayor a 0)")
+
+
+class AsignarPrecioResponse(BaseModel):
+    """DTO de respuesta tras asignar exitosamente el precio."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_activo: UUID
+    sku_qr_fisico: str
+    precio_referencia: int
+    estado_activo: str
+    mensaje: str
+
+
+# ==========================================
+# ESQUEMAS PARA BODEGA: HANDSHAKE DE SALIDA Y DUAL-SCAN (HU-3.6)
+# ==========================================
+
+class ItemSalidaInfo(BaseModel):
+    """Información de cada ítem de la orden para verificación previa de salida."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_detalle: UUID
+    id_activo: Optional[UUID] = None
+    titulo: str
+    sku_qr_fisico: Optional[str] = None
+    es_inventariado: bool
+    ubicacion: str
+    notas_preparacion: Optional[str] = None
+    cantidad: int
+    precio_final: int
+
+
+class VerificarQrSalidaRequest(BaseModel):
+    """Payload para inspeccionar una orden mediante el QR Digital del Vendedor."""
+    qr_transaccional_salida: str = Field(..., description="Token digital del vendedor (TX-QR-...)")
+
+
+class VerificarQrSalidaResponse(BaseModel):
+    """DTO con el detalle completo de la orden para guiar al bodeguero en el despacho."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_orden: UUID
+    folio: str
+    estado_orden: str
+    total_venta: int
+    monto_pendiente: int
+    id_sucursal: int
+    cliente_nombre: str
+    cliente_rut: str
+    cliente_telefono: Optional[str] = None
+    items_requeridos: List[ItemSalidaInfo]
+    total_items_fisicos: int
+    qr_transaccional_salida: str
+
+
+class EscanearSalidaRequest(BaseModel):
+    """Payload para validar el Dual-Scan y completar la entrega en barrera."""
+    qr_transaccional_salida: str = Field(..., description="Token digital del vendedor (TX-QR-...)")
+    skus_escaneados: List[str] = Field(default_factory=list, description="Lista de SKUs escaneados de las piezas físicas")
+    observaciones_entrega: Optional[str] = Field(None, description="Observaciones opcionales del bodeguero al entregar")
+
+
+class EscanearSalidaResponse(BaseModel):
+    """DTO de confirmación inmediata (Cero-Clics) tras la entrega en barrera."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_orden: UUID
+    folio: str
+    estado_orden: str
+    id_bodeguero: UUID
+    bodeguero_nombre: str
+    fecha_entrega: str
+    activos_entregados: List[str]
+    total_entregados: int
+    mensaje: str
+
+
+# ==========================================
+# ESQUEMAS PARA BODEGA Y PRE-ENTREGA (HU-BODEGA)
+# ==========================================
+
+class TareaAlertaResponse(BaseModel):
+    """DTO para tareas operativas en el tablero de bodega."""
+    id_tarea: str
+    tipo_alerta: str
+    orden_ref: Optional[str] = None
+    titulo_pieza: str
+    ubicacion: str
+    nota_especial: Optional[str] = None
+    estado_bloqueo: Optional[str] = None
+    accion_requerida: str
+    etiqueta_data: Optional[dict] = None
+    id_detalle: Optional[UUID] = None
+    id_activo: Optional[UUID] = None
+    id_sucursal_origen: Optional[int] = None
+    id_sucursal_destino: Optional[int] = None
+    es_traslado: bool = False
+    estado_preparacion: Optional[str] = "Pendiente"
+    categoria: Optional[str] = None
+    tipo_repuesto: Optional[str] = None
+
+
+class CompletarPreentregaResponse(BaseModel):
+    """DTO de respuesta al marcar una pre-entrega como 'Listo'."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_detalle: UUID
+    id_orden: UUID
+    id_activo: Optional[UUID] = None
+    preparacion_lista: bool
+    estado_preparacion: str
+    mensaje: str
+    fecha_preparacion: Optional[str] = None
+
+
+
+
 

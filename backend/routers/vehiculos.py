@@ -1,3 +1,5 @@
+import uuid
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
 from sqlalchemy.orm import Session
 from database import SessionLocal, get_db
@@ -9,11 +11,11 @@ from google.cloud import vision
 import json # <-- Importante para traducir el texto a JSON
 import models
 from dotenv import load_dotenv # Para cargar el .env
-from typing import List # Para definir la lista de imágenes en FastAPI
+from typing import List, Optional # Para definir la lista de imágenes en FastAPI
 from supabase import create_client, Client # El cliente de Supabase
 import os
 from dotenv import load_dotenv
-
+from core.security import get_current_user
 # Cargar variables del .env
 load_dotenv()
 
@@ -45,7 +47,7 @@ router = APIRouter(
 # ==========================================
 
 @router.get("/siguiente-ingreso", status_code=200)
-def obtener_siguiente_ingreso(db: Session = Depends(get_db)):
+def obtener_siguiente_ingreso(db: Session = Depends(get_db), usuario_logeado: models.Usuario = Depends(get_current_user)):
     """
     Calcula y retorna el siguiente número correlativo para el ingreso de un vehículo.
     """
@@ -66,7 +68,8 @@ async def registrar_ingreso_vehiculo(
     # --- NUEVO: Recibimos los datos y la foto por separado (Multipart) ---
     datos: str = Form(...),
     foto: UploadFile = File(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    usuario_logeado: models.Usuario = Depends(get_current_user)
 ):
     """
     Registra un vehículo y sus componentes principales (Motor y Caja) previa validación Poka-Yoke.
@@ -212,26 +215,167 @@ async def registrar_ingreso_vehiculo(
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error crítico en la transacción: {str(e)}")
 
+
+@router.post("/registro-manual", response_model=schemas.VehiculoResponse, status_code=201)
+def registrar_ingreso_vehiculo_manual(
+    vehiculo_in: schemas.VehiculoCreate,
+    db: Session = Depends(get_db),
+    usuario_logeado: models.Usuario = Depends(get_current_user),
+):
+    """
+    [Fallback Contingencia] Permite el registro manual de un vehículo
+    tras confirmación explícita del operario ante fallas de Google Vision u OCR.
+    """
+    patente_normalizada = vehiculo_in.patente.strip().upper() if vehiculo_in.patente else None
+
+    if patente_normalizada:
+        vehiculo_existente = db.query(models.Vehiculo_Origen).filter(
+            models.Vehiculo_Origen.patente == patente_normalizada
+        ).first()
+        if vehiculo_existente:
+            raise HTTPException(
+                status_code=400,
+                detail=f"La patente {patente_normalizada} ya se encuentra registrada en el sistema.",
+            )
+
+    try:
+        max_ingreso = db.query(func.max(cast(models.Vehiculo_Origen.numero_ingreso, Integer))).scalar()
+        nuevo_numero_ingreso = str(1000) if max_ingreso is None else str(max_ingreso + 1)
+        if vehiculo_in.correlativo_ingreso and vehiculo_in.correlativo_ingreso != "Cargando...":
+            nuevo_numero_ingreso = vehiculo_in.correlativo_ingreso.strip()
+
+        nuevo_vehiculo_id = uuid.uuid4()
+        nuevo_vehiculo = models.Vehiculo_Origen(
+            id_vehiculo=nuevo_vehiculo_id,
+            numero_ingreso=nuevo_numero_ingreso,
+            patente=patente_normalizada,
+            marca=vehiculo_in.marca,
+            modelo=vehiculo_in.modelo,
+            anio=vehiculo_in.anio,
+            traccion=vehiculo_in.traccion,
+        )
+        db.add(nuevo_vehiculo)
+        db.flush()
+
+        id_motor = uuid.uuid4()
+        activo_motor = models.Activo_Inventariado(
+            id_activo=id_motor,
+            sku_qr_fisico=f"MOT-{nuevo_numero_ingreso}-{uuid.uuid4().hex[:4].upper()}",
+            id_categoria=1,
+            id_estado=5,
+            id_sucursal_actual=getattr(usuario_logeado, "id_sucursal", 1) or 1,
+            id_vehiculo=nuevo_vehiculo_id,
+            estado="Activo",
+            fecha_creacion=datetime.now(),
+            qr_impreso=False,
+        )
+        db.add(activo_motor)
+        db.flush()
+
+        detalle_motor = models.Detalle_Motor(
+            id_activo=id_motor,
+            numero_motor=vehiculo_in.numero_motor,
+            cilindrada=vehiculo_in.cilindrada,
+            combustible=vehiculo_in.combustible,
+            transmision_tipo=vehiculo_in.transmision,
+        )
+        db.add(detalle_motor)
+
+        id_caja = uuid.uuid4()
+        activo_caja = models.Activo_Inventariado(
+            id_activo=id_caja,
+            sku_qr_fisico=f"CAJ-{nuevo_numero_ingreso}-{uuid.uuid4().hex[:4].upper()}",
+            id_categoria=2,
+            id_estado=5,
+            id_sucursal_actual=getattr(usuario_logeado, "id_sucursal", 1) or 1,
+            id_vehiculo=nuevo_vehiculo_id,
+            estado="Activo",
+            fecha_creacion=datetime.now(),
+            qr_impreso=False,
+        )
+        db.add(activo_caja)
+        db.flush()
+
+        detalle_caja = models.Detalle_Caja_Cambio(
+            id_activo=id_caja,
+            transmision_tipo=vehiculo_in.transmision,
+        )
+        db.add(detalle_caja)
+
+        db.commit()
+        db.refresh(nuevo_vehiculo)
+        return nuevo_vehiculo
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error crítico en la transacción: {str(e)}")
+
+
 # ==========================================
-# 2. RUTAS DINÁMICAS (Van al final)
+# 2. RUTAS DE INVENTARIO Y PALETIZADO
 # ==========================================
 
-@router.get("/{patente}", response_model=schemas.VehiculoResponse, status_code=200)
-def obtener_vehiculo(patente: str, db: Session = Depends(get_db)):
+@router.get("/pendientes-paletizado", status_code=200)
+def obtener_pendientes_paletizado(
+    sucursal_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    usuario_logeado: models.Usuario = Depends(get_current_user),
+):
     """
-    Busca un vehículo por su patente en PostgreSQL. Si no existe, acciona el motor de Scraping 
-    para registrarlo automáticamente.
+    Lista todos los activos de inventario pendientes de paletizado de la sucursal activa
+    (ubicacion_pasillo IS NULL, ubicacion_pasillo == 'S/P', o id_estado == 5).
     """
-    try:
-        patente_validada = schemas.PatenteInput(patente=patente).patente
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-        
-    vehiculo = procesar_patente_y_guardar(db=db, patente_limpia=patente_validada)
-    return vehiculo
+    from sqlalchemy import or_
+
+    suc_target = sucursal_id or getattr(usuario_logeado, "id_sucursal", 1) or 1
+
+    query = (
+        db.query(
+            models.Activo_Inventariado,
+            models.Vehiculo_Origen,
+            models.Categoria_Activo,
+            models.Estado_Activo,
+        )
+        .outerjoin(models.Vehiculo_Origen, models.Activo_Inventariado.id_vehiculo == models.Vehiculo_Origen.id_vehiculo)
+        .join(models.Categoria_Activo, models.Activo_Inventariado.id_categoria == models.Categoria_Activo.id_categoria)
+        .join(models.Estado_Activo, models.Activo_Inventariado.id_estado == models.Estado_Activo.id_estado)
+        .filter(
+            models.Activo_Inventariado.estado == "Activo",
+            models.Activo_Inventariado.id_sucursal_actual == suc_target,
+            or_(
+                models.Activo_Inventariado.id_estado == 5,
+                models.Activo_Inventariado.ubicacion_pasillo == None,
+                models.Activo_Inventariado.ubicacion_pasillo == "",
+                models.Activo_Inventariado.ubicacion_pasillo == "S/P",
+                models.Activo_Inventariado.ubicacion_pallet == None,
+                models.Activo_Inventariado.ubicacion_pallet == "",
+                models.Activo_Inventariado.ubicacion_pallet == "S/P",
+            ),
+        )
+        .order_by(models.Activo_Inventariado.fecha_creacion.desc())
+    )
+
+    resultados = query.all()
+
+    respuesta = []
+    for activo, vehiculo, cat, est in resultados:
+        respuesta.append({
+            "id_activo": str(activo.id_activo),
+            "sku_qr_fisico": activo.sku_qr_fisico,
+            "id_categoria": cat.id_categoria,
+            "tipo_repuesto": cat.nombre_categoria,
+            "numero_ingreso": vehiculo.numero_ingreso if vehiculo else "N/A",
+            "marca": vehiculo.marca if vehiculo else "Desconocida",
+            "modelo": vehiculo.modelo if vehiculo else "Desconocido",
+            "anio": vehiculo.anio if vehiculo else 0,
+            "patente": vehiculo.patente if vehiculo else None,
+            "estado": est.nombre_estado,
+            "fecha_creacion": activo.fecha_creacion.isoformat() if activo.fecha_creacion else None,
+        })
+
+    return respuesta
 
 @router.get("/buscar/{numero_ingreso}")
-def buscar_vehiculo_por_ingreso(numero_ingreso: str, db: Session = Depends(get_db)):
+def buscar_vehiculo_por_ingreso(numero_ingreso: str, db: Session = Depends(get_db), usuario_logeado: models.Usuario = Depends(get_current_user)):
     """
     Busca los datos de un vehículo por su número de ingreso (Folio).
     Retorna los datos del vehículo y los detalles técnicos de sus repuestos (Motor y Caja).
@@ -296,7 +440,8 @@ def buscar_vehiculo_por_ingreso(numero_ingreso: str, db: Session = Depends(get_d
 @router.post("/validar-ocr-pieza")
 async def validar_ocr_pieza(
     numero_ingreso: str = Form(...),
-    imagen_posca: UploadFile = File(...)
+    imagen_posca: UploadFile = File(...),
+    usuario_logeado: models.Usuario = Depends(get_current_user)
 ):
     """
     [Poka-Yoke Digital] - HU-2.3
@@ -379,7 +524,8 @@ async def guardar_paletizado(
     # --- Lista de hasta 10 fotos comerciales ---
     fotos_comerciales: List[UploadFile] = File(...),
     
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    usuario_logeado: models.Usuario = Depends(get_current_user)
 ):
     """
     [Jefe Final] - HU-2.3 & HU-2.4
@@ -559,3 +705,66 @@ async def guardar_paletizado(
             status_code=500,
             detail=f"Error crítico al guardar en PostgreSQL: {str(e)}. Los datos y archivos se han revertido para mantener la integridad."
         )
+
+# ==========================================
+# PATCH: Confirmar Impresión de Etiqueta QR (HU-2.4 Fase 4)
+# ==========================================
+
+@router.patch("/inventario/{id_activo}/impreso", status_code=200)
+def marcar_qr_impreso(
+    id_activo: str,
+    payload: schemas.ActualizarQrImpresoRequest,
+    db: Session = Depends(get_db),
+    usuario_logeado: models.Usuario = Depends(get_current_user)
+):
+    """
+    Marca el campo qr_impreso de un Activo_Inventariado como True (o False).
+    Llamado automáticamente desde la PDA Sunmi L3 tras una impresión física exitosa.
+    """
+    print(f"📌 [INVENTARIO] 🖨️ PATCH qr_impreso={payload.qr_impreso} para id_activo: {id_activo}")
+
+    activo = db.query(models.Activo_Inventariado).filter(
+        models.Activo_Inventariado.id_activo == id_activo
+    ).first()
+
+    if not activo:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Activo inventariado con ID '{id_activo}' no encontrado."
+        )
+
+    activo.qr_impreso = payload.qr_impreso
+    db.commit()
+    db.refresh(activo)
+
+    print(f"📌 [INVENTARIO] ✅ qr_impreso={activo.qr_impreso} guardado exitosamente en BD.")
+
+    return {
+        "status": "success",
+        "mensaje": "Estado de etiqueta QR actualizado exitosamente.",
+        "id_activo": str(activo.id_activo),
+        "qr_impreso": activo.qr_impreso
+    }
+
+
+# ==========================================
+# 3. RUTAS DINÁMICAS (Al final del archivo)
+# ==========================================
+
+@router.get("/{patente}", response_model=schemas.VehiculoResponse, status_code=200)
+def obtener_vehiculo(
+    patente: str,
+    db: Session = Depends(get_db),
+    usuario_logeado: models.Usuario = Depends(get_current_user),
+):
+    """
+    Busca un vehículo por su patente en PostgreSQL. Si no existe, acciona el motor de Scraping 
+    para registrarlo automáticamente.
+    """
+    try:
+        patente_validada = schemas.PatenteInput(patente=patente).patente
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    vehiculo = procesar_patente_y_guardar(db=db, patente_limpia=patente_validada)
+    return vehiculo

@@ -82,6 +82,14 @@ class Usuario(Base):
     rol = relationship("Rol", back_populates="usuarios")
     sucursal = relationship("Sucursal", back_populates="usuarios")
 
+    @property
+    def nombre_rol(self) -> str | None:
+        return self.rol.nombre_rol if self.rol else None
+
+    @property
+    def nombre_sucursal(self) -> str | None:
+        return self.sucursal.nombre_sucursal if self.sucursal else None
+
 # ==========================================
 # SOPORTE TÉCNICO Y MESA DE AYUDA INTERNA
 # ==========================================
@@ -202,6 +210,7 @@ class Orden_Venta(Base):
     id_orden = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     id_cliente = Column(UUID(as_uuid=True), ForeignKey("Cliente.id_cliente"), nullable=False)
     id_vendedor = Column(UUID(as_uuid=True), ForeignKey("Usuario.id_usuario"), nullable=False)
+    id_vendedor_asignado = Column(UUID(as_uuid=True), ForeignKey("Usuario.id_usuario"), nullable=True)
     id_cajera = Column(UUID(as_uuid=True), ForeignKey("Usuario.id_usuario"), nullable=True)
     id_sucursal = Column(Integer, ForeignKey("Sucursal.id_sucursal"), nullable=False)
     estado_orden = Column(String(30), nullable=False, server_default="Reservada")
@@ -222,6 +231,16 @@ class Detalle_Orden(Base):
     cantidad = Column(Integer, nullable=False, default=1)
     precio_unitario = Column(Integer, nullable=True)
     precio_final = Column(Integer, nullable=False)
+    estado_preparacion = Column(String(30), nullable=False, server_default="Pendiente", default="Pendiente")
+    fecha_preparacion = Column(DateTime, nullable=True)
+
+    @property
+    def preparacion_lista(self) -> bool:
+        return self.estado_preparacion == "Listo"
+
+    @preparacion_lista.setter
+    def preparacion_lista(self, val: bool) -> None:
+        self.estado_preparacion = "Listo" if val else "Pendiente"
 
 class Reservas_Backorder(Base):
     __tablename__ = "Reservas_Backorder"
@@ -278,6 +297,7 @@ class Tracking_Logistico(Base):
     id_sucursal_origen = Column(Integer, ForeignKey("Sucursal.id_sucursal"), nullable=False)
     id_sucursal_destino = Column(Integer, ForeignKey("Sucursal.id_sucursal"), nullable=False)
     id_usuario_gestor = Column(UUID(as_uuid=True), ForeignKey("Usuario.id_usuario"), nullable=False)
+    id_orden = Column(UUID(as_uuid=True), ForeignKey("Orden_Venta.id_orden"), nullable=True)
     fecha_movimiento = Column(DateTime, nullable=False, server_default=text("now()"))
     estado_traslado = Column(String(30), nullable=False)
 

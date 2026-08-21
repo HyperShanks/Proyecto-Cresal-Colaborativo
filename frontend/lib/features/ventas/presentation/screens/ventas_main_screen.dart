@@ -1,0 +1,472 @@
+import 'package:flutter/material.dart';
+import '../../../../core/theme/tokens/app_palette.dart';
+import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../auth/services/auth_service.dart';
+import '../../services/inventario_service.dart';
+import '../../controllers/cart_controller.dart';
+import 'carrito_screen.dart';
+import 'catalogo_screen.dart';
+import 'historial_screen.dart';
+import 'bandeja_precios_screen.dart';
+
+/// Contenedor Principal para el Mesón de Ventas.
+/// Implementa un BottomNavigationBar con IndexedStack dinámico según el rol:
+///   • Vendedor (id_rol == 2): 3 pestañas (Catálogo, Mis Órdenes, Carrito).
+///   • Jefe de Ventas (id_rol == 6): 4 pestañas (Catálogo, Mis Órdenes, Tasación, Carrito).
+class VentasMainScreen extends StatefulWidget {
+  const VentasMainScreen({super.key});
+
+  @override
+  State<VentasMainScreen> createState() => _VentasMainScreenState();
+}
+
+class _VentasMainScreenState extends State<VentasMainScreen> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final GlobalKey<CatalogoScreenState> _catalogoKey =
+      GlobalKey<CatalogoScreenState>();
+  int _currentIndex = 0;
+  String? _userRol;
+  int? _idRol;
+  String? _userSucursal;
+  int _pendientesTasacionCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarDatosUsuario();
+  }
+
+  Future<void> _cargarDatosUsuario() async {
+    final rol = await AuthService.getRol();
+    final idRol = await AuthService.getIdRol();
+    final sucursal = await AuthService.getNombreSucursal();
+
+    if (mounted) {
+      setState(() {
+        _userRol = rol;
+        _idRol = idRol;
+        _userSucursal = sucursal;
+      });
+      _actualizarPendientesTasacion();
+    }
+  }
+
+  Future<void> _actualizarPendientesTasacion() async {
+    if (!_esJefeVentas) return;
+    try {
+      final pendientes = await InventarioService.obtenerPendientesPrecio();
+      if (mounted) {
+        setState(() {
+          _pendientesTasacionCount = pendientes.length;
+        });
+      }
+    } catch (_) {
+      // Ignorar errores transitorios de red
+    }
+  }
+
+  bool get _esJefeVentas =>
+      _idRol == 6 ||
+      _userRol?.toLowerCase() == 'jefe de ventas' ||
+      _userRol?.toLowerCase() == 'auditor';
+
+  bool get _esVendedor =>
+      _idRol == 2 ||
+      _idRol == 7 ||
+      _userRol?.toLowerCase() == 'vendedor' ||
+      _userRol?.toLowerCase() == 'vendedoronline' ||
+      _userRol?.toLowerCase() == 'vendedor online';
+
+  bool get _puedeGestionarEntregas {
+    if (_idRol == 7) return false;
+    final rLower = _userRol?.trim().toLowerCase() ?? '';
+    if (rLower == 'vendedoronline' || rLower == 'vendedor online') return false;
+
+    return _idRol == 2 ||
+        _idRol == 6 ||
+        rLower == 'vendedor' ||
+        rLower == 'jefe de ventas' ||
+        rLower == 'auditor';
+  }
+
+  String get _rolLabel {
+    if (_userRol != null && _userRol!.trim().isNotEmpty) {
+      final rLower = _userRol!.trim().toLowerCase();
+      if (rLower == 'vendedoronline' || rLower == 'vendedor online') {
+        return 'VENDEDOR ONLINE';
+      }
+      return _userRol!.toUpperCase();
+    }
+    if (_idRol == 7) return 'VENDEDOR ONLINE';
+    if (_idRol == 6) return 'JEFE DE VENTAS';
+    return 'VENDEDOR';
+  }
+
+  // ── Cerrar Sesión ──────────────────────────────────────────────────────────
+
+  Future<void> _logout() async {
+    Navigator.of(context).pop(); // Cierra el Drawer
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppPalette.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: Text('Cerrar sesión', style: AppTypography.title),
+        content: const Text(
+          '¿Estás seguro de que deseas cerrar sesión?',
+          style: AppTypography.small,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(
+              'Cancelar',
+              style: AppTypography.button.copyWith(color: AppPalette.neutral),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(
+              'CERRAR SESIÓN',
+              style: AppTypography.button.copyWith(color: AppPalette.error),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    await AuthService.clearToken();
+
+    if (!mounted) return;
+    Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+  }
+
+  // ── Menú Lateral (Drawer) ─────────────────────────────────────────────────
+
+  Widget _buildDrawer(BuildContext context) {
+    return Drawer(
+      backgroundColor: AppPalette.surface,
+      child: Column(
+        children: [
+          // ── Encabezado de perfil ─────────────────────────────────────────
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(16, 48, 16, 16),
+            decoration: const BoxDecoration(
+              color: AppPalette.background,
+              border: Border(
+                bottom: BorderSide(color: AppPalette.surface, width: 1),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Avatar de usuario
+                Container(
+                  width: 58,
+                  height: 58,
+                  decoration: BoxDecoration(
+                    color: AppPalette.primary,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppPalette.primary.withValues(alpha: 0.35),
+                        blurRadius: 12,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.person,
+                    color: AppPalette.textPrimary,
+                    size: 32,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  _rolLabel,
+                  style: AppTypography.title.copyWith(
+                    fontSize: 15,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _userSucursal != null && _userSucursal!.isNotEmpty
+                      ? _userSucursal!
+                      : 'Sucursal Central',
+                  style: AppTypography.small.copyWith(
+                    color: AppPalette.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // ── Opciones de menú ─────────────────────────────────────────────
+          if (_puedeGestionarEntregas)
+            _buildDrawerItem(
+              icon: Icons.local_shipping_outlined,
+              label: 'ENTREGAS Y ENVÍOS',
+              onTap: () {
+                Navigator.of(context).pop(); // Cierra el Drawer
+                Navigator.of(context).pushNamed('/entregas-envios');
+              },
+            ),
+          _buildDrawerItem(
+            icon: Icons.confirmation_number_outlined,
+            label: 'TICKET',
+            onTap: () {
+              Navigator.of(context).pop(); // Cierra el Drawer
+              Navigator.of(context).pushNamed('/tickets');
+            },
+          ),
+          _buildDrawerItem(
+            icon: Icons.settings_outlined,
+            label: 'CONFIGURACIÓN',
+            onTap: () {
+              Navigator.of(context).pop();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Módulo de Configuración en desarrollo'),
+                ),
+              );
+            },
+          ),
+
+          // ── Opción Exclusiva: Jefe de Ventas (HU-3.8) ────────────────────
+          if (_esJefeVentas) ...[
+            const Divider(color: Colors.white10, height: 16),
+            _buildDrawerItem(
+              icon: Icons.price_change_outlined,
+              label: 'BANDEJA DE PRECIOS',
+              badgeColor: _pendientesTasacionCount > 0 ? AppPalette.secondary : null,
+              onTap: () {
+                Navigator.of(context).pop();
+                // Si la pestaña de Tasación está activa, navega al índice 2
+                setState(() => _currentIndex = 2);
+              },
+            ),
+          ],
+
+          const Spacer(),
+
+          // ── Botón de Cerrar Sesión (anclado en la parte inferior) ─────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            child: SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton.icon(
+                onPressed: _logout,
+                icon: const Icon(Icons.logout, size: 20),
+                label: Text(
+                  'CERRAR SESIÓN',
+                  style: AppTypography.button.copyWith(
+                    fontSize: 14,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppPalette.error,
+                  foregroundColor: AppPalette.textPrimary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  elevation: 0,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDrawerItem({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    Color? badgeColor,
+  }) {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+      leading: Icon(
+        icon,
+        color: badgeColor ?? AppPalette.textPrimary,
+        size: 22,
+      ),
+      title: Text(
+        label,
+        style: AppTypography.body.copyWith(
+          letterSpacing: 1.0,
+          fontWeight: FontWeight.w600,
+          fontSize: 14,
+          color: badgeColor ?? AppPalette.textPrimary,
+        ),
+      ),
+      trailing: badgeColor != null
+          ? Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: badgeColor,
+                shape: BoxShape.circle,
+              ),
+            )
+          : null,
+      onTap: onTap,
+    );
+  }
+
+  // ── Construcción Dinámica de Pestañas ──────────────────────────────────────
+
+  List<Widget> _buildTabs() {
+    final tabs = <Widget>[
+      CatalogoScreen(
+        key: _catalogoKey,
+        onOpenMenuDrawer: () => _scaffoldKey.currentState?.openDrawer(),
+      ),
+      HistorialScreen(
+        onOpenMenuDrawer: () => _scaffoldKey.currentState?.openDrawer(),
+        onRefreshCatalogo: () => _catalogoKey.currentState?.refrescarCatalogo(),
+      ),
+    ];
+
+    if (_esJefeVentas) {
+      tabs.add(
+        BandejaPreciosScreen(
+          onOpenMenuDrawer: () => _scaffoldKey.currentState?.openDrawer(),
+        ),
+      );
+    }
+
+    tabs.add(
+      CarritoScreen(
+        onOpenMenuDrawer: () => _scaffoldKey.currentState?.openDrawer(),
+        onNavigateToCatalogo: () {
+          _catalogoKey.currentState?.refrescarCatalogo();
+          setState(() => _currentIndex = 0);
+        },
+      ),
+    );
+
+    return tabs;
+  }
+
+  List<BottomNavigationBarItem> _buildNavItems(int totalItems) {
+    final items = <BottomNavigationBarItem>[
+      const BottomNavigationBarItem(
+        icon: Icon(Icons.storefront_outlined),
+        activeIcon: Icon(Icons.storefront),
+        label: 'Catálogo',
+      ),
+      const BottomNavigationBarItem(
+        icon: Icon(Icons.receipt_long_outlined),
+        activeIcon: Icon(Icons.receipt_long),
+        label: 'Mis Órdenes',
+      ),
+    ];
+
+    if (_esJefeVentas) {
+      items.add(
+        BottomNavigationBarItem(
+          icon: _pendientesTasacionCount > 0
+              ? Badge.count(
+                  count: _pendientesTasacionCount,
+                  backgroundColor: AppPalette.secondary,
+                  textColor: AppPalette.background,
+                  child: const Icon(Icons.price_change_outlined),
+                )
+              : const Icon(Icons.price_change_outlined),
+          activeIcon: _pendientesTasacionCount > 0
+              ? Badge.count(
+                  count: _pendientesTasacionCount,
+                  backgroundColor: AppPalette.secondary,
+                  textColor: AppPalette.background,
+                  child: const Icon(Icons.price_change),
+                )
+              : const Icon(Icons.price_change),
+          label: 'Tasación',
+        ),
+      );
+    }
+
+    items.add(
+      BottomNavigationBarItem(
+        icon: totalItems > 0
+            ? Badge.count(
+                count: totalItems,
+                backgroundColor: AppPalette.secondary,
+                textColor: AppPalette.background,
+                child: const Icon(Icons.shopping_cart_outlined),
+              )
+            : const Icon(Icons.shopping_cart_outlined),
+        activeIcon: totalItems > 0
+            ? Badge.count(
+                count: totalItems,
+                backgroundColor: AppPalette.secondary,
+                textColor: AppPalette.background,
+                child: const Icon(Icons.shopping_cart),
+              )
+            : const Icon(Icons.shopping_cart),
+        label: 'Carrito',
+      ),
+    );
+
+    return items;
+  }
+
+  // ── Construcción de la Vista ──────────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
+    final tabs = _buildTabs();
+    final safeIndex = _currentIndex.clamp(0, tabs.length - 1);
+
+    return Scaffold(
+      key: _scaffoldKey,
+      backgroundColor: AppPalette.background,
+      drawer: _buildDrawer(context),
+      body: IndexedStack(index: safeIndex, children: tabs),
+      bottomNavigationBar: ListenableBuilder(
+        listenable: CartController.instance,
+        builder: (context, _) {
+          final totalItems = CartController.instance.totalItems;
+          final navItems = _buildNavItems(totalItems);
+
+          return Container(
+            decoration: const BoxDecoration(
+              color: AppPalette.surface,
+              border: Border(
+                top: BorderSide(color: Colors.white10, width: 1.0),
+              ),
+            ),
+            child: BottomNavigationBar(
+              currentIndex: safeIndex,
+              onTap: (index) {
+                setState(() {
+                  _currentIndex = index;
+                });
+                _actualizarPendientesTasacion();
+              },
+              backgroundColor: AppPalette.surface,
+              selectedItemColor: AppPalette.primary,
+              unselectedItemColor: AppPalette.neutral,
+              selectedLabelStyle: AppTypography.small.copyWith(
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+              unselectedLabelStyle: AppTypography.small.copyWith(fontSize: 11),
+              type: BottomNavigationBarType.fixed,
+              elevation: 0,
+              items: navItems,
+            ),
+          );
+        },
+      ),
+    );
+  }
+}

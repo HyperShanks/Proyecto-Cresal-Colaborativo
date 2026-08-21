@@ -16,10 +16,38 @@ class AppComponents {
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         backgroundColor: AppPalette.primary,
         foregroundColor: AppPalette.textPrimary,
+        splashFactory: InkRipple.splashFactory,
         textStyle: AppTypography.button,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(defaultBorderRadius),
         ),
+      ),
+    );
+  }
+
+  // Configuración global para botones con borde.
+  static OutlinedButtonThemeData get outlinedButtonTheme {
+    return OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(64, minTouchTarget),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        foregroundColor: AppPalette.primary,
+        splashFactory: InkRipple.splashFactory,
+        textStyle: AppTypography.button,
+        side: const BorderSide(color: AppPalette.primary, width: 1.5),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(defaultBorderRadius),
+        ),
+      ),
+    );
+  }
+
+  // Configuración global para botones de icono.
+  static IconButtonThemeData get iconButtonTheme {
+    return IconButtonThemeData(
+      style: IconButton.styleFrom(
+        splashFactory: InkRipple.splashFactory,
+        highlightColor: Colors.transparent,
       ),
     );
   }
