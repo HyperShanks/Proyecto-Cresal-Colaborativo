@@ -3,7 +3,7 @@
 
 import uuid
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from models import (
     Region, Comuna, Sucursal, Rol, Usuario,
@@ -122,7 +122,7 @@ def db_session(setup_database):
             qr_transaccional_salida="ORD-TEST001",
             total_venta=520000,
             monto_pendiente=520000,
-            fecha_creacion=datetime.now(),
+            fecha_creacion=datetime.now(timezone.utc).replace(tzinfo=None),
         )
         db.add(orden_1)
 
@@ -152,7 +152,7 @@ def db_session(setup_database):
         db.add(despacho_1)
 
         # Orden 2 (Vendedor 1, Creada Ayer, Estado Pagada)
-        ayer = datetime.now() - timedelta(days=1)
+        ayer = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=1)
         orden_2 = Orden_Venta(
             id_orden=uuid.uuid4(),
             id_cliente=cliente_1.id_cliente,
@@ -187,7 +187,7 @@ def db_session(setup_database):
             qr_transaccional_salida="ORD-TEST003",
             total_venta=50000,
             monto_pendiente=50000,
-            fecha_creacion=datetime.now(),
+            fecha_creacion=datetime.now(timezone.utc).replace(tzinfo=None),
         )
         db.add(orden_3)
 

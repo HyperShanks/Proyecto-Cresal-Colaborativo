@@ -10,7 +10,6 @@ import '../../controllers/cart_controller.dart';
 import '../../models/catalogo_model.dart';
 import '../../services/catalogo_service.dart';
 import '../widgets/catalogo_item_card.dart';
-import '../widgets/catalogo_item_detail_sheet.dart';
 import '../widgets/filtros_drawer.dart';
 import '../widgets/venta_libre_dialog.dart';
 import 'detalle_activo_screen.dart';

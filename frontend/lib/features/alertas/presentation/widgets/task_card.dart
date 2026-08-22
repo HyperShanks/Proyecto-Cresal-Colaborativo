@@ -49,7 +49,7 @@ class _TaskCardState extends State<TaskCard> {
     return titulo;
   }
 
-  Future<void> _marcarListo(BuildContext context) async {
+  Future<void> _marcarListo() async {
     if (widget.tarea.idDetalle == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -251,7 +251,7 @@ class _TaskCardState extends State<TaskCard> {
                         ? null
                         : () {
                             Navigator.pop(ctx);
-                            _marcarListo(context);
+                            _marcarListo();
                           },
                     icon: _isProcessingListo
                         ? const SizedBox(
@@ -611,7 +611,7 @@ class _TaskCardState extends State<TaskCard> {
               height: 45,
               child: ElevatedButton.icon(
                 key: Key('btn_listo_${tarea.idTarea}'),
-                onPressed: _isProcessingListo ? null : () => _marcarListo(context),
+                onPressed: _isProcessingListo ? null : _marcarListo,
                 icon: _isProcessingListo
                     ? const SizedBox(
                         width: 18,

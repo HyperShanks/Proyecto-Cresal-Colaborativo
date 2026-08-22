@@ -10,6 +10,8 @@ import re
 # ==========================================
 
 class VehiculoResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id_vehiculo: UUID
     numero_ingreso: str # Añadido: Vital para que el operario lo anote físicamente
     patente: Optional[str] = None # Opcional, según lo dicta tu DBML
@@ -17,9 +19,6 @@ class VehiculoResponse(BaseModel):
     modelo: str
     anio: int
     traccion: Optional[str] = None
-
-    class Config:
-        from_attributes = True
 
 class PatenteInput(BaseModel):
     patente: str = Field(..., description="Patente del vehículo chileno (6 caracteres alfanuméricos)")
@@ -99,22 +98,24 @@ class RegisterUserResponse(BaseModel):
 
 class RolData(BaseModel):
     """DTO para la información de un rol."""
+    model_config = ConfigDict(from_attributes=True)
+
     id_rol: int
     nombre_rol: str
 
-    class Config:
-        from_attributes = True
 
 class SucursalData(BaseModel):
     """DTO para la información de una sucursal."""
+    model_config = ConfigDict(from_attributes=True)
+
     id_sucursal: int
     nombre_sucursal: str
 
-    class Config:
-        from_attributes = True
 
 class UsuarioData(BaseModel):
     """DTO de salida con los datos públicos del usuario autenticado."""
+    model_config = ConfigDict(from_attributes=True)
+
     id_usuario: UUID
     nombres: str
     apellidos: str
@@ -125,9 +126,6 @@ class UsuarioData(BaseModel):
     nombre_sucursal: Optional[str] = None
     rol: Optional[RolData] = None
     sucursal: Optional[SucursalData] = None
-
-    class Config:
-        from_attributes = True  # Permite lectura directa desde el modelo SQLAlchemy
 
 class TokenResponse(BaseModel):
     """Respuesta completa del endpoint de login exitoso."""
@@ -195,10 +193,13 @@ class TicketResponse(BaseModel):
     fecha_creacion: Optional[str] = None  # Serializado como ISO string para compatibilidad Flutter
     fecha_cierre: Optional[str] = None
 
-    class Config:
-        from_attributes = True  # Permite lectura directa desde el modelo SQLAlchemy
+    model_config = ConfigDict(from_attributes=True)
+
+
 class VehiculoInventarioResponse(BaseModel):
     """Esquema de respuesta para buscar un vehículo por su folio (HU-2.3)"""
+    model_config = ConfigDict(from_attributes=True)
+
     id_vehiculo: UUID
     numero_ingreso: str
     patente: Optional[str] = None
@@ -207,9 +208,6 @@ class VehiculoInventarioResponse(BaseModel):
     anio: int
     traccion: Optional[str] = None
     # Aquí podríamos agregar más campos técnicos (motor, caja) a medida que los necesitemos
-    
-    class Config:
-        from_attributes = True
 
 
 # ==========================================
@@ -218,6 +216,8 @@ class VehiculoInventarioResponse(BaseModel):
 
 class CatalogoItemResponse(BaseModel):
     """DTO de salida para un elemento individual del catálogo de inventario."""
+    model_config = ConfigDict(from_attributes=True)
+
     id_activo: UUID
     sku_qr_fisico: str
     precio_referencia: Optional[int] = None
@@ -246,9 +246,6 @@ class CatalogoItemResponse(BaseModel):
     estado_activo: Optional[str] = None
     qr_impreso: bool = False
     imagenes: List[str] = []
-
-    class Config:
-        from_attributes = True
 
 
 class PaginatedCatalogoResponse(BaseModel):

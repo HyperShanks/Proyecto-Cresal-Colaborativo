@@ -398,8 +398,10 @@ def obtener_mis_ventas(
                 )
         else:
             ahora_chile = datetime.now(tz_chile)
-            inicio_utc = ahora_chile.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc).replace(tzinfo=None)
-            fin_utc = ahora_chile.replace(hour=23, minute=59, second=59, microsecond=999999).astimezone(timezone.utc).replace(tzinfo=None)
+            inicio_dia_chile = datetime.combine(ahora_chile.date(), datetime_time.min, tzinfo=tz_chile)
+            fin_dia_chile = datetime.combine(ahora_chile.date(), datetime_time.max, tzinfo=tz_chile)
+            inicio_utc = inicio_dia_chile.astimezone(timezone.utc).replace(tzinfo=None)
+            fin_utc = fin_dia_chile.astimezone(timezone.utc).replace(tzinfo=None)
 
         query = query.filter(
             Orden_Venta.fecha_creacion >= inicio_utc,
@@ -814,48 +816,59 @@ def confirmar_entrega_tienda(
             detail=f"La orden ya fue entregada anteriormente (Estado: {orden.estado_orden})."
         )
 
-    # Actualizar Orden a 'Despachada'
-    orden.estado_orden = "Despachada"
-    orden.fecha_actualizacion = datetime.now()
+    try:
+        # Actualizar Orden a 'Despachada'
+        orden.estado_orden = "Despachada"
+        orden.fecha_actualizacion = datetime.now()
 
-    # Obtener o crear estado 'Entregado' / 'Finalizado'
-    estado_final = db.query(Estado_Activo).filter(
-        Estado_Activo.nombre_estado.in_(["Entregado", "Finalizado"])
-    ).first()
-    if not estado_final:
-        estado_final = Estado_Activo(id_estado=6, nombre_estado="Entregado")
-        db.add(estado_final)
-        db.flush()
+        # Obtener o crear estado 'Entregado' / 'Finalizado'
+        estado_final = db.query(Estado_Activo).filter(
+            Estado_Activo.nombre_estado.in_(["Entregado", "Finalizado"])
+        ).first()
+        if not estado_final:
+            estado_final = Estado_Activo(id_estado=6, nombre_estado="Entregado")
+            db.add(estado_final)
+            db.flush()
 
-    detalles = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == orden.id_orden).all()
-    activos_actualizados = 0
+        detalles = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == orden.id_orden).all()
+        activos_actualizados = 0
 
-    for d in detalles:
-        d.estado_preparacion = "Listo"
-        d.fecha_preparacion = datetime.now()
-        if d.id_activo:
-            activo = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == d.id_activo).first()
-            if activo:
-                activo.id_estado = estado_final.id_estado
-                activo.ubicacion_pasillo = None
-                activo.ubicacion_pallet = None
-                activo.ubicacion_galpon = None
-                activo.observacion_estado = f"Entregado en tienda por {current_user.nombres} {current_user.apellidos} - Orden #{str(orden.id_orden)[:8].upper()}"
-                activo.fecha_actualizacion = datetime.now()
-                activos_actualizados += 1
+        for d in detalles:
+            d.estado_preparacion = "Listo"
+            d.fecha_preparacion = datetime.now()
+            if d.id_activo:
+                activo = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == d.id_activo).first()
+                if activo:
+                    activo.id_estado = estado_final.id_estado
+                    activo.ubicacion_pasillo = None
+                    activo.ubicacion_pallet = None
+                    activo.ubicacion_galpon = None
+                    activo.observacion_estado = f"Entregado en tienda por {current_user.nombres} {current_user.apellidos} - Orden #{str(orden.id_orden)[:8].upper()}"
+                    activo.version_lock = (activo.version_lock or 1) + 1
+                    activo.fecha_actualizacion = datetime.now()
+                    activos_actualizados += 1
 
-    db.commit()
-    db.refresh(orden)
+        db.commit()
+        db.refresh(orden)
 
-    folio = orden.qr_transaccional_salida or f"ORD-{str(orden.id_orden)[:8].upper()}"
-    return EntregaConfirmacionResponse(
-        id_orden=orden.id_orden,
-        folio=folio,
-        estado_orden=orden.estado_orden,
-        mensaje="¡Entrega en tienda confirmada exitosamente! Orden actualizada a Despachada.",
-        activos_finalizados=activos_actualizados,
-        fecha_entrega=datetime.now().isoformat(),
-    )
+        folio = orden.qr_transaccional_salida or f"ORD-{str(orden.id_orden)[:8].upper()}"
+        return EntregaConfirmacionResponse(
+            id_orden=orden.id_orden,
+            folio=folio,
+            estado_orden=orden.estado_orden,
+            mensaje="¡Entrega en tienda confirmada exitosamente! Orden actualizada a Despachada.",
+            activos_finalizados=activos_actualizados,
+            fecha_entrega=datetime.now().isoformat(),
+        )
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error transaccional al confirmar la entrega en tienda: {str(e)}"
+        )
 
 
 @router.patch(
@@ -877,52 +890,63 @@ def marcar_despacho_enviado(
     if not orden:
         raise HTTPException(status_code=404, detail="Orden asociada al despacho no encontrada.")
 
-    despacho.estado_despacho = "Enviado"
-    despacho.fecha_actualizacion = datetime.now()
+    try:
+        despacho.estado_despacho = "Enviado"
+        despacho.fecha_actualizacion = datetime.now()
 
-    orden.estado_orden = "Despachada"
-    orden.fecha_actualizacion = datetime.now()
+        orden.estado_orden = "Despachada"
+        orden.fecha_actualizacion = datetime.now()
 
-    estado_final = db.query(Estado_Activo).filter(
-        Estado_Activo.nombre_estado.in_(["Entregado", "Finalizado"])
-    ).first()
-    if not estado_final:
-        estado_final = Estado_Activo(id_estado=6, nombre_estado="Entregado")
-        db.add(estado_final)
-        db.flush()
+        estado_final = db.query(Estado_Activo).filter(
+            Estado_Activo.nombre_estado.in_(["Entregado", "Finalizado"])
+        ).first()
+        if not estado_final:
+            estado_final = Estado_Activo(id_estado=6, nombre_estado="Entregado")
+            db.add(estado_final)
+            db.flush()
 
-    detalles = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == orden.id_orden).all()
-    activos_actualizados = 0
+        detalles = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == orden.id_orden).all()
+        activos_actualizados = 0
 
-    for d in detalles:
-        d.estado_preparacion = "Listo"
-        d.fecha_preparacion = datetime.now()
-        if d.id_activo:
-            activo = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == d.id_activo).first()
-            if activo:
-                activo.id_estado = estado_final.id_estado
-                activo.ubicacion_pasillo = None
-                activo.ubicacion_pallet = None
-                activo.ubicacion_galpon = None
-                activo.observacion_estado = f"Despachado con transporte '{despacho.empresa_transporte or 'Externo'}' - Orden #{str(orden.id_orden)[:8].upper()}"
-                activo.fecha_actualizacion = datetime.now()
-                activos_actualizados += 1
+        for d in detalles:
+            d.estado_preparacion = "Listo"
+            d.fecha_preparacion = datetime.now()
+            if d.id_activo:
+                activo = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == d.id_activo).first()
+                if activo:
+                    activo.id_estado = estado_final.id_estado
+                    activo.ubicacion_pasillo = None
+                    activo.ubicacion_pallet = None
+                    activo.ubicacion_galpon = None
+                    activo.observacion_estado = f"Despachado con transporte '{despacho.empresa_transporte or 'Externo'}' - Orden #{str(orden.id_orden)[:8].upper()}"
+                    activo.version_lock = (activo.version_lock or 1) + 1
+                    activo.fecha_actualizacion = datetime.now()
+                    activos_actualizados += 1
 
-    db.commit()
-    db.refresh(despacho)
-    db.refresh(orden)
+        db.commit()
+        db.refresh(despacho)
+        db.refresh(orden)
 
-    folio = orden.qr_transaccional_salida or f"ORD-{str(orden.id_orden)[:8].upper()}"
-    return DespachoEnvioResponse(
-        id_despacho=despacho.id_despacho,
-        id_orden=orden.id_orden,
-        folio=folio,
-        estado_despacho=despacho.estado_despacho,
-        estado_orden=orden.estado_orden,
-        mensaje=f"¡Despacho #{str(despacho.id_despacho)[:8].upper()} marcado como Enviado exitosamente!",
-        activos_finalizados=activos_actualizados,
-        fecha_envio=datetime.now().isoformat(),
-    )
+        folio = orden.qr_transaccional_salida or f"ORD-{str(orden.id_orden)[:8].upper()}"
+        return DespachoEnvioResponse(
+            id_despacho=despacho.id_despacho,
+            id_orden=orden.id_orden,
+            folio=folio,
+            estado_despacho=despacho.estado_despacho,
+            estado_orden=orden.estado_orden,
+            mensaje=f"¡Despacho #{str(despacho.id_despacho)[:8].upper()} marcado como Enviado exitosamente!",
+            activos_finalizados=activos_actualizados,
+            fecha_envio=datetime.now().isoformat(),
+        )
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error transaccional al marcar despacho como enviado: {str(e)}"
+        )
 
 
 @router.post(

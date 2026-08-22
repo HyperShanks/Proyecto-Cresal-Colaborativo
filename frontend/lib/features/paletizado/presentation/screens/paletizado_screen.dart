@@ -228,7 +228,7 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
         );
 
         if (_ocrFailedAttempts >= 5 && mounted) {
-          _mostrarModalIngresoManual(context);
+          _mostrarModalIngresoManual();
         }
       }
     } else {
@@ -243,13 +243,15 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
       );
 
       // Fallo de red / API -> Dispara contingencia manual
-      _mostrarModalIngresoManual(context);
+      if (mounted) {
+        _mostrarModalIngresoManual();
+      }
     }
   }
 
   // ── MODALES DE CONTINGENCIA / VALIDACIÓN MANUAL (HU-2.3 Poka-Yoke Fallback) ──
 
-  Future<void> _mostrarModalIngresoManual(BuildContext context) async {
+  Future<void> _mostrarModalIngresoManual() async {
     final TextEditingController manualIngresoController =
         TextEditingController(text: _searchController.text.trim());
 
@@ -333,14 +335,14 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
         return;
       }
 
-      await _mostrarModalDobleConfirmacion(context, numeroManual);
+      await _mostrarModalDobleConfirmacion(numeroManual);
     }
   }
 
   Future<void> _mostrarModalDobleConfirmacion(
-    BuildContext context,
     String numeroManual,
   ) async {
+    if (!mounted) return;
     final doubleConfirmed = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -360,7 +362,7 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
           ],
         ),
         content: Text(
-          '¿Confirmas que el N° de Ingreso $numeroManual corresponde fielmente al vehículo/pieza física?',
+          '¿Confirmas que el N° de Ingreso $numeroManual corresponde fielmente a la pieza que estás paletizando?',
           style: AppTypography.body.copyWith(fontSize: 14, height: 1.4),
         ),
         actions: [
@@ -382,10 +384,7 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
     );
 
     if (doubleConfirmed == true && mounted) {
-      setState(() {
-        _isValidatingOCR = true;
-        _ocrFailedAttempts = 0;
-      });
+      setState(() => _isValidatingOCR = true);
 
       List<File> fotosArchivos = _fotosComerciales.map((x) => File(x.path)).toList();
 
@@ -477,9 +476,12 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
 
       // ⚠️ LÓGICA DE BLOQUEO: Solo agregamos los que están en estado 5 (En Desarme)
       List<String> opcionesDisponibles = [];
-      if (datosMotorTemp['id_estado'] == 5) opcionesDisponibles.add('Motor');
-      if (datosCajaTemp['id_estado'] == 5)
+      if (datosMotorTemp['id_estado'] == 5) {
+        opcionesDisponibles.add('Motor');
+      }
+      if (datosCajaTemp['id_estado'] == 5) {
         opcionesDisponibles.add('Caja de Cambios');
+      }
 
       // Si la lista quedó vacía, significa que ambos ya fueron paletizados (estado 1 u otro)
       if (opcionesDisponibles.isEmpty) {
@@ -1013,7 +1015,7 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: _pendientesPaletizado.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  separatorBuilder: (context, index) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final item = _pendientesPaletizado[index];
                     final folio = item['numero_ingreso']?.toString() ?? 'S/F';
@@ -1164,6 +1166,128 @@ class _ModalExitoContentState extends State<_ModalExitoContent> {
   bool _isConnecting = false;
   final PaletizadoService _paletizadoService = PaletizadoService();
 
+  Future<void> _ejecutarImpresion() async {
+    setState(() => _isConnecting = true);
+
+    try {
+      final exito = await PrintService.imprimirEtiqueta(widget.etiqueta);
+
+      if (!mounted) return;
+
+      if (exito) {
+        // Confirmación en Backend (PATCH qr_impreso = true)
+        await _paletizadoService.confirmarQrImpreso(widget.etiqueta.idActivo);
+
+        if (!mounted) return;
+        Navigator.of(context).pop(); // Cierra el modal
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '✅ Etiqueta impresa y registrada. SKU: ${widget.etiqueta.skuQrFisico}',
+            ),
+            backgroundColor: AppPalette.success,
+          ),
+        );
+      }
+    } on PrinterException catch (e) {
+      debugPrint('📌 [PALETIZADO_SCREEN] ❌ Error de dominio de impresora: ${e.mensaje}');
+      if (!mounted) return;
+      await showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppPalette.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: AppPalette.secondary, size: 28),
+              SizedBox(width: 10),
+              Text(
+                'Error de Impresión',
+                style: TextStyle(
+                  color: AppPalette.textPrimary,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            e.mensaje,
+            style: const TextStyle(
+              color: AppPalette.textSecondary,
+              fontSize: 14,
+              height: 1.4,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text(
+                'ENTENDIDO',
+                style: TextStyle(
+                  color: AppPalette.primary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      debugPrint('📌 [PALETIZADO_SCREEN] ❌ Excepción no controlada: $e');
+      if (!mounted) return;
+      await showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppPalette.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.error_outline, color: AppPalette.secondary, size: 28),
+              SizedBox(width: 10),
+              Text(
+                'Error Inesperado',
+                style: TextStyle(
+                  color: AppPalette.textPrimary,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            'Ocurrió un error inesperado al comunicarse con la impresora: $e',
+            style: const TextStyle(
+              color: AppPalette.textSecondary,
+              fontSize: 14,
+              height: 1.4,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text(
+                'ENTENDIDO',
+                style: TextStyle(
+                  color: AppPalette.primary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isConnecting = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -1212,129 +1336,7 @@ class _ModalExitoContentState extends State<_ModalExitoContent> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: _isConnecting
-                  ? null
-                  : () async {
-                      setState(() => _isConnecting = true);
-
-                      try {
-                        final exito = await PrintService.imprimirEtiqueta(widget.etiqueta);
-
-                        if (!mounted) return;
-
-                        if (exito) {
-                          // Confirmación en Backend (PATCH qr_impreso = true)
-                          await _paletizadoService.confirmarQrImpreso(widget.etiqueta.idActivo);
-
-                          if (!mounted) return;
-                          Navigator.of(context).pop(); // Cierra el modal
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                '✅ Etiqueta impresa y registrada. SKU: ${widget.etiqueta.skuQrFisico}',
-                              ),
-                              backgroundColor: AppPalette.success,
-                            ),
-                          );
-                        }
-                      } on PrinterException catch (e) {
-                        debugPrint('📌 [PALETIZADO_SCREEN] ❌ Error de dominio de impresora: ${e.mensaje}');
-                        if (!mounted) return;
-                        await showDialog(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            backgroundColor: AppPalette.surface,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            title: const Row(
-                              children: [
-                                Icon(Icons.warning_amber_rounded, color: AppPalette.secondary, size: 28),
-                                SizedBox(width: 10),
-                                Text(
-                                  'Error de Impresión',
-                                  style: TextStyle(
-                                    color: AppPalette.textPrimary,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 18,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            content: Text(
-                              e.mensaje,
-                              style: const TextStyle(
-                                color: AppPalette.textSecondary,
-                                fontSize: 14,
-                                height: 1.4,
-                              ),
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.of(ctx).pop(),
-                                child: const Text(
-                                  'ENTENDIDO',
-                                  style: TextStyle(
-                                    color: AppPalette.primary,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      } catch (e) {
-                        debugPrint('📌 [PALETIZADO_SCREEN] ❌ Excepción no controlada: $e');
-                        if (!mounted) return;
-                        await showDialog(
-                          context: context,
-                          builder: (ctx) => AlertDialog(
-                            backgroundColor: AppPalette.surface,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            title: const Row(
-                              children: [
-                                Icon(Icons.error_outline, color: AppPalette.secondary, size: 28),
-                                SizedBox(width: 10),
-                                Text(
-                                  'Error Inesperado',
-                                  style: TextStyle(
-                                    color: AppPalette.textPrimary,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 18,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            content: Text(
-                              'Ocurrió un error inesperado al comunicarse con la impresora: $e',
-                              style: const TextStyle(
-                                color: AppPalette.textSecondary,
-                                fontSize: 14,
-                                height: 1.4,
-                              ),
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.of(ctx).pop(),
-                                child: const Text(
-                                  'ENTENDIDO',
-                                  style: TextStyle(
-                                    color: AppPalette.primary,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      } finally {
-                        if (mounted) {
-                          setState(() => _isConnecting = false);
-                        }
-                      }
-                    },
+              onPressed: _isConnecting ? null : _ejecutarImpresion,
               icon: _isConnecting
                   ? const SizedBox(
                       width: 20,

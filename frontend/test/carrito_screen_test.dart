@@ -7,7 +7,6 @@ import 'package:http/testing.dart';
 import 'package:frontend/features/ventas/controllers/cart_controller.dart';
 import 'package:frontend/features/ventas/models/catalogo_model.dart';
 import 'package:frontend/features/ventas/presentation/screens/carrito_screen.dart';
-import 'package:frontend/features/ventas/presentation/widgets/cart_item_tile.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

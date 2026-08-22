@@ -7,7 +7,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
-import 'package:frontend/features/auth/services/auth_service.dart';
 import 'package:frontend/features/ventas/models/pendiente_precio_model.dart';
 import 'package:frontend/features/ventas/services/inventario_service.dart';
 import 'package:frontend/features/ventas/presentation/widgets/pendiente_precio_card.dart';

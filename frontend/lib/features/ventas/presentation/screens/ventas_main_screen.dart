@@ -70,13 +70,6 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
       _userRol?.toLowerCase() == 'jefe de ventas' ||
       _userRol?.toLowerCase() == 'auditor';
 
-  bool get _esVendedor =>
-      _idRol == 2 ||
-      _idRol == 7 ||
-      _userRol?.toLowerCase() == 'vendedor' ||
-      _userRol?.toLowerCase() == 'vendedoronline' ||
-      _userRol?.toLowerCase() == 'vendedor online';
-
   bool get _puedeGestionarEntregas {
     if (_idRol == 7) return false;
     final rLower = _userRol?.trim().toLowerCase() ?? '';

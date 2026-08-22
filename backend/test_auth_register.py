@@ -5,7 +5,7 @@ import uuid
 import pytest
 
 from models import Region, Comuna, Sucursal, Rol, Usuario
-from core.security import verify_password
+from core.security import verify_password, create_access_token
 from conftest import TestingSessionLocal
 
 
@@ -24,8 +24,9 @@ def db_session(setup_database):
         # Seed Roles
         rol_bodeguero = Rol(id_rol=1, nombre_rol="Bodeguero")
         rol_vendedor = Rol(id_rol=2, nombre_rol="Vendedor")
+        rol_admin = Rol(id_rol=5, nombre_rol="Administrador")
         rol_jefe = Rol(id_rol=6, nombre_rol="Jefe de Ventas")
-        db.add_all([rol_bodeguero, rol_vendedor, rol_jefe])
+        db.add_all([rol_bodeguero, rol_vendedor, rol_admin, rol_jefe])
 
         # Usuario existente para pruebas de colisión
         user_existente = Usuario(
@@ -40,7 +41,21 @@ def db_session(setup_database):
             pin_acceso="5555",
             estado="Activo"
         )
-        db.add(user_existente)
+
+        # Usuario administrador para autorizar el registro
+        user_admin = Usuario(
+            id_usuario=uuid.uuid4(),
+            id_rol=5,
+            id_sucursal=1,
+            rut_usuario="55.555.555-5",
+            nombres="Admin",
+            apellidos="Principal",
+            email="admin@cresal.cl",
+            password_hash="fake_hash",
+            pin_acceso="0000",
+            estado="Activo"
+        )
+        db.add_all([user_existente, user_admin])
         db.commit()
 
         yield {
@@ -48,12 +63,39 @@ def db_session(setup_database):
             "rol_vendedor": rol_vendedor,
             "rol_jefe": rol_jefe,
             "user_existente": user_existente,
+            "user_admin": user_admin,
         }
     finally:
         db.close()
 
 
-def test_registro_usuario_exitoso_encripta_password(client, db_session):
+@pytest.fixture(scope="module")
+def auth_headers_admin(db_session):
+    token = create_access_token(data={"sub": str(db_session["user_admin"].id_usuario)})
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture(scope="module")
+def auth_headers_vendedor(db_session):
+    token = create_access_token(data={"sub": str(db_session["user_existente"].id_usuario)})
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_registro_usuario_acceso_denegado_para_no_admin(client, db_session, auth_headers_vendedor):
+    payload = {
+        "rut_usuario": "17.123.456-7",
+        "nombres": "Intento",
+        "apellidos": "NoAdmin",
+        "email": "intento@cresal.cl",
+        "password": "Password123!",
+        "id_rol": 2,
+    }
+    response = client.post("/api/auth/register", json=payload, headers=auth_headers_vendedor)
+    assert response.status_code == 403
+    assert "Se requiere rol de Administrador" in response.json()["detail"]
+
+
+def test_registro_usuario_exitoso_encripta_password(client, db_session, auth_headers_admin):
     payload = {
         "rut_usuario": "18.765.432-1",
         "nombres": "Carlos",
@@ -65,7 +107,7 @@ def test_registro_usuario_exitoso_encripta_password(client, db_session):
         "pin_acceso": "4321"
     }
 
-    response = client.post("/api/auth/register", json=payload)
+    response = client.post("/api/auth/register", json=payload, headers=auth_headers_admin)
     assert response.status_code == 201
 
     data = response.json()
@@ -90,7 +132,7 @@ def test_registro_usuario_exitoso_encripta_password(client, db_session):
         db.close()
 
 
-def test_registro_usuario_sin_pin_ni_sucursal_auto_genera_pin_y_default_sucursal(client, db_session):
+def test_registro_usuario_sin_pin_ni_sucursal_auto_genera_pin_y_default_sucursal(client, db_session, auth_headers_admin):
     payload = {
         "rut_usuario": "19.999.888-7",
         "nombres": "Daniela",
@@ -100,7 +142,7 @@ def test_registro_usuario_sin_pin_ni_sucursal_auto_genera_pin_y_default_sucursal
         "id_rol": 6,
     }
 
-    response = client.post("/api/auth/register", json=payload)
+    response = client.post("/api/auth/register", json=payload, headers=auth_headers_admin)
     assert response.status_code == 201
 
     data = response.json()
@@ -110,7 +152,7 @@ def test_registro_usuario_sin_pin_ni_sucursal_auto_genera_pin_y_default_sucursal
     assert data["nombre_rol"] == "Jefe de Ventas"
 
 
-def test_registro_usuario_correo_duplicado_retorna_400(client, db_session):
+def test_registro_usuario_correo_duplicado_retorna_400(client, db_session, auth_headers_admin):
     payload = {
         "rut_usuario": "20.111.222-3",
         "nombres": "Otro",
@@ -120,12 +162,12 @@ def test_registro_usuario_correo_duplicado_retorna_400(client, db_session):
         "id_rol": 1
     }
 
-    response = client.post("/api/auth/register", json=payload)
+    response = client.post("/api/auth/register", json=payload, headers=auth_headers_admin)
     assert response.status_code == 400
     assert "correo electrónico 'existente@cresal.cl' ya se encuentra registrado" in response.json()["detail"]
 
 
-def test_registro_usuario_rut_duplicado_retorna_400(client, db_session):
+def test_registro_usuario_rut_duplicado_retorna_400(client, db_session, auth_headers_admin):
     payload = {
         "rut_usuario": "99.888.777-6",  # RUT duplicado
         "nombres": "Nombre",
@@ -135,12 +177,12 @@ def test_registro_usuario_rut_duplicado_retorna_400(client, db_session):
         "id_rol": 1
     }
 
-    response = client.post("/api/auth/register", json=payload)
+    response = client.post("/api/auth/register", json=payload, headers=auth_headers_admin)
     assert response.status_code == 400
     assert "El RUT '99.888.777-6' ya se encuentra registrado" in response.json()["detail"]
 
 
-def test_registro_usuario_rol_no_existente_retorna_404(client, db_session):
+def test_registro_usuario_rol_no_existente_retorna_404(client, db_session, auth_headers_admin):
     payload = {
         "rut_usuario": "22.333.444-5",
         "nombres": "Rol",
@@ -150,12 +192,12 @@ def test_registro_usuario_rol_no_existente_retorna_404(client, db_session):
         "id_rol": 9999  # Rol inexistente
     }
 
-    response = client.post("/api/auth/register", json=payload)
+    response = client.post("/api/auth/register", json=payload, headers=auth_headers_admin)
     assert response.status_code == 404
     assert "El rol con ID '9999' no existe" in response.json()["detail"]
 
 
-def test_registro_usuario_pin_duplicado_retorna_400(client, db_session):
+def test_registro_usuario_pin_duplicado_retorna_400(client, db_session, auth_headers_admin):
     payload = {
         "rut_usuario": "23.444.555-6",
         "nombres": "Pin",
@@ -166,6 +208,7 @@ def test_registro_usuario_pin_duplicado_retorna_400(client, db_session):
         "pin_acceso": "5555"  # PIN existente
     }
 
-    response = client.post("/api/auth/register", json=payload)
+    response = client.post("/api/auth/register", json=payload, headers=auth_headers_admin)
     assert response.status_code == 400
     assert "El PIN '5555' ya se encuentra asignado" in response.json()["detail"]
+

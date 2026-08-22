@@ -78,7 +78,9 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
     // Ejecutar Scraping NATIVO
     final datos = await _vehiculoService.buscarDatosPorPatente(patente);
 
-    if (datos != null && context.mounted) {
+    if (!mounted) return;
+
+    if (datos != null) {
       setState(() {
         _marcaController.text = datos['marca'] ?? '';
         _modeloController.text = datos['modelo'] ?? '';
@@ -92,7 +94,7 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
           backgroundColor: AppPalette.success,
         ),
       );
-    } else if (context.mounted) {
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('❌ No se encontraron datos para esta patente.'),
@@ -101,11 +103,9 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
       );
     }
 
-    if (context.mounted) {
-      setState(() {
-        _isSearchingPatente = false;
-      });
-    }
+    setState(() {
+      _isSearchingPatente = false;
+    });
   }
 
   @override
@@ -275,7 +275,7 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
                 color: AppPalette.surface,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: AppPalette.secondary.withOpacity(0.35),
+                  color: AppPalette.secondary.withValues(alpha: 0.35),
                   width: 1.2,
                 ),
               ),
@@ -564,15 +564,15 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
 
     if (confirmed == true && mounted) {
       final numeroManual = manualIngresoController.text.trim();
-      await _mostrarModalDobleConfirmacion(context, datosNuevos, numeroManual);
+      await _mostrarModalDobleConfirmacion(datosNuevos, numeroManual);
     }
   }
 
   Future<void> _mostrarModalDobleConfirmacion(
-    BuildContext context,
     Map<String, dynamic> datosNuevos,
     String numeroManual,
   ) async {
+    if (!mounted) return;
     final doubleConfirmed = await showDialog<bool>(
       context: context,
       barrierDismissible: false,

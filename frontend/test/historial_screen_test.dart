@@ -376,7 +376,6 @@ void main() {
       bool periodoVal = false;
       String? estadoVal;
       bool aplicado = false;
-      bool limpiado = false;
 
       await tester.pumpWidget(
         MaterialApp(
@@ -387,7 +386,7 @@ void main() {
               onPeriodoChanged: (val) => periodoVal = val,
               onEstadoChanged: (val) => estadoVal = val,
               onAplicar: () => aplicado = true,
-              onLimpiar: () => limpiado = true,
+              onLimpiar: () {},
             ),
             body: Builder(
               builder: (ctx) => Center(

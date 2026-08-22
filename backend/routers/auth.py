@@ -11,7 +11,7 @@ from schemas import (
     RegisterUserRequest,
     RegisterUserResponse,
 )
-from core.security import verify_pin, create_access_token, hash_password
+from core.security import verify_pin, create_access_token, hash_password, get_current_user
 
 router = APIRouter(
     prefix="/api/auth",
@@ -24,17 +24,29 @@ router = APIRouter(
     response_model=RegisterUserResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Registro de Nuevos Usuarios",
-    description="Crea un nuevo usuario en la base de datos con contraseña cifrada en bcrypt."
+    description="Crea un nuevo usuario en la base de datos con contraseña cifrada en bcrypt. Requiere permisos de Administrador (id_rol == 5)."
 )
-def registrar_usuario(request: RegisterUserRequest, db: Session = Depends(get_db)):
+def registrar_usuario(
+    request: RegisterUserRequest,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
     """
     Registra un usuario en la tabla Usuario:
-    1. Valida unicidad de correo y RUT.
-    2. Valida la existencia del rol asignado.
-    3. Hashea la contraseña en texto plano usando bcrypt.
-    4. Genera o valida el PIN numérico de acceso de 4 dígitos.
-    5. Guarda el nuevo registro con estado 'Activo'.
+    1. Valida permisos de Administrador (id_rol == 5).
+    2. Valida unicidad de correo y RUT.
+    3. Valida la existencia del rol asignado.
+    4. Hashea la contraseña en texto plano usando bcrypt.
+    5. Genera o valida el PIN numérico de acceso de 4 dígitos.
+    6. Guarda el nuevo registro con estado 'Activo'.
     """
+    # 0. Validar permisos de Administrador (Zero Trust RBAC)
+    if current_user.id_rol != 5:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso denegado: Se requiere rol de Administrador para registrar nuevos usuarios."
+        )
+
     # 1. Validar si el email ya existe
     email_limpio = request.email.strip().lower()
     if db.query(Usuario).filter(Usuario.email == email_limpio).first():

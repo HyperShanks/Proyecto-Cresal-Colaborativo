@@ -10,7 +10,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import '../domain/exceptions/printer_exceptions.dart';
 import '../domain/models/etiqueta_data.dart';
