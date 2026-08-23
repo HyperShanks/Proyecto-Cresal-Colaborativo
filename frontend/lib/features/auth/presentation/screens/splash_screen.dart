@@ -57,6 +57,13 @@ class _SplashScreenState extends State<SplashScreen>
     if (!mounted) return;
 
     if (token != null && token.isNotEmpty) {
+      final esCaja = await AuthService.esCaja();
+      if (!mounted) return;
+      if (esCaja) {
+        Navigator.of(context).pushReplacementNamed('/caja');
+        return;
+      }
+
       final esVentas = await AuthService.esModuloVentas();
       if (!mounted) return;
       if (esVentas) {
@@ -67,6 +74,7 @@ class _SplashScreenState extends State<SplashScreen>
     } else {
       Navigator.of(context).pushReplacementNamed('/login');
     }
+
   }
 
   @override

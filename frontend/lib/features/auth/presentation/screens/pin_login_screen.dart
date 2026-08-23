@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../services/auth_service.dart';
+import '../../controllers/login_controller.dart';
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PANTALLA DE LOGIN POR PIN INDUSTRIAL
-// Diseñada para operarios con guantes en patio de desarme.
-// Cumple regla W3C: touch targets mínimos de 44px.
+// Diseñada para operarios con guantes en patio de desarme y terminales de caja.
+// Cumple regla W3C: touch targets mínimos de 44px y soporte de teclado físico/numpad.
 // ─────────────────────────────────────────────────────────────────────────────
 class PinLoginScreen extends StatefulWidget {
   const PinLoginScreen({super.key});
@@ -23,6 +26,7 @@ class _PinLoginScreenState extends State<PinLoginScreen>
   bool _isLoading = false;
   String? _errorMessage;
   int _failedAttempts = 0;
+  final FocusNode _keyboardFocusNode = FocusNode();
 
   // Animación de sacudida para feedback de error
   late AnimationController _shakeController;
@@ -43,6 +47,7 @@ class _PinLoginScreenState extends State<PinLoginScreen>
   @override
   void dispose() {
     _shakeController.dispose();
+    _keyboardFocusNode.dispose();
     super.dispose();
   }
 
@@ -72,6 +77,37 @@ class _PinLoginScreenState extends State<PinLoginScreen>
     });
   }
 
+  void _handleKeyEvent(KeyEvent event) {
+    if (event is! KeyDownEvent) return;
+    final key = event.logicalKey;
+
+    if (key == LogicalKeyboardKey.digit0 || key == LogicalKeyboardKey.numpad0) {
+      _onDigitPressed('0');
+    } else if (key == LogicalKeyboardKey.digit1 || key == LogicalKeyboardKey.numpad1) {
+      _onDigitPressed('1');
+    } else if (key == LogicalKeyboardKey.digit2 || key == LogicalKeyboardKey.numpad2) {
+      _onDigitPressed('2');
+    } else if (key == LogicalKeyboardKey.digit3 || key == LogicalKeyboardKey.numpad3) {
+      _onDigitPressed('3');
+    } else if (key == LogicalKeyboardKey.digit4 || key == LogicalKeyboardKey.numpad4) {
+      _onDigitPressed('4');
+    } else if (key == LogicalKeyboardKey.digit5 || key == LogicalKeyboardKey.numpad5) {
+      _onDigitPressed('5');
+    } else if (key == LogicalKeyboardKey.digit6 || key == LogicalKeyboardKey.numpad6) {
+      _onDigitPressed('6');
+    } else if (key == LogicalKeyboardKey.digit7 || key == LogicalKeyboardKey.numpad7) {
+      _onDigitPressed('7');
+    } else if (key == LogicalKeyboardKey.digit8 || key == LogicalKeyboardKey.numpad8) {
+      _onDigitPressed('8');
+    } else if (key == LogicalKeyboardKey.digit9 || key == LogicalKeyboardKey.numpad9) {
+      _onDigitPressed('9');
+    } else if (key == LogicalKeyboardKey.backspace) {
+      _onBackspace();
+    } else if (key == LogicalKeyboardKey.escape) {
+      _onClear();
+    }
+  }
+
   Future<void> _submitPin() async {
     setState(() {
       _isLoading = true;
@@ -84,13 +120,11 @@ class _PinLoginScreenState extends State<PinLoginScreen>
 
     if (result.success) {
       _failedAttempts = 0;
-      final esVentas = await AuthService.esModuloVentas();
-      if (!mounted) return;
-      if (esVentas) {
-        Navigator.of(context).pushReplacementNamed('/ventas_main');
-      } else {
-        Navigator.of(context).pushReplacementNamed('/home');
-      }
+      await LoginController.handlePostLoginNavigation(
+        context,
+        idRol: result.user?.idRol,
+        rol: result.user?.nombreRol,
+      );
     } else {
       _failedAttempts++;
       _shakeController.forward(from: 0);
@@ -112,6 +146,7 @@ class _PinLoginScreenState extends State<PinLoginScreen>
       }
     }
   }
+
 
   void _showFatalErrorDialog() {
     showDialog(
@@ -150,29 +185,35 @@ class _PinLoginScreenState extends State<PinLoginScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppPalette.background,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _buildHeader(),
-                const SizedBox(height: 48),
-                _buildPinIndicators(),
-                const SizedBox(height: 20),
-                _buildErrorMessage(),
-                const SizedBox(height: 40),
-                _buildNumericKeypad(),
-              ],
+    return KeyboardListener(
+      focusNode: _keyboardFocusNode,
+      autofocus: true,
+      onKeyEvent: _handleKeyEvent,
+      child: Scaffold(
+        backgroundColor: AppPalette.background,
+        body: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _buildHeader(),
+                  const SizedBox(height: 48),
+                  _buildPinIndicators(),
+                  const SizedBox(height: 20),
+                  _buildErrorMessage(),
+                  const SizedBox(height: 40),
+                  _buildNumericKeypad(),
+                ],
+              ),
             ),
           ),
         ),
       ),
     );
   }
+
 
   // ── Encabezado con logo y título ──────────────────────────────────────────
 

@@ -62,12 +62,27 @@ class ActualizarQrImpresoRequest(BaseModel):
     qr_impreso: bool = True
 
 # ==========================================
-# ESQUEMAS PARA AUTENTICACIÓN (HU-2.1 LOGIN-PIN)
+# ESQUEMAS PARA AUTENTICACIÓN (HU-2.1 LOGIN-PIN & HU-01 CAJA)
 # ==========================================
 
 class LoginPINRequest(BaseModel):
     """Payload de entrada para el login por PIN de operario."""
-    pin: str
+    pin: Optional[str] = None
+    pin_acceso: Optional[str] = None
+
+    @property
+    def pin_valor(self) -> str:
+        return self.pin_acceso or self.pin or ""
+
+LoginPinRequest = LoginPINRequest
+
+
+class LoginEmailRequest(BaseModel):
+    """Payload de entrada para el login por email y contraseña."""
+    email: str
+    password: str
+
+
 
 class RegisterUserRequest(BaseModel):
     """Payload de entrada para el registro de nuevos usuarios."""
@@ -120,6 +135,7 @@ class UsuarioData(BaseModel):
     nombres: str
     apellidos: str
     rut_usuario: str
+    email: Optional[str] = None
     id_rol: int
     nombre_rol: Optional[str] = None
     id_sucursal: int
@@ -127,11 +143,39 @@ class UsuarioData(BaseModel):
     rol: Optional[RolData] = None
     sucursal: Optional[SucursalData] = None
 
+
+class AuthUserData(BaseModel):
+    """DTO de claims y datos del usuario de sesión."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_usuario: UUID
+    rut_usuario: str
+    nombres: str
+    apellidos: str
+    email: Optional[str] = None
+    id_rol: int
+    nombre_rol: Optional[str] = None
+    id_sucursal: int
+    nombre_sucursal: Optional[str] = None
+
+
 class TokenResponse(BaseModel):
     """Respuesta completa del endpoint de login exitoso."""
+    model_config = ConfigDict(from_attributes=True)
+
     access_token: str
     token_type: str = "bearer"
     usuario: UsuarioData
+
+LoginResponse = TokenResponse
+
+
+class CajaVerificarAccesoResponse(BaseModel):
+    """Respuesta de verificación RBAC para el módulo de caja."""
+    autorizado: bool = True
+    rol: str
+    id_sucursal: int
+
 
 # ==========================================
 # ESQUEMAS PARA TICKETS DE SOPORTE (HU-2.7)

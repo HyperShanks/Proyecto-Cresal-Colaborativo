@@ -6,6 +6,7 @@ import '../../../core/constants/api_constants.dart';
 import '../../../core/theme/tokens/app_palette.dart';
 import '../../../core/services/api_service.dart';
 import '../../alertas/services/bodega_polling_service.dart';
+import '../models/auth_user_model.dart';
 
 // Claves de almacenamiento seguro
 const String _tokenKey = 'access_token';
@@ -14,6 +15,7 @@ const String _idRolKey = 'user_id_rol';
 const String _sucursalKey = 'user_sucursal_id';
 const String _sucursalNombreKey = 'user_sucursal_nombre';
 const String _nombreUsuarioKey = 'user_nombre_completo';
+const String _userModelKey = 'user_model_json';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MODELOS DE RESULTADO (evita mezclar lógica HTTP en la UI)
@@ -21,9 +23,10 @@ const String _nombreUsuarioKey = 'user_nombre_completo';
 class AuthResult {
   final bool success;
   final String? errorMessage;
+  final AuthUserModel? user;
 
-  const AuthResult.ok() : success = true, errorMessage = null;
-  const AuthResult.fail(this.errorMessage) : success = false;
+  const AuthResult.ok([this.user]) : success = true, errorMessage = null;
+  const AuthResult.fail(this.errorMessage) : success = false, user = null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -44,7 +47,7 @@ class AuthService {
           .post(
             uri,
             headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'pin': pin}),
+            body: jsonEncode({'pin': pin, 'pin_acceso': pin}),
           )
           .timeout(
             const Duration(seconds: 10),
@@ -55,7 +58,7 @@ class AuthService {
 
       if (response.statusCode == 200) {
         final token = body['access_token'] as String;
-        // Extraemos el rol en formato texto (ej. "Bodeguero", "Vendedor")
+        // Extraemos el rol en formato texto (ej. "Bodeguero", "Vendedor", "Caja")
         final usuarioMap = body['usuario'] as Map<String, dynamic>?;
         String rolText = usuarioMap?['nombre_rol']?.toString() ??
             usuarioMap?['rol']?['nombre_rol']?.toString() ??
@@ -78,8 +81,22 @@ class AuthService {
             '';
         final nombres = usuarioMap?['nombres']?.toString() ?? '';
         final apellidos = usuarioMap?['apellidos']?.toString() ?? '';
+        final rutUsuario = usuarioMap?['rut_usuario']?.toString() ?? '';
+        final email = usuarioMap?['email']?.toString() ?? '';
+        final idUsuario = usuarioMap?['id_usuario']?.toString() ?? '';
 
-        // Guardar token, rol, id_rol y sucursal de forma segura en el dispositivo
+        final userModel = AuthUserModel(
+          idUsuario: idUsuario,
+          rutUsuario: rutUsuario,
+          nombres: nombres,
+          apellidos: apellidos,
+          email: email,
+          idRol: idRol ?? 0,
+          nombreRol: rolText,
+          idSucursal: int.tryParse(sucursalId ?? '1') ?? 1,
+        );
+
+        // Guardar token, rol, id_rol, sucursal y modelo de usuario
         await _storage.write(key: _tokenKey, value: token);
         await _storage.write(key: _rolKey, value: rolText);
         if (idRol != null) {
@@ -97,7 +114,9 @@ class AuthService {
             value: '$nombres $apellidos'.trim(),
           );
         }
-        return const AuthResult.ok();
+        await _storage.write(key: _userModelKey, value: jsonEncode(userModel.toJson()));
+
+        return AuthResult.ok(userModel);
       }
 
       // Camino triste: el backend retornó un error (401, 422, etc.)
@@ -111,14 +130,33 @@ class AuthService {
   /// Recupera el token almacenado (útil para inyectarlo en peticiones futuras).
   static Future<String?> getToken() => _storage.read(key: _tokenKey);
 
-  /// Recupera el rol textual almacenado (ej. "Bodeguero", "Vendedor", "Jefe de Ventas", "Vendedor Online").
+  /// Recupera el rol textual almacenado (ej. "Bodeguero", "Vendedor", "Caja", "Jefe de Ventas").
   static Future<String?> getRol() => _storage.read(key: _rolKey);
 
-  /// Recupera el ID numérico del rol del usuario (ej. 2 para Vendedor, 6 para Jefe de Ventas, 7 para VendedorOnline).
+  /// Recupera el ID numérico del rol del usuario (ej. 1=Bodega, 2=Ventas, 3=Caja, 5=Admin, 6=Jefe).
   static Future<int?> getIdRol() async {
     final val = await _storage.read(key: _idRolKey);
     return val != null ? int.tryParse(val) : null;
   }
+
+  /// Verifica si el usuario actual pertenece al rol Caja (id_rol == 3).
+  static Future<bool> esCaja() async {
+    final idRol = await getIdRol();
+    if (idRol != null) return idRol == 3;
+    final rol = await getRol();
+    final rLower = rol?.toLowerCase() ?? '';
+    return rLower == 'caja' || rLower == 'operario de caja';
+  }
+
+  /// Verifica si el usuario actual posee rol Administrador (id_rol == 5).
+  static Future<bool> esAdmin() async {
+    final idRol = await getIdRol();
+    if (idRol != null) return idRol == 5;
+    final rol = await getRol();
+    final rLower = rol?.toLowerCase() ?? '';
+    return rLower == 'administrador' || rLower == 'admin';
+  }
+
 
   /// Verifica si el usuario actual pertenece al módulo de ventas (Vendedor [2], Jefe de Ventas [6], Vendedor Online [7]).
   static Future<bool> esModuloVentas() async {
@@ -167,6 +205,35 @@ class AuthService {
   /// Recupera el nombre completo del usuario autenticado.
   static Future<String?> getNombreUsuario() => _storage.read(key: _nombreUsuarioKey);
 
+  /// Recupera el modelo completo de sesión AuthUserModel si está disponible.
+  static Future<AuthUserModel?> getAuthUser() async {
+    final jsonStr = await _storage.read(key: _userModelKey);
+    if (jsonStr != null && jsonStr.isNotEmpty) {
+      try {
+        final map = jsonDecode(jsonStr) as Map<String, dynamic>;
+        return AuthUserModel.fromJson(map);
+      } catch (_) {}
+    }
+    // Reconstruir con claves sueltas si no existe el JSON compuesto
+    final token = await getToken();
+    if (token == null) return null;
+    final idRol = await getIdRol() ?? 0;
+    final rol = await getRol() ?? '';
+    final nombreCompleto = await getNombreUsuario() ?? '';
+    final sucursalId = await getSucursalId() ?? 1;
+
+    return AuthUserModel(
+      idUsuario: '',
+      rutUsuario: '',
+      nombres: nombreCompleto,
+      apellidos: '',
+      email: '',
+      idRol: idRol,
+      nombreRol: rol,
+      idSucursal: sucursalId,
+    );
+  }
+
   /// Elimina el token, rol y datos de sesión (para logout o sesiones expiradas).
   static Future<void> clearToken() async {
     await _storage.delete(key: _tokenKey);
@@ -175,6 +242,7 @@ class AuthService {
     await _storage.delete(key: _sucursalKey);
     await _storage.delete(key: _sucursalNombreKey);
     await _storage.delete(key: _nombreUsuarioKey);
+    await _storage.delete(key: _userModelKey);
   }
 
   /// Alias de clearToken para logout explícito
@@ -210,4 +278,5 @@ class AuthService {
     }
   }
 }
+
 

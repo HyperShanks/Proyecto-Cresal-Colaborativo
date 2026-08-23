@@ -15,6 +15,8 @@ import 'features/ventas/presentation/screens/ventas_main_screen.dart'; // HU-3.2
 import 'features/ventas/presentation/screens/checkout_crm_screen.dart'; // HU-3.4: Micro-CRM y Checkout
 import 'features/ventas/presentation/screens/bandeja_precios_screen.dart'; // HU-3.8: Bandeja de Precios Jefe de Ventas
 import 'features/ventas/presentation/screens/entregas_envios_screen.dart'; // Entregas y Envíos
+import 'features/caja/presentation/screens/caja_main_screen.dart'; // HU-01: Módulo de Caja Escritorio
+
 
 void main() {
   runApp(const MyApp());
@@ -45,6 +47,7 @@ class _MyAppState extends State<MyApp> {
       routes: {
         '/login': (context) => const PinLoginScreen(),
         '/home': (context) => const HomeScreen(),
+        '/caja': (context) => const CajaMainScreen(), // HU-01: Layout Base de Caja
         '/ventas_main': (context) => const VentasMainScreen(),
         '/recepcion': (context) => const RecepcionVehiculoScreen(),
         '/tickets': (context) => const TicketsScreen(),
@@ -68,3 +71,4 @@ class _MyAppState extends State<MyApp> {
     );
   }
 }
+

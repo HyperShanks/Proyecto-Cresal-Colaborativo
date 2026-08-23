@@ -6,17 +6,25 @@ from database import get_db
 from models import Usuario, Rol, Sucursal
 from schemas import (
     LoginPINRequest,
+    LoginEmailRequest,
     TokenResponse,
     UsuarioData,
     RegisterUserRequest,
     RegisterUserResponse,
 )
-from core.security import verify_pin, create_access_token, hash_password, get_current_user
+from core.security import (
+    verify_pin,
+    verify_password,
+    create_access_token,
+    hash_password,
+    get_current_user,
+)
 
 router = APIRouter(
     prefix="/api/auth",
     tags=["Autenticación"]
 )
+
 
 
 @router.post(
@@ -149,12 +157,19 @@ def login_por_pin(request: LoginPINRequest, db: Session = Depends(get_db)):
     2. Camino Triste: Si no existe o está inactivo → 401 Unauthorized.
     3. Camino Feliz: Si es válido y activo → Genera JWT y retorna TokenResponse.
     """
+    pin_ingresado = request.pin_valor
+    if not pin_ingresado:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="PIN de acceso requerido."
+        )
+
     # Consulta: buscar usuario por PIN (cargando relación con Rol y Sucursal)
     usuario = db.query(Usuario).options(
         joinedload(Usuario.rol),
         joinedload(Usuario.sucursal)
     ).filter(
-        Usuario.pin_acceso == request.pin
+        Usuario.pin_acceso == pin_ingresado
     ).first()
 
     # Camino Triste: PIN no encontrado
@@ -172,7 +187,7 @@ def login_por_pin(request: LoginPINRequest, db: Session = Depends(get_db)):
         )
 
     # Verificación adicional de PIN (comparación explícita)
-    if not verify_pin(request.pin, usuario.pin_acceso):
+    if not verify_pin(pin_ingresado, usuario.pin_acceso):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="PIN inválido o usuario inactivo"
@@ -194,3 +209,45 @@ def login_por_pin(request: LoginPINRequest, db: Session = Depends(get_db)):
         token_type="bearer",
         usuario=usuario_data
     )
+
+
+@router.post(
+    "/login",
+    response_model=TokenResponse,
+    summary="Login por Email y Contraseña",
+    description="Autentica a un usuario corporativo usando su correo y contraseña. "
+                "Retorna un JWT Bearer Token y los datos públicos del usuario."
+)
+def login_por_email(request: LoginEmailRequest, db: Session = Depends(get_db)):
+    """
+    Autenticación tradicional por correo y contraseña.
+    """
+    usuario = db.query(Usuario).options(
+        joinedload(Usuario.rol),
+        joinedload(Usuario.sucursal)
+    ).filter(
+        Usuario.email == request.email.strip().lower()
+    ).first()
+
+    if not usuario or usuario.estado != "Activo" or not verify_password(request.password, usuario.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciales inválidas o usuario inactivo"
+        )
+
+    access_token = create_access_token(
+        data={"sub": str(usuario.id_usuario)}
+    )
+
+    usuario_data = UsuarioData.model_validate(usuario)
+    if usuario.rol and not usuario_data.nombre_rol:
+        usuario_data.nombre_rol = usuario.rol.nombre_rol
+    if usuario.sucursal and not usuario_data.nombre_sucursal:
+        usuario_data.nombre_sucursal = usuario.sucursal.nombre_sucursal
+
+    return TokenResponse(
+        access_token=access_token,
+        token_type="bearer",
+        usuario=usuario_data
+    )
+
