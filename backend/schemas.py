@@ -1,9 +1,9 @@
-    # Este archivo contiene los esquemas de Pydantic para la validación de datos de entrada y salida en la API.
-
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional, List
 from uuid import UUID
+from datetime import datetime
 import re
+
 
 # ==========================================
 # ESQUEMAS PARA VEHÍCULOS (HU-2.2 Ingesta)
@@ -175,6 +175,72 @@ class CajaVerificarAccesoResponse(BaseModel):
     autorizado: bool = True
     rol: str
     id_sucursal: int
+
+
+# ==========================================
+# ESQUEMAS PARA BANDEJA DE COBROS DE CAJA (SPEC-HU-4.2)
+# ==========================================
+
+class BackorderEspecificacionesDTO(BaseModel):
+    marca: str
+    modelo: str
+    anio: Optional[int] = None
+    categoria: str
+    cilindrada: Optional[str] = None
+    combustible: Optional[str] = None
+    transito: Optional[str] = "En Tránsito Marítimo / Bodega"
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ArticuloResumenDTO(BaseModel):
+    cantidad: int
+    tipo: str  # 'INVENTARIADO' | 'DESARME'
+    descripcion: str
+    sku: Optional[str] = None
+    precio: int
+    subtotal: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CobroPendienteItemResponse(BaseModel):
+    id_referencia: UUID = Field(description="id_orden o id_reserva según la entidad de origen")
+    folio_documento: str = Field(description="Ej: ORD-9780 o RES-5401")
+    tipo_operacion: str = Field(description="'VENTA' para Orden_Venta, 'BACKORDER' para Reservas_Backorder")
+    estado_documento: str = Field(description="'Reservada', 'Pendiente', etc.")
+
+    # Datos del Cliente
+    cliente_nombre: str
+    cliente_rut: str
+
+    # Datos del Vendedor Originador
+    vendedor_nombre: str
+
+    # Temporalidad
+    fecha_emision: datetime
+    fecha_emision_formateada: str  # dd/MM/yyyy
+    hora_emision_formateada: str   # HH:mm
+
+    # Datos Financieros
+    total_operacion: int = Field(description="Total venta o precio acordado de reserva")
+    abono_previo: int = Field(default=0, description="Monto ya pagado previamente")
+    monto_a_cobrar: int = Field(description="Saldo pendiente o abono fijado requerido")
+
+    # Detalles complementarios
+    articulos: List[ArticuloResumenDTO] = Field(default_factory=list)
+    especificaciones_backorder: Optional[BackorderEspecificacionesDTO] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CobroPendienteListResponse(BaseModel):
+    total: int
+    sucursal_id: int
+    items: List[CobroPendienteItemResponse]
+
+    model_config = ConfigDict(from_attributes=True)
+
 
 
 # ==========================================

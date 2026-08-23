@@ -186,8 +186,13 @@ void main() {
 
       expect(find.text('CRESAL'), findsOneWidget);
       expect(find.text('MÓDULO DE CAJA'), findsOneWidget);
-      expect(find.text('Bandeja de Cobros'), findsWidgets);
-      expect(find.text('Historial de Pagos'), findsWidgets);
+      expect(find.text('Caja'), findsWidgets);
+      expect(find.text('Historial'), findsWidgets);
+
+      // Navegar a la pestaña de Historial de Pagos para ver métricas
+      await tester.tap(find.text('Historial').first);
+      await tester.pumpAndSettle();
+
       expect(find.text('Órdenes por Cobrar'), findsOneWidget);
       expect(find.text('Recaudación del Turno'), findsOneWidget);
       expect(find.text('Estado del Turno'), findsOneWidget);

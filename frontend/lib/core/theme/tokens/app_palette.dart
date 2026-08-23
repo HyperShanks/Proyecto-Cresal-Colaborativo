@@ -14,7 +14,9 @@ abstract class AppPalette {
   // Marca y Acentos
   static const Color primary = Color(0xFF2596BE); // Azul Cresal
   static const Color secondary = Color(0xFFFFB800); // Ámbar para alertas/prioridades
+  static const Color tertiary = Color(0xFF004C89); // Azul corporativo sidebar / acentos
   static const Color neutral = Color(0xFF73787B); // Gris para elementos inactivos
+
 
   // Textos (Alto contraste para legibilidad al sol)
   static const Color textPrimary = Color(0xFFFFFFFF);
