@@ -189,13 +189,13 @@ void main() {
       expect(find.text('Caja'), findsWidgets);
       expect(find.text('Historial'), findsWidgets);
 
-      // Navegar a la pestaña de Historial de Pagos para ver métricas
+      // Navegar a la pestaña de Historial de Pagos para ver pantalla de auditoría
       await tester.tap(find.text('Historial').first);
       await tester.pumpAndSettle();
 
-      expect(find.text('Órdenes por Cobrar'), findsOneWidget);
-      expect(find.text('Recaudación del Turno'), findsOneWidget);
-      expect(find.text('Estado del Turno'), findsOneWidget);
+      expect(find.text('Hoy'), findsOneWidget);
+      expect(find.text('Esta Semana'), findsOneWidget);
+      expect(find.text('Este Mes'), findsOneWidget);
     });
 
     testWidgets('CajaDrawer muestra exclusivamente las opciones autorizadas de caja y no las de bodega/ventas', (tester) async {

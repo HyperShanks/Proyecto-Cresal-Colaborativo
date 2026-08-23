@@ -6,6 +6,7 @@ import '../providers/caja_provider.dart';
 import '../widgets/caja_drawer.dart';
 import '../widgets/bandeja_cobros_panel.dart';
 import '../widgets/cobro_pendiente_card.dart';
+import 'historial_caja_screen.dart';
 
 /// Contenedor principal de escritorio para el Módulo de Caja (CRES-213 / CRES-214).
 /// Implementa Sidebar Dinámico Colapsable (256px / 80px) y Grid 4/12 + 8/12 Master-Detail.
@@ -31,7 +32,6 @@ class _CajaMainScreenState extends State<CajaMainScreen> {
   String _cajeraNombre = 'Lorena Valenzuela';
   String _sucursalNombre = 'Casa Matriz • Viña del Mar';
   int _idSucursal = 1;
-  final int _totalRecaudadoHoy = 450000;
 
   @override
   void initState() {
@@ -1033,153 +1033,8 @@ class _CajaMainScreenState extends State<CajaMainScreen> {
   }
 
   Widget _buildHistorialPagosView() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Resumen de Métricas del Turno en Historial
-          Row(
-            children: [
-              _buildStatCard(
-                icon: Icons.pending_actions_rounded,
-                title: 'Órdenes por Cobrar',
-                value: '${_cajaProvider.totalCobros}',
-                color: AppPalette.secondary,
-              ),
-              const SizedBox(width: 16),
-              _buildStatCard(
-                icon: Icons.attach_money_rounded,
-                title: 'Recaudación del Turno',
-                value: CobroPendienteCard.formatClp(_totalRecaudadoHoy),
-                color: AppPalette.success,
-              ),
-              const SizedBox(width: 16),
-              _buildStatCard(
-                icon: Icons.verified_user_rounded,
-                title: 'Estado del Turno',
-                value: 'Turno Activo',
-                color: AppPalette.primary,
-                subtitle: 'ID Sucursal: $_idSucursal',
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          Container(
-            padding: const EdgeInsets.all(32),
-            decoration: BoxDecoration(
-              color: AppPalette.surfaceLight,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: AppPalette.neutral.withValues(alpha: 0.2),
-              ),
-            ),
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.history_rounded,
-                    size: 56,
-                    color: AppPalette.neutral.withValues(alpha: 0.5),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Historial de Comprobantes y Pagos',
-                    style: AppTypography.title.copyWith(
-                      color: AppPalette.textPrimaryLight,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Consulte los comprobantes emitidos durante el turno actual.',
-                    style: AppTypography.body.copyWith(
-                      color: AppPalette.textSecondaryLight,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatCard({
-    required IconData icon,
-    required String title,
-    required String value,
-    required Color color,
-    String? subtitle,
-  }) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-        decoration: BoxDecoration(
-          color: AppPalette.surfaceLight,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: AppPalette.neutral.withValues(alpha: 0.2),
-            width: 1,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.02),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: color, size: 24),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: AppTypography.small.copyWith(
-                      color: AppPalette.textSecondaryLight,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    value,
-                    style: AppTypography.title.copyWith(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: AppPalette.textPrimaryLight,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (subtitle != null) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: AppTypography.small.copyWith(
-                        color: color,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+    return HistorialCajaScreen(
+      sucursalId: _idSucursal,
     );
   }
 }

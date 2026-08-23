@@ -1,8 +1,10 @@
+import math
 from typing import Optional, List
-from datetime import datetime, timezone
+from datetime import datetime, timezone, time, timedelta, date
+from uuid import UUID
 from zoneinfo import ZoneInfo
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, Query, HTTPException, status
+from sqlalchemy.orm import Session, aliased
 
 from database import get_db
 from models import (
@@ -14,6 +16,8 @@ from models import (
     Activo_Inventariado,
     Vehiculo_Origen,
     Categoria_Activo,
+    Transaccion_Pago,
+    Auditoria_Barrera,
 )
 from schemas import (
     CajaVerificarAccesoResponse,
@@ -21,6 +25,12 @@ from schemas import (
     CobroPendienteListResponse,
     ArticuloResumenDTO,
     BackorderEspecificacionesDTO,
+    HistorialPagoDetalleDTO,
+    HistorialArticuloDTO,
+    HistorialMovimientoDTO,
+    ResumenCuadreCajaDTO,
+    HistorialOrdenItemResponse,
+    HistorialCajaResponse,
 )
 from core.security import require_caja_role
 
@@ -265,3 +275,373 @@ def obtener_cobros_pendientes(
         sucursal_id=sucursal_id,
         items=items_resultado,
     )
+
+
+def format_clp(amount: int) -> str:
+    """Formatea enteros a moneda CLP (ej: 420000 -> $420.000)."""
+    return f"${amount:,}".replace(",", ".")
+
+
+def parse_periodo_chile(
+    periodo: Optional[str],
+    fecha_desde: Optional[str] = None,
+    fecha_hasta: Optional[str] = None,
+) -> tuple[Optional[datetime], Optional[datetime]]:
+    """
+    Calcula los límites temporales en UTC correspondientes al huso horario de Chile (America/Santiago).
+    """
+    p = (periodo or "HOY").strip().upper()
+    ahora_chile = datetime.now(tz_chile)
+
+    if p == "HOY":
+        start_local = datetime.combine(ahora_chile.date(), time.min, tzinfo=tz_chile)
+        end_local = datetime.combine(ahora_chile.date(), time.max, tzinfo=tz_chile)
+    elif p == "ESTA_SEMANA":
+        lunes = ahora_chile.date() - timedelta(days=ahora_chile.weekday())
+        domingo = lunes + timedelta(days=6)
+        start_local = datetime.combine(lunes, time.min, tzinfo=tz_chile)
+        end_local = datetime.combine(domingo, time.max, tzinfo=tz_chile)
+    elif p == "ESTE_MES":
+        primer_dia = ahora_chile.date().replace(day=1)
+        if primer_dia.month == 12:
+            prox_mes = primer_dia.replace(year=primer_dia.year + 1, month=1)
+        else:
+            prox_mes = primer_dia.replace(month=primer_dia.month + 1)
+        ultimo_dia = prox_mes - timedelta(days=1)
+        start_local = datetime.combine(primer_dia, time.min, tzinfo=tz_chile)
+        end_local = datetime.combine(ultimo_dia, time.max, tzinfo=tz_chile)
+    elif p == "RANGO":
+        if not fecha_desde or not fecha_hasta:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="fecha_desde y fecha_hasta son obligatorias para el período RANGO.",
+            )
+        try:
+            d_desde = datetime.strptime(str(fecha_desde).strip(), "%Y-%m-%d").date()
+            d_hasta = datetime.strptime(str(fecha_hasta).strip(), "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Formato de fecha inválido. Debe ser YYYY-MM-DD.",
+            )
+        if d_desde > d_hasta:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="fecha_desde no puede ser posterior a fecha_hasta.",
+            )
+        start_local = datetime.combine(d_desde, time.min, tzinfo=tz_chile)
+        end_local = datetime.combine(d_hasta, time.max, tzinfo=tz_chile)
+    elif p == "TODOS":
+        return None, None
+    else:
+        start_local = datetime.combine(ahora_chile.date(), time.min, tzinfo=tz_chile)
+        end_local = datetime.combine(ahora_chile.date(), time.max, tzinfo=tz_chile)
+
+    start_utc = start_local.astimezone(timezone.utc).replace(tzinfo=None)
+    end_utc = end_local.astimezone(timezone.utc).replace(tzinfo=None)
+    return start_utc, end_utc
+
+
+@router.get(
+    "/historial",
+    response_model=HistorialCajaResponse,
+    summary="Historial de Órdenes y Auditoría de Cobros",
+    description="Retorna el historial paginado de órdenes y transacciones de caja, con filtros multicriterio, "
+                "métricas agregadas de cuadre/arqueo y trazabilidad detallada de pagos e ítems."
+)
+def obtener_historial_caja(
+    sucursal_id: int = Query(..., description="ID de la sucursal activa"),
+    periodo: Optional[str] = Query("HOY", description="Atajo de período: 'HOY', 'ESTA_SEMANA', 'ESTE_MES', 'RANGO', 'TODOS'"),
+    fecha_desde: Optional[str] = Query(None, description="Fecha de inicio YYYY-MM-DD (para período RANGO)"),
+    fecha_hasta: Optional[str] = Query(None, description="Fecha de término YYYY-MM-DD (para período RANGO)"),
+    estado_orden: Optional[str] = Query("TODOS", description="Filtro de estado: 'TODOS', 'Pagada', 'Despachada', 'Reservada', 'Anulada'"),
+    metodo_pago: Optional[str] = Query("TODOS", description="Filtro de método: 'TODOS', 'Efectivo', 'Débito', 'Crédito', 'Transferencia', 'Cheque'"),
+    busqueda: Optional[str] = Query(None, description="Búsqueda por Folio, RUT, Cliente, Vendedor o Cajera"),
+    monto_min: Optional[int] = Query(None, description="Monto mínimo de venta"),
+    monto_max: Optional[int] = Query(None, description="Monto máximo de venta"),
+    id_cajera: Optional[UUID] = Query(None, description="ID del usuario cajera"),
+    id_vendedor: Optional[UUID] = Query(None, description="ID del usuario vendedor"),
+    pagina: int = Query(1, ge=1, description="Número de página"),
+    limite: int = Query(20, ge=1, le=100, description="Registros por página"),
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_caja_role),
+):
+    start_utc, end_utc = parse_periodo_chile(periodo, fecha_desde, fecha_hasta)
+
+    UsuarioVendedor = aliased(Usuario, name="vendedor")
+    UsuarioCajera = aliased(Usuario, name="cajera")
+
+    query = (
+        db.query(Orden_Venta, Cliente, UsuarioVendedor, UsuarioCajera)
+        .join(Cliente, Orden_Venta.id_cliente == Cliente.id_cliente)
+        .join(UsuarioVendedor, Orden_Venta.id_vendedor == UsuarioVendedor.id_usuario)
+        .outerjoin(UsuarioCajera, Orden_Venta.id_cajera == UsuarioCajera.id_usuario)
+        .filter(Orden_Venta.id_sucursal == sucursal_id)
+    )
+
+    if start_utc is not None and end_utc is not None:
+        query = query.filter(Orden_Venta.fecha_creacion.between(start_utc, end_utc))
+
+    if estado_orden and estado_orden.strip().upper() != "TODOS":
+        query = query.filter(Orden_Venta.estado_orden == estado_orden.strip())
+
+    if id_cajera:
+        query = query.filter(Orden_Venta.id_cajera == id_cajera)
+
+    if id_vendedor:
+        query = query.filter(Orden_Venta.id_vendedor == id_vendedor)
+
+    if monto_min is not None:
+        query = query.filter(Orden_Venta.total_venta >= monto_min)
+
+    if monto_max is not None:
+        query = query.filter(Orden_Venta.total_venta <= monto_max)
+
+    resultados_raw = query.order_by(Orden_Venta.fecha_creacion.desc()).all()
+
+    items_filtrados: List[HistorialOrdenItemResponse] = []
+
+    for orden, cliente, vendedor, cajera in resultados_raw:
+        # Obtener pagos
+        pagos_db = (
+            db.query(Transaccion_Pago)
+            .filter(Transaccion_Pago.id_orden == orden.id_orden)
+            .order_by(Transaccion_Pago.fecha_pago.asc())
+            .all()
+        )
+
+        desglose_pagos = [
+            HistorialPagoDetalleDTO(
+                id_transaccion=p.id_pago,
+                metodo_pago=p.metodo_pago,
+                monto=p.monto,
+                fecha_pago=p.fecha_pago,
+            )
+            for p in pagos_db
+        ]
+
+        # Filtro por método de pago
+        if metodo_pago and metodo_pago.strip().upper() != "TODOS":
+            mp_filtro = metodo_pago.strip().lower()
+            encontrado = any(mp_filtro in (p.metodo_pago or "").lower() for p in pagos_db)
+            if not encontrado:
+                continue
+
+        # Obtener detalles de repuestos/artículos
+        detalles_raw = (
+            db.query(Detalle_Orden, Activo_Inventariado, Vehiculo_Origen, Categoria_Activo)
+            .outerjoin(Activo_Inventariado, Detalle_Orden.id_activo == Activo_Inventariado.id_activo)
+            .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
+            .outerjoin(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
+            .filter(Detalle_Orden.id_orden == orden.id_orden)
+        ).all()
+
+        articulos_dto: List[HistorialArticuloDTO] = []
+        for det, activo, vehiculo, categoria in detalles_raw:
+            if activo:
+                tipo_art = "INVENTARIADO"
+                sku_art = activo.sku_qr_fisico
+                if det.descripcion_manual:
+                    desc_art = det.descripcion_manual
+                else:
+                    cat_str = categoria.nombre_categoria if categoria else "Repuesto"
+                    veh_str = f"{vehiculo.marca} {vehiculo.modelo}" if vehiculo else ""
+                    desc_art = f"{cat_str} {veh_str}".strip() or "Repuesto Inventariado"
+            else:
+                tipo_art = "DESARME"
+                sku_art = None
+                desc_art = det.descripcion_manual or "Pieza en Desarme"
+
+            precio_unit = det.precio_unitario if det.precio_unitario is not None else det.precio_final
+            articulos_dto.append(
+                HistorialArticuloDTO(
+                    cantidad=det.cantidad,
+                    tipo=tipo_art,
+                    descripcion=desc_art,
+                    sku=sku_art,
+                    precio=precio_unit,
+                    subtotal=det.precio_final,
+                )
+            )
+
+        # Folio
+        if orden.qr_transaccional_salida and orden.qr_transaccional_salida.startswith("ORD-"):
+            folio_doc = orden.qr_transaccional_salida
+        else:
+            folio_doc = f"ORD-{str(orden.id_orden).replace('-', '')[:4].upper()}"
+
+        fecha_fmt, hora_fmt, dt_utc = format_chile_datetime(orden.fecha_creacion)
+        dt_chile = dt_utc.astimezone(tz_chile)
+        fecha_iso = dt_chile.strftime("%Y-%m-%d")
+        fecha_hora_fmt = f"{hora_fmt} - {fecha_fmt}"
+
+        cliente_nombre = f"{cliente.nombres} {cliente.apellidos}".strip()
+        vendedor_nombre = f"{vendedor.nombres} {vendedor.apellidos}".strip()
+        cajera_nombre = f"{cajera.nombres} {cajera.apellidos}".strip() if cajera else "Caja 01"
+
+        # Métodos Resumen String
+        if desglose_pagos:
+            metodos_resumen = " + ".join([f"{p.metodo_pago}: {format_clp(p.monto)}" for p in desglose_pagos])
+            modalidad = "split" if len(desglose_pagos) > 1 else "unico"
+            total_liquidado = sum(p.monto for p in desglose_pagos)
+        else:
+            metodos_resumen = "Sin pagos registrados" if orden.estado_orden != "Anulada" else "Anulada"
+            modalidad = "unico"
+            total_liquidado = max(0, orden.total_venta - orden.monto_pendiente)
+
+        abono_prev = max(0, orden.total_venta - orden.monto_pendiente - total_liquidado)
+
+        # Historial de movimientos (auditoría cronológica)
+        movimientos: List[HistorialMovimientoDTO] = [
+            HistorialMovimientoDTO(
+                hora=hora_fmt,
+                evento=f"Orden emitida en Mesón por {vendedor_nombre}",
+            )
+        ]
+
+        if desglose_pagos:
+            pago_hora_fmt = hora_fmt
+            if desglose_pagos[0].fecha_pago:
+                _, p_hora, _ = format_chile_datetime(desglose_pagos[0].fecha_pago)
+                pago_hora_fmt = p_hora
+            movimientos.append(
+                HistorialMovimientoDTO(
+                    hora=pago_hora_fmt,
+                    evento=f"Pago liquidado en ventanilla ({metodos_resumen}) por {cajera_nombre}",
+                )
+            )
+
+        if orden.qr_transaccional_salida:
+            movimientos.append(
+                HistorialMovimientoDTO(
+                    hora=hora_fmt,
+                    evento="QR Transaccional generado para barrera de salida",
+                )
+            )
+
+        auditoria_barrera = (
+            db.query(Auditoria_Barrera)
+            .filter(Auditoria_Barrera.id_orden == orden.id_orden)
+            .first()
+        )
+        if auditoria_barrera:
+            _, b_hora, _ = format_chile_datetime(auditoria_barrera.fecha_escaneo)
+            movimientos.append(
+                HistorialMovimientoDTO(
+                    hora=b_hora,
+                    evento="Pieza entregada en mesón y validada en barrera de salida",
+                )
+            )
+
+        item = HistorialOrdenItemResponse(
+            id_orden=orden.id_orden,
+            folio=folio_doc,
+            tipo_operacion="VENTA",
+            emite_qr=bool(orden.qr_transaccional_salida),
+            fecha_iso=fecha_iso,
+            hora=hora_fmt,
+            fecha_hora_formateada=fecha_hora_fmt,
+            cliente_nombre=cliente_nombre,
+            cliente_rut=cliente.rut_cliente,
+            vendedor_nombre=vendedor_nombre,
+            cajera_nombre=cajera_nombre,
+            estado_orden=orden.estado_orden,
+            modalidad_pago=modalidad,
+            metodos_resumen=metodos_resumen,
+            total_venta=orden.total_venta,
+            abono_previo=abono_prev,
+            total_liquidado=total_liquidado,
+            desglose_pagos=desglose_pagos,
+            articulos=articulos_dto,
+            historial_movimientos=movimientos,
+        )
+
+        items_filtrados.append(item)
+
+    # Filtro reactivo de búsqueda multicriterio
+    if busqueda and busqueda.strip():
+        def strip_accents(s: str) -> str:
+            import unicodedata
+            return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn").lower()
+
+        q_raw = busqueda.strip().lower()
+        q = strip_accents(q_raw)
+        q_rut = q.replace(".", "").replace("-", "")
+
+        def match_search(it: HistorialOrdenItemResponse) -> bool:
+            if q in strip_accents(it.folio):
+                return True
+            if q in strip_accents(it.cliente_nombre):
+                return True
+            rut_clean = (it.cliente_rut or "").lower().replace(".", "").replace("-", "")
+            if (it.cliente_rut and q in it.cliente_rut.lower()) or (q_rut and q_rut in rut_clean):
+                return True
+            if q in strip_accents(it.vendedor_nombre) or q in strip_accents(it.cajera_nombre):
+                return True
+            for art in it.articulos:
+                if q in strip_accents(art.descripcion) or (art.sku and q in strip_accents(art.sku)):
+                    return True
+            return False
+
+        items_filtrados = [it for it in items_filtrados if match_search(it)]
+
+    # Cálculo exacto de resumen_cuadre (excluyendo órdenes en estado 'Anulada')
+    tot_recaudado = 0
+    tot_ordenes_pag = 0
+    tot_efectivo = 0
+    tot_debito = 0
+    tot_credito = 0
+    tot_transferencia = 0
+    tot_cheque = 0
+
+    for it in items_filtrados:
+        if it.estado_orden == "Anulada":
+            continue
+
+        if it.estado_orden in ["Pagada", "Despachada"]:
+            tot_ordenes_pag += 1
+
+        for p in it.desglose_pagos:
+            mp = (p.metodo_pago or "").lower()
+            if "efectivo" in mp:
+                tot_efectivo += p.monto
+            elif "débito" in mp or "debito" in mp:
+                tot_debito += p.monto
+            elif "crédito" in mp or "credito" in mp:
+                tot_credito += p.monto
+            elif "transferencia" in mp:
+                tot_transferencia += p.monto
+            elif "cheque" in mp:
+                tot_cheque += p.monto
+            else:
+                tot_efectivo += p.monto
+
+    tot_pos = tot_debito + tot_credito
+    tot_recaudado = tot_efectivo + tot_pos + tot_transferencia + tot_cheque
+
+    resumen = ResumenCuadreCajaDTO(
+        total_recaudado=tot_recaudado,
+        total_ordenes_pagadas=tot_ordenes_pag,
+        total_efectivo=tot_efectivo,
+        total_pos=tot_pos,
+        total_debito=tot_debito,
+        total_credito=tot_credito,
+        total_transferencia=tot_transferencia,
+        total_cheque=tot_cheque,
+    )
+
+    # Paginación
+    total_registros = len(items_filtrados)
+    total_paginas = max(1, math.ceil(total_registros / limite))
+    offset = (pagina - 1) * limite
+    paginated_items = items_filtrados[offset: offset + limite]
+
+    return HistorialCajaResponse(
+        total_registros=total_registros,
+        pagina_actual=pagina,
+        limite_por_pagina=limite,
+        total_paginas=total_paginas,
+        resumen_cuadre=resumen,
+        items=paginated_items,
+    )
+

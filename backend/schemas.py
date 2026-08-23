@@ -764,6 +764,93 @@ class CompletarPreentregaResponse(BaseModel):
     fecha_preparacion: Optional[str] = None
 
 
+# ==========================================
+# ESQUEMAS PARA HISTORIAL Y AUDITORÍA DE CAJA (SPEC-HU-4.5 / CRES-217)
+# ==========================================
+
+class HistorialPagoDetalleDTO(BaseModel):
+    id_transaccion: Optional[UUID] = None
+    metodo_pago: str = Field(description="Efectivo, Débito, Crédito, Transferencia o Cheque")
+    monto: int = Field(ge=0, description="Monto cubierto por este método específico")
+    fecha_pago: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class HistorialArticuloDTO(BaseModel):
+    cantidad: int
+    tipo: str = Field(description="'INVENTARIADO' o 'DESARME'")
+    descripcion: str
+    sku: Optional[str] = None
+    precio: int
+    subtotal: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class HistorialMovimientoDTO(BaseModel):
+    hora: str = Field(description="Hora del evento (HH:mm)")
+    evento: str = Field(description="Descripción del hito de auditoría")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ResumenCuadreCajaDTO(BaseModel):
+    total_recaudado: int = Field(default=0, description="Suma total de pagos en el rango y filtros aplicados")
+    total_ordenes_pagadas: int = Field(default=0, description="Cantidad total de órdenes en estado Pagada/Despachada")
+    total_efectivo: int = Field(default=0, description="Arqueo físico de gaveta (Billetes y monedas)")
+    total_pos: int = Field(default=0, description="Total tarjetas voucher Transbank (Débito + Crédito)")
+    total_debito: int = Field(default=0)
+    total_credito: int = Field(default=0)
+    total_transferencia: int = Field(default=0)
+    total_cheque: int = Field(default=0)
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class HistorialOrdenItemResponse(BaseModel):
+    id_orden: UUID
+    folio: str = Field(description="Ej: ORD-9778 o RES-5401")
+    tipo_operacion: str = Field(description="'VENTA' o 'BACKORDER'")
+    emite_qr: bool = Field(description="True si la orden liquida el 100% de la venta para barrera")
+    fecha_iso: str = Field(description="YYYY-MM-DD en hora local America/Santiago")
+    hora: str = Field(description="HH:mm en hora local")
+    fecha_hora_formateada: str = Field(description="HH:mm - DD/MM/YYYY")
+
+    # Datos de Cliente y Personal Responsable
+    cliente_nombre: str
+    cliente_rut: Optional[str] = None
+    vendedor_nombre: str
+    cajera_nombre: str
+
+    # Estados y Pagos
+    estado_orden: str = Field(description="'Pagada', 'Despachada', 'Reservada', 'Anulada'")
+    modalidad_pago: str = Field(description="'unico' o 'split'")
+    metodos_resumen: str = Field(description="Ej: Débito: $420.000 + Transferencia: $180.000")
+    total_venta: int
+    abono_previo: int = 0
+    total_liquidado: int = Field(description="Monto total pagado en ventanilla")
+
+    # Desgloses Detallados para Auditoría
+    desglose_pagos: List[HistorialPagoDetalleDTO] = Field(default_factory=list)
+    articulos: List[HistorialArticuloDTO] = Field(default_factory=list)
+    historial_movimientos: List[HistorialMovimientoDTO] = Field(default_factory=list)
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class HistorialCajaResponse(BaseModel):
+    total_registros: int
+    pagina_actual: int
+    limite_por_pagina: int
+    total_paginas: int
+    resumen_cuadre: ResumenCuadreCajaDTO
+    items: List[HistorialOrdenItemResponse]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+
 
 
 
