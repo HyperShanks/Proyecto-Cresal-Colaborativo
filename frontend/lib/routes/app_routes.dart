@@ -53,7 +53,10 @@ class AppRoutes {
       if (_cajaRestrictedRoutes.contains(route)) {
         return false;
       }
-      return route == caja || route == login || route == tickets || route == '/';
+      return route == caja ||
+          route == login ||
+          route == tickets ||
+          route == '/';
     }
     return true;
   }

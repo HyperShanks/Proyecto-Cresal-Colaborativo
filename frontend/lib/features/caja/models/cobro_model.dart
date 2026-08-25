@@ -64,6 +64,7 @@ class RegistrarCobroResponseModel {
   final int nuevoSaldoPendiente;
   final String estadoActualizado;
   final List<String> transaccionesIds;
+  final String? qrGenerado;
 
   RegistrarCobroResponseModel({
     required this.success,
@@ -73,6 +74,7 @@ class RegistrarCobroResponseModel {
     required this.nuevoSaldoPendiente,
     required this.estadoActualizado,
     required this.transaccionesIds,
+    this.qrGenerado,
   });
 
   factory RegistrarCobroResponseModel.fromJson(Map<String, dynamic> json) =>
@@ -87,5 +89,6 @@ class RegistrarCobroResponseModel {
                 ?.map((e) => e.toString())
                 .toList() ??
             [],
+        qrGenerado: json['qr_generado'] as String?,
       );
 }

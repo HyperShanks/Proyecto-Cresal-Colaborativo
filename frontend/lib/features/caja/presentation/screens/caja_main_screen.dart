@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../../auth/services/auth_service.dart';
+import '../../../tickets/presentation/widgets/soporte_desktop_view.dart';
 import '../providers/caja_provider.dart';
 import '../widgets/caja_drawer.dart';
 import '../widgets/bandeja_cobros_panel.dart';
@@ -187,7 +188,9 @@ class _CajaMainScreenState extends State<CajaMainScreen> {
                       Expanded(
                         child: _selectedNavIndex == 0
                             ? _buildBandejaCobrosView()
-                            : _buildHistorialPagosView(),
+                            : _selectedNavIndex == 1
+                                ? _buildHistorialPagosView()
+                                : const SoporteDesktopView(),
                       ),
                     ],
                   ),
@@ -321,9 +324,11 @@ class _CajaMainScreenState extends State<CajaMainScreen> {
                   icon: Icons.support_agent_rounded,
                   title: 'Soporte',
                   subtitle: 'Tickets de Soporte',
-                  isSelected: false,
+                  isSelected: _selectedNavIndex == 2,
                   onTap: () {
-                    Navigator.of(context).pushNamed('/tickets');
+                    setState(() {
+                      _selectedNavIndex = 2;
+                    });
                   },
                 ),
               ],
@@ -570,15 +575,23 @@ class _CajaMainScreenState extends State<CajaMainScreen> {
             },
           ),
           const SizedBox(width: 8),
-          Text(
-            _selectedNavIndex == 0 ? 'Bandeja de Cobros' : 'Historial de Pagos',
-            style: AppTypography.title.copyWith(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: AppPalette.textPrimaryLight,
+          Expanded(
+            child: Text(
+              _selectedNavIndex == 0
+                  ? 'Bandeja de Cobros'
+                  : _selectedNavIndex == 1
+                      ? 'Historial de Pagos'
+                      : 'Soporte Técnico',
+              style: AppTypography.title.copyWith(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: AppPalette.textPrimaryLight,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
-          const Spacer(),
+          const SizedBox(width: 12),
           // Badge Sucursal Activa
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -599,12 +612,16 @@ class _CajaMainScreenState extends State<CajaMainScreen> {
                   color: AppPalette.primary,
                 ),
                 const SizedBox(width: 6),
-                Text(
-                  _sucursalNombre,
-                  style: AppTypography.small.copyWith(
-                    color: AppPalette.textPrimaryLight,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
+                Flexible(
+                  child: Text(
+                    _sucursalNombre,
+                    style: AppTypography.small.copyWith(
+                      color: AppPalette.textPrimaryLight,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
@@ -652,12 +669,16 @@ class _CajaMainScreenState extends State<CajaMainScreen> {
                   color: AppPalette.primary,
                 ),
                 const SizedBox(width: 6),
-                Text(
-                  _cajeraNombre,
-                  style: AppTypography.small.copyWith(
-                    color: AppPalette.primary,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
+                Flexible(
+                  child: Text(
+                    _cajeraNombre,
+                    style: AppTypography.small.copyWith(
+                      color: AppPalette.primary,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],

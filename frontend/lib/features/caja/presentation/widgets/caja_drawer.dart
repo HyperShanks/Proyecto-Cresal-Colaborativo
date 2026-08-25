@@ -142,12 +142,16 @@ class CajaDrawer extends StatelessWidget {
                     icon: Icons.support_agent_rounded,
                     title: 'Tickets de Soporte',
                     subtitle: 'Reporte de incidencias',
-                    isSelected: false,
+                    isSelected: selectedIndex == 2,
                     onTap: () {
                       if (Scaffold.maybeOf(context)?.isDrawerOpen ?? false) {
                         Navigator.of(context).pop();
                       }
-                      Navigator.of(context).pushNamed('/tickets');
+                      if (onSectionSelected != null) {
+                        onSectionSelected!(2);
+                      } else {
+                        Navigator.of(context).pushNamed('/tickets');
+                      }
                     },
                   ),
                 ],

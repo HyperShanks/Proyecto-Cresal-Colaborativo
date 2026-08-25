@@ -43,6 +43,7 @@ class MockCajaService implements ICajaService {
       nuevoSaldoPendiente: 0,
       estadoActualizado: 'Pagada',
       transaccionesIds: ['tx-123-abc'],
+      qrGenerado: 'TX-QR-3FA85F64-ABC123DEF456',
     );
   }
 }
@@ -250,7 +251,7 @@ void main() {
     expect(provider.esCuadraturaValida, isTrue);
   });
 
-  testWidgets('Procesar cobro invoca al servicio backend y muestra confirmación',
+  testWidgets('Procesar cobro invoca al servicio backend y muestra ResultadoCobroDialog',
       (tester) async {
     setDesktopViewport(tester);
     provider.seleccionarOrden(sampleVenta);
@@ -262,12 +263,20 @@ void main() {
     await tester.tap(find.text('CONFIRMAR Y PROCESAR COBRO'));
     await tester.pump();
     await tester.pump(); // Procesa la reanudación del async gap
-    await tester.pump(const Duration(milliseconds: 500)); // Anima la entrada del SnackBar
+    await tester.pump(const Duration(milliseconds: 500)); // Renderiza el diálogo modal
 
     expect(mockService.registrarCobroLlamado, isTrue);
     expect(mockService.ultimoRequest, isNotNull);
     expect(mockService.ultimoRequest!.idDocumento, sampleVenta.idReferencia);
     expect(mockService.ultimoRequest!.montoDeclarado, 500000);
-    expect(find.text('¡Cobro Procesado Exitosamente!'), findsOneWidget);
+    expect(find.text('Pago Registrado Exitosamente'), findsOneWidget);
+    expect(find.text('Siguiente Orden'), findsOneWidget);
+
+    // Pulsar Siguiente Orden
+    await tester.tap(find.text('Siguiente Orden'));
+    await tester.pumpAndSettle();
+
+    // Diálogo cerrado y panel reiniciado a Empty State
+    expect(find.text('Seleccione una orden para procesar el cobro'), findsOneWidget);
   });
 }

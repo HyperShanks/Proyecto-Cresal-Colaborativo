@@ -257,9 +257,6 @@ class CajaProvider extends ChangeNotifier {
       final resultado = await _cajaService.registrarCobro(request);
       _ultimoResultadoCobro = resultado;
 
-      // Recargar lista de cobros pendientes tras éxito
-      await cargarCobrosPendientes(refresh: true);
-
       return resultado;
     } catch (e) {
       _errorMessage = e.toString().replaceAll('Exception: ', '');
@@ -268,6 +265,16 @@ class CajaProvider extends ChangeNotifier {
       _isProcesandoCobro = false;
       notifyListeners();
     }
+  }
+
+  /// Remueve la orden procesada de la lista en memoria y limpia el panel lateral (SPEC-HU-04 / CA-06).
+  void removerOrdenProcesada(String idDocumento) {
+    _cobros.removeWhere((c) => c.idReferencia == idDocumento);
+    _ordenSeleccionada = null;
+    _montoDeclarado = 0;
+    _pagosDivididos = [];
+    _modalidad = 'LIQUIDACION';
+    notifyListeners();
   }
 
   /// Cambia el filtro de píldoras ('TODOS', 'VENTA', 'BACKORDER') y recarga.

@@ -299,6 +299,8 @@ def test_registrar_cobro_orden_liquidacion_total_exitoso(client, db_session):
     assert data["nuevo_saldo_pendiente"] == 0
     assert data["estado_actualizado"] == "Pagada"
     assert len(data["transacciones_ids"]) == 1
+    assert data["qr_generado"] is not None
+    assert data["qr_generado"].startswith("TX-QR-")
 
     # Verificar en base de datos
     db = TestingSessionLocal()
@@ -307,7 +309,7 @@ def test_registrar_cobro_orden_liquidacion_total_exitoso(client, db_session):
         assert orden_db.monto_pendiente == 0
         assert orden_db.estado_orden == "Pagada"
         assert orden_db.id_cajera == user_caja.id_usuario
-        assert orden_db.qr_transaccional_salida is not None
+        assert orden_db.qr_transaccional_salida == data["qr_generado"]
 
         pago_db = db.query(Transaccion_Pago).filter(
             Transaccion_Pago.id_pago == uuid.UUID(data["transacciones_ids"][0])
@@ -325,7 +327,7 @@ def test_registrar_cobro_orden_liquidacion_total_exitoso(client, db_session):
 def test_registrar_cobro_orden_split_payment_exitoso(client, db_session):
     """
     Registra cobro dividido (split payment) de una orden: Débito ($120.000) + Efectivo ($80.000) = $200.000.
-    Verifica creación de múltiples registros en Transaccion_Pago.
+    Verifica creación de múltiples registros en Transaccion_Pago y generación de QR al liquidar.
     """
     user_caja = db_session["caja_user"]
     orden2 = db_session["orden2"]
@@ -350,6 +352,8 @@ def test_registrar_cobro_orden_split_payment_exitoso(client, db_session):
     assert data["nuevo_saldo_pendiente"] == 0
     assert data["estado_actualizado"] == "Pagada"
     assert len(data["transacciones_ids"]) == 2
+    assert data["qr_generado"] is not None
+    assert data["qr_generado"].startswith("TX-QR-")
 
     # Verificar en BD
     db = TestingSessionLocal()
@@ -369,8 +373,10 @@ def test_registrar_cobro_orden_abono_parcial_exitoso(client, db_session):
     """
     Registra un abono parcial sobre una orden de $800.000 pendiente, pagando $300.000 con Transferencia.
     Verifica:
-    - estado_orden pasa a 'Retenida_Abono'
+    - estado_orden pasa a 'Reservada' (SPEC-HU-04)
     - nuevo_saldo_pendiente queda en $500.000
+    - qr_generado es None
+    - id_cajera se actualiza
     """
     user_caja = db_session["caja_user"]
     orden3 = db_session["orden3"]
@@ -392,13 +398,16 @@ def test_registrar_cobro_orden_abono_parcial_exitoso(client, db_session):
     assert data["success"] is True
     assert data["monto_cobrado"] == 300000
     assert data["nuevo_saldo_pendiente"] == 500000
-    assert data["estado_actualizado"] == "Retenida_Abono"
+    assert data["estado_actualizado"] == "Reservada"
+    assert data["qr_generado"] is None
 
     db = TestingSessionLocal()
     try:
         orden_db = db.query(Orden_Venta).filter(Orden_Venta.id_orden == orden3.id_orden).first()
         assert orden_db.monto_pendiente == 500000
-        assert orden_db.estado_orden == "Retenida_Abono"
+        assert orden_db.estado_orden == "Reservada"
+        assert orden_db.id_cajera == user_caja.id_usuario
+        assert orden_db.qr_transaccional_salida is None
     finally:
         db.close()
 
@@ -409,7 +418,9 @@ def test_registrar_cobro_backorder_abono_exitoso(client, db_session):
     Abona $200.000 con Crédito.
     Verifica:
     - monto_abonado incrementado a $1.100.000
+    - estado_reserva = 'Confirmada'
     - nuevo_saldo_pendiente = $100.000
+    - qr_generado es None
     - Transaccion_Pago con id_reserva persistido
     """
     user_admin = db_session["admin_user"]
@@ -432,12 +443,15 @@ def test_registrar_cobro_backorder_abono_exitoso(client, db_session):
     assert data["success"] is True
     assert data["monto_cobrado"] == 200000
     assert data["nuevo_saldo_pendiente"] == 100000
+    assert data["estado_actualizado"] == "Confirmada"
+    assert data["qr_generado"] is None
     assert data["folio"].startswith("RES-")
 
     db = TestingSessionLocal()
     try:
         res_db = db.query(Reservas_Backorder).filter(Reservas_Backorder.id_reserva == reserva1.id_reserva).first()
         assert res_db.monto_abonado == 1100000
+        assert res_db.estado_reserva == "Confirmada"
 
         pago_db = db.query(Transaccion_Pago).filter(
             Transaccion_Pago.id_pago == uuid.UUID(data["transacciones_ids"][0])

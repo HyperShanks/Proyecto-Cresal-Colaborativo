@@ -332,20 +332,22 @@ def registrar_cobro(
                 )
 
             nuevo_saldo = orden.monto_pendiente - payload.monto_declarado
+            qr_hash: Optional[str] = None
 
-            # Transiciones de Estado (SPEC-HU-03 Sec 3.4)
-            if payload.modalidad == ModalidadCobroEnum.LIQUIDACION and nuevo_saldo == 0:
+            # Transiciones de Estado y Hash QR (SPEC-HU-04 Sec 3.2)
+            if nuevo_saldo == 0:
                 orden.estado_orden = "Pagada"
-                if not orden.qr_transaccional_salida:
-                    orden.qr_transaccional_salida = f"ORD-{uuid.uuid4().hex[:8].upper()}"
-            elif payload.modalidad == ModalidadCobroEnum.ABONO or nuevo_saldo > 0:
-                orden.estado_orden = "Retenida_Abono"
+                qr_hash = f"TX-QR-{uuid.uuid4()}"
+                orden.qr_transaccional_salida = qr_hash
+            else:
+                orden.estado_orden = "Reservada"
+                orden.qr_transaccional_salida = None
 
             orden.monto_pendiente = nuevo_saldo
             orden.id_cajera = current_user.id_usuario
             orden.fecha_actualizacion = now_utc
 
-            folio_doc = orden.qr_transaccional_salida or f"ORD-{str(orden.id_orden).replace('-', '')[:4].upper()}"
+            folio_doc = f"ORD-{str(orden.id_orden).replace('-', '')[:4].upper()}"
             estado_resultado = orden.estado_orden
 
             # Registrar cada método en Transaccion_Pago
@@ -383,8 +385,10 @@ def registrar_cobro(
                 )
 
             reserva.monto_abonado += payload.monto_declarado
-            nuevo_saldo = reserva.precio_acordado - reserva.monto_abonado
+            reserva.estado_reserva = "Confirmada"
             reserva.fecha_actualizacion = now_utc
+            nuevo_saldo = reserva.precio_acordado - reserva.monto_abonado
+            qr_hash = None
 
             folio_doc = f"RES-{str(reserva.id_reserva).replace('-', '')[:4].upper()}"
             estado_resultado = reserva.estado_reserva
@@ -424,4 +428,5 @@ def registrar_cobro(
         nuevo_saldo_pendiente=nuevo_saldo,
         estado_actualizado=estado_resultado,
         transacciones_ids=transacciones_creadas_ids,
+        qr_generado=qr_hash,
     )

@@ -5,6 +5,7 @@ import '../../../../core/theme/tokens/app_typography.dart';
 import '../../models/cobro_pendiente_model.dart';
 import '../providers/caja_provider.dart';
 import 'cobro_pendiente_card.dart';
+import 'resultado_cobro_dialog.dart';
 
 /// Panel de Detalle de Cobro con soporte para Pago Único o Dividido (Split Payment).
 /// Cumple con la especificación SPEC-HU-03 / CRES-214 (Master-Detail alimentado en memoria).
@@ -119,40 +120,22 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
       if (!mounted) return;
 
       if (res != null && res.success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: AppPalette.success,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle_rounded, color: Colors.white, size: 24),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '¡Cobro Procesado Exitosamente!',
-                        style: AppTypography.body.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      Text(
-                        'Folio: ${res.folio} • Monto Cobrado: ${CobroPendienteCard.formatClp(res.montoCobrado)} • Saldo: ${CobroPendienteCard.formatClp(res.nuevoSaldoPendiente)}',
-                        style: AppTypography.small.copyWith(
-                          color: Colors.white.withValues(alpha: 0.9),
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            duration: const Duration(seconds: 4),
+        final resumenMetodos = widget.provider.pagosDivididos
+            .where((p) => p.monto > 0)
+            .map((p) => '${p.metodo}: ${CobroPendienteCard.formatClp(p.monto)}')
+            .join(' + ');
+
+        await showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogCtx) => ResultadoCobroDialog(
+            orden: orden,
+            resultado: res,
+            metodosResumen: resumenMetodos,
+            onSiguienteOrden: () {
+              Navigator.of(dialogCtx).pop();
+              widget.provider.removerOrdenProcesada(orden.idReferencia);
+            },
           ),
         );
       }

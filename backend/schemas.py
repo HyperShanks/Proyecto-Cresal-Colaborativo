@@ -287,6 +287,7 @@ class RegistrarCobroResponse(BaseModel):
     nuevo_saldo_pendiente: int
     estado_actualizado: str
     transacciones_ids: List[UUID]
+    qr_generado: Optional[str] = None
 
 
 
@@ -313,11 +314,13 @@ class TicketCreate(BaseModel):
     asunto: str = Field(
         ...,
         description="Título corto y descriptivo del problema",
+        min_length=5,
         max_length=150,
     )
     descripcion: str = Field(
         ...,
         description="Detalle completo del problema o solicitud",
+        min_length=10,
         max_length=1000,
     )
     tabla_referencia: Optional[str] = Field(
