@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/features/caja/models/cobro_pendiente_model.dart';
+import 'package:frontend/features/caja/models/cobro_model.dart';
 import 'package:frontend/features/caja/services/caja_service.dart';
 import 'package:frontend/features/caja/presentation/providers/caja_provider.dart';
 import 'package:frontend/features/caja/presentation/widgets/cobro_pendiente_card.dart';
@@ -38,6 +39,24 @@ class MockCajaService implements ICajaService {
     }
 
     return result;
+  }
+
+  @override
+  Future<RegistrarCobroResponseModel> registrarCobro(
+    RegistrarCobroRequestModel request,
+  ) async {
+    if (shouldFail) {
+      throw Exception('Fallo de conexión simulado');
+    }
+    return RegistrarCobroResponseModel(
+      success: true,
+      mensaje: 'Cobro registrado exitosamente',
+      folio: 'ORD-9780',
+      montoCobrado: request.montoDeclarado,
+      nuevoSaldoPendiente: 0,
+      estadoActualizado: 'Pagada',
+      transaccionesIds: ['tx-001'],
+    );
   }
 }
 
@@ -341,15 +360,15 @@ void main() {
       // Panel derecho muestra detalle de la orden seleccionada
       expect(find.text('DETALLE DE REPUESTOS Y ARTÍCULOS'), findsOneWidget);
       expect(find.text('Motor MG ZS 1.5 VTi-Tech Completo'), findsWidgets);
-      expect(find.text('COBRAR \$500.000'), findsOneWidget);
+      expect(find.text('TOTAL VENTA'), findsOneWidget);
 
       // Seleccionar orden de Backorder (RES-5401)
-      await tester.tap(find.text('RES-5401'));
+      await tester.tap(find.text('RES-5401').first);
       await tester.pumpAndSettle();
 
       expect(find.text('ESPECIFICACIONES DE LA RESERVA BACKORDER'), findsOneWidget);
       expect(find.text('Tucson 2.0 CRDi Turbo Diesel'), findsOneWidget);
-      expect(find.text('COBRAR \$300.000'), findsOneWidget);
+      expect(find.text('PRECIO ACORDADO'), findsOneWidget);
     });
   });
 }

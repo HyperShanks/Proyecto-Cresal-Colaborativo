@@ -1,7 +1,8 @@
+import uuid
 from typing import Optional, List
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -14,6 +15,7 @@ from models import (
     Activo_Inventariado,
     Vehiculo_Origen,
     Categoria_Activo,
+    Transaccion_Pago,
 )
 from schemas import (
     CajaVerificarAccesoResponse,
@@ -21,6 +23,10 @@ from schemas import (
     CobroPendienteListResponse,
     ArticuloResumenDTO,
     BackorderEspecificacionesDTO,
+    TipoOperacionEnum,
+    ModalidadCobroEnum,
+    RegistrarCobroRequest,
+    RegistrarCobroResponse,
 )
 from core.security import require_caja_role
 
@@ -264,4 +270,158 @@ def obtener_cobros_pendientes(
         total=len(items_resultado),
         sucursal_id=sucursal_id,
         items=items_resultado,
+    )
+
+
+@router.post(
+    "/cobros/registrar",
+    response_model=RegistrarCobroResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Registrar Cobro Único o Dividido",
+    description="Procesa y persiste el pago de una orden de venta o reserva backorder "
+                "validando la cuadratura matemática, rol de caja y atomicidad ACID."
+)
+def registrar_cobro(
+    payload: RegistrarCobroRequest,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_caja_role),
+):
+    """
+    Endpoint transaccional para registro de cobros en caja (SPEC-HU-03).
+    Soporta pago único o dividido (split payment) sobre Orden_Venta y Reservas_Backorder.
+    """
+    # 1. Validación de Cuadratura Matemática (CA-05)
+    total_pagos = sum(p.monto for p in payload.pagos)
+    if total_pagos != payload.monto_declarado:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Descuadre financiero: La suma de los métodos de pago (${total_pagos:,}) "
+                   f"no coincide con el monto declarado a cobrar (${payload.monto_declarado:,})."
+        )
+
+    # 2. Validación de montos individuales > 0 (CA-06)
+    for p in payload.pagos:
+        if p.monto <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Todos los métodos de pago deben registrar un monto estrictamente mayor a $0."
+            )
+
+    transacciones_creadas_ids: List[uuid.UUID] = []
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    # 3. Bloque Transaccional ACID Obligatorio (RULES.md)
+    try:
+        if payload.tipo_operacion == TipoOperacionEnum.ORDEN:
+            orden = db.query(Orden_Venta).filter(
+                Orden_Venta.id_orden == payload.id_documento
+            ).first()
+
+            if not orden:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"No se encontró la Orden de Venta con ID {payload.id_documento}."
+                )
+
+            # Validación Anti-Sobrepago (CA-06)
+            if payload.monto_declarado > orden.monto_pendiente:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Sobrepago rechazado: El monto a cobrar (${payload.monto_declarado:,}) "
+                           f"supera el saldo pendiente de la orden (${orden.monto_pendiente:,})."
+                )
+
+            nuevo_saldo = orden.monto_pendiente - payload.monto_declarado
+
+            # Transiciones de Estado (SPEC-HU-03 Sec 3.4)
+            if payload.modalidad == ModalidadCobroEnum.LIQUIDACION and nuevo_saldo == 0:
+                orden.estado_orden = "Pagada"
+                if not orden.qr_transaccional_salida:
+                    orden.qr_transaccional_salida = f"ORD-{uuid.uuid4().hex[:8].upper()}"
+            elif payload.modalidad == ModalidadCobroEnum.ABONO or nuevo_saldo > 0:
+                orden.estado_orden = "Retenida_Abono"
+
+            orden.monto_pendiente = nuevo_saldo
+            orden.id_cajera = current_user.id_usuario
+            orden.fecha_actualizacion = now_utc
+
+            folio_doc = orden.qr_transaccional_salida or f"ORD-{str(orden.id_orden).replace('-', '')[:4].upper()}"
+            estado_resultado = orden.estado_orden
+
+            # Registrar cada método en Transaccion_Pago
+            for pago_item in payload.pagos:
+                id_transaccion = uuid.uuid4()
+                transaccion = Transaccion_Pago(
+                    id_pago=id_transaccion,
+                    id_orden=orden.id_orden,
+                    id_reserva=None,
+                    monto=pago_item.monto,
+                    metodo_pago=pago_item.metodo.value,
+                    estado_pago="Procesado",
+                    fecha_pago=now_utc,
+                )
+                db.add(transaccion)
+                transacciones_creadas_ids.append(id_transaccion)
+
+        elif payload.tipo_operacion == TipoOperacionEnum.BACKORDER:
+            reserva = db.query(Reservas_Backorder).filter(
+                Reservas_Backorder.id_reserva == payload.id_documento
+            ).first()
+
+            if not reserva:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"No se encontró la Reserva Backorder con ID {payload.id_documento}."
+                )
+
+            saldo_pendiente_backorder = reserva.precio_acordado - reserva.monto_abonado
+            if payload.monto_declarado > saldo_pendiente_backorder:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Sobrepago rechazado: El monto declarado (${payload.monto_declarado:,}) "
+                           f"supera el saldo pendiente de la reserva (${saldo_pendiente_backorder:,})."
+                )
+
+            reserva.monto_abonado += payload.monto_declarado
+            nuevo_saldo = reserva.precio_acordado - reserva.monto_abonado
+            reserva.fecha_actualizacion = now_utc
+
+            folio_doc = f"RES-{str(reserva.id_reserva).replace('-', '')[:4].upper()}"
+            estado_resultado = reserva.estado_reserva
+
+            # Registrar cada método en Transaccion_Pago
+            for pago_item in payload.pagos:
+                id_transaccion = uuid.uuid4()
+                transaccion = Transaccion_Pago(
+                    id_pago=id_transaccion,
+                    id_orden=None,
+                    id_reserva=reserva.id_reserva,
+                    monto=pago_item.monto,
+                    metodo_pago=pago_item.metodo.value,
+                    estado_pago="Procesado",
+                    fecha_pago=now_utc,
+                )
+                db.add(transaccion)
+                transacciones_creadas_ids.append(id_transaccion)
+
+        db.commit()
+
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error transaccional al registrar el cobro: {str(e)}"
+        )
+
+    return RegistrarCobroResponse(
+        success=True,
+        mensaje=f"Cobro registrado exitosamente para el documento {folio_doc}.",
+        folio=folio_doc,
+        monto_cobrado=payload.monto_declarado,
+        nuevo_saldo_pendiente=nuevo_saldo,
+        estado_actualizado=estado_resultado,
+        transacciones_ids=transacciones_creadas_ids,
     )

@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional, List
 from uuid import UUID
 from datetime import datetime
+from enum import Enum
 import re
 
 
@@ -240,6 +241,52 @@ class CobroPendienteListResponse(BaseModel):
     items: List[CobroPendienteItemResponse]
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ==========================================
+# ESQUEMAS PARA REGISTRO DE COBROS Y SPLIT PAYMENT (SPEC-HU-03)
+# ==========================================
+
+class TipoOperacionEnum(str, Enum):
+    ORDEN = "ORDEN"
+    BACKORDER = "BACKORDER"
+
+
+class ModalidadCobroEnum(str, Enum):
+    LIQUIDACION = "LIQUIDACION"
+    ABONO = "ABONO"
+
+
+class MetodoPagoEnum(str, Enum):
+    EFECTIVO = "Efectivo"
+    DEBITO = "Debito"
+    CREDITO = "Credito"
+    TRANSFERENCIA = "Transferencia"
+    CHEQUE = "Cheque"
+
+
+class TransaccionPagoItemSchema(BaseModel):
+    metodo: MetodoPagoEnum
+    monto: int = Field(gt=0, description="El monto por método debe ser mayor a 0 y sin decimales")
+
+
+class RegistrarCobroRequest(BaseModel):
+    tipo_operacion: TipoOperacionEnum
+    id_documento: UUID
+    modalidad: ModalidadCobroEnum
+    monto_declarado: int = Field(gt=0, description="Monto total acordado a pagar")
+    pagos: List[TransaccionPagoItemSchema] = Field(min_length=1)
+
+
+class RegistrarCobroResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    success: bool
+    mensaje: str
+    folio: str
+    monto_cobrado: int
+    nuevo_saldo_pendiente: int
+    estado_actualizado: str
+    transacciones_ids: List[UUID]
 
 
 

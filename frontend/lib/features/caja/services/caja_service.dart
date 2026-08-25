@@ -2,6 +2,7 @@ import 'dart:convert';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/services/api_service.dart';
 import '../models/cobro_pendiente_model.dart';
+import '../models/cobro_model.dart';
 
 abstract class ICajaService {
   Future<List<CobroPendienteModel>> obtenerCobrosPendientes({
@@ -9,6 +10,10 @@ abstract class ICajaService {
     String? busqueda,
     String? tipoOperacion,
   });
+
+  Future<RegistrarCobroResponseModel> registrarCobro(
+    RegistrarCobroRequestModel request,
+  );
 }
 
 class CajaService implements ICajaService {
@@ -58,4 +63,32 @@ class CajaService implements ICajaService {
       throw Exception(mensaje);
     }
   }
+
+  @override
+  Future<RegistrarCobroResponseModel> registrarCobro(
+    RegistrarCobroRequestModel request,
+  ) async {
+    final uri = Uri.parse('$_endpoint/cobros/registrar');
+
+    final response = await ApiService.post(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode(request.toJson()),
+    );
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      final data = json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      return RegistrarCobroResponseModel.fromJson(data);
+    } else {
+      String mensaje = 'Error al registrar cobro (${response.statusCode})';
+      try {
+        final errJson = json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        if (errJson.containsKey('detail')) {
+          mensaje = errJson['detail'].toString();
+        }
+      } catch (_) {}
+      throw Exception(mensaje);
+    }
+  }
 }
+
