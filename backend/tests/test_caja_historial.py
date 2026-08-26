@@ -567,3 +567,21 @@ def test_filtro_rango_fechas_y_validacion_error(client, tokens):
     # Rango sin fechas -> 422
     r_missing = client.get("/api/v1/caja/historial?sucursal_id=1&periodo=RANGO", headers=headers)
     assert r_missing.status_code == 422
+
+
+def test_historial_excluye_ordenes_reservadas(client, tokens):
+    """
+    Test 8: Valida que órdenes en estado 'Reservada' (pendientes de cobro)
+    NUNCA aparezcan en el historial de auditoría de caja.
+    """
+    headers = {"Authorization": f"Bearer {tokens['caja']}"}
+
+    # Consultar historial general
+    response = client.get("/api/v1/caja/historial?sucursal_id=1&periodo=TODOS", headers=headers)
+    assert response.status_code == 200
+    items = response.json()["items"]
+
+    # Ningún ítem en el historial debe tener estado Reservada
+    for item in items:
+        assert item["estado_orden"] != "Reservada"
+

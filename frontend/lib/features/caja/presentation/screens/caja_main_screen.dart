@@ -242,9 +242,9 @@ class _CajaMainScreenState extends State<CajaMainScreen> {
                               color: AppPalette.primary,
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: const Text(
+                            child: Text(
                               'CRESAL',
-                              style: TextStyle(
+                              style: AppTypography.headline.copyWith(
                                 fontWeight: FontWeight.w900,
                                 fontSize: 16,
                                 letterSpacing: 2,
@@ -274,9 +274,9 @@ class _CajaMainScreenState extends State<CajaMainScreen> {
                       borderRadius: BorderRadius.circular(10),
                     ),
                     alignment: Alignment.center,
-                    child: const Text(
+                    child: Text(
                       'C',
-                      style: TextStyle(
+                      style: AppTypography.headline.copyWith(
                         fontWeight: FontWeight.w900,
                         fontSize: 22,
                         color: Colors.white,
@@ -320,7 +320,7 @@ class _CajaMainScreenState extends State<CajaMainScreen> {
                 ),
                 const SizedBox(height: 6),
                 _buildSidebarItem(
-                  icon: Icons.support_agent_rounded,
+                  icon: Icons.contact_support_rounded,
                   title: 'Soporte',
                   subtitle: 'Tickets de Soporte',
                   isSelected: _selectedNavIndex == 2,
@@ -527,9 +527,9 @@ class _CajaMainScreenState extends State<CajaMainScreen> {
                 ),
               ),
               icon: const Icon(Icons.logout_rounded, size: 16, color: Colors.white),
-              label: const Text(
+              label: Text(
                 'CERRAR SESIÓN',
-                style: TextStyle(
+                style: AppTypography.button.copyWith(
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.5,
                   fontSize: 12,
@@ -645,42 +645,6 @@ class _CajaMainScreenState extends State<CajaMainScreen> {
               ),
               tooltip: 'Notificaciones del turno',
               onPressed: () {},
-            ),
-          ),
-          const SizedBox(width: 12),
-          // Cajera Info Chip
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppPalette.primary.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: AppPalette.primary.withValues(alpha: 0.35),
-                width: 1,
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.account_circle_rounded,
-                  size: 16,
-                  color: AppPalette.primary,
-                ),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(
-                    _cajeraNombre,
-                    style: AppTypography.small.copyWith(
-                      color: AppPalette.primary,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
             ),
           ),
         ],

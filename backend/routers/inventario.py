@@ -461,8 +461,7 @@ def obtener_pendientes_precio(
             Activo_Inventariado.ubicacion_pasillo != "",
             Activo_Inventariado.ubicacion_pallet.isnot(None),
             Activo_Inventariado.ubicacion_pallet != "",
-            Activo_Inventariado.id_estado.notin_([1, 3, 4, 5]),
-            Estado_Activo.nombre_estado.notin_(["Disponible", "Vendido", "En Importación", "En Desarme"]),
+            Estado_Activo.nombre_estado == "Paletizado",
         )
         .order_by(Activo_Inventariado.fecha_creacion.desc())
     )

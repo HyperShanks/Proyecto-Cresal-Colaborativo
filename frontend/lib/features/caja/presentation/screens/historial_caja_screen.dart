@@ -87,26 +87,35 @@ class _HistorialCajaScreenState extends State<HistorialCajaScreen> {
 
         return Container(
           color: AppPalette.backgroundLight,
-          padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // ── 1. BARRA DE PERÍODOS Y FILTROS RÁPIDOS ──
-              _buildBarraPeriodos(state),
-              const SizedBox(height: 14),
+              // ── 1. CABECERA CON TÍTULO, SUBTÍTULOS Y SELECTOR DE PERÍODOS ──
+              _buildCabecera(state),
 
-              // ── 2. BARRA DE BÚSQUEDA Y FILTROS DESPLEGABLES ──
-              _buildBarraBusquedaFiltros(state),
-              const SizedBox(height: 16),
-
-              // ── 3. PANEL DE MÉTRICAS DE ARQUEO / CUADRE ──
-              if (state.data != null)
-                HistorialMetricasPanel(resumen: state.data!.resumenCuadre),
-              const SizedBox(height: 16),
-
-              // ── 4. CONTENIDO PRINCIPAL (TABLA / LOADING / ERROR / ZERO STATE) ──
+              // ── 2. ÁREA DE CONTENIDO (Métricas, Filtros y Tabla de Órdenes) ──
               Expanded(
-                child: _buildCuerpoPrincipal(state),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // ── 2.1 BARRA DE BÚSQUEDA Y FILTROS DESPLEGABLES ──
+                      _buildBarraBusquedaFiltros(state),
+                      const SizedBox(height: 16),
+
+                      // ── 2.2 PANEL DE MÉTRICAS DE ARQUEO / CUADRE ──
+                      if (state.data != null)
+                        HistorialMetricasPanel(resumen: state.data!.resumenCuadre),
+                      const SizedBox(height: 16),
+
+                      // ── 2.3 CONTENIDO PRINCIPAL (TABLA / LOADING / ERROR / ZERO STATE) ──
+                      Expanded(
+                        child: _buildCuerpoPrincipal(state),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
@@ -115,44 +124,99 @@ class _HistorialCajaScreenState extends State<HistorialCajaScreen> {
     );
   }
 
+  Widget _buildCabecera(HistorialCajaState state) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      decoration: const BoxDecoration(
+        color: AppPalette.surfaceLight,
+        border: Border(bottom: BorderSide(color: AppPalette.borderLight)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          // Título, Tag de Categoría y Subtítulo
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'AUDITORÍA Y CIERRE',
+                  style: AppTypography.small.copyWith(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.1,
+                    color: AppPalette.textSecondaryLight,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Historial de Órdenes',
+                  style: AppTypography.title.copyWith(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: AppPalette.textPrimaryLight,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Control de cobros, arqueo de turno y trazabilidad de ventas',
+                  style: AppTypography.small.copyWith(
+                    fontSize: 12,
+                    fontWeight: FontWeight.normal,
+                    color: AppPalette.textSecondaryLight,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+
+          // Selector Segmentado de Períodos en Cápsula
+          _buildBarraPeriodos(state),
+        ],
+      ),
+    );
+  }
+
   Widget _buildBarraPeriodos(HistorialCajaState state) {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: AppPalette.surfaceLight,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppPalette.neutral.withValues(alpha: 0.18),
-        ),
+        color: const Color(0xFFF1F5F9), // Slate-100 capsule
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppPalette.borderLight),
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          _buildPeriodoButton(
+          _buildPeriodoPill(
             label: 'Hoy',
             isSelected: state.periodo == PeriodoHistorial.hoy,
             onTap: () => _provider.cambiarPeriodo(PeriodoHistorial.hoy),
           ),
           const SizedBox(width: 4),
-          _buildPeriodoButton(
+          _buildPeriodoPill(
             label: 'Esta Semana',
             isSelected: state.periodo == PeriodoHistorial.estaSemana,
             onTap: () => _provider.cambiarPeriodo(PeriodoHistorial.estaSemana),
           ),
           const SizedBox(width: 4),
-          _buildPeriodoButton(
+          _buildPeriodoPill(
             label: 'Este Mes',
             isSelected: state.periodo == PeriodoHistorial.esteMes,
             onTap: () => _provider.cambiarPeriodo(PeriodoHistorial.esteMes),
           ),
           const SizedBox(width: 4),
-          _buildPeriodoButton(
+          _buildPeriodoPill(
             label: state.periodo == PeriodoHistorial.rango &&
                     state.fechaDesde != null &&
                     state.fechaHasta != null
-                ? 'Rango: ${state.fechaDesde} a ${state.fechaHasta}'
-                : 'Rango Personalizado...',
+                ? '${state.fechaDesde} a ${state.fechaHasta}'
+                : 'Rango',
             isSelected: state.periodo == PeriodoHistorial.rango,
-            icon: Icons.calendar_month_rounded,
+            icon: Icons.calendar_today_outlined,
             onTap: _abrirDialogoRangoFechas,
           ),
         ],
@@ -160,57 +224,59 @@ class _HistorialCajaScreenState extends State<HistorialCajaScreen> {
     );
   }
 
-  Widget _buildPeriodoButton({
+  Widget _buildPeriodoPill({
     required String label,
     required bool isSelected,
     IconData? icon,
     required VoidCallback onTap,
   }) {
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 8),
-          decoration: BoxDecoration(
-            color: isSelected ? AppPalette.primary : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: AppPalette.primary.withValues(alpha: 0.25),
-                      blurRadius: 4,
-                      offset: const Offset(0, 1),
-                    ),
-                  ]
-                : null,
-          ),
-          alignment: Alignment.center,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (icon != null) ...[
-                Icon(
-                  icon,
-                  size: 14,
-                  color: isSelected ? Colors.white : AppPalette.textSecondaryLight,
-                ),
-                const SizedBox(width: 6),
-              ],
-              Flexible(
-                child: Text(
-                  label,
-                  style: AppTypography.small.copyWith(
-                    color: isSelected ? Colors.white : AppPalette.textSecondaryLight,
-                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                    fontSize: 12,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: isSelected
+              ? Border.all(color: AppPalette.borderLight)
+              : null,
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 4,
+                    offset: const Offset(0, 1),
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(
+                icon,
+                size: 14,
+                color: isSelected
+                    ? AppPalette.primary
+                    : AppPalette.textSecondaryLight,
               ),
+              const SizedBox(width: 6),
             ],
-          ),
+            Text(
+              label,
+              style: AppTypography.button.copyWith(
+                fontFamily: AppTypography.fontFamily,
+                color: isSelected
+                    ? AppPalette.primary
+                    : AppPalette.textSecondaryLight,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                fontSize: 12,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -233,7 +299,10 @@ class _HistorialCajaScreenState extends State<HistorialCajaScreen> {
             flex: 5,
             child: TextField(
               controller: _searchController,
-              style: AppTypography.body.copyWith(fontSize: 13),
+              style: AppTypography.body.copyWith(
+                fontSize: 13,
+                color: AppPalette.textPrimaryLight,
+              ),
               onChanged: (val) => _provider.actualizarBusqueda(val),
               decoration: InputDecoration(
                 hintText: 'Buscar por Folio (ORD-), RUT, Cliente, Vendedor...',
@@ -295,7 +364,6 @@ class _HistorialCajaScreenState extends State<HistorialCajaScreen> {
                 _buildDropdownItem('TODOS', 'Todos los Estados'),
                 _buildDropdownItem('Pagada', 'Pagada'),
                 _buildDropdownItem('Despachada', 'Despachada'),
-                _buildDropdownItem('Reservada', 'Reservada'),
                 _buildDropdownItem('Anulada', 'Anulada'),
               ],
               onChanged: (val) {

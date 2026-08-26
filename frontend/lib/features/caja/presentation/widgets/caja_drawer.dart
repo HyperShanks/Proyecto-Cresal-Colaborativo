@@ -139,7 +139,7 @@ class CajaDrawer extends StatelessWidget {
                   const SizedBox(height: 6),
                   _buildMenuItem(
                     context: context,
-                    icon: Icons.support_agent_rounded,
+                    icon: Icons.contact_support_rounded,
                     title: 'Tickets de Soporte',
                     subtitle: 'Reporte de incidencias',
                     isSelected: selectedIndex == 2,
@@ -366,9 +366,9 @@ class CajaDrawer extends StatelessWidget {
             ),
           ),
           icon: const Icon(Icons.logout_rounded, size: 18, color: Colors.white),
-          label: const Text(
+          label: Text(
             'CERRAR SESIÓN',
-            style: TextStyle(
+            style: AppTypography.button.copyWith(
               fontWeight: FontWeight.w700,
               letterSpacing: 0.5,
               fontSize: 13,

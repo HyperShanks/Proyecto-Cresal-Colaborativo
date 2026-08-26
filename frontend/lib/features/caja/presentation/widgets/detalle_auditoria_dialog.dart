@@ -177,18 +177,18 @@ class DetalleAuditoriaDialog extends StatelessWidget {
                                     color: AppPalette.neutral.withValues(alpha: 0.3),
                                   ),
                                 ),
-                                child: const Row(
+                                child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(
+                                    const Icon(
                                       Icons.qr_code_2_rounded,
                                       size: 13,
                                       color: AppPalette.textPrimaryLight,
                                     ),
-                                    SizedBox(width: 4),
+                                    const SizedBox(width: 4),
                                     Text(
                                       'QR Activo',
-                                      style: TextStyle(
+                                      style: AppTypography.small.copyWith(
                                         fontSize: 10,
                                         fontWeight: FontWeight.w700,
                                         color: AppPalette.textPrimaryLight,

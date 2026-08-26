@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../models/cobro_pendiente_model.dart';
+import '../../models/cobro_model.dart';
 import '../providers/caja_provider.dart';
 import 'cobro_pendiente_card.dart';
 import 'resultado_cobro_dialog.dart';
@@ -105,7 +106,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
       case 'transferencia':
         return Icons.swap_horiz_rounded;
       case 'cheque':
-        return Icons.receipt_long_rounded;
+        return Icons.description_rounded;
       default:
         return Icons.account_balance_wallet_rounded;
     }
@@ -263,8 +264,8 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
 
           const SizedBox(height: 16),
 
-          // ── 5. PASARELA DE MÉTODOS DE PAGO / SPLIT (ST-F04 / CA-04) ──
-          _buildSplitPaymentSection(),
+          // ── 5. PASARELA DE MÉTODOS DE PAGO (PAGO ÚNICO / SPLIT) (ST-F04 / CA-04) ──
+          _buildMetodosPagoSection(),
 
           const SizedBox(height: 16),
 
@@ -323,13 +324,24 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                               .withValues(alpha: 0.4),
                         ),
                       ),
-                      child: Text(
-                        isVenta ? 'Venta en Tienda' : 'Reserva Backorder',
-                        style: AppTypography.small.copyWith(
-                          color: isVenta ? AppPalette.warningText : AppPalette.tertiary,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
-                        ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isVenta ? Icons.storefront_rounded : Icons.directions_boat_filled_outlined,
+                            size: 14,
+                            color: isVenta ? AppPalette.warningText : AppPalette.tertiary,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            isVenta ? 'Venta en Tienda' : 'Reserva Backorder',
+                            style: AppTypography.small.copyWith(
+                              color: isVenta ? AppPalette.warningText : AppPalette.tertiary,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -515,7 +527,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
           Row(
             children: [
               Icon(
-                isVenta ? Icons.format_list_bulleted_rounded : Icons.info_outline_rounded,
+                isVenta ? Icons.assignment_rounded : Icons.info_outline_rounded,
                 size: 18,
                 color: AppPalette.primary,
               ),
@@ -855,9 +867,23 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
               controller: _abonoCustomController,
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              style: AppTypography.body.copyWith(
+                color: AppPalette.textPrimaryLight,
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
+              ),
               decoration: InputDecoration(
                 prefixText: '\$ ',
+                prefixStyle: AppTypography.body.copyWith(
+                  color: AppPalette.textPrimaryLight,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                ),
                 hintText: 'Ej: 150000',
+                hintStyle: AppTypography.body.copyWith(
+                  color: AppPalette.textSecondaryLight.withValues(alpha: 0.6),
+                  fontSize: 14,
+                ),
                 filled: true,
                 fillColor: AppPalette.backgroundLight,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -882,9 +908,10 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
     );
   }
 
-  Widget _buildSplitPaymentSection() {
+  Widget _buildMetodosPagoSection() {
+    final modalidadPago = widget.provider.modalidadPago;
+    final isUnico = modalidadPago == 'UNICO';
     final pagos = widget.provider.pagosDivididos;
-    const metodosDisponibles = ['Efectivo', 'Debito', 'Credito', 'Transferencia', 'Cheque'];
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -899,47 +926,268 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(
-                child: Row(
-                  children: [
-                    const Icon(Icons.account_tree_rounded, size: 18, color: AppPalette.primary),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'CANALES DE PAGO (PAGO DIVIDIDO)',
-                        style: AppTypography.title.copyWith(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
-                          color: AppPalette.textSecondaryLight,
-                          letterSpacing: 0.5,
-                        ),
-                        overflow: TextOverflow.ellipsis,
+              Row(
+                children: [
+                  const Icon(Icons.payment_rounded, size: 18, color: AppPalette.primary),
+                  const SizedBox(width: 8),
+                  Text(
+                    'MÉTODOS DE PAGO',
+                    style: AppTypography.title.copyWith(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: AppPalette.textSecondaryLight,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+              InkWell(
+                onTap: () {
+                  final nuevaMod = isUnico ? 'SPLIT' : 'UNICO';
+                  widget.provider.setModalidadPago(nuevaMod);
+                  _sincronizarControllers();
+                },
+                borderRadius: BorderRadius.circular(6),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  child: Row(
+                    children: [
+                      Icon(
+                        isUnico ? Icons.call_split_rounded : Icons.check_circle_outline_rounded,
+                        size: 16,
+                        color: AppPalette.primary,
                       ),
+                      const SizedBox(width: 4),
+                      Text(
+                        isUnico ? 'Dividir Pago' : 'Pago Único (100%)',
+                        style: AppTypography.small.copyWith(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppPalette.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Título del selector de métodos (idéntico al prototipo)
+          Text(
+            'SELECCIONA EL MÉTODO',
+            style: AppTypography.small.copyWith(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: AppPalette.textSecondaryLight,
+              letterSpacing: 0.6,
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Grid de 5 Botones de Métodos (Borde constante de 1.5px y altura uniforme)
+          _buildMetodosGrid(),
+          const SizedBox(height: 14),
+
+          // Detalle de distribución según modalidad
+          if (isUnico)
+            _buildPagoUnicoResumen(pagos)
+          else
+            _buildPagoDivididoInputs(pagos),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMetodosGrid() {
+    const metodosConfig = [
+      {'nombre': 'Efectivo', 'label': 'EFECTIVO', 'icon': Icons.payments_rounded},
+      {'nombre': 'Debito', 'label': 'DÉBITO', 'icon': Icons.credit_card_rounded},
+      {'nombre': 'Credito', 'label': 'CRÉDITO', 'icon': Icons.credit_card_rounded},
+      {'nombre': 'Transferencia', 'label': 'TRANSFERENCIA', 'icon': Icons.swap_horiz_rounded},
+      {'nombre': 'Cheque', 'label': 'CHEQUE', 'icon': Icons.description_rounded},
+    ];
+
+    return Row(
+      children: metodosConfig.map((cfg) {
+        final nombre = cfg['nombre'] as String;
+        final label = cfg['label'] as String;
+        final icon = cfg['icon'] as IconData;
+        final isActive = widget.provider.esMetodoActivo(nombre);
+
+        return Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: InkWell(
+              onTap: () {
+                widget.provider.toggleMetodoPago(nombre);
+                _sincronizarControllers();
+              },
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 2),
+                decoration: BoxDecoration(
+                  color: isActive ? AppPalette.primary : AppPalette.surfaceLight,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: isActive ? AppPalette.primary : AppPalette.borderLight,
+                    width: 1.5,
+                  ),
+                  boxShadow: isActive
+                      ? [
+                          BoxShadow(
+                            color: AppPalette.primary.withValues(alpha: 0.2),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ]
+                      : null,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      icon,
+                      size: 20,
+                      color: isActive ? Colors.white : AppPalette.textSecondaryLight,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      label,
+                      style: AppTypography.small.copyWith(
+                        color: isActive ? Colors.white : AppPalette.textPrimaryLight,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 11,
+                        letterSpacing: 0.4,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              TextButton.icon(
-                style: TextButton.styleFrom(
-                  foregroundColor: AppPalette.primary,
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildPagoUnicoResumen(List<TransaccionPagoItemModel> pagos) {
+    final metodoNombre = pagos.isNotEmpty ? pagos.first.metodo : 'Efectivo';
+    final monto = widget.provider.montoDeclarado;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: AppPalette.backgroundLight,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppPalette.borderLight),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppPalette.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
-                label: const Text(
-                  'Agregar Método',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+                child: Icon(
+                  _getIconoMetodo(metodoNombre),
+                  size: 20,
+                  color: AppPalette.primary,
                 ),
-                onPressed: () {
-                  widget.provider.agregarMetodoPago(metodo: 'Debito', monto: 0);
-                  _sincronizarControllers();
-                },
               ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Canal Activo: $metodoNombre',
+                    style: AppTypography.body.copyWith(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                      color: AppPalette.textPrimaryLight,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Cubre el 100% del monto acordado',
+                    style: AppTypography.small.copyWith(
+                      fontSize: 11,
+                      color: AppPalette.textSecondaryLight,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          Text(
+            CobroPendienteCard.formatClp(monto),
+            style: AppTypography.title.copyWith(
+              fontWeight: FontWeight.w900,
+              fontSize: 16,
+              color: AppPalette.primary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPagoDivididoInputs(List<TransaccionPagoItemModel> pagos) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppPalette.backgroundLight,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppPalette.borderLight),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'DISTRIBUCIÓN DE MONTOS',
+                style: AppTypography.small.copyWith(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 11,
+                  color: AppPalette.textSecondaryLight,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              if (widget.provider.diferenciaCuadratura > 0 && pagos.length > 1)
+                InkWell(
+                  onTap: () {
+                    widget.provider.autoRellenarRestante(pagos.length - 1);
+                    _sincronizarControllers();
+                  },
+                  child: Row(
+                    children: [
+                      const Icon(Icons.auto_fix_high_rounded, size: 14, color: AppPalette.primary),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Auto-rellenar restante',
+                        style: AppTypography.small.copyWith(
+                          color: AppPalette.primary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: 12),
 
-          // Lista dinámica de métodos de pago
+          // Inputs dinámicos para los métodos seleccionados
           ListView.separated(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -952,67 +1200,62 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
               return Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppPalette.backgroundLight,
+                  color: AppPalette.surfaceLight,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: AppPalette.borderLight),
                 ),
                 child: Row(
                   children: [
-                    // Selector de Método
+                    // Badge del método
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
-                        color: AppPalette.surfaceLight,
+                        color: AppPalette.primary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppPalette.borderLight),
                       ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: metodosDisponibles.contains(pago.metodo)
-                              ? pago.metodo
-                              : 'Efectivo',
-                          icon: const Icon(Icons.arrow_drop_down_rounded),
-                          items: metodosDisponibles.map((m) {
-                            return DropdownMenuItem(
-                              value: m,
-                              child: Row(
-                                children: [
-                                  Icon(_getIconoMetodo(m), size: 16, color: AppPalette.primary),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    m,
-                                    style: AppTypography.body.copyWith(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 13,
-                                      color: AppPalette.textPrimaryLight,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }).toList(),
-                          onChanged: (newMethod) {
-                            if (newMethod != null) {
-                              widget.provider.actualizarTipoMetodo(idx, newMethod);
-                            }
-                          },
-                        ),
+                      child: Row(
+                        children: [
+                          Icon(_getIconoMetodo(pago.metodo), size: 16, color: AppPalette.primary),
+                          const SizedBox(width: 6),
+                          Text(
+                            pago.metodo,
+                            style: AppTypography.body.copyWith(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                              color: AppPalette.primary,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(width: 12),
 
-                    // Input de Monto
+                    // Input de monto
                     Expanded(
                       child: TextField(
                         controller: ctrl,
                         keyboardType: TextInputType.number,
                         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        style: AppTypography.body.copyWith(
+                          color: AppPalette.textPrimaryLight,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
                         decoration: InputDecoration(
                           prefixText: '\$ ',
+                          prefixStyle: AppTypography.body.copyWith(
+                            color: AppPalette.textPrimaryLight,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                          ),
                           hintText: '0',
+                          hintStyle: AppTypography.body.copyWith(
+                            color: AppPalette.textSecondaryLight.withValues(alpha: 0.6),
+                            fontSize: 14,
+                          ),
                           isDense: true,
                           filled: true,
-                          fillColor: AppPalette.surfaceLight,
+                          fillColor: AppPalette.backgroundLight,
                           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
@@ -1031,15 +1274,16 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                     ),
                     const SizedBox(width: 8),
 
-                    // Botón Auto-rellenar Restante (CA-04)
+                    // Botón Auto-rellenar
                     Tooltip(
-                      message: 'Auto-rellenar restante',
+                      message: 'Auto-rellenar este método',
                       child: IconButton(
-                        icon: const Icon(Icons.auto_fix_high_rounded, size: 20),
+                        icon: const Icon(Icons.auto_fix_high_rounded, size: 18),
                         color: AppPalette.primary,
                         style: IconButton.styleFrom(
                           backgroundColor: AppPalette.primary.withValues(alpha: 0.1),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.all(8),
                         ),
                         onPressed: () {
                           widget.provider.autoRellenarRestante(idx);
@@ -1048,14 +1292,19 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                       ),
                     ),
 
-                    // Botón Eliminar fila si > 1
+                    // Botón Eliminar si hay > 1 método
                     if (pagos.length > 1) ...[
                       const SizedBox(width: 4),
                       Tooltip(
                         message: 'Eliminar método',
                         child: IconButton(
-                          icon: const Icon(Icons.delete_outline_rounded, size: 20),
+                          icon: const Icon(Icons.delete_outline_rounded, size: 18),
                           color: AppPalette.error,
+                          style: IconButton.styleFrom(
+                            backgroundColor: AppPalette.error.withValues(alpha: 0.08),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            padding: const EdgeInsets.all(8),
+                          ),
                           onPressed: () {
                             widget.provider.removerMetodoPago(idx);
                             _sincronizarControllers();
@@ -1252,7 +1501,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                     : esValida
                         ? 'CONFIRMAR Y PROCESAR COBRO'
                         : 'PAGO BLOQUEADO (DESCUADRE)',
-                style: const TextStyle(
+                style: AppTypography.button.copyWith(
                   fontWeight: FontWeight.w900,
                   fontSize: 15,
                   letterSpacing: 0.5,

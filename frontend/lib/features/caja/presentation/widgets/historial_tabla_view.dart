@@ -112,14 +112,14 @@ class HistorialTablaView extends StatelessWidget {
                                 style: AppTypography.body.copyWith(
                                   fontWeight: FontWeight.w800,
                                   color: AppPalette.textPrimaryLight,
-                                  fontSize: 13,
+                                  fontSize: 14,
                                 ),
                               ),
                               if (item.emiteQr) ...[
                                 const SizedBox(width: 4),
                                 const Icon(
                                   Icons.qr_code_2_rounded,
-                                  size: 14,
+                                  size: 15,
                                   color: AppPalette.primary,
                                 ),
                               ],
@@ -134,7 +134,8 @@ class HistorialTablaView extends StatelessWidget {
                             item.fechaHoraFormateada,
                             style: AppTypography.small.copyWith(
                               color: AppPalette.textSecondaryLight,
-                              fontSize: 12,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ),
@@ -150,7 +151,7 @@ class HistorialTablaView extends StatelessWidget {
                                 style: AppTypography.small.copyWith(
                                   fontWeight: FontWeight.w700,
                                   color: AppPalette.textPrimaryLight,
-                                  fontSize: 12,
+                                  fontSize: 13,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -160,7 +161,7 @@ class HistorialTablaView extends StatelessWidget {
                                   item.clienteRut!,
                                   style: AppTypography.small.copyWith(
                                     color: AppPalette.textSecondaryLight,
-                                    fontSize: 11,
+                                    fontSize: 12,
                                   ),
                                 ),
                             ],
@@ -174,10 +175,11 @@ class HistorialTablaView extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Vend: ${item.vendedorNombre}',
+                                item.vendedorNombre,
                                 style: AppTypography.small.copyWith(
                                   color: AppPalette.textPrimaryLight,
-                                  fontSize: 11,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -186,7 +188,7 @@ class HistorialTablaView extends StatelessWidget {
                                 'Caja: ${item.cajeraNombre}',
                                 style: AppTypography.small.copyWith(
                                   color: AppPalette.textSecondaryLight,
-                                  fontSize: 10,
+                                  fontSize: 11,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -203,7 +205,7 @@ class HistorialTablaView extends StatelessWidget {
                             child: Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 8,
-                                vertical: 2,
+                                vertical: 3,
                               ),
                               decoration: BoxDecoration(
                                 color: estadoColor.withValues(alpha: 0.12),
@@ -217,7 +219,7 @@ class HistorialTablaView extends StatelessWidget {
                                 style: AppTypography.small.copyWith(
                                   color: estadoColor,
                                   fontWeight: FontWeight.w700,
-                                  fontSize: 10,
+                                  fontSize: 11,
                                 ),
                               ),
                             ),
@@ -231,7 +233,7 @@ class HistorialTablaView extends StatelessWidget {
                             item.metodosResumen,
                             style: AppTypography.small.copyWith(
                               color: AppPalette.textSecondaryLight,
-                              fontSize: 11,
+                              fontSize: 12,
                             ),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
@@ -247,7 +249,7 @@ class HistorialTablaView extends StatelessWidget {
                               CobroPendienteCard.formatClp(item.totalLiquidado),
                               style: AppTypography.body.copyWith(
                                 fontWeight: FontWeight.w800,
-                                fontSize: 13,
+                                fontSize: 14,
                                 color: item.esAnulada
                                     ? AppPalette.textSecondaryLight
                                     : AppPalette.textPrimaryLight,
@@ -264,8 +266,8 @@ class HistorialTablaView extends StatelessWidget {
                             child: OutlinedButton.icon(
                               style: OutlinedButton.styleFrom(
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
+                                  horizontal: 10,
+                                  vertical: 5,
                                 ),
                                 side: BorderSide(
                                   color: AppPalette.primary.withValues(alpha: 0.5),
@@ -276,15 +278,15 @@ class HistorialTablaView extends StatelessWidget {
                               ),
                               icon: const Icon(
                                 Icons.visibility_rounded,
-                                size: 13,
+                                size: 14,
                                 color: AppPalette.primary,
                               ),
                               label: Text(
                                 'Ver Detalle',
-                                style: AppTypography.small.copyWith(
+                                style: AppTypography.button.copyWith(
                                   color: AppPalette.primary,
                                   fontWeight: FontWeight.w700,
-                                  fontSize: 11,
+                                  fontSize: 12,
                                 ),
                               ),
                               onPressed: () => onVerDetalle(item),
@@ -322,19 +324,28 @@ class HistorialTablaView extends StatelessWidget {
                   'Mostrando página $paginaActual de $totalPaginas (${items.length} registros en esta página)',
                   style: AppTypography.small.copyWith(
                     color: AppPalette.textSecondaryLight,
-                    fontSize: 12,
+                    fontSize: 13,
                   ),
                 ),
                 Row(
                   children: [
                     OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        foregroundColor: AppPalette.primary,
+                        disabledForegroundColor: AppPalette.textSecondaryLight.withValues(alpha: 0.45),
+                        disabledIconColor: AppPalette.textSecondaryLight.withValues(alpha: 0.45),
+                        backgroundColor: Colors.white,
+                        disabledBackgroundColor: AppPalette.backgroundLight,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         side: BorderSide(
-                          color: AppPalette.neutral.withValues(alpha: 0.3),
+                          color: AppPalette.neutral.withValues(alpha: 0.25),
                         ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(6),
+                        ),
+                        textStyle: AppTypography.button.copyWith(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                       icon: const Icon(Icons.chevron_left_rounded, size: 18),
@@ -346,12 +357,21 @@ class HistorialTablaView extends StatelessWidget {
                     const SizedBox(width: 8),
                     OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        foregroundColor: AppPalette.primary,
+                        disabledForegroundColor: AppPalette.textSecondaryLight.withValues(alpha: 0.45),
+                        disabledIconColor: AppPalette.textSecondaryLight.withValues(alpha: 0.45),
+                        backgroundColor: Colors.white,
+                        disabledBackgroundColor: AppPalette.backgroundLight,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         side: BorderSide(
-                          color: AppPalette.neutral.withValues(alpha: 0.3),
+                          color: AppPalette.neutral.withValues(alpha: 0.25),
                         ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(6),
+                        ),
+                        textStyle: AppTypography.button.copyWith(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                       icon: const Icon(Icons.chevron_right_rounded, size: 18),
@@ -379,7 +399,7 @@ class HistorialTablaView extends StatelessWidget {
           label,
           style: AppTypography.small.copyWith(
             fontWeight: FontWeight.w800,
-            fontSize: 11,
+            fontSize: 12,
             color: AppPalette.textSecondaryLight,
             letterSpacing: 0.6,
           ),

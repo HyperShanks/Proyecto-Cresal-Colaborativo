@@ -351,26 +351,47 @@ class _FiltroRangoFechasDialogState extends State<FiltroRangoFechasDialog> {
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(
-            'CANCELAR',
-            style: AppTypography.button.copyWith(
-              color: AppPalette.textSecondaryLight,
-            ),
-          ),
-        ),
-        ElevatedButton.icon(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppPalette.primary,
-            foregroundColor: Colors.white,
+        OutlinedButton(
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+            backgroundColor: Colors.white,
+            side: const BorderSide(color: AppPalette.borderLight),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
             ),
           ),
-          icon: const Icon(Icons.filter_alt_rounded, size: 16),
-          label: const Text('APLICAR FILTRO'),
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(
+            'Cancelar',
+            style: AppTypography.button.copyWith(
+              fontFamily: AppTypography.fontFamily,
+              color: AppPalette.textSecondaryLight,
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            backgroundColor: AppPalette.primary,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
           onPressed: _confirmar,
+          child: Text(
+            'Aplicar Rango',
+            style: AppTypography.button.copyWith(
+              fontFamily: AppTypography.fontFamily,
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+            ),
+          ),
         ),
       ],
     );
@@ -380,10 +401,11 @@ class _FiltroRangoFechasDialogState extends State<FiltroRangoFechasDialog> {
     return Expanded(
       child: OutlinedButton(
         style: OutlinedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
           side: BorderSide(
-            color: AppPalette.neutral.withValues(alpha: 0.3),
+            color: AppPalette.neutral.withValues(alpha: 0.25),
           ),
+          backgroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
           ),
@@ -391,10 +413,11 @@ class _FiltroRangoFechasDialogState extends State<FiltroRangoFechasDialog> {
         onPressed: onTap,
         child: Text(
           label,
-          style: AppTypography.small.copyWith(
+          style: AppTypography.button.copyWith(
+            fontFamily: AppTypography.fontFamily,
             color: AppPalette.textPrimaryLight,
             fontWeight: FontWeight.w600,
-            fontSize: 11,
+            fontSize: 13,
           ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,

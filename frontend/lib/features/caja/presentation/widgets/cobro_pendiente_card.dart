@@ -53,7 +53,7 @@ class CobroPendienteCard extends StatelessWidget {
         : const Color(0xFF4F46E5);
     final badgeText = isVenta ? 'Venta en Tienda' : 'Reserva Backorder';
     final badgeIcon = isVenta
-        ? Icons.shopping_bag_outlined
+        ? Icons.storefront_rounded
         : Icons.directions_boat_filled_outlined;
 
     final borderColor = isSelected
@@ -218,20 +218,35 @@ class CobroPendienteCard extends StatelessWidget {
                     const SizedBox(width: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 1,
+                        horizontal: 7,
+                        vertical: 2,
                       ),
                       decoration: BoxDecoration(
-                        color: AppPalette.backgroundLight,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        relativeTime,
-                        style: AppTypography.small.copyWith(
-                          color: AppPalette.textSecondaryLight,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
+                        color: AppPalette.primary.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(5),
+                        border: Border.all(
+                          color: AppPalette.primary.withValues(alpha: 0.2),
+                          width: 1,
                         ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.schedule_rounded,
+                            size: 13,
+                            color: AppPalette.primary,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            relativeTime,
+                            style: AppTypography.small.copyWith(
+                              color: AppPalette.textPrimaryLight,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],

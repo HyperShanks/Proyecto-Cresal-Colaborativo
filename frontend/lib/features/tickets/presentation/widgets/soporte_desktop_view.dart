@@ -1166,9 +1166,11 @@ class _VerDetalleButtonState extends State<_VerDetalleButton> {
           ),
           child: Text(
             'Ver Detalle',
-            style: AppTypography.small.copyWith(
+            style: AppTypography.button.copyWith(
+              fontFamily: AppTypography.fontFamily,
               fontSize: 12,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w700,
+              height: 1.1,
               color: _isHovered ? Colors.white : AppPalette.primary,
             ),
           ),

@@ -299,4 +299,56 @@ void main() {
     // Diálogo cerrado y panel reiniciado a Empty State
     expect(find.text('Seleccione una orden para procesar el cobro'), findsOneWidget);
   });
+
+  testWidgets('Selector de 5 botones: Alterna método en Pago Único cubriendo 100%',
+      (tester) async {
+    setDesktopViewport(tester);
+    provider.seleccionarOrden(sampleVenta);
+
+    await tester.pumpWidget(createTestWidget(PanelDetalleCobro(provider: provider)));
+    await tester.pumpAndSettle();
+
+    // Verificar que los 5 botones existen
+    expect(find.text('EFECTIVO'), findsOneWidget);
+    expect(find.text('DÉBITO'), findsOneWidget);
+    expect(find.text('CRÉDITO'), findsOneWidget);
+    expect(find.text('TRANSFERENCIA'), findsOneWidget);
+    expect(find.text('CHEQUE'), findsOneWidget);
+
+    // Inicialmente Efectivo cubre el 100%
+    expect(provider.esMetodoActivo('Efectivo'), isTrue);
+    expect(find.text('Canal Activo: Efectivo'), findsOneWidget);
+
+    // Tocar DÉBITO
+    await tester.tap(find.text('DÉBITO'));
+    await tester.pumpAndSettle();
+
+    expect(provider.esMetodoActivo('Debito'), isTrue);
+    expect(provider.esMetodoActivo('Efectivo'), isFalse);
+    expect(find.text('Canal Activo: Debito'), findsOneWidget);
+    expect(provider.esCuadraturaValida, isTrue);
+  });
+
+  testWidgets('Selector de 5 botones: Permite selección múltiple en Pago Dividido / Mixto',
+      (tester) async {
+    setDesktopViewport(tester);
+    provider.seleccionarOrden(sampleVenta);
+
+    await tester.pumpWidget(createTestWidget(PanelDetalleCobro(provider: provider)));
+    await tester.pumpAndSettle();
+
+    // Cambiar a Pago Dividido
+    await tester.tap(find.text('Dividir Pago'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('DISTRIBUCIÓN DE MONTOS'), findsOneWidget);
+
+    // Tocar DÉBITO para agregarlo a los canales activos
+    await tester.tap(find.text('DÉBITO'));
+    await tester.pumpAndSettle();
+
+    expect(provider.esMetodoActivo('Efectivo'), isTrue);
+    expect(provider.esMetodoActivo('Debito'), isTrue);
+    expect(provider.pagosDivididos.length, 2);
+  });
 }

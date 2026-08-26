@@ -615,7 +615,13 @@ async def guardar_paletizado(
         if hasattr(activo, 'observacion_estado') and observaciones:
             activo.observacion_estado = observaciones
             
-        activo.id_estado = 1
+        estado_paletizado = db.query(models.Estado_Activo).filter(models.Estado_Activo.nombre_estado == "Paletizado").first()
+        if not estado_paletizado:
+            estado_paletizado = models.Estado_Activo(nombre_estado="Paletizado")
+            db.add(estado_paletizado)
+            db.flush()
+            
+        activo.id_estado = estado_paletizado.id_estado
         
         db.flush()
         

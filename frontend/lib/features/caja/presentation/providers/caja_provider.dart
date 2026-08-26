@@ -10,7 +10,8 @@ import '../../services/caja_service.dart';
 class CajaProvider extends ChangeNotifier {
   final ICajaService _cajaService;
 
-  List<CobroPendienteModel> _cobros = [];
+  List<CobroPendienteModel> _todosLosCobros = [];
+  List<CobroPendienteModel> _cobrosFiltrados = [];
   CobroPendienteModel? _ordenSeleccionada;
   String _filtroTipo = 'TODOS'; // 'TODOS' | 'VENTA' | 'BACKORDER'
   String _terminoBusqueda = '';
@@ -23,6 +24,7 @@ class CajaProvider extends ChangeNotifier {
 
   // ── ESTADO REACTIVO DE COBRO ACTIVO (SPEC-HU-03) ──
   String _modalidad = 'LIQUIDACION'; // 'LIQUIDACION' | 'ABONO'
+  String _modalidadPago = 'UNICO'; // 'UNICO' | 'SPLIT'
   int _montoDeclarado = 0;
   List<TransaccionPagoItemModel> _pagosDivididos = [];
   bool _isProcesandoCobro = false;
@@ -32,23 +34,24 @@ class CajaProvider extends ChangeNotifier {
     ICajaService? cajaService,
   }) : _cajaService = cajaService ?? CajaService();
 
-  List<CobroPendienteModel> get cobros => _cobros;
+  List<CobroPendienteModel> get cobros => _cobrosFiltrados;
   CobroPendienteModel? get ordenSeleccionada => _ordenSeleccionada;
   String get filtroTipo => _filtroTipo;
   String get terminoBusqueda => _terminoBusqueda;
   bool get isLoading => _isLoading;
   bool get isRefreshing => _isRefreshing;
   String? get errorMessage => _errorMessage;
-  int get totalCobros => _cobros.length;
+  int get totalCobros => _todosLosCobros.length;
 
-  int get totalVentasCount => _cobros.where((c) => c.esVenta).length;
-  int get totalBackordersCount => _cobros.where((c) => c.esBackorder).length;
+  int get totalVentasCount => _todosLosCobros.where((c) => c.esVenta).length;
+  int get totalBackordersCount => _todosLosCobros.where((c) => c.esBackorder).length;
 
   int get montoTotalPendiente =>
-      _cobros.fold(0, (sum, item) => sum + item.montoACobrar);
+      _todosLosCobros.fold(0, (sum, item) => sum + item.montoACobrar);
 
   // ── GETTERS DE COBRO & CUADRATURA (SPEC-HU-03) ──
   String get modalidad => _modalidad;
+  String get modalidadPago => _modalidadPago;
   int get montoDeclarado => _montoDeclarado;
   List<TransaccionPagoItemModel> get pagosDivididos =>
       List.unmodifiable(_pagosDivididos);
@@ -93,24 +96,12 @@ class CajaProvider extends ChangeNotifier {
 
       final items = await _cajaService.obtenerCobrosPendientes(
         sucursalId: _sucursalId,
-        busqueda: _terminoBusqueda.isNotEmpty ? _terminoBusqueda : null,
-        tipoOperacion: _filtroTipo != 'TODOS' ? _filtroTipo : null,
+        busqueda: null,
+        tipoOperacion: 'TODOS',
       );
 
-      _cobros = items;
-
-      // Mantener seleccionada la orden actual si aún existe en la lista, o resetear
-      if (_ordenSeleccionada != null) {
-        final encontrada = _cobros
-            .where((o) => o.idReferencia == _ordenSeleccionada!.idReferencia);
-        if (encontrada.isNotEmpty) {
-          _ordenSeleccionada = encontrada.first;
-        } else {
-          _ordenSeleccionada = null;
-          _montoDeclarado = 0;
-          _pagosDivididos = [];
-        }
-      }
+      _todosLosCobros = items;
+      _aplicarFiltrosLocales();
     } catch (e) {
       _errorMessage = e.toString().replaceAll('Exception: ', '');
     } finally {
@@ -120,8 +111,50 @@ class CajaProvider extends ChangeNotifier {
     }
   }
 
+  /// Aplica los filtros de píldoras y búsqueda sobre la colección en memoria.
+  void _aplicarFiltrosLocales() {
+    var resultado = List<CobroPendienteModel>.from(_todosLosCobros);
+
+    // Filtro por píldora de tipo
+    if (_filtroTipo == 'VENTA') {
+      resultado = resultado.where((c) => c.esVenta).toList();
+    } else if (_filtroTipo == 'BACKORDER') {
+      resultado = resultado.where((c) => c.esBackorder).toList();
+    }
+
+    // Filtro por término de búsqueda (multicriterio)
+    if (_terminoBusqueda.trim().isNotEmpty) {
+      final query = _terminoBusqueda.trim().toLowerCase();
+      resultado = resultado.where((c) {
+        final folio = c.folioDocumento.toLowerCase();
+        final cliente = c.clienteNombre.toLowerCase();
+        final rut = c.clienteRut.toLowerCase();
+        final vendedor = c.vendedorNombre.toLowerCase();
+        return folio.contains(query) ||
+            cliente.contains(query) ||
+            rut.contains(query) ||
+            vendedor.contains(query);
+      }).toList();
+    }
+
+    _cobrosFiltrados = resultado;
+
+    // Mantener seleccionada la orden actual si aún existe en la lista filtrada, o resetear
+    if (_ordenSeleccionada != null) {
+      final encontrada = _cobrosFiltrados
+          .where((o) => o.idReferencia == _ordenSeleccionada!.idReferencia);
+      if (encontrada.isNotEmpty) {
+        _ordenSeleccionada = encontrada.first;
+      } else {
+        _ordenSeleccionada = null;
+        _montoDeclarado = 0;
+        _pagosDivididos = [];
+      }
+    }
+  }
+
   /// Selecciona una orden para desplegar en el panel de detalle derecho (Master-Detail).
-  /// Inicializa automáticamente la pasarela en Liquidación total con Efectivo.
+  /// Inicializa automáticamente la pasarela en Liquidación total con Efectivo (Pago Único).
   void seleccionarOrden(CobroPendienteModel? orden) {
     if (_ordenSeleccionada?.idReferencia == orden?.idReferencia &&
         orden != null) {
@@ -131,12 +164,14 @@ class CajaProvider extends ChangeNotifier {
     _ultimoResultadoCobro = null;
     if (orden != null) {
       _modalidad = 'LIQUIDACION';
+      _modalidadPago = 'UNICO';
       _montoDeclarado = orden.montoACobrar;
       _pagosDivididos = [
         TransaccionPagoItemModel(metodo: 'Efectivo', monto: orden.montoACobrar),
       ];
     } else {
       _modalidad = 'LIQUIDACION';
+      _modalidadPago = 'UNICO';
       _montoDeclarado = 0;
       _pagosDivididos = [];
     }
@@ -153,8 +188,26 @@ class CajaProvider extends ChangeNotifier {
       if (_modalidad == 'LIQUIDACION') {
         _montoDeclarado = _ordenSeleccionada!.montoACobrar;
       }
+      if (_modalidadPago == 'UNICO' || _pagosDivididos.length <= 1) {
+        final metodoActual = _pagosDivididos.isNotEmpty ? _pagosDivididos.first.metodo : 'Efectivo';
+        _pagosDivididos = [
+          TransaccionPagoItemModel(metodo: metodoActual, monto: _montoDeclarado),
+        ];
+      }
+    }
+    notifyListeners();
+  }
+
+  /// Cambia la modalidad de la pasarela ('UNICO' | 'SPLIT').
+  void setModalidadPago(String nuevaModalidad) {
+    final modNorm = nuevaModalidad.toUpperCase();
+    if (_modalidadPago == modNorm) return;
+    _modalidadPago = modNorm;
+
+    if (_modalidadPago == 'UNICO') {
+      final primerMetodo = _pagosDivididos.isNotEmpty ? _pagosDivididos.first.metodo : 'Efectivo';
       _pagosDivididos = [
-        TransaccionPagoItemModel(metodo: 'Efectivo', monto: _montoDeclarado),
+        TransaccionPagoItemModel(metodo: primerMetodo, monto: _montoDeclarado),
       ];
     }
     notifyListeners();
@@ -163,8 +216,49 @@ class CajaProvider extends ChangeNotifier {
   /// Establece el monto total acordado a cobrar.
   void setMontoDeclarado(int nuevoMonto) {
     _montoDeclarado = nuevoMonto;
-    if (_pagosDivididos.length == 1) {
-      _pagosDivididos[0] = _pagosDivididos[0].copyWith(monto: nuevoMonto);
+    if (_modalidadPago == 'UNICO' || _pagosDivididos.length == 1) {
+      if (_pagosDivididos.isNotEmpty) {
+        _pagosDivididos[0] = _pagosDivididos[0].copyWith(monto: nuevoMonto);
+      }
+    }
+    notifyListeners();
+  }
+
+  /// Comprueba si un canal de pago se encuentra activo en la pasarela.
+  bool esMetodoActivo(String metodo) {
+    final mNorm = metodo.toLowerCase().replaceAll('é', 'e');
+    return _pagosDivididos.any(
+      (p) => p.metodo.toLowerCase().replaceAll('é', 'e') == mNorm,
+    );
+  }
+
+  /// Alterna o selecciona un método de pago desde el grid de 5 botones.
+  void toggleMetodoPago(String metodo) {
+    final mNorm = metodo.toLowerCase().replaceAll('é', 'e');
+
+    if (_modalidadPago == 'UNICO') {
+      // En modo único, el método seleccionado cubre el 100% de inmediato
+      _pagosDivididos = [
+        TransaccionPagoItemModel(metodo: metodo, monto: _montoDeclarado),
+      ];
+      notifyListeners();
+      return;
+    }
+
+    // En modo dividido (SPLIT)
+    final index = _pagosDivididos.indexWhere(
+      (p) => p.metodo.toLowerCase().replaceAll('é', 'e') == mNorm,
+    );
+
+    if (index >= 0) {
+      if (_pagosDivididos.length > 1) {
+        _pagosDivididos.removeAt(index);
+      }
+    } else {
+      final restante = diferenciaCuadratura > 0 ? diferenciaCuadratura : 0;
+      _pagosDivididos.add(
+        TransaccionPagoItemModel(metodo: metodo, monto: restante),
+      );
     }
     notifyListeners();
   }
@@ -226,6 +320,7 @@ class CajaProvider extends ChangeNotifier {
   void reiniciarCobro() {
     if (_ordenSeleccionada != null) {
       _modalidad = 'LIQUIDACION';
+      _modalidadPago = 'UNICO';
       _montoDeclarado = _ordenSeleccionada!.montoACobrar;
       _pagosDivididos = [
         TransaccionPagoItemModel(
@@ -269,7 +364,8 @@ class CajaProvider extends ChangeNotifier {
 
   /// Remueve la orden procesada de la lista en memoria y limpia el panel lateral (SPEC-HU-04 / CA-06).
   void removerOrdenProcesada(String idDocumento) {
-    _cobros.removeWhere((c) => c.idReferencia == idDocumento);
+    _todosLosCobros.removeWhere((c) => c.idReferencia == idDocumento);
+    _aplicarFiltrosLocales();
     _ordenSeleccionada = null;
     _montoDeclarado = 0;
     _pagosDivididos = [];
@@ -277,21 +373,23 @@ class CajaProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Cambia el filtro de píldoras ('TODOS', 'VENTA', 'BACKORDER') y recarga.
+  /// Cambia el filtro de píldoras ('TODOS', 'VENTA', 'BACKORDER') de forma instantánea sin resetear contadores.
   void setFiltroTipo(String nuevoTipo) {
     final tipoNorm = nuevoTipo.toUpperCase();
     if (_filtroTipo == tipoNorm) return;
     _filtroTipo = tipoNorm;
-    cargarCobrosPendientes();
+    _aplicarFiltrosLocales();
+    notifyListeners();
   }
 
-  /// Ejecuta búsqueda con debounce de 300 ms.
+  /// Ejecuta búsqueda con debounce de 150 ms sobre la colección en memoria.
   void buscar(String query) {
     _debounceTimer?.cancel();
     _terminoBusqueda = query;
 
-    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
-      cargarCobrosPendientes();
+    _debounceTimer = Timer(const Duration(milliseconds: 150), () {
+      _aplicarFiltrosLocales();
+      notifyListeners();
     });
   }
 
@@ -300,7 +398,8 @@ class CajaProvider extends ChangeNotifier {
     _debounceTimer?.cancel();
     if (_terminoBusqueda.isEmpty) return;
     _terminoBusqueda = '';
-    cargarCobrosPendientes();
+    _aplicarFiltrosLocales();
+    notifyListeners();
   }
 }
 

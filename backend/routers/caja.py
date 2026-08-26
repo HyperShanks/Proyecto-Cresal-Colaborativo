@@ -518,7 +518,7 @@ def obtener_historial_caja(
     periodo: Optional[str] = Query("HOY", description="Atajo de período: 'HOY', 'ESTA_SEMANA', 'ESTE_MES', 'RANGO', 'TODOS'"),
     fecha_desde: Optional[str] = Query(None, description="Fecha de inicio YYYY-MM-DD (para período RANGO)"),
     fecha_hasta: Optional[str] = Query(None, description="Fecha de término YYYY-MM-DD (para período RANGO)"),
-    estado_orden: Optional[str] = Query("TODOS", description="Filtro de estado: 'TODOS', 'Pagada', 'Despachada', 'Reservada', 'Anulada'"),
+    estado_orden: Optional[str] = Query("TODOS", description="Filtro de estado: 'TODOS', 'Pagada', 'Despachada', 'Anulada'"),
     metodo_pago: Optional[str] = Query("TODOS", description="Filtro de método: 'TODOS', 'Efectivo', 'Débito', 'Crédito', 'Transferencia', 'Cheque'"),
     busqueda: Optional[str] = Query(None, description="Búsqueda por Folio, RUT, Cliente, Vendedor o Cajera"),
     monto_min: Optional[int] = Query(None, description="Monto mínimo de venta"),
@@ -541,6 +541,7 @@ def obtener_historial_caja(
         .join(UsuarioVendedor, Orden_Venta.id_vendedor == UsuarioVendedor.id_usuario)
         .outerjoin(UsuarioCajera, Orden_Venta.id_cajera == UsuarioCajera.id_usuario)
         .filter(Orden_Venta.id_sucursal == sucursal_id)
+        .filter(Orden_Venta.estado_orden != "Reservada")
     )
 
     if start_utc is not None and end_utc is not None:

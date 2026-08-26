@@ -102,7 +102,7 @@ class HistorialMetricasPanel extends StatelessWidget {
                 color: color.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(icon, color: color, size: 22),
+              child: Icon(icon, color: color, size: 24),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -112,10 +112,10 @@ class HistorialMetricasPanel extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: AppTypography.small.copyWith(
+                    style: AppTypography.cardTitle.copyWith(
                       color: AppPalette.textSecondaryLight,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -124,7 +124,7 @@ class HistorialMetricasPanel extends StatelessWidget {
                   Text(
                     value,
                     style: AppTypography.title.copyWith(
-                      fontSize: 18,
+                      fontSize: 20,
                       fontWeight: FontWeight.w900,
                       color: AppPalette.textPrimaryLight,
                     ),
@@ -136,7 +136,7 @@ class HistorialMetricasPanel extends StatelessWidget {
                     subtitle,
                     style: AppTypography.small.copyWith(
                       color: AppPalette.textSecondaryLight,
-                      fontSize: 11,
+                      fontSize: 12,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,

@@ -23,7 +23,7 @@ class HistorialCajaState {
   final PeriodoHistorial periodo;
   final String? fechaDesde;
   final String? fechaHasta;
-  final String estadoOrden; // 'TODOS', 'Pagada', 'Despachada', 'Reservada', 'Anulada'
+  final String estadoOrden; // 'TODOS', 'Pagada', 'Despachada', 'Anulada'
   final String metodoPago; // 'TODOS', 'Efectivo', 'Débito', 'Crédito', 'Transferencia', 'Cheque'
   final String busqueda;
   final int? montoMin;
