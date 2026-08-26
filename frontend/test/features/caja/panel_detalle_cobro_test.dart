@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/features/caja/models/cobro_pendiente_model.dart';
 import 'package:frontend/features/caja/models/cobro_model.dart';
+import 'package:frontend/features/caja/models/historial_caja_model.dart';
 import 'package:frontend/features/caja/services/caja_service.dart';
 import 'package:frontend/features/caja/presentation/providers/caja_provider.dart';
 import 'package:frontend/features/caja/presentation/widgets/panel_detalle_cobro.dart';
@@ -45,6 +46,25 @@ class MockCajaService implements ICajaService {
       transaccionesIds: ['tx-123-abc'],
       qrGenerado: 'TX-QR-3FA85F64-ABC123DEF456',
     );
+  }
+
+  @override
+  Future<HistorialCajaResponseModel> obtenerHistorialCaja({
+    required int sucursalId,
+    String periodo = 'HOY',
+    String? fechaDesde,
+    String? fechaHasta,
+    String estadoOrden = 'TODOS',
+    String metodoPago = 'TODOS',
+    String? busqueda,
+    int? montoMin,
+    int? montoMax,
+    String? idCajera,
+    String? idVendedor,
+    int pagina = 1,
+    int limite = 20,
+  }) async {
+    return HistorialCajaResponseModel.empty();
   }
 }
 
