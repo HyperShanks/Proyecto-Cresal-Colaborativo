@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../models/cobro_pendiente_model.dart';
@@ -106,7 +107,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
       case 'transferencia':
         return Icons.swap_horiz_rounded;
       case 'cheque':
-        return Icons.description_rounded;
+        return Symbols.checkbook_rounded;
       default:
         return Icons.account_balance_wallet_rounded;
     }
@@ -1006,7 +1007,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
       {'nombre': 'Debito', 'label': 'DÉBITO', 'icon': Icons.credit_card_rounded},
       {'nombre': 'Credito', 'label': 'CRÉDITO', 'icon': Icons.credit_card_rounded},
       {'nombre': 'Transferencia', 'label': 'TRANSFERENCIA', 'icon': Icons.swap_horiz_rounded},
-      {'nombre': 'Cheque', 'label': 'CHEQUE', 'icon': Icons.description_rounded},
+      {'nombre': 'Cheque', 'label': 'CHEQUE', 'icon': Symbols.checkbook_rounded},
     ];
 
     return Row(
@@ -1028,16 +1029,16 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 2),
                 decoration: BoxDecoration(
-                  color: isActive ? AppPalette.primary : AppPalette.surfaceLight,
+                  color: isActive ? AppPalette.tertiary : AppPalette.surfaceLight,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                    color: isActive ? AppPalette.primary : AppPalette.borderLight,
+                    color: isActive ? AppPalette.tertiary : AppPalette.borderLight,
                     width: 1.5,
                   ),
                   boxShadow: isActive
                       ? [
                           BoxShadow(
-                            color: AppPalette.primary.withValues(alpha: 0.2),
+                            color: AppPalette.tertiary.withValues(alpha: 0.25),
                             blurRadius: 4,
                             offset: const Offset(0, 2),
                           ),
@@ -1093,13 +1094,13 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: AppPalette.primary.withValues(alpha: 0.12),
+                  color: AppPalette.tertiary.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
                   _getIconoMetodo(metodoNombre),
                   size: 20,
-                  color: AppPalette.primary,
+                  color: AppPalette.tertiary,
                 ),
               ),
               const SizedBox(width: 12),
@@ -1131,7 +1132,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
             style: AppTypography.title.copyWith(
               fontWeight: FontWeight.w900,
               fontSize: 16,
-              color: AppPalette.primary,
+              color: AppPalette.tertiary,
             ),
           ),
         ],
@@ -1170,12 +1171,12 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                   },
                   child: Row(
                     children: [
-                      const Icon(Icons.auto_fix_high_rounded, size: 14, color: AppPalette.primary),
+                      const Icon(Icons.auto_fix_high_rounded, size: 14, color: AppPalette.tertiary),
                       const SizedBox(width: 4),
                       Text(
                         'Auto-rellenar restante',
                         style: AppTypography.small.copyWith(
-                          color: AppPalette.primary,
+                          color: AppPalette.tertiary,
                           fontWeight: FontWeight.w700,
                           fontSize: 11,
                         ),
@@ -1206,23 +1207,29 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                 ),
                 child: Row(
                   children: [
-                    // Badge del método
+                    // Badge del método con ancho uniforme (140px) para alinear todos los inputs
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      width: 140,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                       decoration: BoxDecoration(
-                        color: AppPalette.primary.withValues(alpha: 0.1),
+                        color: AppPalette.tertiary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(_getIconoMetodo(pago.metodo), size: 16, color: AppPalette.primary),
-                          const SizedBox(width: 6),
-                          Text(
-                            pago.metodo,
-                            style: AppTypography.body.copyWith(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 12,
-                              color: AppPalette.primary,
+                          Icon(_getIconoMetodo(pago.metodo), size: 16, color: AppPalette.tertiary),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              pago.metodo,
+                              style: AppTypography.body.copyWith(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12,
+                                color: AppPalette.tertiary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
@@ -1263,7 +1270,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
-                            borderSide: const BorderSide(color: AppPalette.primary, width: 2),
+                            borderSide: const BorderSide(color: AppPalette.tertiary, width: 2),
                           ),
                         ),
                         onChanged: (val) {
@@ -1279,9 +1286,9 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                       message: 'Auto-rellenar este método',
                       child: IconButton(
                         icon: const Icon(Icons.auto_fix_high_rounded, size: 18),
-                        color: AppPalette.primary,
+                        color: AppPalette.tertiary,
                         style: IconButton.styleFrom(
-                          backgroundColor: AppPalette.primary.withValues(alpha: 0.1),
+                          backgroundColor: AppPalette.tertiary.withValues(alpha: 0.1),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           padding: const EdgeInsets.all(8),
                         ),
