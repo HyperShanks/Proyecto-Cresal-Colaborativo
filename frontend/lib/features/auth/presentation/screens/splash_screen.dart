@@ -72,7 +72,13 @@ class _SplashScreenState extends State<SplashScreen>
         Navigator.of(context).pushReplacementNamed('/home');
       }
     } else {
-      Navigator.of(context).pushReplacementNamed('/login');
+      final isEnrolled = await AuthService.isTerminalEnrolled();
+      if (!mounted) return;
+      if (isEnrolled) {
+        Navigator.of(context).pushReplacementNamed('/login');
+      } else {
+        Navigator.of(context).pushReplacementNamed('/enrolamiento');
+      }
     }
 
   }

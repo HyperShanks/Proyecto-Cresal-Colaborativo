@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../features/auth/presentation/screens/enrolamiento_screen.dart';
 import '../features/auth/presentation/screens/pin_login_screen.dart';
 import '../features/home/presentation/screens/home_screen.dart';
 import '../features/caja/presentation/screens/caja_main_screen.dart';
@@ -16,6 +17,7 @@ import '../features/ventas/presentation/screens/entregas_envios_screen.dart';
 
 /// Registro central de rutas y guardas de seguridad RBAC.
 class AppRoutes {
+  static const String enrolamiento = '/enrolamiento';
   static const String login = '/login';
   static const String home = '/home';
   static const String ventasMain = '/ventas_main';
@@ -31,39 +33,85 @@ class AppRoutes {
   static const String bandejaPrecios = '/bandeja_precios';
   static const String entregasEnvios = '/entregas-envios';
 
-  /// Rutas estrictamente restringidas para el rol Operario de Caja (id_rol == 3).
-  static const List<String> _cajaRestrictedRoutes = [
-    catalogo,
-    '/carrito',
+  /// Rutas públicas y comunes a cualquier estado de autenticación.
+  static const List<String> _publicAndCommonRoutes = [
+    enrolamiento,
+    login,
+    tickets,
+    '/',
+  ];
+
+  /// Rutas autorizadas para Bodeguero (id_rol == 1).
+  static const List<String> _bodegaRoutes = [
+    home,
     recepcion,
     paletizado,
     etiquetaPreview,
     buscador,
-    bandejaPrecios,
-    checkoutCrm,
-    entregasEnvios,
     alertas,
-    home,
-    ventasMain,
   ];
 
-  /// Valida si una ruta específica está permitida para un rol determinado.
+  /// Rutas autorizadas para Vendedor (id_rol == 2, 7) y Jefe de Ventas (id_rol == 6).
+  static const List<String> _ventasRoutes = [
+    ventasMain,
+    catalogo,
+    '/carrito',
+    checkoutCrm,
+    bandejaPrecios,
+    entregasEnvios,
+  ];
+
+  /// Rutas autorizadas para Caja (id_rol == 3).
+  static const List<String> _cajaRoutes = [
+    caja,
+  ];
+
+  /// Retorna la ruta inicial o panel principal correspondiente a un rol.
+  static String getHomeRouteForRole(int? idRol) {
+    if (idRol == 3) return caja;
+    if (idRol == 2 || idRol == 6 || idRol == 7) return ventasMain;
+    return home;
+  }
+
+  /// Valida si una ruta específica está permitida para un rol determinado según el RBAC.
   static bool isRouteAllowedForRole(int? idRol, String route) {
-    if (idRol == 3) {
-      if (_cajaRestrictedRoutes.contains(route)) {
-        return false;
-      }
-      return route == caja ||
-          route == login ||
-          route == tickets ||
-          route == '/';
+    // Rutas públicas / de soporte siempre permitidas
+    if (_publicAndCommonRoutes.contains(route)) {
+      return true;
     }
-    return true;
+
+    // Sin rol autenticado: no tiene acceso a rutas privadas
+    if (idRol == null) {
+      return false;
+    }
+
+    // Administrador (5) y Gerente (4): Acceso irrestricto
+    if (idRol == 4 || idRol == 5) {
+      return true;
+    }
+
+    // Caja (id_rol == 3)
+    if (idRol == 3) {
+      return _cajaRoutes.contains(route);
+    }
+
+    // Bodeguero (id_rol == 1)
+    if (idRol == 1) {
+      return _bodegaRoutes.contains(route);
+    }
+
+    // Vendedor (2, 7) y Jefe de Ventas (6)
+    if (idRol == 2 || idRol == 6 || idRol == 7) {
+      return _ventasRoutes.contains(route);
+    }
+
+    return false;
   }
 
   /// Mapa global de rutas de la aplicación.
   static Map<String, WidgetBuilder> getRoutes() {
     return {
+      enrolamiento: (context) => const EnrolamientoScreen(),
       login: (context) => const PinLoginScreen(),
       home: (context) => const HomeScreen(),
       caja: (context) => const CajaMainScreen(),

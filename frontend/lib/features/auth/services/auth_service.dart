@@ -8,7 +8,7 @@ import '../../../core/services/api_service.dart';
 import '../../alertas/services/bodega_polling_service.dart';
 import '../models/auth_user_model.dart';
 
-// Claves de almacenamiento seguro
+// Claves de almacenamiento seguro para sesión
 const String _tokenKey = 'access_token';
 const String _rolKey = 'user_rol';
 const String _idRolKey = 'user_id_rol';
@@ -16,6 +16,11 @@ const String _sucursalKey = 'user_sucursal_id';
 const String _sucursalNombreKey = 'user_sucursal_nombre';
 const String _nombreUsuarioKey = 'user_nombre_completo';
 const String _userModelKey = 'user_model_json';
+
+// Claves de almacenamiento seguro para enrolamiento de terminal
+const String _enrolledUserIdKey = 'enrolled_user_id';
+const String _enrolledUserEmailKey = 'enrolled_user_email';
+const String _enrolledUserNameKey = 'enrolled_user_name';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MODELOS DE RESULTADO (evita mezclar lógica HTTP en la UI)
@@ -35,19 +40,20 @@ class AuthResult {
 class AuthService {
   static const _storage = FlutterSecureStorage();
 
-  /// Envía el PIN al backend y persiste el JWT y el rol si la autenticación es exitosa.
-  ///
-  /// Retorna [AuthResult.ok()] si el login fue correcto,
-  /// o [AuthResult.fail(mensaje)] con el detalle del error del servidor.
-  static Future<AuthResult> loginConPin(String pin) async {
+  /// Enrola el terminal vinculándolo al usuario corporativo vía email y contraseña.
+  /// Guarda el JWT de sesión y fija el `enrolled_user_id`, `enrolled_user_email` y `enrolled_user_name`.
+  static Future<AuthResult> enrolarTerminal(String email, String password) async {
     try {
-      final uri = Uri.parse('${ApiConstants.authEndpoint}/login-pin');
+      final uri = Uri.parse('${ApiConstants.authEndpoint}/login');
 
       final response = await http
           .post(
             uri,
             headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'pin': pin, 'pin_acceso': pin}),
+            body: jsonEncode({
+              'email': email.trim().toLowerCase(),
+              'password': password,
+            }),
           )
           .timeout(
             const Duration(seconds: 10),
@@ -58,7 +64,111 @@ class AuthService {
 
       if (response.statusCode == 200) {
         final token = body['access_token'] as String;
-        // Extraemos el rol en formato texto (ej. "Bodeguero", "Vendedor", "Caja")
+        final usuarioMap = body['usuario'] as Map<String, dynamic>?;
+        String rolText = usuarioMap?['nombre_rol']?.toString() ??
+            usuarioMap?['rol']?['nombre_rol']?.toString() ??
+            '';
+        final dynamic rawIdRol = usuarioMap?['id_rol'] ?? usuarioMap?['rol']?['id_rol'];
+        final int? idRol = rawIdRol is int ? rawIdRol : int.tryParse(rawIdRol?.toString() ?? '');
+
+        if (rolText.isEmpty && idRol != null) {
+          if (idRol == 1) rolText = 'Bodeguero';
+          if (idRol == 2) rolText = 'Vendedor';
+          if (idRol == 3) rolText = 'Caja';
+          if (idRol == 4) rolText = 'Gerente';
+          if (idRol == 5) rolText = 'Administrador';
+          if (idRol == 6) rolText = 'Jefe de Ventas';
+          if (idRol == 7) rolText = 'Vendedor Online';
+        }
+        final sucursalId = usuarioMap?['id_sucursal']?.toString();
+        final sucursalNombre = usuarioMap?['nombre_sucursal']?.toString() ??
+            usuarioMap?['sucursal']?['nombre_sucursal']?.toString() ??
+            '';
+        final nombres = usuarioMap?['nombres']?.toString() ?? '';
+        final apellidos = usuarioMap?['apellidos']?.toString() ?? '';
+        final rutUsuario = usuarioMap?['rut_usuario']?.toString() ?? '';
+        final userEmail = usuarioMap?['email']?.toString() ?? email.trim().toLowerCase();
+        final idUsuario = usuarioMap?['id_usuario']?.toString() ?? '';
+        final nombreCompleto = '$nombres $apellidos'.trim();
+
+        final userModel = AuthUserModel(
+          idUsuario: idUsuario,
+          rutUsuario: rutUsuario,
+          nombres: nombres,
+          apellidos: apellidos,
+          email: userEmail,
+          idRol: idRol ?? 0,
+          nombreRol: rolText,
+          idSucursal: int.tryParse(sucursalId ?? '1') ?? 1,
+        );
+
+        // Guardar token, rol, id_rol, sucursal y modelo de usuario
+        await _storage.write(key: _tokenKey, value: token);
+        await _storage.write(key: _rolKey, value: rolText);
+        if (idRol != null) {
+          await _storage.write(key: _idRolKey, value: idRol.toString());
+        }
+        if (sucursalId != null) {
+          await _storage.write(key: _sucursalKey, value: sucursalId);
+        }
+        if (sucursalNombre.isNotEmpty) {
+          await _storage.write(key: _sucursalNombreKey, value: sucursalNombre);
+        }
+        if (nombreCompleto.isNotEmpty) {
+          await _storage.write(key: _nombreUsuarioKey, value: nombreCompleto);
+        }
+        await _storage.write(key: _userModelKey, value: jsonEncode(userModel.toJson()));
+
+        // Guardar datos de enrolamiento del terminal
+        if (idUsuario.isNotEmpty) {
+          await _storage.write(key: _enrolledUserIdKey, value: idUsuario);
+        }
+        if (userEmail.isNotEmpty) {
+          await _storage.write(key: _enrolledUserEmailKey, value: userEmail);
+        }
+        if (nombreCompleto.isNotEmpty) {
+          await _storage.write(key: _enrolledUserNameKey, value: nombreCompleto);
+        }
+
+        return AuthResult.ok(userModel);
+      }
+
+      final detail = body['detail'] ?? 'Error desconocido del servidor';
+      return AuthResult.fail(detail.toString());
+    } on Exception catch (e) {
+      return AuthResult.fail(e.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+
+  /// Envía el PIN junto al ID del usuario previamente enrolado al backend.
+  /// Persiste el nuevo JWT de sesión y los datos del usuario si la autenticación es exitosa.
+  static Future<AuthResult> loginConPin(String pin, [String? idUsuarioEnrolado]) async {
+    try {
+      final targetUserId = idUsuarioEnrolado ?? await getEnrolledUserId();
+      if (targetUserId == null || targetUserId.isEmpty) {
+        return const AuthResult.fail('Terminal no enrolado. Inicie sesión con email y contraseña.');
+      }
+
+      final uri = Uri.parse('${ApiConstants.authEndpoint}/login-pin');
+
+      final response = await http
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'pin_acceso': pin,
+              'id_usuario': targetUserId,
+            }),
+          )
+          .timeout(
+            const Duration(seconds: 10),
+            onTimeout: () => throw Exception('Tiempo de espera agotado'),
+          );
+
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode == 200) {
+        final token = body['access_token'] as String;
         final usuarioMap = body['usuario'] as Map<String, dynamic>?;
         String rolText = usuarioMap?['nombre_rol']?.toString() ??
             usuarioMap?['rol']?['nombre_rol']?.toString() ??
@@ -83,7 +193,8 @@ class AuthService {
         final apellidos = usuarioMap?['apellidos']?.toString() ?? '';
         final rutUsuario = usuarioMap?['rut_usuario']?.toString() ?? '';
         final email = usuarioMap?['email']?.toString() ?? '';
-        final idUsuario = usuarioMap?['id_usuario']?.toString() ?? '';
+        final idUsuario = usuarioMap?['id_usuario']?.toString() ?? targetUserId;
+        final nombreCompleto = '$nombres $apellidos'.trim();
 
         final userModel = AuthUserModel(
           idUsuario: idUsuario,
@@ -96,7 +207,7 @@ class AuthService {
           idSucursal: int.tryParse(sucursalId ?? '1') ?? 1,
         );
 
-        // Guardar token, rol, id_rol, sucursal y modelo de usuario
+        // Guardar token y datos de sesión activa
         await _storage.write(key: _tokenKey, value: token);
         await _storage.write(key: _rolKey, value: rolText);
         if (idRol != null) {
@@ -108,13 +219,22 @@ class AuthService {
         if (sucursalNombre.isNotEmpty) {
           await _storage.write(key: _sucursalNombreKey, value: sucursalNombre);
         }
-        if (nombres.isNotEmpty) {
+        if (nombreCompleto.isNotEmpty) {
           await _storage.write(
             key: _nombreUsuarioKey,
-            value: '$nombres $apellidos'.trim(),
+            value: nombreCompleto,
           );
         }
         await _storage.write(key: _userModelKey, value: jsonEncode(userModel.toJson()));
+
+        // Asegurar que las claves de enrolamiento se mantengan persistidas
+        await _storage.write(key: _enrolledUserIdKey, value: idUsuario);
+        if (email.isNotEmpty) {
+          await _storage.write(key: _enrolledUserEmailKey, value: email);
+        }
+        if (nombreCompleto.isNotEmpty) {
+          await _storage.write(key: _enrolledUserNameKey, value: nombreCompleto);
+        }
 
         return AuthResult.ok(userModel);
       }
@@ -125,6 +245,29 @@ class AuthService {
     } on Exception catch (e) {
       return AuthResult.fail(e.toString().replaceFirst('Exception: ', ''));
     }
+  }
+
+  /// Recupera el ID del usuario previamente enrolado en este terminal.
+  static Future<String?> getEnrolledUserId() => _storage.read(key: _enrolledUserIdKey);
+
+  /// Recupera el email del usuario enrolado en este terminal.
+  static Future<String?> getEnrolledUserEmail() => _storage.read(key: _enrolledUserEmailKey);
+
+  /// Recupera el nombre completo del usuario enrolado en este terminal.
+  static Future<String?> getEnrolledUserName() => _storage.read(key: _enrolledUserNameKey);
+
+  /// Comprueba si el terminal actual cuenta con un usuario enrolado.
+  static Future<bool> isTerminalEnrolled() async {
+    final id = await getEnrolledUserId();
+    return id != null && id.isNotEmpty;
+  }
+
+  /// Desenrola completamente el terminal eliminando tanto la sesión activa como el enrolamiento.
+  static Future<void> desenrolarTerminal() async {
+    await clearToken();
+    await _storage.delete(key: _enrolledUserIdKey);
+    await _storage.delete(key: _enrolledUserEmailKey);
+    await _storage.delete(key: _enrolledUserNameKey);
   }
 
   /// Recupera el token almacenado (útil para inyectarlo en peticiones futuras).
@@ -156,7 +299,6 @@ class AuthService {
     final rLower = rol?.toLowerCase() ?? '';
     return rLower == 'administrador' || rLower == 'admin';
   }
-
 
   /// Verifica si el usuario actual pertenece al módulo de ventas (Vendedor [2], Jefe de Ventas [6], Vendedor Online [7]).
   static Future<bool> esModuloVentas() async {
@@ -234,7 +376,8 @@ class AuthService {
     );
   }
 
-  /// Elimina el token, rol y datos de sesión (para logout o sesiones expiradas).
+  /// Elimina el token, rol y datos de sesión activa (para logout o sesiones expiradas),
+  /// preservando la vinculación/enrolamiento del terminal al operario.
   static Future<void> clearToken() async {
     await _storage.delete(key: _tokenKey);
     await _storage.delete(key: _rolKey);
@@ -278,5 +421,3 @@ class AuthService {
     }
   }
 }
-
-

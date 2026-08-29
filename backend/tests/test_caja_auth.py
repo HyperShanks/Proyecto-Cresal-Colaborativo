@@ -105,9 +105,13 @@ def db_session(setup_database):
 
 def test_login_pin_cajera_exitoso(client, db_session):
     """Verifica autenticación por PIN para rol de Caja (id_rol == 3) y claims devueltos."""
+    user_caja = db_session.query(Usuario).filter(Usuario.pin_acceso == "3333").first()
     response = client.post(
         "/api/auth/login-pin",
-        json={"pin_acceso": "3333"}
+        json={
+            "pin_acceso": "3333",
+            "id_usuario": str(user_caja.id_usuario)
+        }
     )
     assert response.status_code == 200
     data = response.json()
@@ -124,9 +128,13 @@ def test_login_pin_cajera_exitoso(client, db_session):
 
 def test_login_pin_admin_exitoso(client, db_session):
     """Verifica autenticación por PIN para Administrador (id_rol == 5)."""
+    user_admin = db_session.query(Usuario).filter(Usuario.pin_acceso == "5555").first()
     response = client.post(
         "/api/auth/login-pin",
-        json={"pin": "5555"}
+        json={
+            "pin_acceso": "5555",
+            "id_usuario": str(user_admin.id_usuario)
+        }
     )
     assert response.status_code == 200
     data = response.json()
@@ -209,10 +217,14 @@ def test_verificar_acceso_token_invalido_401(client, db_session):
 
 
 def test_login_pin_invalido_401(client, db_session):
-    """Verifica que un PIN inexistente retorna 401 Unauthorized."""
+    """Verifica que un PIN inexistente o que no coincide retorna 401 Unauthorized."""
+    user_caja = db_session.query(Usuario).filter(Usuario.pin_acceso == "3333").first()
     response = client.post(
         "/api/auth/login-pin",
-        json={"pin_acceso": "0000"}
+        json={
+            "pin_acceso": "0000",
+            "id_usuario": str(user_caja.id_usuario)
+        }
     )
     assert response.status_code == 401
     assert "PIN inválido o usuario inactivo" in response.json()["detail"]
@@ -220,9 +232,14 @@ def test_login_pin_invalido_401(client, db_session):
 
 def test_login_pin_usuario_inactivo_401(client, db_session):
     """Verifica que un usuario inactivo no pueda iniciar sesión por PIN."""
+    user_inactivo = db_session.query(Usuario).filter(Usuario.pin_acceso == "9999").first()
     response = client.post(
         "/api/auth/login-pin",
-        json={"pin_acceso": "9999"}
+        json={
+            "pin_acceso": "9999",
+            "id_usuario": str(user_inactivo.id_usuario)
+        }
     )
     assert response.status_code == 401
     assert "PIN inválido o usuario inactivo" in response.json()["detail"]
+

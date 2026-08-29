@@ -5,11 +5,11 @@ import '../../../../core/theme/tokens/app_typography.dart';
 import '../../services/auth_service.dart';
 import '../../controllers/login_controller.dart';
 
-
 // ─────────────────────────────────────────────────────────────────────────────
 // PANTALLA DE LOGIN POR PIN INDUSTRIAL
 // Diseñada para operarios con guantes en patio de desarme y terminales de caja.
 // Cumple regla W3C: touch targets mínimos de 44px y soporte de teclado físico/numpad.
+// Vinculada al usuario enrolado en el terminal con opción de desenrolamiento.
 // ─────────────────────────────────────────────────────────────────────────────
 class PinLoginScreen extends StatefulWidget {
   const PinLoginScreen({super.key});
@@ -28,6 +28,10 @@ class _PinLoginScreenState extends State<PinLoginScreen>
   int _failedAttempts = 0;
   final FocusNode _keyboardFocusNode = FocusNode();
 
+  String? _enrolledUserId;
+  String? _enrolledUserName;
+  String? _enrolledUserEmail;
+
   // Animación de sacudida para feedback de error
   late AnimationController _shakeController;
   late Animation<double> _shakeAnimation;
@@ -42,6 +46,27 @@ class _PinLoginScreenState extends State<PinLoginScreen>
     _shakeAnimation = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(parent: _shakeController, curve: Curves.elasticIn),
     );
+
+    _cargarDatosEnrolamiento();
+  }
+
+  Future<void> _cargarDatosEnrolamiento() async {
+    final userId = await AuthService.getEnrolledUserId();
+    final userName = await AuthService.getEnrolledUserName();
+    final userEmail = await AuthService.getEnrolledUserEmail();
+
+    if (!mounted) return;
+
+    if (userId == null || userId.isEmpty) {
+      Navigator.of(context).pushReplacementNamed('/enrolamiento');
+      return;
+    }
+
+    setState(() {
+      _enrolledUserId = userId;
+      _enrolledUserName = userName;
+      _enrolledUserEmail = userEmail;
+    });
   }
 
   @override
@@ -114,7 +139,7 @@ class _PinLoginScreenState extends State<PinLoginScreen>
       _errorMessage = null;
     });
 
-    final result = await AuthService.loginConPin(_pin);
+    final result = await AuthService.loginConPin(_pin, _enrolledUserId);
 
     if (!mounted) return;
 
@@ -131,6 +156,7 @@ class _PinLoginScreenState extends State<PinLoginScreen>
 
       if (_failedAttempts >= 10) {
         await AuthService.clearToken();
+        if (!mounted) return;
         setState(() {
           _isLoading = false;
           _pin = '';
@@ -147,6 +173,37 @@ class _PinLoginScreenState extends State<PinLoginScreen>
     }
   }
 
+  Future<void> _confirmarDesenrolamiento() async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        backgroundColor: AppPalette.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text('Desenrolar Terminal', style: AppTypography.title),
+        content: const Text(
+          '¿Está seguro de que desea desenrolar este terminal? Se requerirán credenciales corporativas (email y contraseña) para volver a vincularlo.',
+          style: AppTypography.small,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
+            child: const Text('CANCELAR', style: TextStyle(color: AppPalette.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppPalette.error),
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
+            child: const Text('DESENROLAR', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar == true && mounted) {
+      await AuthService.desenrolarTerminal();
+      if (!mounted) return;
+      Navigator.of(context).pushNamedAndRemoveUntil('/enrolamiento', (route) => false);
+    }
+  }
 
   void _showFatalErrorDialog() {
     showDialog(
@@ -199,12 +256,14 @@ class _PinLoginScreenState extends State<PinLoginScreen>
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   _buildHeader(),
-                  const SizedBox(height: 48),
+                  const SizedBox(height: 36),
                   _buildPinIndicators(),
                   const SizedBox(height: 20),
                   _buildErrorMessage(),
-                  const SizedBox(height: 40),
+                  const SizedBox(height: 32),
                   _buildNumericKeypad(),
+                  const SizedBox(height: 28),
+                  _buildDesenrolarButton(),
                 ],
               ),
             ),
@@ -214,8 +273,7 @@ class _PinLoginScreenState extends State<PinLoginScreen>
     );
   }
 
-
-  // ── Encabezado con logo y título ──────────────────────────────────────────
+  // ── Encabezado con logo, título y usuario vinculado ───────────────────────
 
   Widget _buildHeader() {
     return Column(
@@ -253,9 +311,59 @@ class _PinLoginScreenState extends State<PinLoginScreen>
           style: AppTypography.small,
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 28),
-        const Divider(color: AppPalette.surface, thickness: 1),
         const SizedBox(height: 20),
+        // Badge del usuario enrolado
+        if (_enrolledUserName != null || _enrolledUserEmail != null) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppPalette.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: AppPalette.primary.withValues(alpha: 0.3),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.account_circle_outlined,
+                  color: AppPalette.primary,
+                  size: 22,
+                ),
+                const SizedBox(width: 10),
+                Flexible(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_enrolledUserName != null && _enrolledUserName!.isNotEmpty)
+                        Text(
+                          _enrolledUserName!,
+                          style: AppTypography.body.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: AppPalette.textPrimary,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      if (_enrolledUserEmail != null && _enrolledUserEmail!.isNotEmpty)
+                        Text(
+                          _enrolledUserEmail!,
+                          style: AppTypography.small.copyWith(
+                            color: AppPalette.textSecondary,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+        const Divider(color: AppPalette.surface, thickness: 1),
+        const SizedBox(height: 16),
         const Text(
           'Ingrese su PIN de Operario',
           style: AppTypography.title,
@@ -309,9 +417,8 @@ class _PinLoginScreenState extends State<PinLoginScreen>
               boxShadow: isFilled
                   ? [
                       BoxShadow(
-                        color:
-                            (hasError ? AppPalette.error : AppPalette.primary)
-                                .withValues(alpha: 0.5),
+                        color: (hasError ? AppPalette.error : AppPalette.primary)
+                            .withValues(alpha: 0.5),
                         blurRadius: 8,
                         spreadRadius: 1,
                       ),
@@ -468,6 +575,17 @@ class _PinLoginScreenState extends State<PinLoginScreen>
                   ),
                 ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildDesenrolarButton() {
+    return TextButton.icon(
+      onPressed: _isLoading ? null : _confirmarDesenrolamiento,
+      icon: const Icon(Icons.phonelink_erase, size: 18, color: AppPalette.textSecondary),
+      label: Text(
+        'Desenrolar Terminal',
+        style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
       ),
     );
   }

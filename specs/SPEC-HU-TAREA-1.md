@@ -62,16 +62,16 @@
 - **Consideraciones UI**: Manejo de asincronía en callbacks requiere `if (!mounted) return;` antes de cualquier manipulación de `Navigator` o `ScaffoldMessenger`.
 
 ## 4. Checklist de Tareas de Implementación (TDD)
-- [ ] **Tarea 1 (Backend - Schemas & Modelos)**: Modificar `LoginPINRequest` en `schemas.py` exigiendo `id_usuario: str`. Aplicar `ConfigDict(from_attributes=True)`.
-- [ ] **Tarea 2 (Backend - Endpoints & Transacciones ACID)**: Actualizar `/api/auth/login-pin` en `routers/auth.py` para comparar PIN y el `id_usuario` recibido simultáneamente. Manejar respuestas `401 Unauthorized`.
-- [ ] **Tarea 3 (Backend - Pruebas Pytest)**: Escribir/actualizar tests unitarios en `test/` validando el acceso a `/login-pin` (camino feliz, error de pin incorrecto, error de usuario no coincide).
-- [ ] **Tarea 4 (Frontend - Servicio & Modelos Dart)**: Implementar lógica de enrolamiento y desenrolamiento en `auth_service.dart`. Actualizar invocación de login por PIN enviando el `idUsuarioEnrolado` persistido.
-- [ ] **Tarea 5 (Frontend - UI, Controladores & Mounted Guards)**: 
+- [x] **Tarea 1 (Backend - Schemas & Modelos)**: Modificar `LoginPINRequest` en `schemas.py` exigiendo `id_usuario: str`. Aplicar `ConfigDict(from_attributes=True)`.
+- [x] **Tarea 2 (Backend - Endpoints & Transacciones ACID)**: Actualizar `/api/auth/login-pin` en `routers/auth.py` para comparar PIN y el `id_usuario` recibido simultáneamente. Manejar respuestas `401 Unauthorized`.
+- [x] **Tarea 3 (Backend - Pruebas Pytest)**: Escribir/actualizar tests unitarios en `test/` validando el acceso a `/login-pin` (camino feliz, error de pin incorrecto, error de usuario no coincide).
+- [x] **Tarea 4 (Frontend - Servicio & Modelos Dart)**: Implementar lógica de enrolamiento y desenrolamiento en `auth_service.dart`. Actualizar invocación de login por PIN enviando el `idUsuarioEnrolado` persistido.
+- [x] **Tarea 5 (Frontend - UI, Controladores & Mounted Guards)**: 
     - Crear `enrolamiento_screen.dart` (UI Email/Password).
     - Adaptar `pin_login_screen.dart` visualizando a quién pertenece la terminal, con botón administrativo de "Desenrolar" (exige confirmación).
     - Verificar `if (!mounted) return;` en todo el bloque `try-catch` del login.
-- [ ] **Tarea 6 (Frontend - Guardas y Routing)**: Refactorizar `app_routes.dart` o añadir un observer de rutas para rechazar y redireccionar navegaciones no permitidas basadas en el RBAC.
-- [ ] **Tarea 7 (Frontend - Pruebas Widget/Unitarias Flutter)**: Tests comprobando comportamiento de guardas RBAC e interfaz del enrolamiento/desenrolamiento.
+- [x] **Tarea 6 (Frontend - Guardas y Routing)**: Refactorizar `app_routes.dart` o añadir un observer de rutas para rechazar y redireccionar navegaciones no permitidas basadas en el RBAC.
+- [x] **Tarea 7 (Frontend - Pruebas Widget/Unitarias Flutter)**: Tests comprobando comportamiento de guardas RBAC e interfaz del enrolamiento/desenrolamiento.
 
 ## 5. Criterios de Validación Automatizada
 - Backend Tests: Ejecutar `pytest tests/ -v` asegurando 100% pase en validaciones de Auth.

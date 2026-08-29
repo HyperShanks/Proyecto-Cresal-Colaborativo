@@ -55,13 +55,14 @@ void main() {
   });
 
   group('SplashScreen - Navigation Routing Tests', () {
-    testWidgets('Sin sesión redirige a /login', (tester) async {
+    testWidgets('Sin enrolamiento ni sesión redirige a /enrolamiento', (tester) async {
       await const FlutterSecureStorage().deleteAll();
 
       await tester.pumpWidget(
         MaterialApp(
           home: const SplashScreen(),
           routes: {
+            '/enrolamiento': (context) => const Scaffold(body: Text('ENROLAMIENTO_SCREEN')),
             '/login': (context) => const Scaffold(body: Text('LOGIN_SCREEN')),
             '/home': (context) => const Scaffold(body: Text('HOME_SCREEN')),
             '/ventas_main': (context) => const Scaffold(body: Text('VENTAS_MAIN_SCREEN')),
@@ -70,6 +71,29 @@ void main() {
       );
 
       // Avanzar tiempo del splash
+      await tester.pump(const Duration(milliseconds: 1600));
+      await tester.pumpAndSettle();
+
+      expect(find.text('ENROLAMIENTO_SCREEN'), findsOneWidget);
+    });
+
+    testWidgets('Terminal enrolado sin sesión activa redirige a /login (PIN)', (tester) async {
+      await const FlutterSecureStorage().deleteAll();
+      await const FlutterSecureStorage().write(key: 'enrolled_user_id', value: 'user-uuid-123');
+      await const FlutterSecureStorage().write(key: 'enrolled_user_email', value: 'operario@cresal.cl');
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: const SplashScreen(),
+          routes: {
+            '/enrolamiento': (context) => const Scaffold(body: Text('ENROLAMIENTO_SCREEN')),
+            '/login': (context) => const Scaffold(body: Text('LOGIN_SCREEN')),
+            '/home': (context) => const Scaffold(body: Text('HOME_SCREEN')),
+            '/ventas_main': (context) => const Scaffold(body: Text('VENTAS_MAIN_SCREEN')),
+          },
+        ),
+      );
+
       await tester.pump(const Duration(milliseconds: 1600));
       await tester.pumpAndSettle();
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'core/theme/app_theme.dart';
 import 'core/services/api_service.dart';
 import 'features/auth/presentation/screens/splash_screen.dart';
+import 'features/auth/presentation/screens/enrolamiento_screen.dart';
 import 'features/auth/presentation/screens/pin_login_screen.dart';
 import 'features/home/presentation/screens/home_screen.dart';
 import 'features/recepcion/presentation/screens/recepcion_vehiculo_screen.dart';
@@ -45,6 +46,7 @@ class _MyAppState extends State<MyApp> {
 
       // Rutas nombradas de la aplicación
       routes: {
+        '/enrolamiento': (context) => const EnrolamientoScreen(),
         '/login': (context) => const PinLoginScreen(),
         '/home': (context) => const HomeScreen(),
         '/caja': (context) => const CajaMainScreen(), // HU-01: Layout Base de Caja

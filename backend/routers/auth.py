@@ -1,4 +1,5 @@
 import random
+import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
@@ -87,7 +88,6 @@ def registrar_usuario(
         if primera_sucursal:
             id_sucursal_final = primera_sucursal.id_sucursal
         else:
-            # Fallback en testing si no hay sucursales creadas
             id_sucursal_final = 1
 
     # 5. Generar o validar PIN de acceso único de 4 dígitos
@@ -123,9 +123,19 @@ def registrar_usuario(
         estado="Activo"
     )
 
-    db.add(nuevo_usuario)
-    db.commit()
-    db.refresh(nuevo_usuario)
+    try:
+        db.add(nuevo_usuario)
+        db.commit()
+        db.refresh(nuevo_usuario)
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error transaccional al registrar usuario: {str(e)}"
+        )
 
     return RegisterUserResponse(
         id_usuario=nuevo_usuario.id_usuario,
@@ -136,6 +146,7 @@ def registrar_usuario(
         id_rol=nuevo_usuario.id_rol,
         nombre_rol=rol.nombre_rol,
         id_sucursal=nuevo_usuario.id_sucursal,
+        nombre_sucursal=nuevo_usuario.nombre_sucursal,
         pin_acceso=nuevo_usuario.pin_acceso,
         estado=nuevo_usuario.estado,
         mensaje="Usuario registrado exitosamente con contraseña encriptada.",
@@ -145,34 +156,37 @@ def registrar_usuario(
 @router.post(
     "/login-pin",
     response_model=TokenResponse,
-    summary="Login por PIN de Operario",
-    description="Autentica a un operario usando su PIN de 4 dígitos asignado. "
+    summary="Login por PIN de Operario Vinculado",
+    description="Autentica a un operario usando su PIN de 4 dígitos y su ID de usuario vinculado. "
                 "Retorna un JWT Bearer Token y los datos públicos del usuario."
 )
 def login_por_pin(request: LoginPINRequest, db: Session = Depends(get_db)):
     """
-    Flujo de autenticación por PIN:
+    Flujo de autenticación por PIN vinculado al usuario:
 
-    1. Busca en la tabla Usuario el registro cuyo pin_acceso coincide con el ingresado.
-    2. Camino Triste: Si no existe o está inactivo → 401 Unauthorized.
-    3. Camino Feliz: Si es válido y activo → Genera JWT y retorna TokenResponse.
+    1. Valida el UUID de id_usuario.
+    2. Busca en la tabla Usuario el registro con (id_usuario == request.id_usuario) AND (pin_acceso == request.pin_acceso).
+    3. Si no existe, no coincide o está inactivo → 401 Unauthorized.
+    4. Si es válido y activo → Genera JWT y retorna TokenResponse.
     """
-    pin_ingresado = request.pin_valor
-    if not pin_ingresado:
+    try:
+        user_uuid = uuid.UUID(str(request.id_usuario))
+    except (ValueError, AttributeError):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="PIN de acceso requerido."
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="PIN inválido o usuario inactivo"
         )
 
-    # Consulta: buscar usuario por PIN (cargando relación con Rol y Sucursal)
+    # Consulta: buscar usuario por ID y PIN (cargando relación con Rol y Sucursal)
     usuario = db.query(Usuario).options(
         joinedload(Usuario.rol),
         joinedload(Usuario.sucursal)
     ).filter(
-        Usuario.pin_acceso == pin_ingresado
+        Usuario.id_usuario == user_uuid,
+        Usuario.pin_acceso == request.pin_acceso
     ).first()
 
-    # Camino Triste: PIN no encontrado
+    # Camino Triste: PIN no coincide o usuario no encontrado
     if not usuario:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -186,8 +200,8 @@ def login_por_pin(request: LoginPINRequest, db: Session = Depends(get_db)):
             detail="PIN inválido o usuario inactivo"
         )
 
-    # Verificación adicional de PIN (comparación explícita)
-    if not verify_pin(pin_ingresado, usuario.pin_acceso):
+    # Verificación adicional de PIN
+    if not verify_pin(request.pin_acceso, usuario.pin_acceso):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="PIN inválido o usuario inactivo"

@@ -67,13 +67,16 @@ class ActualizarQrImpresoRequest(BaseModel):
 # ==========================================
 
 class LoginPINRequest(BaseModel):
-    """Payload de entrada para el login por PIN de operario."""
-    pin: Optional[str] = None
-    pin_acceso: Optional[str] = None
+    """Payload de entrada para el login por PIN de operario vinculado."""
+    model_config = ConfigDict(from_attributes=True)
+
+    pin_acceso: str
+    id_usuario: str  # ID del usuario previamente enrolado en el terminal
 
     @property
     def pin_valor(self) -> str:
-        return self.pin_acceso or self.pin or ""
+        return self.pin_acceso
+
 
 LoginPinRequest = LoginPINRequest
 
