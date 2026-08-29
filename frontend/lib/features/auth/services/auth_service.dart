@@ -134,9 +134,16 @@ class AuthService {
         return AuthResult.ok(userModel);
       }
 
-      final detail = body['detail'] ?? 'Error desconocido del servidor';
+      if (response.statusCode == 401) {
+        return const AuthResult.fail('Credenciales inválidas, verifica tu correo o contraseña.');
+      }
+
+      final detail = body['message_user'] ?? body['detail'] ?? 'Error desconocido del servidor';
       return AuthResult.fail(detail.toString());
     } on Exception catch (e) {
+      if (e.toString().contains('Tiempo de espera') || e.toString().contains('TimeoutException')) {
+        return const AuthResult.fail('Problemas de conexión con el servidor. Reintentando...');
+      }
       return AuthResult.fail(e.toString().replaceFirst('Exception: ', ''));
     }
   }
@@ -147,7 +154,7 @@ class AuthService {
     try {
       final targetUserId = idUsuarioEnrolado ?? await getEnrolledUserId();
       if (targetUserId == null || targetUserId.isEmpty) {
-        return const AuthResult.fail('Terminal no enrolado. Inicie sesión con email y contraseña.');
+        return const AuthResult.fail('Terminal no enrolada, contacte a su administrador.');
       }
 
       final uri = Uri.parse('${ApiConstants.authEndpoint}/login-pin');
@@ -240,10 +247,17 @@ class AuthService {
         return AuthResult.ok(userModel);
       }
 
-      // Camino triste: el backend retornó un error (401, 422, etc.)
-      final detail = body['detail'] ?? 'Error desconocido del servidor';
+      if (response.statusCode == 401) {
+        return const AuthResult.fail('PIN incorrecto para este terminal.');
+      }
+
+      // Camino triste: el backend retornó un error (422, 500, etc.)
+      final detail = body['message_user'] ?? body['detail'] ?? 'Error desconocido del servidor';
       return AuthResult.fail(detail.toString());
     } on Exception catch (e) {
+      if (e.toString().contains('Tiempo de espera') || e.toString().contains('TimeoutException')) {
+        return const AuthResult.fail('Problemas de conexión con el servidor. Reintentando...');
+      }
       return AuthResult.fail(e.toString().replaceFirst('Exception: ', ''));
     }
   }

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../../core/theme/app_components.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../core/widgets/custom_error_snackbar.dart';
 import '../../models/tarea_alerta.dart';
 import '../../services/logistica_service.dart';
 
@@ -26,9 +27,11 @@ class _AuditoriaSalidaScreenState extends State<AuditoriaSalidaScreen>
   bool _isProcessing = false;
   EscanearSalidaResponseModel? _resultadoExitoso;
 
+  // Controlador de entrada manual / lector PDA
   final TextEditingController _simuladorController = TextEditingController();
   final FocusNode _simuladorFocus = FocusNode();
 
+  // Animación del láser escáner industrial
   late AnimationController _laserAnimController;
 
   @override
@@ -36,7 +39,7 @@ class _AuditoriaSalidaScreenState extends State<AuditoriaSalidaScreen>
     super.initState();
     _laserAnimController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 2),
+      duration: const Duration(milliseconds: 1800),
     )..repeat(reverse: true);
   }
 
@@ -53,22 +56,30 @@ class _AuditoriaSalidaScreenState extends State<AuditoriaSalidaScreen>
     final code = rawCode.trim();
     if (code.isEmpty || _isProcessing || _resultadoExitoso != null) return;
 
-    setState(() {
-      if (code.toUpperCase().startsWith('TX-QR-')) {
+    if (code.toUpperCase().startsWith('TX-QR-')) {
+      setState(() {
         _qrTransaccionalSalida = code;
         print(
           '📱 [AUDITORIA] QR Digital Vendedor capturado: $_qrTransaccionalSalida',
         );
-      } else {
-        final sku = code.toUpperCase();
-        if (!_skusEscaneados.contains(sku)) {
-          _skusEscaneados.add(sku);
-          print(
-            '📦 [AUDITORIA] SKU Físico de pieza capturado: $sku (Total: ${_skusEscaneados.length})',
-          );
-        }
+      });
+    } else {
+      final sku = code.toUpperCase();
+      if (_skusEscaneados.contains(sku)) {
+        CustomErrorSnackbar.mostrar(
+          context,
+          mensaje: 'La pieza ya fue escaneada y registrada previamente.',
+          codigoError: 'PIEZA_DUPLICADA',
+        );
+        return;
       }
-    });
+      setState(() {
+        _skusEscaneados.add(sku);
+        print(
+          '📦 [AUDITORIA] SKU Físico de pieza capturado: $sku (Total: ${_skusEscaneados.length})',
+        );
+      });
+    }
 
     _simuladorController.clear();
 
@@ -108,7 +119,7 @@ class _AuditoriaSalidaScreenState extends State<AuditoriaSalidaScreen>
         _isProcessing = false;
       });
 
-      // Retorno automático tras 3.0s para que el operario visualice la confirmación
+      // Retorno automático tras 5.0s para que el operario visualice la confirmación
       Future.delayed(const Duration(milliseconds: 5000), () {
         if (mounted) {
           Navigator.of(context).pop(true);
@@ -120,29 +131,27 @@ class _AuditoriaSalidaScreenState extends State<AuditoriaSalidaScreen>
       // Feedback háptico de alerta
       HapticFeedback.mediumImpact();
 
-      final mensajeError = e.toString().replaceFirst('Exception: ', '');
-      print('❌ [AUDITORIA] Error en barrera: $mensajeError');
+      String rawError = e.toString().replaceFirst('Exception: ', '').trim();
+      String mensajeSanitizado = rawError;
+      String codigoError = 'BARRERA_ERROR';
+
+      if (rawError.toLowerCase().contains('no encontrado') || rawError.toLowerCase().contains('404')) {
+        mensajeSanitizado = 'El código escaneado no pertenece a ninguna orden activa.';
+        codigoError = 'SCAN_NO_ENCONTRADO';
+      } else if (rawError.toLowerCase().contains('no pertenecen a esta orden') || rawError.toLowerCase().contains('otra orden')) {
+        mensajeSanitizado = 'Cuidado, la pieza escaneada pertenece a otra orden.';
+        codigoError = 'ORDEN_MISMATCH';
+      }
+
+      print('❌ [AUDITORIA] Error en barrera: $mensajeSanitizado');
 
       setState(() => _isProcessing = false);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.error_outline, color: Colors.white, size: 22.0),
-              const SizedBox(width: 10.0),
-              Expanded(
-                child: Text(
-                  mensajeError,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ),
-            ],
-          ),
-          backgroundColor: AppPalette.error,
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 4),
-        ),
+      CustomErrorSnackbar.mostrar(
+        context,
+        mensaje: mensajeSanitizado,
+        codigoError: codigoError,
+        onReintentar: () => _ejecutarDualScanMatch(),
       );
     }
   }

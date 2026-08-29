@@ -1,8 +1,11 @@
 // test/api_service_test.dart
 
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:http/http.dart' as http;
 import 'package:frontend/core/services/api_service.dart';
 import 'package:frontend/features/auth/services/auth_service.dart';
 import 'package:frontend/features/alertas/services/bodega_polling_service.dart';
@@ -93,6 +96,59 @@ void main() {
       }
 
       expect(onUnauthorizedLlamado, isTrue);
+    });
+  });
+
+  group('ApiService - Manejo y Sanitización de Errores (SPEC-HU-07)', () {
+    test('extraerMensajeError prioriza message_user de ErrorResponseDTO', () {
+      final response = http.Response(
+        jsonEncode({
+          'error_code': 'RECORD_ALREADY_EXISTS',
+          'message_user': 'El registro ya existe en el sistema.',
+          'detail': 'Detalle técnico interno',
+        }),
+        409,
+      );
+
+      final msg = ApiService.extraerMensajeError(response);
+      expect(msg, 'El registro ya existe en el sistema.');
+    });
+
+    test('extraerMensajeError hace fallback seguro a códigos HTTP conocidos', () {
+      final response500 = http.Response('Internal Server Error', 500);
+      expect(
+        ApiService.extraerMensajeError(response500),
+        'Ocurrió un error inesperado en el servidor. Intenta nuevamente.',
+      );
+
+      final response404 = http.Response('Not Found', 404);
+      expect(
+        ApiService.extraerMensajeError(response404),
+        'El recurso solicitado no fue encontrado.',
+      );
+
+      final response503 = http.Response('Service Unavailable', 503);
+      expect(
+        ApiService.extraerMensajeError(response503),
+        'El servicio no está disponible temporalmente. Intenta más tarde.',
+      );
+    });
+
+    test('ejecutarConManejoErrores captura TimeoutException y mapea a CustomApiException', () async {
+      expect(
+        () => ApiService.ejecutarConManejoErrores(() async {
+          throw TimeoutException('Timed out');
+        }),
+        throwsA(
+          isA<CustomApiException>()
+              .having((e) => e.errorCode, 'errorCode', 'NETWORK_TIMEOUT')
+              .having(
+                (e) => e.messageUser,
+                'messageUser',
+                'Problemas de conexión con el servidor. Reintentando...',
+              ),
+        ),
+      );
     });
   });
 }

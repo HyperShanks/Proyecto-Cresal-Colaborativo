@@ -73,12 +73,12 @@ class CheckoutWizardController extends ChangeNotifier {
   bool nextStep() {
     _errorMessage = null;
     if (_currentStep == 0 && !validateStep1()) {
-      _errorMessage = 'Debe agregar al menos un producto, ítem manual o reserva por encargo.';
+      _errorMessage = 'Debes agregar al menos un artículo o servicio para proceder.';
       notifyListeners();
       return false;
     }
     if (_currentStep == 1 && !validateStep2()) {
-      _errorMessage = 'Debe seleccionar o registrar un cliente antes de avanzar.';
+      _errorMessage = 'Por favor, ingresa o busca el RUT del cliente antes de continuar.';
       notifyListeners();
       return false;
     }
