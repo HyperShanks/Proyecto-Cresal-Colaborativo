@@ -380,6 +380,11 @@ class _PanelTareasDesplegableState extends State<PanelTareasDesplegable> {
         badgeIcon = Icons.qr_code_2;
         badgeLabel = 'QR IMPRESIÓN';
         break;
+      case 'REINGRESO':
+        badgeColor = const Color(0xFFFFB300);
+        badgeIcon = Icons.assignment_return_outlined;
+        badgeLabel = 'REINGRESO';
+        break;
       default:
         badgeColor = AppPalette.textSecondary;
         badgeIcon = Icons.task_alt;
@@ -460,6 +465,24 @@ class _PanelTareasDesplegableState extends State<PanelTareasDesplegable> {
                         : const Icon(Icons.check, size: 14),
                     label: Text(isProcessing ? 'Guardando...' : 'Marcar Listo', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                     onPressed: isProcessing ? null : () => _marcarListo(tarea),
+                  ),
+                ),
+              ] else if (tarea.tipoAlerta == 'REINGRESO') ...[
+                SizedBox(
+                  height: 32,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00A3FF),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                    ),
+                    icon: const Icon(Icons.qr_code_scanner_rounded, size: 14),
+                    label: const Text('Reingresar', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      Navigator.pushNamed(context, '/alertas');
+                    },
                   ),
                 ),
               ] else if (tarea.tipoAlerta == 'LIBERADA') ...[

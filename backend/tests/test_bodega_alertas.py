@@ -290,3 +290,20 @@ def test_completar_preentrega_decrementa_resumen(client, db_session, auth_token_
     # Obtener nuevo conteo
     res2 = client.get("/api/v1/bodega/resumen-alertas?sucursal_id=1", headers=headers).json()
     assert res2["desglose_preparacion"] == conteo_previo - 1
+
+
+def test_obtener_tareas_pendientes_incluye_reingresos(client, auth_token_bodeguero):
+    """Verifica que /tareas-pendientes retorna las tareas de REINGRESO para Logística Inversa."""
+    headers = {"Authorization": f"Bearer {auth_token_bodeguero}"}
+    response = client.get("/api/v1/bodega/tareas-pendientes?sucursal_id=1", headers=headers)
+    assert response.status_code == 200
+    tareas = response.json()
+    assert isinstance(tareas, list)
+    
+    reingresos = [t for t in tareas if t["tipo_alerta"] == "REINGRESO"]
+    assert len(reingresos) >= 1
+    tarea_reingreso = reingresos[0]
+    assert tarea_reingreso["accion_requerida"] == "REINGRESAR / PALETIZAR"
+    assert tarea_reingreso["sku_qr_fisico"] is not None
+    assert "ORDEN" in tarea_reingreso["orden_ref"]
+

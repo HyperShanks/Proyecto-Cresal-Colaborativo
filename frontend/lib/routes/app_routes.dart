@@ -133,7 +133,7 @@ class AppRoutes {
       checkoutWizard: (context) => const CheckoutWizardScreen(),
       bandejaPrecios: (context) => const BandejaPreciosScreen(),
       entregasEnvios: (context) => const EntregasEnviosScreen(),
-      reingresos: (context) => const ReingresoTareasScreen(),
+      reingresos: (context) => const AlertasScreen(),
     };
   }
 }

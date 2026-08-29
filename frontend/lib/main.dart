@@ -74,7 +74,7 @@ class _MyAppState extends State<MyApp> {
         '/entregas-envios': (context) =>
             const EntregasEnviosScreen(), // Módulo de Entregas y Envíos
         '/reingresos': (context) =>
-            const ReingresoTareasScreen(), // Logística Inversa Bodega
+            const AlertasScreen(), // Logística Inversa Bodega consolidada en Alertas Tareas
       },
     );
   }

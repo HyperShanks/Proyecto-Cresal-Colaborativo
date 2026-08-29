@@ -230,7 +230,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
           ),
           _buildDrawerItem(icon: Icons.confirmation_number_outlined, label: 'TICKET', onTap: () { Navigator.of(context).pop(); Navigator.of(context).pushNamed('/tickets'); }),
-          _buildDrawerItem(icon: Icons.assignment_return_outlined, label: 'LOGÍSTICA INVERSA', onTap: () { Navigator.of(context).pop(); Navigator.of(context).pushNamed('/reingresos'); }),
           _buildDrawerItem(icon: Icons.settings_outlined, label: 'CONFIGURACIÓN', onTap: () => Navigator.of(context).pop()),
           const Spacer(),
           Padding(

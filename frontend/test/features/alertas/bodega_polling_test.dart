@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/features/alertas/services/bodega_polling_service.dart';
 import 'package:frontend/features/alertas/models/tarea_alerta.dart';
 import 'package:frontend/features/alertas/presentation/widgets/panel_tareas_desplegable.dart';
+import 'package:frontend/features/alertas/presentation/widgets/task_card.dart';
 import 'package:frontend/core/theme/tokens/app_palette.dart';
 
 void main() {
@@ -229,6 +230,36 @@ void main() {
       expect(find.text('ORDEN #A1B2C3D4'), findsOneWidget);
       expect(find.text('Marcar Listo'), findsOneWidget);
       expect(find.text('VER TABLERO COMPLETO'), findsOneWidget);
+    });
+
+    testWidgets('TaskCard renderiza botón REINGRESAR / PALETIZAR para tareas de tipo REINGRESO', (tester) async {
+      const tareaReingreso = TareaAlerta(
+        idTarea: 'REING-001',
+        tipoAlerta: 'REINGRESO',
+        tituloPieza: 'Motor Toyota Tercel XLI 1.5',
+        ordenRef: 'ORDEN ANULADA #A6B0E068',
+        accionRequerida: 'REINGRESAR / PALETIZAR',
+        skuQrFisico: 'MOT-1006',
+        ubicacion: 'P-01 - PAL-04',
+      );
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: TaskCard(tarea: tareaReingreso),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Motor Toyota Tercel XLI 1.5'), findsOneWidget);
+      expect(find.text('ORDEN ANULADA'), findsOneWidget);
+      expect(find.text('MOT-1006'), findsOneWidget);
+      expect(find.text('REINGRESAR / PALETIZAR'), findsWidgets);
+      expect(find.byKey(const Key('btn_reingresar_REING-001')), findsOneWidget);
     });
   });
 }

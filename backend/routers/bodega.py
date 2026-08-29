@@ -219,7 +219,54 @@ def obtener_tareas_pendientes(
         )
 
     # ---------------------------------------------------------
-    # PRIORIDAD 2: Pendiente de Impresión (FILTRADO POR SUCURSAL)
+    # PRIORIDAD 2: Reingresos de Logística Inversa (Órdenes Anuladas)
+    # ---------------------------------------------------------
+    reingresos = (
+        db.query(Detalle_Orden, Orden_Venta, Activo_Inventariado, Vehiculo_Origen)
+        .join(Orden_Venta, Detalle_Orden.id_orden == Orden_Venta.id_orden)
+        .join(Activo_Inventariado, Detalle_Orden.id_activo == Activo_Inventariado.id_activo)
+        .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
+        .filter(
+            Orden_Venta.estado_orden == "Anulada",
+            Activo_Inventariado.id_estado.notin_([1, 7]),  # No Disponible ni Paletizado
+            Activo_Inventariado.estado == "Activo",
+            (Activo_Inventariado.id_sucursal_actual == sucursal_id) | (Orden_Venta.id_sucursal == sucursal_id),
+        )
+        .all()
+    )
+
+    for detalle, orden, activo, vehiculo in reingresos:
+        cat_nombre = "Motor" if activo.id_categoria == 1 else ("Caja de Cambios" if activo.id_categoria == 2 else "Repuesto")
+        if vehiculo:
+            anio_str = f" ({vehiculo.anio})" if vehiculo.anio else ""
+            titulo = f"{cat_nombre} - {vehiculo.marca} {vehiculo.modelo}{anio_str}"
+        else:
+            titulo = f"{cat_nombre} - {activo.sku_qr_fisico}" if activo.sku_qr_fisico else cat_nombre
+
+        alertas.append(
+            TareaAlertaResponse(
+                id_tarea=f"REING-{str(detalle.id_detalle)[:8]}",
+                tipo_alerta="REINGRESO",
+                orden_ref=f"ORDEN #{str(orden.id_orden)[:8].upper()}",
+                titulo_pieza=titulo,
+                categoria=cat_nombre,
+                tipo_repuesto=cat_nombre,
+                ubicacion=f"{activo.ubicacion_pasillo or 'S/P'} - {activo.ubicacion_pallet or 'S/P'}",
+                nota_especial="Reingreso a inventario / paletizado por anulación de orden",
+                estado_bloqueo=None,
+                accion_requerida="REINGRESAR / PALETIZAR",
+                id_detalle=detalle.id_detalle,
+                id_activo=activo.id_activo,
+                id_orden=orden.id_orden,
+                sku_qr_fisico=activo.sku_qr_fisico,
+                id_sucursal_origen=activo.id_sucursal_actual,
+                es_traslado=False,
+                estado_preparacion="Reingreso Pendiente",
+            )
+        )
+
+    # ---------------------------------------------------------
+    # PRIORIDAD 3: Pendiente de Impresión (FILTRADO POR SUCURSAL)
     # ---------------------------------------------------------
     activos_sin_qr = (
         db.query(Activo_Inventariado, Vehiculo_Origen, Detalle_Motor, Detalle_Caja_Cambio)

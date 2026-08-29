@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../models/tarea_alerta.dart';
 import '../../services/logistica_service.dart';
+import '../../services/bodega_service.dart';
+import '../../services/bodega_polling_service.dart';
 
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
@@ -67,6 +69,7 @@ class _TaskCardState extends State<TaskCard> {
       if (!mounted) return;
 
       if (exito) {
+        BodegaPollingService.instance.decrementarPendiente();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -91,6 +94,241 @@ class _TaskCardState extends State<TaskCard> {
     }
   }
 
+  Future<void> _abrirDialogoConfirmarReingreso(BuildContext context) async {
+    final tarea = widget.tarea;
+    final idOrden = tarea.idOrden ?? (tarea.ordenRef?.replaceAll('ORDEN #', '').replaceAll('ORDEN ANULADA #', '').trim() ?? '');
+    final skuInicial = tarea.skuQrFisico ?? '';
+
+    String pasilloInicial = '';
+    String palletInicial = '';
+    if (tarea.ubicacion.contains('-')) {
+      final parts = tarea.ubicacion.split('-');
+      if (parts.length >= 2) {
+        pasilloInicial = parts[0].trim().replaceAll('S/P', '');
+        palletInicial = parts[1].trim().replaceAll('S/P', '');
+      }
+    }
+
+    final pasilloController = TextEditingController(text: pasilloInicial);
+    final palletController = TextEditingController(text: palletInicial);
+    final skuController = TextEditingController(text: skuInicial);
+
+    bool isSubmitting = false;
+    String? modalError;
+
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return AlertDialog(
+              backgroundColor: AppPalette.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16.0),
+                side: const BorderSide(color: Colors.white12),
+              ),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00A3FF).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.qr_code_scanner_rounded, color: Color(0xFF00A3FF), size: 26),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('Confirmar Reingreso', style: AppTypography.title.copyWith(fontSize: 17)),
+                        if (skuInicial.isNotEmpty)
+                          Text('SKU: $skuInicial', style: AppTypography.small.copyWith(color: AppPalette.secondary, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppPalette.background,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.white10),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(_obtenerTituloFormateado(), style: AppTypography.body.copyWith(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 4),
+                          Text('Orden Anulada: ${tarea.ordenRef ?? idOrden}', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text('Escaneo de QR Físico (Validación):', style: AppTypography.small.copyWith(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: skuController,
+                      enabled: !isSubmitting,
+                      style: AppTypography.body.copyWith(fontWeight: FontWeight.w600),
+                      decoration: InputDecoration(
+                        hintText: 'Escanee o digite el SKU del repuesto',
+                        filled: true,
+                        fillColor: AppPalette.background,
+                        prefixIcon: const Icon(Icons.qr_code, color: Color(0xFF00A3FF), size: 20),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white24)),
+                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Color(0xFF00A3FF), width: 1.5)),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Pasillo / Rack:', style: AppTypography.small.copyWith(fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 4),
+                              TextField(
+                                controller: pasilloController,
+                                enabled: !isSubmitting,
+                                textCapitalization: TextCapitalization.characters,
+                                style: AppTypography.body,
+                                decoration: InputDecoration(
+                                  hintText: 'Ej: P-02',
+                                  filled: true,
+                                  fillColor: AppPalette.background,
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white24)),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Pallet:', style: AppTypography.small.copyWith(fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 4),
+                              TextField(
+                                controller: palletController,
+                                enabled: !isSubmitting,
+                                textCapitalization: TextCapitalization.characters,
+                                style: AppTypography.body,
+                                decoration: InputDecoration(
+                                  hintText: 'Ej: PAL-05',
+                                  filled: true,
+                                  fillColor: AppPalette.background,
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white24)),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (modalError != null) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(color: AppPalette.error.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.error_outline, color: AppPalette.error, size: 16),
+                            const SizedBox(width: 6),
+                            Expanded(child: Text(modalError!, style: const TextStyle(color: AppPalette.error, fontSize: 12))),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSubmitting ? null : () => Navigator.of(ctx).pop(false),
+                  child: Text('Cancelar', style: AppTypography.button.copyWith(color: AppPalette.textSecondary)),
+                ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppPalette.success,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  icon: isSubmitting
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.check, size: 18),
+                  label: Text(isSubmitting ? 'Guardando...' : 'CONFIRMAR REINGRESO'),
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          final skuEscaneado = skuController.text.trim();
+                          if (skuEscaneado.isEmpty) {
+                            setModalState(() => modalError = 'Debe ingresar o escanear el SKU físico.');
+                            return;
+                          }
+
+                          setModalState(() {
+                            isSubmitting = true;
+                            modalError = null;
+                          });
+
+                          try {
+                            await BodegaService.confirmarReingreso(
+                              skuQrFisico: skuEscaneado,
+                              idOrdenAnulada: idOrden,
+                              ubicacionPasillo: pasilloController.text.trim(),
+                              ubicacionPallet: palletController.text.trim(),
+                            );
+
+                            if (!ctx.mounted) return;
+                            Navigator.of(ctx).pop(true);
+                          } catch (e) {
+                            setModalState(() {
+                              isSubmitting = false;
+                              modalError = e.toString().replaceAll('Exception:', '').trim();
+                            });
+                          }
+                        },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    pasilloController.dispose();
+    palletController.dispose();
+    skuController.dispose();
+
+    if (result == true && mounted) {
+      BodegaPollingService.instance.decrementarPendiente();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: AppPalette.success,
+          content: Text('✅ Reingreso completado y pieza paletizada/disponible.'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      widget.onActualizar?.call();
+    }
+  }
+
   // Método para desplegar el Modal de Acción
   void _mostrarDetalleModal(
     BuildContext context,
@@ -101,7 +339,8 @@ class _TaskCardState extends State<TaskCard> {
     final tituloFormateado = _obtenerTituloFormateado();
     final esLiberada = tarea.tipoAlerta == 'LIBERADA';
     final esImpresion = tarea.tipoAlerta == 'IMPRESION';
-    final esPreEntrega = !esLiberada && !esImpresion;
+    final esReingreso = tarea.tipoAlerta == 'REINGRESO';
+    final esPreEntrega = !esLiberada && !esImpresion && !esReingreso;
 
     showModalBottomSheet(
       context: context,
@@ -134,7 +373,7 @@ class _TaskCardState extends State<TaskCard> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    tarea.ordenRef ?? (esImpresion ? 'PENDIENTE: IMPRESIÓN' : 'TAREA OPERATIVA'),
+                    tarea.ordenRef ?? (esImpresion ? 'PENDIENTE: IMPRESIÓN' : (esReingreso ? 'LOGÍSTICA INVERSA' : 'TAREA OPERATIVA')),
                     style: AppTypography.small.copyWith(
                       color: accentColor,
                       fontWeight: FontWeight.bold,
@@ -157,11 +396,32 @@ class _TaskCardState extends State<TaskCard> {
                         ),
                       ),
                     ),
+                  if (esReingreso)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppPalette.error.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: AppPalette.error.withValues(alpha: 0.6)),
+                      ),
+                      child: Text(
+                        'ORDEN ANULADA',
+                        style: AppTypography.small.copyWith(
+                          color: AppPalette.error,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 9,
+                        ),
+                      ),
+                    ),
                 ],
               ),
               const SizedBox(height: 8),
 
               Text(tituloFormateado, style: AppTypography.headline),
+              if (tarea.skuQrFisico != null && tarea.skuQrFisico!.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text('SKU: ${tarea.skuQrFisico}', style: AppTypography.small.copyWith(color: const Color(0xFF00A3FF), fontWeight: FontWeight.bold)),
+              ],
               const SizedBox(height: 20),
 
               // Recuadro de Ubicación
@@ -191,7 +451,7 @@ class _TaskCardState extends State<TaskCard> {
                 ),
               ),
 
-              // RECUADRO DE INSTRUCCIONES DEL VENDEDOR (Destacado)
+              // RECUADRO DE INSTRUCCIONES DEL VENDEDOR / MOTIVO (Destacado)
               if (tarea.notaEspecial != null) ...[
                 const SizedBox(height: 16),
                 Container(
@@ -216,7 +476,7 @@ class _TaskCardState extends State<TaskCard> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'INSTRUCCIONES DE PREPARACIÓN',
+                              'DETALLE DE LA TAREA',
                               style: AppTypography.small.copyWith(
                                 color: AppPalette.secondary,
                                 fontWeight: FontWeight.bold,
@@ -241,7 +501,7 @@ class _TaskCardState extends State<TaskCard> {
 
               const SizedBox(height: 24),
 
-              // Botón Excluyente 'LISTO' solo para tareas de preparación / pre-entrega (NO en LIBERADA)
+              // Botón Excluyente 'LISTO' solo para tareas de preparación / pre-entrega
               if (esPreEntrega && tarea.idDetalle != null) ...[
                 SizedBox(
                   width: double.infinity,
@@ -266,6 +526,30 @@ class _TaskCardState extends State<TaskCard> {
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppPalette.success,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+
+              // Botón de Reingreso / Paletizado
+              if (esReingreso) ...[
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _abrirDialogoConfirmarReingreso(context);
+                    },
+                    icon: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white),
+                    label: Text(
+                      'REINGRESAR / PALETIZAR',
+                      style: AppTypography.button.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00A3FF),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                   ),
@@ -365,12 +649,17 @@ class _TaskCardState extends State<TaskCard> {
         accentColor = AppPalette.success;
         buttonColor = AppPalette.success;
         break;
+      case 'REINGRESO':
+        accentColor = const Color(0xFFFFB300); // Amber 700
+        buttonColor = const Color(0xFF00A3FF); // Cyan
+        break;
       default:
         accentColor = AppPalette.neutral;
         buttonColor = AppPalette.neutral;
     }
 
     final esImpresion = tarea.tipoAlerta == 'IMPRESION';
+    final esReingreso = tarea.tipoAlerta == 'REINGRESO';
 
     return GestureDetector(
       onTap: () => _mostrarDetalleModal(context, accentColor, buttonColor),
@@ -393,7 +682,7 @@ class _TaskCardState extends State<TaskCard> {
                     children: [
                       Flexible(
                         child: Text(
-                          tarea.ordenRef ?? (esImpresion ? 'PENDIENTE: IMPRESIÓN' : 'TAREA OPERATIVA'),
+                          tarea.ordenRef ?? (esImpresion ? 'PENDIENTE: IMPRESIÓN' : (esReingreso ? 'LOGÍSTICA INVERSA' : 'TAREA OPERATIVA')),
                           style: AppTypography.small.copyWith(
                             color: accentColor,
                             fontWeight: FontWeight.bold,
@@ -417,6 +706,25 @@ class _TaskCardState extends State<TaskCard> {
                             'TRASLADO',
                             style: AppTypography.small.copyWith(
                               color: AppPalette.secondary,
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                      if (esReingreso) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppPalette.error.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: AppPalette.error.withValues(alpha: 0.5), width: 0.8),
+                          ),
+                          child: Text(
+                            'ORDEN ANULADA',
+                            style: AppTypography.small.copyWith(
+                              color: AppPalette.error,
                               fontSize: 9,
                               fontWeight: FontWeight.bold,
                             ),
@@ -451,6 +759,36 @@ class _TaskCardState extends State<TaskCard> {
             ),
             const SizedBox(height: 8),
             Text(tituloFormateado, style: AppTypography.title),
+            if (tarea.skuQrFisico != null && tarea.skuQrFisico!.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00A3FF).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: const Color(0xFF00A3FF).withValues(alpha: 0.4)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.qr_code, size: 12, color: Color(0xFF00A3FF)),
+                        const SizedBox(width: 4),
+                        Text(
+                          tarea.skuQrFisico!,
+                          style: const TextStyle(
+                            color: Color(0xFF00A3FF),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 12),
             Container(
               width: double.infinity,
@@ -463,7 +801,7 @@ class _TaskCardState extends State<TaskCard> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'UBICACIÓN DE RETIRO',
+                    'UBICACIÓN DE RETIRO / PALLET',
                     style: AppTypography.small.copyWith(fontSize: 10),
                   ),
                   const SizedBox(height: 4),
@@ -541,7 +879,29 @@ class _TaskCardState extends State<TaskCard> {
   Widget _buildActionButtons(BuildContext context, Color accentColor) {
     final tarea = widget.tarea;
 
-    // 1. Estado Pagada / Salida (LIBERADA): Exclusivamente botón BARRERA (oculta LISTO)
+    // 1. Estado Reingreso (LOGÍSTICA INVERSA): Botón REINGRESAR / PALETIZAR
+    if (tarea.tipoAlerta == 'REINGRESO') {
+      return SizedBox(
+        width: double.infinity,
+        height: 46,
+        child: ElevatedButton.icon(
+          key: Key('btn_reingresar_${tarea.idTarea}'),
+          onPressed: () => _abrirDialogoConfirmarReingreso(context),
+          icon: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 20),
+          label: Text(
+            'REINGRESAR / PALETIZAR',
+            style: AppTypography.button.copyWith(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF00A3FF),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+          ),
+        ),
+      );
+    }
+
+    // 2. Estado Pagada / Salida (LIBERADA): Exclusivamente botón BARRERA (oculta LISTO)
     if (tarea.tipoAlerta == 'LIBERADA') {
       return SizedBox(
         width: double.infinity,
@@ -569,7 +929,7 @@ class _TaskCardState extends State<TaskCard> {
       );
     }
 
-    // 2. Estado Impresión QR: Botón IMPRIMIR
+    // 3. Estado Impresión QR: Botón IMPRIMIR
     if (tarea.tipoAlerta == 'IMPRESION') {
       return SizedBox(
         width: double.infinity,
@@ -601,7 +961,7 @@ class _TaskCardState extends State<TaskCard> {
       );
     }
 
-    // 3. Estado Reservada / Pre-entrega Pendiente (PREPARACION / TRASLADO): Botón LISTO + DETALLES (oculta BARRERA)
+    // 4. Estado Reservada / Pre-entrega Pendiente (PREPARACION / TRASLADO): Botón LISTO + DETALLES (oculta BARRERA)
     return Row(
       children: [
         if (tarea.idDetalle != null) ...[

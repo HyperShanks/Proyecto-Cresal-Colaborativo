@@ -844,6 +844,9 @@ class TareaAlertaResponse(BaseModel):
     estado_preparacion: Optional[str] = "Pendiente"
     categoria: Optional[str] = None
     tipo_repuesto: Optional[str] = None
+    id_orden: Optional[UUID] = None
+    sku_qr_fisico: Optional[str] = None
+    motivo_anulacion: Optional[str] = None
 
 
 class CompletarPreentregaResponse(BaseModel):
