@@ -14,7 +14,7 @@ from models import (
     Usuario, Cliente, Comuna, Orden_Venta, Detalle_Orden,
     Despacho, Activo_Inventariado, Estado_Activo,
     Vehiculo_Origen, Categoria_Activo, Transaccion_Pago,
-    Tracking_Logistico, Sucursal
+    Tracking_Logistico, Sucursal, Reservas_Backorder
 )
 from schemas import (
     OrdenCreateRequest, OrdenResponse,
@@ -24,7 +24,8 @@ from schemas import (
     InstruccionesUpdateResponse, OrdenPagoRequest,
     OrdenPagoResponse, EntregaEnvioItemResponse,
     EntregaConfirmacionResponse, DespachoEnvioResponse,
-    VendedorResumenResponse
+    VendedorResumenResponse, CheckoutWizardRequest,
+    CheckoutWizardResponse, ReservaBackorderDTO, DespachoDTO
 )
 from core.security import get_current_user
 
@@ -1412,3 +1413,244 @@ def obtener_orden(
             for d in detalles
         ],
     }
+
+
+# ==========================================
+# ENDPOINT CHECKOUT WIZARD & RESERVAS BACKORDER (SPEC-HU-05)
+# ==========================================
+
+@router.post(
+    "/checkout-wizard",
+    response_model=CheckoutWizardResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Procesar Checkout por Pasos (Wizard) y Reservas Backorder (SPEC-HU-05)",
+    description="Procesa de forma atómica (ACID) la creación de la orden de venta, "
+                "reserva de repuestos físicos de inventario, registro de reservas por encargo (Backorder) "
+                "y datos de despacho a domicilio."
+)
+def checkout_wizard(
+    request: CheckoutWizardRequest,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    # 1. Control de Acceso RBAC: Solo roles de Ventas, Jefatura o Administración
+    rol_nombre = (current_user.nombre_rol or "").lower()
+    es_vendedor_o_admin = current_user.id_rol in [2, 4, 5, 6, 7] or (
+        "vendedor" in rol_nombre or "admin" in rol_nombre or "jefe" in rol_nombre or "gerente" in rol_nombre
+    )
+    if not es_vendedor_o_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso restringido: Solo el personal de Ventas o Administración puede procesar el checkout."
+        )
+
+    # 2. Validar Cliente
+    cliente = db.query(Cliente).filter(Cliente.id_cliente == request.id_cliente).first()
+    if not cliente or cliente.estado != "Activo":
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="El cliente especificado no existe o se encuentra inactivo."
+        )
+
+    # Validar que al menos haya 1 ítem (inventariado, manual o reserva backorder)
+    num_inv = len(request.items_inventariados or [])
+    num_man = len(request.items_manuales or [])
+    num_res = len(request.reservas or [])
+
+    if num_inv == 0 and num_man == 0 and num_res == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La orden debe contener al menos un producto inventariado, ítem manual o reserva por encargo."
+        )
+
+    # Validar datos de despacho si aplica
+    es_despacho = "despacho" in (request.tipo_entrega or "").lower()
+    if es_despacho:
+        if not request.datos_despacho:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Para entrega tipo 'Despacho Domicilio' se requieren los datos de despacho completos."
+            )
+        comuna = db.query(Comuna).filter(Comuna.id_comuna == request.datos_despacho.id_comuna_destino).first()
+        if not comuna:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"La comuna destino con ID '{request.datos_despacho.id_comuna_destino}' no existe."
+            )
+        if not request.datos_despacho.direccion_envio.strip() or not request.datos_despacho.receptor_nombres.strip() or not request.datos_despacho.receptor_rut.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Los campos de dirección, receptor y RUT son obligatorios para el despacho."
+            )
+
+    try:
+        # A. Crear Cabecera de Orden de Venta
+        id_orden = uuid.uuid4()
+        sucursal_id = current_user.id_sucursal or 1
+
+        orden = Orden_Venta(
+            id_orden=id_orden,
+            id_cliente=cliente.id_cliente,
+            id_vendedor=current_user.id_usuario,
+            id_vendedor_asignado=current_user.id_usuario,
+            id_sucursal=sucursal_id,
+            estado_orden="Reservada",
+            total_venta=request.total_venta,
+            monto_pendiente=request.monto_pendiente,
+            fecha_creacion=datetime.now(timezone.utc),
+            fecha_actualizacion=datetime.now(timezone.utc)
+        )
+        db.add(orden)
+        db.flush()
+
+        # B. Procesar Ítems Inventariados
+        activos_reservados = 0
+        for act_id in (request.items_inventariados or []):
+            activo = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == act_id).first()
+            if not activo:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"El activo con ID '{act_id}' no fue encontrado en inventario."
+                )
+            if activo.id_estado not in [1, 7]:  # 1: Disponible, 7: Paletizado
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"El repuesto SKU '{activo.sku_qr_fisico}' no está disponible para venta (Estado actual ID {activo.id_estado})."
+                )
+
+            # Transición a Reservado (id_estado = 2) y control de concurrencia optimista
+            activo.id_estado = 2
+            activo.version_lock = (activo.version_lock or 1) + 1
+            activo.fecha_actualizacion = datetime.now(timezone.utc)
+            activos_reservados += 1
+
+            cat = db.query(Categoria_Activo).filter(Categoria_Activo.id_categoria == activo.id_categoria).first()
+            cat_nombre = cat.nombre_categoria if cat else "Repuesto"
+            desc = f"{cat_nombre} - SKU: {activo.sku_qr_fisico}"
+
+            detalle = Detalle_Orden(
+                id_detalle=uuid.uuid4(),
+                id_orden=orden.id_orden,
+                id_activo=activo.id_activo,
+                descripcion_manual=desc,
+                cantidad=1,
+                precio_unitario=activo.precio_referencia or 0,
+                precio_final=activo.precio_referencia or 0,
+                estado_preparacion="Pendiente"
+            )
+            db.add(detalle)
+
+        # C. Procesar Ítems Manuales
+        for m in (request.items_manuales or []):
+            desc_m = m.get("descripcion", "Ítem Manual")
+            cant_m = int(m.get("cantidad", 1))
+            p_unit = int(m.get("precio_unitario", 0))
+            p_fin = int(m.get("precio_final", p_unit * cant_m))
+            notas_m = m.get("notas_preparacion")
+
+            detalle_m = Detalle_Orden(
+                id_detalle=uuid.uuid4(),
+                id_orden=orden.id_orden,
+                id_activo=None,
+                descripcion_manual=desc_m,
+                notas_preparacion=notas_m,
+                cantidad=cant_m,
+                precio_unitario=p_unit,
+                precio_final=p_fin,
+                estado_preparacion="Pendiente"
+            )
+            db.add(detalle_m)
+
+        # D. Procesar Reservas por Encargo (Backorder / Compras en Verde)
+        reservas_creadas = 0
+        for r in (request.reservas or []):
+            categoria = db.query(Categoria_Activo).filter(Categoria_Activo.id_categoria == r.id_categoria_requerida).first()
+            cat_label = categoria.nombre_categoria if categoria else f"Categoría {r.id_categoria_requerida}"
+
+            reserva_bo = Reservas_Backorder(
+                id_reserva=uuid.uuid4(),
+                id_cliente=cliente.id_cliente,
+                id_vendedor=current_user.id_usuario,
+                id_orden=orden.id_orden,
+                id_sucursal_registro=sucursal_id,
+                id_categoria_requerida=r.id_categoria_requerida,
+                marca_requerida=r.marca_requerida.strip(),
+                modelo_requerido=r.modelo_requerido.strip(),
+                anio_requerido=r.anio_requerido,
+                cilindrada_requerida=r.cilindrada_requerida,
+                combustible_requerido=r.combustible_requerido,
+                transmision_requerida=r.transmision_requerida,
+                notas_preparacion=r.notas_preparacion,
+                precio_acordado=r.precio_acordado,
+                monto_abonado=r.monto_abonado,
+                estado_reserva="Pendiente",
+                fecha_creacion=datetime.now(timezone.utc)
+            )
+            db.add(reserva_bo)
+            reservas_creadas += 1
+
+            # Línea de detalle comercial en la orden
+            desc_res = f"[RESERVA EN VERDE] {cat_label} - {r.marca_requerida} {r.modelo_requerido}"
+            if r.anio_requerido:
+                desc_res += f" ({r.anio_requerido})"
+
+            detalle_res = Detalle_Orden(
+                id_detalle=uuid.uuid4(),
+                id_orden=orden.id_orden,
+                id_activo=None,
+                descripcion_manual=desc_res,
+                notas_preparacion=r.notas_preparacion or f"Reserva por encargo. Abono acordado: ${r.monto_abonado:,}".replace(",", "."),
+                cantidad=1,
+                precio_unitario=r.precio_acordado,
+                precio_final=r.precio_acordado,
+                estado_preparacion="Pendiente"
+            )
+            db.add(detalle_res)
+
+        # E. Procesar Despacho a Domicilio
+        despacho_generado = False
+        if es_despacho and request.datos_despacho:
+            d_data = request.datos_despacho
+            despacho = Despacho(
+                id_despacho=uuid.uuid4(),
+                id_orden=orden.id_orden,
+                id_comuna_destino=d_data.id_comuna_destino,
+                direccion_envio=d_data.direccion_envio.strip(),
+                receptor_nombres=d_data.receptor_nombres.strip(),
+                receptor_rut=d_data.receptor_rut.strip(),
+                receptor_telefono=d_data.receptor_telefono.strip(),
+                empresa_transporte=d_data.empresa_transporte or "Por Asignar",
+                costo_envio=0,
+                estado_despacho="Por Enviar",
+                estado="Activo",
+                fecha_creacion=datetime.now(timezone.utc)
+            )
+            db.add(despacho)
+            despacho_generado = True
+
+        db.commit()
+        db.refresh(orden)
+
+        return CheckoutWizardResponse(
+            id_orden=orden.id_orden,
+            estado=orden.estado_orden,
+            estado_orden=orden.estado_orden,
+            total_venta=orden.total_venta,
+            monto_pendiente=orden.monto_pendiente,
+            reservas_generadas=reservas_creadas,
+            activos_reservados=activos_reservados,
+            despacho_generado=despacho_generado,
+            msg="Orden generada exitosamente.",
+            mensaje="Orden generada exitosamente."
+        )
+
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error transaccional al procesar Checkout Wizard: {str(e)}"
+        )
+

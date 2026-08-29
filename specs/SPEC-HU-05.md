@@ -80,15 +80,15 @@
 - **Manejo de Zona Horaria**: El `server_default=text("now()")` de Postgres es suficiente, pero si el ORM inyecta fechas manuales (ej: `fecha_preparacion`), usar `datetime.now(timezone.utc)`.
 
 ## 4. Checklist de Tareas de Implementación (TDD)
-- [ ] **Tarea 1 (Backend - Schemas & Modelos)**: Construir `CheckoutWizardRequest`, `ReservaBackorderDTO`, `DespachoDTO` en Pydantic V2 (`ConfigDict(from_attributes=True)`).
-- [ ] **Tarea 2 (Backend - Endpoints & Transacciones ACID)**: Codificar `/checkout-wizard` usando `try/commit/rollback` para asegurar persistencia atómica en `Orden_Venta`, `Detalle_Orden`, `Reservas_Backorder` y `Despacho`.
-- [ ] **Tarea 3 (Backend - Pruebas Pytest)**: Implementar tests `test_checkout_wizard.py` comprobando la creación exitosa de órdenes combinadas (inventario + reservas + despacho) y el rollback frente a validaciones rotas.
-- [ ] **Tarea 4 (Frontend - Servicio & Modelos Dart)**: Declarar modelos `CheckoutWizardRequest` y crear `processCheckout` en el `ventas_service.dart`.
-- [ ] **Tarea 5 (Frontend - UI, Controladores & Mounted Guards)**: 
+- [x] **Tarea 1 (Backend - Schemas & Modelos)**: Construir `CheckoutWizardRequest`, `ReservaBackorderDTO`, `DespachoDTO` en Pydantic V2 (`ConfigDict(from_attributes=True)`).
+- [x] **Tarea 2 (Backend - Endpoints & Transacciones ACID)**: Codificar `/checkout-wizard` usando `try/commit/rollback` para asegurar persistencia atómica en `Orden_Venta`, `Detalle_Orden`, `Reservas_Backorder` y `Despacho`.
+- [x] **Tarea 3 (Backend - Pruebas Pytest)**: Implementar tests `test_checkout_wizard.py` comprobando la creación exitosa de órdenes combinadas (inventario + reservas + despacho) y el rollback frente a validaciones rotas.
+- [x] **Tarea 4 (Frontend - Servicio & Modelos Dart)**: Declarar modelos `CheckoutWizardRequest` y crear `processCheckout` en el `ventas_service.dart`.
+- [x] **Tarea 5 (Frontend - UI, Controladores & Mounted Guards)**: 
   - Codificar `CheckoutWizardController` reactivo.
   - Armar el layout de pasos (Paso 1 a 5) y el formulario `modal_backorder_form`.
   - Aplicar `if (!mounted) return;` en cada transición asíncrona.
-- [ ] **Tarea 6 (Frontend - Pruebas Widget/Unitarias Flutter)**: Escribir tests verificando que no se pueda avanzar de paso sin data válida y comprobando que retroceder no borra el input.
+- [x] **Tarea 6 (Frontend - Pruebas Widget/Unitarias Flutter)**: Escribir tests verificando que no se pueda avanzar de paso sin data válida y comprobando que retroceder no borra el input.
 
 ## 5. Criterios de Validación Automatizada
 - Backend Tests: Ejecutar `pytest tests/test_checkout_wizard.py -v`.

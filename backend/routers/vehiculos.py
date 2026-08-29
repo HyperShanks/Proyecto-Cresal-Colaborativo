@@ -31,9 +31,9 @@ try:
     else:
         # Aquí está la magia que conecta FastAPI con Supabase
         supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-        print(f"✅ Conexión exitosa a Supabase en {SUPABASE_URL}. Cliente de Storage listo.")
+        print(f"[OK] Conexion exitosa a Supabase en {SUPABASE_URL}. Cliente de Storage listo.")
 except Exception as e:
-    print(f"❌ ERROR al conectar con Supabase: {str(e)}")
+    print(f"[ERROR] al conectar con Supabase: {str(e)}")
     supabase = None
 
 # Instanciamos el enrutador con su prefijo oficial (Sub-tarea A)

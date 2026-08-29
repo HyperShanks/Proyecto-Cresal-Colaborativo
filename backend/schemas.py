@@ -945,6 +945,79 @@ class HistorialCajaResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+# ==========================================
+# ESQUEMAS PARA CHECKOUT WIZARD Y RESERVAS BACKORDER (SPEC-HU-05)
+# ==========================================
+
+class ReservaBackorderDTO(BaseModel):
+    """DTO para capturar características técnicas y comerciales de una reserva backorder."""
+    id_categoria_requerida: int
+    marca_requerida: str
+    modelo_requerido: str
+    anio_requerido: Optional[int] = None
+    cilindrada_requerida: Optional[str] = None
+    combustible_requerido: Optional[str] = None
+    transmision_requerida: Optional[str] = None
+    notas_preparacion: Optional[str] = None
+    precio_acordado: int
+    monto_abonado: int = 0
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DespachoDTO(BaseModel):
+    """DTO para capturar datos de envío y receptor."""
+    direccion_envio: str
+    receptor_nombres: str
+    receptor_rut: str
+    receptor_telefono: str
+    id_comuna_destino: int
+    empresa_transporte: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ItemManualDTO(BaseModel):
+    """DTO para ítems manuales o ventas rápidas de mostrador."""
+    descripcion: str
+    cantidad: int = 1
+    precio_unitario: int
+    notas_preparacion: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CheckoutWizardRequest(BaseModel):
+    """Payload integral para procesar el checkout por pasos (Wizard)."""
+    id_cliente: UUID
+    tipo_entrega: str = "Retiro"  # 'Retiro' o 'Despacho Domicilio'
+    total_venta: int
+    monto_pendiente: int
+    items_inventariados: List[UUID] = Field(default_factory=list)
+    items_manuales: List[dict] = Field(default_factory=list)
+    reservas: Optional[List[ReservaBackorderDTO]] = None
+    datos_despacho: Optional[DespachoDTO] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CheckoutWizardResponse(BaseModel):
+    """Respuesta transaccional tras procesar el Checkout Wizard."""
+    id_orden: UUID
+    estado: str = "Reservada"
+    estado_orden: str = "Reservada"
+    total_venta: int
+    monto_pendiente: int
+    reservas_generadas: int = 0
+    activos_reservados: int = 0
+    despacho_generado: bool = False
+    msg: str = "Orden generada exitosamente."
+    mensaje: str = "Orden generada exitosamente."
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+
 
 
 

@@ -14,6 +14,7 @@ import '../features/ventas/presentation/screens/catalogo_screen.dart';
 import '../features/ventas/presentation/screens/checkout_crm_screen.dart';
 import '../features/ventas/presentation/screens/bandeja_precios_screen.dart';
 import '../features/ventas/presentation/screens/entregas_envios_screen.dart';
+import '../features/ventas/presentation/screens/checkout_wizard_screen.dart';
 import '../features/bodega/presentation/screens/reingreso_tareas_screen.dart';
 
 /// Registro central de rutas y guardas de seguridad RBAC.
@@ -31,6 +32,7 @@ class AppRoutes {
   static const String buscador = '/buscador';
   static const String catalogo = '/catalogo';
   static const String checkoutCrm = '/checkout_crm';
+  static const String checkoutWizard = '/checkout_wizard';
   static const String bandejaPrecios = '/bandeja_precios';
   static const String entregasEnvios = '/entregas-envios';
   static const String reingresos = '/reingresos';
@@ -60,6 +62,7 @@ class AppRoutes {
     catalogo,
     '/carrito',
     checkoutCrm,
+    checkoutWizard,
     bandejaPrecios,
     entregasEnvios,
   ];
@@ -127,6 +130,7 @@ class AppRoutes {
       buscador: (context) => const BuscadorScreen(),
       catalogo: (context) => const CatalogoScreen(),
       checkoutCrm: (context) => const CheckoutCrmScreen(),
+      checkoutWizard: (context) => const CheckoutWizardScreen(),
       bandejaPrecios: (context) => const BandejaPreciosScreen(),
       entregasEnvios: (context) => const EntregasEnviosScreen(),
       reingresos: (context) => const ReingresoTareasScreen(),
