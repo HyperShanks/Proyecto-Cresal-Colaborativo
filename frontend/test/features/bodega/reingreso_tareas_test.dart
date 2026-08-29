@@ -72,10 +72,10 @@ void main() {
 
         return http.Response(
           jsonEncode({
-            'msg': 'Activo paletizado/disponible exitosamente',
+            'msg': 'Activo reingresado y disponible exitosamente',
             'id_activo': 'act-001',
             'sku_qr_fisico': 'MOT-NIS-SEN-001',
-            'nuevo_estado': 'Paletizado',
+            'nuevo_estado': 'Disponible',
             'ubicacion_pasillo': 'P-03',
             'ubicacion_pallet': 'PAL-99',
           }),
@@ -92,9 +92,9 @@ void main() {
         client: mockClient,
       );
 
-      expect(res.msg, 'Activo paletizado/disponible exitosamente');
+      expect(res.msg, contains('disponible'));
       expect(res.skuQrFisico, 'MOT-NIS-SEN-001');
-      expect(res.nuevoEstado, 'Paletizado');
+      expect(res.nuevoEstado, 'Disponible');
     });
 
     test('confirmarReingreso lanza excepción ante error 400', () async {
