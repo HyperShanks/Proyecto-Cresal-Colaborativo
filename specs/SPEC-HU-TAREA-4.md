@@ -67,14 +67,14 @@
 - **Guardián de Ciclo de Vida Frontend**: Obligatorio utilizar `if (!mounted) return;` en la UI de Flutter tras esperar llamadas API (ej. tras `await apiService.anularOrden()`).
 
 ## 4. Checklist de Tareas de Implementación (TDD)
-- [ ] **Tarea 1 (Backend - Schemas & Modelos)**: Crear DTOs usando Pydantic V2 (`AnularOrdenRequest`, `ConfirmarReingresoRequest`, `TareaReingresoDTO`) en `schemas.py`.
-- [ ] **Tarea 2 (Backend - Anulación ACID)**: Implementar `/api/ordenes/{id_orden}/anular` en `routers/ordenes.py` con transaccionalidad total (Orden + Pagos).
-- [ ] **Tarea 3 (Backend - Endpoints Bodega PDA)**: En `routers/bodega.py`, crear `/reingresos-pendientes` (Query con JOIN) y `/confirmar-reingreso` con incremento de `version_lock`.
-- [ ] **Tarea 4 (Backend - Pruebas Pytest)**: Tests para anular orden (Happy path + Rollback on exception) y confirmación de reingreso (concurrencia).
-- [ ] **Tarea 5 (Frontend - Servicio & Modelos Dart)**: DTOs en Dart, funciones asíncronas de API en servicios de Ventas y Bodega.
-- [ ] **Tarea 6 (Frontend - UI Mesón)**: Diálogo modal de anulación, integración de botón "Deshacer orden" y uso de `if (!mounted) return;`.
-- [ ] **Tarea 7 (Frontend - UI Bodega PDA)**: Vista y controlador de lista de reingresos. Integración de cámara/lector PDA para `sku_qr_fisico`.
-- [ ] **Tarea 8 (Frontend - Pruebas Widget/Unitarias)**: Tests en Dart comprobando rendering de tareas y disparo correcto de métodos.
+- [x] **Tarea 1 (Backend - Schemas & Modelos)**: Crear DTOs usando Pydantic V2 (`AnularOrdenRequest`, `ConfirmarReingresoRequest`, `TareaReingresoDTO`, `ConfirmarReingresoResponse`) en `schemas.py`.
+- [x] **Tarea 2 (Backend - Anulación ACID)**: Implementar `/api/ordenes/{id_orden}/anular` en `routers/ordenes.py` con transaccionalidad total (Orden + Pagos).
+- [x] **Tarea 3 (Backend - Endpoints Bodega PDA)**: En `routers/bodega.py`, crear `/reingresos-pendientes` (Query con JOIN) y `/confirmar-reingreso` con incremento de `version_lock`.
+- [x] **Tarea 4 (Backend - Pruebas Pytest)**: Tests para anular orden (Happy path + Rollback on exception) y confirmación de reingreso (concurrencia).
+- [x] **Tarea 5 (Frontend - Servicio & Modelos Dart)**: DTOs en Dart, funciones asíncronas de API en servicios de Ventas y Bodega.
+- [x] **Tarea 6 (Frontend - UI Mesón)**: Diálogo modal de anulación, integración de botón "Deshacer orden" y uso de `if (!mounted) return;`.
+- [x] **Tarea 7 (Frontend - UI Bodega PDA)**: Vista y controlador de lista de reingresos. Integración de cámara/lector PDA para `sku_qr_fisico`.
+- [x] **Tarea 8 (Frontend - Pruebas Widget/Unitarias)**: Tests en Dart comprobando rendering de tareas y disparo correcto de métodos.
 
 ## 5. Criterios de Validación Automatizada
 - Backend Tests: Ejecutar `pytest tests/test_ordenes_anulacion.py tests/test_bodega_reingresos.py -v`.

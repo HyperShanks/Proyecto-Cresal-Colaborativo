@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -30,6 +30,9 @@ from schemas import (
     ItemSalidaInfo,
     EscanearSalidaRequest,
     EscanearSalidaResponse,
+    TareaReingresoDTO,
+    ConfirmarReingresoRequest,
+    ConfirmarReingresoResponse,
 )
 from core.security import get_current_user
 
@@ -520,4 +523,193 @@ def obtener_pendientes_paletizado_bodega(
     """
     from routers.vehiculos import obtener_pendientes_paletizado
     return obtener_pendientes_paletizado(sucursal_id=sucursal_id, db=db, usuario_logeado=usuario_logeado)
+
+
+# ==========================================
+# MÓDULO: LOGÍSTICA INVERSA Y REINGRESOS (SPEC-HU-TAREA-4)
+# ==========================================
+
+@router.get(
+    "/reingresos-pendientes",
+    response_model=List[TareaReingresoDTO],
+    summary="Listado de Tareas de Reingreso y Paletizado (Logística Inversa)",
+    description="Lista los repuestos físicos que pertenecían a órdenes anuladas y requieren "
+                "reingreso, escaneo de QR físico y ubicación en pallet/rack por el bodeguero."
+)
+def obtener_reingresos_pendientes(
+    sucursal_id: Optional[int] = Query(None, description="ID de la sucursal (opcional)"),
+    db: Session = Depends(get_db),
+    usuario_logeado: Usuario = Depends(get_current_user),
+):
+    # Control de acceso RBAC: Bodeguero (id_rol == 1) o Administrador (id_rol == 5)
+    if usuario_logeado.id_rol not in [1, 4, 5]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso denegado. Solo personal de bodega o administradores pueden gestionar reingresos."
+        )
+
+    # Identificar sucursal objetivo
+    target_sucursal = sucursal_id if sucursal_id is not None else (usuario_logeado.id_sucursal or 1)
+
+    # Consulta con JOINs: Detalle_Orden -> Orden_Venta ('Anulada') -> Activo_Inventariado (id_estado not in [1, 7])
+    query = (
+        db.query(
+            Detalle_Orden,
+            Orden_Venta,
+            Activo_Inventariado,
+            Vehiculo_Origen,
+            Categoria_Activo,
+        )
+        .join(Orden_Venta, Detalle_Orden.id_orden == Orden_Venta.id_orden)
+        .join(Activo_Inventariado, Detalle_Orden.id_activo == Activo_Inventariado.id_activo)
+        .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
+        .outerjoin(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
+        .filter(
+            Orden_Venta.estado_orden == "Anulada",
+            Activo_Inventariado.id_estado.notin_([1, 7]),  # No paletizado ni disponible aún
+            Activo_Inventariado.estado == "Activo",
+        )
+    )
+
+    if target_sucursal is not None:
+        query = query.filter(
+            (Activo_Inventariado.id_sucursal_actual == target_sucursal) | (Orden_Venta.id_sucursal == target_sucursal)
+        )
+
+    rows = query.order_by(Orden_Venta.fecha_actualizacion.desc()).all()
+
+    resultados = []
+    for detalle, orden, activo, vehiculo, categoria in rows:
+        folio = f"ORD-{str(orden.id_orden)[:8].upper()}"
+
+        cat_nombre = categoria.nombre_categoria if categoria else "Repuesto"
+        if vehiculo:
+            desc_pieza = f"{cat_nombre} - {vehiculo.marca} {vehiculo.modelo} ({vehiculo.anio})"
+        else:
+            desc_pieza = detalle.descripcion_manual or cat_nombre
+
+        resultados.append(
+            TareaReingresoDTO(
+                id_orden=orden.id_orden,
+                id_activo=activo.id_activo,
+                sku_qr_fisico=activo.sku_qr_fisico,
+                ubicacion_pallet=activo.ubicacion_pallet,
+                ubicacion_pasillo=activo.ubicacion_pasillo,
+                descripcion_pieza=desc_pieza,
+                folio_orden=folio,
+            )
+        )
+
+    return resultados
+
+
+@router.post(
+    "/confirmar-reingreso",
+    response_model=ConfirmarReingresoResponse,
+    summary="Confirmar Reingreso de Activo con Control de Concurrencia Optimista",
+    description="Valida el SKU físico escaneado por PDA para una orden anulada, "
+                "actualiza la ubicación en rack y muta el estado del inventario a Paletizado (7) o Disponible (1) "
+                "incrementando atómicamente version_lock."
+)
+def confirmar_reingreso(
+    payload: ConfirmarReingresoRequest,
+    db: Session = Depends(get_db),
+    usuario_logeado: Usuario = Depends(get_current_user),
+):
+    # Control de acceso RBAC: Bodeguero (1) o Administrador (4, 5)
+    if usuario_logeado.id_rol not in [1, 4, 5]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso denegado. Solo personal de bodega o administradores pueden confirmar reingresos."
+        )
+
+    # 1. Validar existencia de la orden anulada
+    orden = db.query(Orden_Venta).filter(Orden_Venta.id_orden == payload.id_orden_anulada).first()
+    if not orden:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"La orden #{str(payload.id_orden_anulada)[:8].upper()} no fue encontrada."
+        )
+
+    if orden.estado_orden != "Anulada":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"La orden #{str(payload.id_orden_anulada)[:8].upper()} no está en estado 'Anulada' (Estado actual: '{orden.estado_orden}')."
+        )
+
+    # 2. Validar que el SKU escaneado pertenezca a la orden anulada
+    sku_busqueda = payload.sku_qr_fisico.strip().upper()
+    activo = (
+        db.query(Activo_Inventariado)
+        .filter(Activo_Inventariado.sku_qr_fisico == sku_busqueda)
+        .first()
+    )
+    if not activo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No se encontró ningún activo con el SKU/QR '{sku_busqueda}'."
+        )
+
+    detalle = (
+        db.query(Detalle_Orden)
+        .filter(
+            Detalle_Orden.id_orden == payload.id_orden_anulada,
+            Detalle_Orden.id_activo == activo.id_activo,
+        )
+        .first()
+    )
+    if not detalle:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"El repuesto '{sku_busqueda}' no pertenece a la orden anulada #{str(orden.id_orden)[:8].upper()}."
+        )
+
+    # 3. Validar si ya fue reingresado
+    if activo.id_estado in [1, 7]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"El repuesto '{sku_busqueda}' ya fue reingresado y se encuentra en estado Paletizado/Disponible."
+        )
+
+    try:
+        # Estado Paletizado (7) o Disponible (1)
+        estado_paletizado = db.query(Estado_Activo).filter(Estado_Activo.nombre_estado == "Paletizado").first()
+        if not estado_paletizado:
+            estado_paletizado = Estado_Activo(id_estado=7, nombre_estado="Paletizado")
+            db.add(estado_paletizado)
+            db.flush()
+
+        # Actualizar ubicación si fue suministrada
+        if payload.ubicacion_pasillo is not None:
+            activo.ubicacion_pasillo = payload.ubicacion_pasillo.strip().upper()
+        if payload.ubicacion_pallet is not None:
+            activo.ubicacion_pallet = payload.ubicacion_pallet.strip().upper()
+
+        # Mutación con control de concurrencia optimista
+        activo.id_estado = estado_paletizado.id_estado
+        activo.version_lock = (activo.version_lock or 1) + 1
+        activo.fecha_actualizacion = datetime.now(timezone.utc)
+        activo.observacion_estado = f"Reingreso confirmado tras anulación orden #{str(orden.id_orden)[:8].upper()} por {usuario_logeado.nombres} {usuario_logeado.apellidos}"
+
+        db.commit()
+        db.refresh(activo)
+
+        return ConfirmarReingresoResponse(
+            msg="Activo paletizado/disponible exitosamente",
+            id_activo=activo.id_activo,
+            sku_qr_fisico=activo.sku_qr_fisico,
+            nuevo_estado="Paletizado",
+            ubicacion_pasillo=activo.ubicacion_pasillo,
+            ubicacion_pallet=activo.ubicacion_pallet,
+        )
+
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error transaccional al confirmar el reingreso: {str(e)}"
+        )
 

@@ -17,6 +17,7 @@ import 'features/ventas/presentation/screens/checkout_crm_screen.dart'; // HU-3.
 import 'features/ventas/presentation/screens/bandeja_precios_screen.dart'; // HU-3.8: Bandeja de Precios Jefe de Ventas
 import 'features/ventas/presentation/screens/entregas_envios_screen.dart'; // Entregas y Envíos
 import 'features/caja/presentation/screens/caja_main_screen.dart'; // HU-01: Módulo de Caja Escritorio
+import 'features/bodega/presentation/screens/reingreso_tareas_screen.dart'; // Logística Inversa y Reingresos
 
 
 void main() {
@@ -69,6 +70,8 @@ class _MyAppState extends State<MyApp> {
             const BandejaPreciosScreen(), // HU-3.8: Bandeja de Precios Jefe de Ventas
         '/entregas-envios': (context) =>
             const EntregasEnviosScreen(), // Módulo de Entregas y Envíos
+        '/reingresos': (context) =>
+            const ReingresoTareasScreen(), // Logística Inversa Bodega
       },
     );
   }

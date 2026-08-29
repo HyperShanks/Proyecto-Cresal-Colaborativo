@@ -14,6 +14,7 @@ import '../features/ventas/presentation/screens/catalogo_screen.dart';
 import '../features/ventas/presentation/screens/checkout_crm_screen.dart';
 import '../features/ventas/presentation/screens/bandeja_precios_screen.dart';
 import '../features/ventas/presentation/screens/entregas_envios_screen.dart';
+import '../features/bodega/presentation/screens/reingreso_tareas_screen.dart';
 
 /// Registro central de rutas y guardas de seguridad RBAC.
 class AppRoutes {
@@ -32,6 +33,7 @@ class AppRoutes {
   static const String checkoutCrm = '/checkout_crm';
   static const String bandejaPrecios = '/bandeja_precios';
   static const String entregasEnvios = '/entregas-envios';
+  static const String reingresos = '/reingresos';
 
   /// Rutas públicas y comunes a cualquier estado de autenticación.
   static const List<String> _publicAndCommonRoutes = [
@@ -49,6 +51,7 @@ class AppRoutes {
     etiquetaPreview,
     buscador,
     alertas,
+    reingresos,
   ];
 
   /// Rutas autorizadas para Vendedor (id_rol == 2, 7) y Jefe de Ventas (id_rol == 6).
@@ -126,6 +129,7 @@ class AppRoutes {
       checkoutCrm: (context) => const CheckoutCrmScreen(),
       bandejaPrecios: (context) => const BandejaPreciosScreen(),
       entregasEnvios: (context) => const EntregasEnviosScreen(),
+      reingresos: (context) => const ReingresoTareasScreen(),
     };
   }
 }

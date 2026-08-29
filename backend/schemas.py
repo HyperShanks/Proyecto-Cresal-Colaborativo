@@ -644,13 +644,55 @@ class DespachoEnvioResponse(BaseModel):
 
 
 class OrdenAnulacionResponse(BaseModel):
-    """DTO de respuesta tras anular una orden y liberar stock."""
+    """DTO de respuesta tras anular una orden y liberar stock / generar tareas de reingreso."""
     model_config = ConfigDict(from_attributes=True)
 
     id_orden: UUID
     estado_orden: str
     mensaje: str
-    activos_liberados: int
+    msg: Optional[str] = None
+    activos_liberados: int = 0
+    pagos_reversados: int = 0
+    motivo_anulacion: Optional[str] = None
+
+
+class AnularOrdenRequest(BaseModel):
+    """Payload para anular una orden desde el mesón de ventas."""
+    model_config = ConfigDict(from_attributes=True)
+    motivo_anulacion: Optional[str] = None
+
+
+class ConfirmarReingresoRequest(BaseModel):
+    """Payload para confirmar reingreso y paletizado de pieza por PDA."""
+    model_config = ConfigDict(from_attributes=True)
+    sku_qr_fisico: str
+    id_orden_anulada: UUID
+    ubicacion_pallet: Optional[str] = None
+    ubicacion_pasillo: Optional[str] = None
+
+
+class TareaReingresoDTO(BaseModel):
+    """DTO para listar tareas de reingreso / paletizado en PDA Bodega."""
+    model_config = ConfigDict(from_attributes=True)
+    id_orden: UUID
+    id_activo: UUID
+    sku_qr_fisico: str
+    ubicacion_pallet: Optional[str] = None
+    ubicacion_pasillo: Optional[str] = None
+    descripcion_pieza: str
+    folio_orden: Optional[str] = None
+    motivo_anulacion: Optional[str] = None
+
+
+class ConfirmarReingresoResponse(BaseModel):
+    """Respuesta tras confirmar reingreso de activo inventariado."""
+    model_config = ConfigDict(from_attributes=True)
+    msg: str
+    id_activo: Optional[UUID] = None
+    sku_qr_fisico: Optional[str] = None
+    nuevo_estado: Optional[str] = None
+    ubicacion_pasillo: Optional[str] = None
+    ubicacion_pallet: Optional[str] = None
 
 
 class InstruccionesUpdateRequest(BaseModel):

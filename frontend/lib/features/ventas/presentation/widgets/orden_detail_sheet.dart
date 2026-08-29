@@ -4,6 +4,7 @@ import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../services/ordenes_service.dart';
 import 'qr_ticket_dialog.dart';
+import 'modal_anular_orden.dart';
 
 /// Modal inferior para visualizar el detalle técnico completo de una orden de venta (HU-3.5).
 /// Ofrece acciones condicionales de visualización de QR transaccional (HU-3.6),
@@ -218,105 +219,21 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
     }
   }
 
-  /// Diálogo de confirmación para anular la orden
+  /// Diálogo modal interactivo para anular la orden (SPEC-HU-TAREA-4)
   Future<void> _dialogAnularOrden() async {
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
-    final navigator = Navigator.of(context);
-
-    final confirmar = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppPalette.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12.0),
-          side: const BorderSide(color: Colors.white10),
-        ),
-        title: Row(
-          children: [
-            const Icon(Icons.warning_amber_rounded, color: AppPalette.error, size: 24.0),
-            const SizedBox(width: 8.0),
-            Text(
-              '¿Deshacer esta Orden?',
-              style: AppTypography.title.copyWith(fontSize: 18.0),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Al anular la orden ${_orden.folioDisplay}:',
-              style: AppTypography.body.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8.0),
-            Text(
-              '• La orden pasará inmediatamente a estado "Anulada".\n'
-              '• Todos los repuestos inventariados serán liberados y volverán a estar disponibles en el catálogo.',
-              style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(
-              'Volver',
-              style: AppTypography.button.copyWith(color: AppPalette.textSecondary),
-            ),
-          ),
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppPalette.error,
-              foregroundColor: AppPalette.textPrimary,
-              elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
-            ),
-            icon: const Icon(Icons.delete_outline, size: 18.0),
-            label: const Text('Confirmar Anulación'),
-            onPressed: () => Navigator.of(ctx).pop(true),
-          ),
-        ],
-      ),
+    final result = await ModalAnularOrden.mostrar(
+      context,
+      idOrden: _orden.idOrden,
+      folio: _orden.folioDisplay,
+      clienteNombre: _orden.cliente?.nombreCompleto,
+      totalVenta: _orden.totalVenta,
+      onOrdenAnulada: () {
+        widget.onOrderUpdated?.call();
+      },
     );
 
-    if (confirmar != true || !mounted) return;
-
-    setState(() => _isLoading = true);
-
-    try {
-      await OrdenesService.anularOrden(_orden.idOrden);
-
-      if (!mounted) return;
-
-      scaffoldMessenger.showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.check_circle_outline, color: Colors.white, size: 20.0),
-              const SizedBox(width: 8.0),
-              Expanded(
-                child: Text('Orden ${_orden.folioDisplay} anulada. Repuestos devueltos al catálogo.'),
-              ),
-            ],
-          ),
-          backgroundColor: AppPalette.success,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-
-      widget.onOrderUpdated?.call();
-      navigator.pop(); // Cerrar el bottom sheet tras anular
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      scaffoldMessenger.showSnackBar(
-        SnackBar(
-          content: Text('Error al anular la orden: $e'),
-          backgroundColor: AppPalette.error,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+    if (result == true && mounted) {
+      Navigator.of(context).pop(); // Cerrar el bottom sheet tras anulación exitosa
     }
   }
 

@@ -20,7 +20,7 @@ from schemas import (
     OrdenCreateRequest, OrdenResponse,
     ClienteOrdenResumen, DespachoOrdenResumen,
     DetalleOrdenItemResponse, OrdenHistorialItemResponse,
-    OrdenAnulacionResponse, InstruccionesUpdateRequest,
+    OrdenAnulacionResponse, AnularOrdenRequest, InstruccionesUpdateRequest,
     InstruccionesUpdateResponse, OrdenPagoRequest,
     OrdenPagoResponse, EntregaEnvioItemResponse,
     EntregaConfirmacionResponse, DespachoEnvioResponse,
@@ -1114,18 +1114,29 @@ def pagar_orden(
         )
 
 
-@router.patch(
+@router.post(
     "/{id_orden}/anular",
     response_model=OrdenAnulacionResponse,
-    summary="Anular Orden y Liberar Stock (ACID)",
-    description="Anula una orden en estado 'Reservada' (Pendiente de pago) y "
-                "devuelve automáticamente los repuestos inventariados a 'Disponible' en el catálogo."
+    summary="Anular Orden, Reversar Pagos y Generar Logística Inversa (SPEC-HU-TAREA-4)",
+    description="Anula una orden en el Mesón de Ventas, propaga la reversa de transacciones de pago "
+                "y genera automáticamente tareas de reingreso (Logística Inversa) para PDA Bodega."
 )
-def anular_orden(
+def anular_orden_post(
     id_orden: uuid.UUID,
+    payload: Optional[AnularOrdenRequest] = None,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
+    rol_nombre = (current_user.nombre_rol or "").lower()
+    es_vendedor_o_admin = current_user.id_rol in [2, 4, 5, 6, 7] or (
+        "vendedor" in rol_nombre or "admin" in rol_nombre or "jefe" in rol_nombre or "gerente" in rol_nombre
+    )
+    if not es_vendedor_o_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permisos de ventas o administración para anular órdenes."
+        )
+
     orden = db.query(Orden_Venta).filter(Orden_Venta.id_orden == id_orden).first()
     if not orden:
         raise HTTPException(
@@ -1133,7 +1144,98 @@ def anular_orden(
             detail=f"Orden con ID '{id_orden}' no encontrada."
         )
 
-    # Solo se permite anular órdenes en estado 'Reservada' (Pendiente de pago)
+    if orden.estado_orden == "Anulada":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"La orden #{str(orden.id_orden)[:8].upper()} ya se encuentra anulada."
+        )
+
+    if orden.estado_orden == "Completada":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"No es posible anular la orden #{str(orden.id_orden)[:8].upper()} porque ya fue entregada/completada."
+        )
+
+    try:
+        # Paso A: Cambiar estado de la orden a 'Anulada'
+        orden.estado_orden = "Anulada"
+        orden.monto_pendiente = 0
+        orden.fecha_actualizacion = datetime.now(timezone.utc)
+
+        # Paso B: Reversar pagos asociados
+        pagos = db.query(Transaccion_Pago).filter(Transaccion_Pago.id_orden == id_orden).all()
+        pagos_reversados = 0
+        for pago in pagos:
+            pago.estado_pago = "Anulado"
+            pagos_reversados += 1
+
+        # Paso C: Obtener activos físicos de la orden para cola de reingreso
+        detalles = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == id_orden).all()
+        activos_afectados = 0
+
+        for d in detalles:
+            if d.id_activo:
+                activo = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == d.id_activo).first()
+                if activo:
+                    if activo.id_estado in [1, 7]:
+                        activo.id_estado = 5  # Pendiente de paletizado / reingreso
+                    activo.version_lock = (activo.version_lock or 1) + 1
+                    activo.fecha_actualizacion = datetime.now(timezone.utc)
+                    activos_afectados += 1
+
+        db.commit()
+        db.refresh(orden)
+
+        mensaje = "Orden anulada, pagos reversados y tareas de reingreso generadas"
+        return OrdenAnulacionResponse(
+            id_orden=orden.id_orden,
+            estado_orden=orden.estado_orden,
+            mensaje=mensaje,
+            msg=mensaje,
+            activos_liberados=activos_afectados,
+            pagos_reversados=pagos_reversados,
+            motivo_anulacion=payload.motivo_anulacion if payload else None,
+        )
+
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error transaccional al anular la orden: {str(e)}"
+        )
+
+
+@router.patch(
+    "/{id_orden}/anular",
+    response_model=OrdenAnulacionResponse,
+    summary="Anular Orden y Liberar Stock Directo (HU-3.5 Retrocompatibilidad)",
+    description="Anula una orden en estado 'Reservada' y devuelve repuestos a 'Disponible'."
+)
+def anular_orden_patch(
+    id_orden: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    rol_nombre = (current_user.nombre_rol or "").lower()
+    es_vendedor_o_admin = current_user.id_rol in [2, 4, 5, 6, 7] or (
+        "vendedor" in rol_nombre or "admin" in rol_nombre or "jefe" in rol_nombre or "gerente" in rol_nombre
+    )
+    if not es_vendedor_o_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permisos de ventas o administración para anular órdenes."
+        )
+
+    orden = db.query(Orden_Venta).filter(Orden_Venta.id_orden == id_orden).first()
+    if not orden:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Orden con ID '{id_orden}' no encontrada."
+        )
+
     if orden.estado_orden != "Reservada":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1142,12 +1244,10 @@ def anular_orden(
         )
 
     try:
-        # Paso A: Cambiar estado de la orden a 'Anulada'
         orden.estado_orden = "Anulada"
         orden.monto_pendiente = 0
-        orden.fecha_actualizacion = datetime.now()
+        orden.fecha_actualizacion = datetime.now(timezone.utc)
 
-        # Paso B: Liberar repuestos inventariados a 'Disponible'
         estado_disponible = db.query(Estado_Activo).filter(Estado_Activo.nombre_estado == "Disponible").first()
         if not estado_disponible:
             estado_disponible = Estado_Activo(id_estado=1, nombre_estado="Disponible")
@@ -1168,10 +1268,12 @@ def anular_orden(
         db.commit()
         db.refresh(orden)
 
+        mensaje = "Orden anulada exitosamente. Los repuestos inventariados han sido devueltos al catálogo como disponibles."
         return OrdenAnulacionResponse(
             id_orden=orden.id_orden,
             estado_orden=orden.estado_orden,
-            mensaje="Orden anulada exitosamente. Los repuestos inventariados han sido devueltos al catálogo como disponibles.",
+            mensaje=mensaje,
+            msg=mensaje,
             activos_liberados=activos_liberados,
         )
 

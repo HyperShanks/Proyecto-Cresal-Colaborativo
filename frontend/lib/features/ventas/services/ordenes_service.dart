@@ -582,9 +582,11 @@ class OrdenesService {
     }
   }
 
-  /// Anula una orden en estado Reservada y libera los repuestos inventariados (HU-3.5).
+  /// Anula una orden en el mesón de ventas, reversando cobros y generando logística inversa (SPEC-HU-TAREA-4).
   static Future<Map<String, dynamic>> anularOrden(
     String idOrden, {
+    String? motivoAnulacion,
+    bool usePost = false,
     http.Client? client,
   }) async {
     final httpClient = client ?? http.Client();
@@ -598,12 +600,24 @@ class OrdenesService {
         if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
       };
 
-      final response = await httpClient
-          .patch(uri, headers: headers)
-          .timeout(
-            const Duration(seconds: 15),
-            onTimeout: () => throw Exception('Tiempo de espera agotado al anular la orden.'),
-          );
+      final body = jsonEncode({
+        if (motivoAnulacion != null && motivoAnulacion.isNotEmpty)
+          'motivo_anulacion': motivoAnulacion,
+      });
+
+      final response = (usePost || motivoAnulacion != null)
+          ? await httpClient
+              .post(uri, headers: headers, body: body)
+              .timeout(
+                const Duration(seconds: 15),
+                onTimeout: () => throw Exception('Tiempo de espera agotado al anular la orden.'),
+              )
+          : await httpClient
+              .patch(uri, headers: headers, body: body)
+              .timeout(
+                const Duration(seconds: 15),
+                onTimeout: () => throw Exception('Tiempo de espera agotado al anular la orden.'),
+              );
 
       dynamic decodedBody;
       try {
