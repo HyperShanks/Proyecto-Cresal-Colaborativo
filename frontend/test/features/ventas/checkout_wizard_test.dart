@@ -247,5 +247,38 @@ void main() {
       expect(find.text('Siguiente'), findsOneWidget);
       expect(find.text('Reserva Backorder'), findsOneWidget);
     });
+
+    testWidgets('CheckoutWizardScreen permite activar Consumidor Final y avanzar de paso', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: CheckoutWizardScreen(
+            initialInventario: [
+              {'id_activo': 'act-101', 'sku': 'SKU-101', 'descripcion': 'Alternador', 'precio': 120000}
+            ],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Avanzar de Paso 0 a Paso 1 (Cliente CRM)
+      await tester.tap(find.text('Siguiente'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('2. Datos del Cliente (Micro-CRM)'), findsOneWidget);
+      expect(find.byKey(const Key('switch_cliente_anonimo')), findsOneWidget);
+
+      // Activar Switch Consumidor Final
+      await tester.tap(find.byKey(const Key('switch_cliente_anonimo')));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('RUT 6.666.666-6'), findsOneWidget);
+
+      // Avanzar a Paso 2 (Logística)
+      await tester.tap(find.text('Siguiente'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('3. Modalidad de Entrega y Despacho'), findsOneWidget);
+      expect(find.text('Traslado Sucursal'), findsOneWidget);
+    });
   });
 }

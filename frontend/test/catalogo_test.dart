@@ -229,10 +229,10 @@ void main() {
       await tester.pump();
       expect(find.text('Mis Órdenes de Venta'), findsOneWidget);
 
-      // Cambiar a pestaña Carrito
+      // Cambiar a pestaña Carrito (Checkout Wizard)
       await tester.tap(find.text('Carrito'));
       await tester.pump();
-      expect(find.text('Tu carrito está vacío'), findsOneWidget);
+      expect(find.text('El carrito está actualmente vacío'), findsOneWidget);
     });
 
     testWidgets('Botón de hamburguesa abre el Drawer con TICKET, CONFIGURACIÓN y CERRAR SESIÓN', (tester) async {

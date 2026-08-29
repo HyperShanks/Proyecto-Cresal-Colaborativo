@@ -15,20 +15,23 @@ Se implementó una reingeniería completa del flujo de compra en el **Mesón de 
 ```
 ├── backend/
 │   ├── schemas.py                                    # [MODIFY] DTOs Pydantic V2: ReservaBackorderDTO, DespachoDTO, CheckoutWizardRequest/Response
-│   ├── routers/ordenes.py                            # [MODIFY] Endpoint transaccional ACID: POST /api/v1/ordenes/checkout-wizard
+│   ├── routers/ordenes.py                            # [MODIFY] Endpoint transaccional ACID con Upsert de Cliente y Traslados: POST /api/v1/ordenes/checkout-wizard
 │   └── tests/test_checkout_wizard.py                 # [NEW] 6 Pruebas automatizadas Pytest (ACID, Rollback, RBAC, Despacho)
 │
 ├── frontend/
+│   ├── lib/features/auth/services/auth_service.dart  # [MODIFY] Aislamiento de Carrito por Usuario (vacía el carrito al hacer clearToken/logout)
 │   ├── lib/features/ventas/
-│   │   ├── models/checkout_wizard_models.dart        # [NEW] DTOs Dart: ClienteWizardModel, ReservaBackorderModel, DespachoModel, etc.
-│   │   ├── controllers/checkout_wizard_controller.dart# [NEW] Manejador de estado reactivo y persistencia entre pasos
+│   │   ├── models/cart_item_model.dart               # [MODIFY] Soporte de ReservaBackorderCartItem en carrito reactivo global
+│   │   ├── models/checkout_wizard_models.dart        # [MODIFY] DTOs Dart: ClienteWizardModel (con toClienteInputJson), DespachoModel, etc.
+│   │   ├── controllers/cart_controller.dart          # [MODIFY] agregarReservaBackorder(...) sincronizado bidireccionalmente
+│   │   ├── controllers/checkout_wizard_controller.dart# [MODIFY] Manejo de traslado, asignación de vendedor y abonos parciales
 │   │   ├── services/ventas_service.dart              # [MODIFY] Método HTTP processCheckoutWizard()
 │   │   ├── presentation/
 │   │   │   ├── widgets/modal_backorder_form.dart     # [NEW] Diálogo modal para parametrizar piezas en verde
-│   │   │   └── screens/checkout_wizard_screen.dart   # [NEW] Stepper interactivo de 5 pasos con diseño industrial
-│   ├── lib/routes/app_routes.dart                    # [MODIFY] Registro de ruta '/checkout_wizard' y guardas RBAC
-│   ├── lib/main.dart                                 # [MODIFY] Inyección de ruta '/checkout_wizard'
-│   └── test/features/ventas/checkout_wizard_test.dart# [NEW] 8 Pruebas unitarias y de widgets en Flutter
+│   │   │   ├── screens/catalogo_screen.dart          # [MODIFY] Botón rápido AppBar y estado vacío para Backorder
+│   │   │   ├── screens/ventas_main_screen.dart       # [MODIFY] Reemplazo total de CarritoScreen por CheckoutWizardScreen
+│   │   │   └── screens/checkout_wizard_screen.dart   # [MODIFY] Formulario CRM unificado con Consumidor Final, Traslados y Abonos
+│   └── test/features/ventas/checkout_wizard_test.dart# [NEW] 9 Pruebas unitarias y de widgets en Flutter
 │
 └── specs/SPEC-HU-05.md                               # [MODIFY] Checklist 100% completada y validada
 ```
@@ -42,36 +45,37 @@ Una **Reserva por Encargo (Backorder)** ocurre cuando un cliente solicita una pi
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Vendedor as 👤 Vendedor (Mesón)
+    actor Vendedor as 👤 Vendedor (Mesón / Online / Jefe)
     participant Wizard as 🖥️ Checkout Wizard
     participant Backend as ⚙️ FastAPI (ACID)
     participant DB as 🗄️ PostgreSQL
     actor Caja as 💳 Cajera (Caja)
-    actor Bodega as 📦 Bodega / Adquisiciones
+    actor Bodega as 📦 Bodega / Traslados
 
     Vendedor->>Wizard: 1. Agrega repuestos físicos + Reserva Backorder (con abono)
-    Vendedor->>Wizard: 2. Selecciona Cliente CRM
-    Vendedor->>Wizard: 3. Elige Entrega (Retiro o Despacho)
-    Vendedor->>Wizard: 4. Revisa Abonos y Condiciones
-    Vendedor->>Wizard: 5. Confirma y Emite Orden
+    Vendedor->>Wizard: 2. Selecciona Cliente CRM o activa "Consumidor Final (6.666.666-6)"
+    Vendedor->>Wizard: 3. Elige Entrega (Retiro, Despacho Domicilio o Traslado a Sucursal)
+    Vendedor->>Wizard: 4. Revisa Abonos y Condiciones Comerciales (saldo pendiente)
+    Vendedor->>Wizard: 5. Confirma y Emite Orden Atómicamente
     Wizard->>Backend: POST /api/v1/ordenes/checkout-wizard
     
     critical Transacción Atómica ACID
+        Backend->>DB: INSERT / UPDATE Cliente (si es nuevo o consumidor final)
         Backend->>DB: INSERT Orden_Venta (estado='Reservada', total, monto_pendiente)
         Backend->>DB: UPDATE Activo_Inventariado (id_estado=2, version_lock+1)
         Backend->>DB: INSERT Detalle_Orden (líneas físicas + líneas backorder)
         Backend->>DB: INSERT Reservas_Backorder (estado='Pendiente', abono)
-        Backend->>DB: INSERT Despacho (si tipo_entrega='Despacho Domicilio')
+        Backend->>DB: INSERT Despacho (si tipo_entrega='Despacho' o 'Traslado')
     end
     
     Backend-->>Wizard: 201 Created (id_orden, total, monto_pendiente)
-    Wizard-->>Vendedor: Muestra Folio y envía cliente a Caja
+    Wizard-->>Vendedor: Muestra Folio ORD-XXXXXXXX y limpia el carrito
     
     Caja->>Backend: GET /api/v1/caja/pendientes-cobro
     Backend-->>Caja: Orden listada con su saldo pendiente
     Caja->>Backend: POST /api/v1/caja/cobros (Liquida abono o total)
     
-    Bodega->>Backend: Consulta órdenes con líneas [RESERVA EN VERDE]
+    Bodega->>Backend: Consulta órdenes con líneas [RESERVA EN VERDE] o [TRASLADO]
     Bodega->>Bodega: Proceso de búsqueda/desarme y asignación posterior
 ```
 
@@ -80,10 +84,10 @@ sequenceDiagram
 | Paso | Nombre | Descripción y Reglas de Negocio |
 | :--- | :--- | :--- |
 | **Paso 1** | **Ítems & Reservas** | El vendedor carga repuestos desde inventario, agrega ítems manuales o abre el `ModalBackorderForm` para crear piezas por encargo. No permite avanzar con carrito vacío. |
-| **Paso 2** | **Cliente CRM** | Búsqueda por RUT. Si el cliente existe, autocompleta sus datos; si es nuevo, permite crearlo inline con validación de consentimiento legal. Obligatorio para avanzar. |
-| **Paso 3** | **Logística & Despacho** | Selector de modalidad: **Retiro en Tienda** (cliente retira en mesón) o **Despacho a Domicilio** (formulario obligatorio de dirección, receptor, teléfono y comuna). |
-| **Paso 4** | **Condiciones & Abonos** | Desglose financiero en tiempo real. Permite ingresar abonos adicionales o notas técnicas para el personal de bodega/preparación. |
-| **Paso 5** | **Revisión Final & Emisión** | Resumen consolidado. Al presionar **Confirmar**, se ejecuta la llamada transaccional atómica al backend (`if (!mounted) return;`). |
+| **Paso 2** | **Cliente CRM** | Formulario unificado con campo RUT integrado. Incluye switch de **Consumidor Final (Sin RUT)** que autocompleta el cliente `6.666.666-6`. Si es un cliente existente o nuevo, se gestiona todo en la misma tarjeta. |
+| **Paso 3** | **Logística & Despacho** | Selector de 3 modalidades: **Retiro en Tienda** (mesón), **Despacho a Domicilio** (formulario de dirección y transportista) o **Traslado a otra Sucursal** (Viña del Mar / Limache). Si es Vendedor Online, permite asignar el responsable en sucursal. |
+| **Paso 4** | **Condiciones & Abonos** | Desglose financiero en tiempo real. Permite ingresar **Monto de Abono / Anticipo (\$):** personalizado (calculando en vivo el saldo pendiente para Caja) e instrucciones para Bodega. |
+| **Paso 5** | **Revisión Final & Emisión** | Resumen consolidado. Al presionar **Confirmar**, se ejecuta la llamada transaccional atómica al backend, se genera la orden y se limpia el carrito. |
 
 ---
 

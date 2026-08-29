@@ -133,3 +133,67 @@ class VentaLibreCartItem extends CartItem {
     };
   }
 }
+
+/// Representa una Reserva por Encargo (Compra en Verde / Backorder) en el carrito
+class ReservaBackorderCartItem extends CartItem {
+  @override
+  final String id;
+  final String marca;
+  final String modelo;
+  final int? anio;
+  final String categoriaNombre;
+  final int idCategoria;
+  final int precioAcordado;
+  final int montoAbonado;
+  final String? notas;
+
+  ReservaBackorderCartItem({
+    required this.id,
+    required this.marca,
+    required this.modelo,
+    this.anio,
+    required this.categoriaNombre,
+    required this.idCategoria,
+    required this.precioAcordado,
+    this.montoAbonado = 0,
+    this.notas,
+  });
+
+  @override
+  String get titulo => '[COMPRA EN VERDE] $categoriaNombre - $marca $modelo ${anio != null ? "($anio)" : ""}';
+
+  @override
+  String get subtitulo => 'Precio Acordado: \$$_montoFormateado(precioAcordado) | Abono: \$$_montoFormateado(montoAbonado)';
+
+  static String _montoFormateado(int monto) {
+    return monto.toString().replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (Match m) => '${m[1]}.',
+    );
+  }
+
+  @override
+  int get precioUnitario => precioAcordado;
+
+  @override
+  int get cantidad => 1;
+
+  @override
+  bool get esInventariado => false;
+
+  @override
+  Map<String, dynamic> toJson() {
+    return {
+      'tipo': 'reserva_backorder',
+      'id_reserva': id,
+      'id_categoria_requerida': idCategoria,
+      'categoria_nombre': categoriaNombre,
+      'marca_requerida': marca,
+      'modelo_requerido': modelo,
+      'anio_requerido': anio,
+      'precio_acordado': precioAcordado,
+      'monto_abonado': montoAbonado,
+      'notas_preparacion': notas,
+    };
+  }
+}

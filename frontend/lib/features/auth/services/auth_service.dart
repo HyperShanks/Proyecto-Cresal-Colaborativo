@@ -6,6 +6,7 @@ import '../../../core/constants/api_constants.dart';
 import '../../../core/theme/tokens/app_palette.dart';
 import '../../../core/services/api_service.dart';
 import '../../alertas/services/bodega_polling_service.dart';
+import '../../ventas/controllers/cart_controller.dart';
 import '../models/auth_user_model.dart';
 
 // Claves de almacenamiento seguro para sesión
@@ -379,6 +380,7 @@ class AuthService {
   /// Elimina el token, rol y datos de sesión activa (para logout o sesiones expiradas),
   /// preservando la vinculación/enrolamiento del terminal al operario.
   static Future<void> clearToken() async {
+    CartController.instance.vaciarCarrito();
     await _storage.delete(key: _tokenKey);
     await _storage.delete(key: _rolKey);
     await _storage.delete(key: _idRolKey);

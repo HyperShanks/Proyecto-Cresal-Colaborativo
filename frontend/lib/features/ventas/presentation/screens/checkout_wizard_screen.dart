@@ -1,18 +1,26 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../auth/services/auth_service.dart';
+import '../../controllers/cart_controller.dart';
+import '../../models/cart_item_model.dart';
 import '../../models/checkout_wizard_models.dart';
 import '../../controllers/checkout_wizard_controller.dart';
 import '../../services/ordenes_service.dart';
 import '../widgets/modal_backorder_form.dart';
 
 /// Pantalla Principal del Checkout Wizard por 5 Pasos Secuenciales (SPEC-HU-05)
+/// Integra Carrito Híbrido, Micro-CRM con Consumidor Final, Logística (Retiro/Despacho/Traslado) y Abonos.
 class CheckoutWizardScreen extends StatefulWidget {
+  final VoidCallback? onOpenMenuDrawer;
+  final VoidCallback? onNavigateToCatalogo;
   final List<Map<String, dynamic>>? initialInventario;
   final List<ItemManualModel>? initialManuales;
 
   const CheckoutWizardScreen({
     super.key,
+    this.onOpenMenuDrawer,
+    this.onNavigateToCatalogo,
     this.initialInventario,
     this.initialManuales,
   });
@@ -24,32 +32,57 @@ class CheckoutWizardScreen extends StatefulWidget {
 class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
   final CheckoutWizardController _controller = CheckoutWizardController();
 
-  // Controladores Paso 2 (Cliente)
-  final _rutSearchController = TextEditingController();
+  // Controladores Paso 2 (Micro-CRM)
+  final _rutController = TextEditingController();
   final _clienteNombresController = TextEditingController();
   final _clienteApellidosController = TextEditingController();
   final _clienteTelefonoController = TextEditingController();
   final _clienteEmailController = TextEditingController();
+  final FocusNode _rutFocusNode = FocusNode();
   bool _isSearchingCliente = false;
-  bool _isNuevoClienteForm = false;
+  bool _esClienteAnonimo = false;
+  String _comunaCliente = 'Viña del Mar';
 
-  // Controladores Paso 3 (Despacho)
+  // Controladores Paso 3 (Logística & Despacho / Traslado)
   final _direccionController = TextEditingController();
   final _receptorNombresController = TextEditingController();
   final _receptorRutController = TextEditingController();
   final _receptorTelefonoController = TextEditingController();
-  int _comunaId = 1;
+  final _empresaTransporteController = TextEditingController(text: 'Chilexpress');
+  String _comunaDespacho = 'Viña del Mar';
+  int _idSucursalDestino = 1; // 1: Viña del Mar, 2: Limache
+  int? _userRolId;
+  bool get _esVendedorOnline => _userRolId == 7;
+  List<VendedorModel> _vendedoresDisponibles = [];
+  String? _idVendedorAsignado;
 
-  // Controladores Paso 4 (Comercial / Abono)
-  final _abonoAdicionalController = TextEditingController();
+  // Controladores Paso 4 (Comercial / Abonos)
+  final _montoAbonoController = TextEditingController();
   final _notasGeneralesController = TextEditingController();
+
+  static const List<String> _comunasDisponibles = [
+    'Viña del Mar',
+    'Valparaíso',
+    'Limache',
+    'Quilpué',
+    'Villa Alemana',
+    'Concón',
+    'Quillota',
+    'San Antonio',
+    'Santiago',
+  ];
 
   @override
   void initState() {
     super.initState();
     _controller.addListener(_onControllerUpdate);
+    CartController.instance.addListener(_sincronizarDesdeCartController);
+    _rutFocusNode.addListener(_onRutFocusChange);
 
-    // Cargar ítems iniciales si se pasan desde el carrito
+    _sincronizarDesdeCartController();
+    _cargarRolYVendedores();
+
+    // Cargar ítems iniciales directos si se pasan por parámetro
     if (widget.initialInventario != null) {
       for (final item in widget.initialInventario!) {
         _controller.addItemInventariado(
@@ -70,15 +103,74 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     }
   }
 
+  Future<void> _cargarRolYVendedores() async {
+    try {
+      final rolId = await AuthService.getIdRol();
+      if (mounted) {
+        setState(() => _userRolId = rolId);
+      }
+      if (rolId == 7) {
+        final vends = await OrdenesService.obtenerVendedores();
+        if (mounted) {
+          setState(() => _vendedoresDisponibles = vends);
+        }
+      }
+    } catch (_) {}
+  }
+
+  void _sincronizarDesdeCartController() {
+    final cartItems = CartController.instance.items;
+    for (final item in cartItems) {
+      if (item is InventariadoCartItem) {
+        _controller.addItemInventariado(
+          idActivo: item.id,
+          sku: item.sku,
+          descripcion: item.titulo,
+          precio: item.precioFinal,
+        );
+      } else if (item is VentaLibreCartItem) {
+        if (!_controller.itemsManuales.any((m) => m.descripcion == item.descripcion && m.precioUnitario == item.monto)) {
+          _controller.addItemManual(
+            ItemManualModel(
+              descripcion: item.descripcion,
+              cantidad: item.cantidad,
+              precioUnitario: item.monto,
+              precioFinal: item.subtotal,
+              notasPreparacion: item.observacion,
+            ),
+          );
+        }
+      } else if (item is ReservaBackorderCartItem) {
+        if (!_controller.reservas.any((r) => r.marcaRequerida == item.marca && r.modeloRequerido == item.modelo && r.idCategoriaRequerida == item.idCategoria)) {
+          _controller.addReservaBackorder(
+            ReservaBackorderModel(
+              idCategoriaRequerida: item.idCategoria,
+              categoriaNombre: item.categoriaNombre,
+              marcaRequerida: item.marca,
+              modeloRequerido: item.modelo,
+              anioRequerido: item.anio,
+              precioAcordado: item.precioAcordado,
+              montoAbonado: item.montoAbonado,
+              notasPreparacion: item.notas,
+            ),
+          );
+        }
+      }
+    }
+  }
+
   void _onControllerUpdate() {
     if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    CartController.instance.removeListener(_sincronizarDesdeCartController);
+    _rutFocusNode.removeListener(_onRutFocusChange);
+    _rutFocusNode.dispose();
     _controller.removeListener(_onControllerUpdate);
     _controller.dispose();
-    _rutSearchController.dispose();
+    _rutController.dispose();
     _clienteNombresController.dispose();
     _clienteApellidosController.dispose();
     _clienteTelefonoController.dispose();
@@ -87,15 +179,22 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     _receptorNombresController.dispose();
     _receptorRutController.dispose();
     _receptorTelefonoController.dispose();
-    _abonoAdicionalController.dispose();
+    _empresaTransporteController.dispose();
+    _montoAbonoController.dispose();
     _notasGeneralesController.dispose();
     super.dispose();
   }
 
-  // ── Helper Buscar Cliente ──────────────────────────────────────────────────
+  // ── Búsqueda y Autocompletado Reactivo por RUT ────────────────────────────
+  void _onRutFocusChange() {
+    if (!_rutFocusNode.hasFocus && !_esClienteAnonimo) {
+      _buscarClientePorRut();
+    }
+  }
+
   Future<void> _buscarClientePorRut() async {
-    final rut = _rutSearchController.text.trim();
-    if (rut.isEmpty) return;
+    final rut = _rutController.text.trim();
+    if (rut.length < 7 || _esClienteAnonimo) return;
 
     setState(() => _isSearchingCliente = true);
     try {
@@ -105,74 +204,157 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
       setState(() {
         _isSearchingCliente = false;
         if (res != null) {
-          final cliente = ClienteWizardModel.fromJson(res);
+          _clienteNombresController.text = res['nombres']?.toString() ?? '';
+          _clienteApellidosController.text = res['apellidos']?.toString() ?? '';
+          if (res['telefono'] != null) {
+            _clienteTelefonoController.text = res['telefono'].toString();
+          }
+          if (res['correo'] != null) {
+            _clienteEmailController.text = res['correo'].toString();
+          }
+          final com = res['comuna']?.toString();
+          if (com != null && _comunasDisponibles.contains(com)) {
+            _comunaCliente = com;
+          }
+
+          final cliente = ClienteWizardModel(
+            idCliente: res['id_cliente']?.toString() ?? 'cli-${DateTime.now().millisecondsSinceEpoch}',
+            rut: rut,
+            nombres: _clienteNombresController.text,
+            apellidos: _clienteApellidosController.text,
+            telefono: _clienteTelefonoController.text,
+            correo: _clienteEmailController.text,
+            comuna: _comunaCliente,
+            consentimientoLegal: true,
+            estado: 'Activo',
+          );
           _controller.setCliente(cliente);
-          _isNuevoClienteForm = false;
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: AppPalette.surface,
+              duration: const Duration(seconds: 2),
+              content: Text(
+                'Cliente frecuente encontrado: ${cliente.nombreCompleto}',
+                style: AppTypography.small.copyWith(color: AppPalette.secondary, fontWeight: FontWeight.bold),
+              ),
+            ),
+          );
         } else {
-          _isNuevoClienteForm = true;
-          _clienteNombresController.clear();
-          _clienteApellidosController.clear();
-          _clienteTelefonoController.clear();
-          _clienteEmailController.clear();
+          _actualizarClienteLocal();
         }
       });
     } catch (_) {
       if (!mounted) return;
-      setState(() {
-        _isSearchingCliente = false;
-        _isNuevoClienteForm = true;
-      });
+      setState(() => _isSearchingCliente = false);
+      _actualizarClienteLocal();
     }
   }
 
-  void _guardarNuevoClienteLocal() {
-    final rut = _rutSearchController.text.trim();
+  void _actualizarClienteLocal() {
+    final rut = _rutController.text.trim();
     final nom = _clienteNombresController.text.trim();
     final ape = _clienteApellidosController.text.trim();
-    final tel = _clienteTelefonoController.text.trim();
-    final mail = _clienteEmailController.text.trim();
 
-    if (rut.isEmpty || nom.isEmpty || ape.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('RUT, Nombres y Apellidos son obligatorios.')),
+    if (rut.isNotEmpty && nom.isNotEmpty) {
+      final cliente = ClienteWizardModel(
+        idCliente: _controller.clienteSeleccionado?.idCliente ?? 'cli-${DateTime.now().millisecondsSinceEpoch}',
+        rut: rut,
+        nombres: nom,
+        apellidos: ape.isNotEmpty ? ape : 'S/A',
+        telefono: _clienteTelefonoController.text.trim(),
+        correo: _clienteEmailController.text.trim(),
+        comuna: _comunaCliente,
+        consentimientoLegal: true,
+        estado: 'Activo',
       );
-      return;
+      _controller.setCliente(cliente);
     }
-
-    final cliente = ClienteWizardModel(
-      idCliente: 'cli-${DateTime.now().millisecondsSinceEpoch}',
-      rut: rut,
-      nombres: nom,
-      apellidos: ape,
-      telefono: tel,
-      correo: mail,
-      consentimientoLegal: true,
-      estado: 'Activo',
-    );
-
-    _controller.setCliente(cliente);
-    setState(() => _isNuevoClienteForm = false);
   }
 
-  // ── Emisión Final ──────────────────────────────────────────────────────────
+  void _toggleClienteAnonimo(bool valor) {
+    setState(() {
+      _esClienteAnonimo = valor;
+      if (valor) {
+        _rutController.text = '6.666.666-6';
+        _clienteNombresController.text = 'Consumidor';
+        _clienteApellidosController.text = 'Final';
+        _clienteTelefonoController.clear();
+        _clienteEmailController.clear();
+        _comunaCliente = 'Viña del Mar';
+
+        _controller.setCliente(
+          const ClienteWizardModel(
+            idCliente: 'cli-cf',
+            rut: '6.666.666-6',
+            nombres: 'Consumidor',
+            apellidos: 'Final',
+            comuna: 'Viña del Mar',
+            consentimientoLegal: true,
+            estado: 'Activo',
+          ),
+        );
+      } else {
+        _rutController.clear();
+        _clienteNombresController.clear();
+        _clienteApellidosController.clear();
+        _clienteTelefonoController.clear();
+        _clienteEmailController.clear();
+        _controller.setCliente(null);
+      }
+    });
+  }
+
+  // ── Emisión Final Transaccional (ACID) ─────────────────────────────────────
   Future<void> _confirmarYEnviarOrden() async {
-    // Sincronizar datos finales de despacho si aplica
-    if (_controller.tipoEntrega == 'Despacho Domicilio') {
+    if (_controller.tipoEntrega == 'Despacho Domicilio' || _controller.tipoEntrega == 'Despacho') {
       final d = DespachoModel(
         direccionEnvio: _direccionController.text.trim(),
         receptorNombres: _receptorNombresController.text.trim(),
         receptorRut: _receptorRutController.text.trim(),
         receptorTelefono: _receptorTelefonoController.text.trim(),
-        idComunaDestino: _comunaId,
-        empresaTransporte: 'Por Asignar',
+        idComunaDestino: _comunasDisponibles.indexOf(_comunaDespacho) + 1,
+        comunaNombre: _comunaDespacho,
+        empresaTransporte: _empresaTransporteController.text.trim().isNotEmpty
+            ? _empresaTransporteController.text.trim()
+            : 'Chilexpress',
+        tipoEntrega: 'Despacho',
       );
       _controller.setDatosDespacho(d);
+    } else if (_controller.tipoEntrega == 'Traslado') {
+      final nomDest = _idSucursalDestino == 1 ? 'Viña del Mar' : 'Limache';
+      final d = DespachoModel(
+        direccionEnvio: 'Traslado a Sucursal $nomDest',
+        receptorNombres: _receptorNombresController.text.trim().isNotEmpty
+            ? _receptorNombresController.text.trim()
+            : (_controller.clienteSeleccionado?.nombreCompleto ?? 'Cliente'),
+        receptorRut: _receptorRutController.text.trim().isNotEmpty
+            ? _receptorRutController.text.trim()
+            : (_controller.clienteSeleccionado?.rut ?? 'S/R'),
+        receptorTelefono: _receptorTelefonoController.text.trim().isNotEmpty
+            ? _receptorTelefonoController.text.trim()
+            : '+56900000000',
+        idComunaDestino: _idSucursalDestino,
+        comunaNombre: nomDest,
+        empresaTransporte: 'Interno',
+        tipoEntrega: 'Traslado',
+        idSucursalDestino: _idSucursalDestino,
+      );
+      _controller.setDatosDespacho(d);
+      _controller.setIdSucursalDestino(_idSucursalDestino);
+    }
+
+    if (_esVendedorOnline && _idVendedorAsignado != null) {
+      _controller.setIdVendedorAsignado(_idVendedorAsignado);
     }
 
     final res = await _controller.submitOrder();
     if (!mounted) return;
 
     if (res != null) {
+      CartController.instance.vaciarCarrito();
+      _controller.clearAll();
+
       await showDialog(
         context: context,
         barrierDismissible: false,
@@ -190,7 +372,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('ID Orden: ${res.idOrden}', style: AppTypography.small.copyWith(color: AppPalette.secondary, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+              Text('Folio: ${res.idOrden.length >= 8 ? "ORD-" + res.idOrden.substring(0, 8).toUpperCase() : res.idOrden}', style: AppTypography.small.copyWith(color: AppPalette.secondary, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               Text('Total Venta: \$${res.totalVenta}', style: AppTypography.body.copyWith(fontWeight: FontWeight.bold)),
               Text('Monto Pendiente en Caja: \$${res.montoPendiente}', style: AppTypography.body.copyWith(color: AppPalette.secondary)),
@@ -200,7 +382,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               ],
               if (res.despachoGenerado) ...[
                 const SizedBox(height: 4),
-                Text('• Solicitud de despacho a domicilio registrada.', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
+                Text('• Solicitud de despacho / traslado registrada.', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
               ],
             ],
           ),
@@ -209,7 +391,11 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               style: ElevatedButton.styleFrom(backgroundColor: AppPalette.primary),
               onPressed: () {
                 Navigator.of(ctx).pop();
-                Navigator.of(context).pop(true);
+                if (widget.onNavigateToCatalogo != null) {
+                  widget.onNavigateToCatalogo!();
+                } else if (Navigator.canPop(context)) {
+                  Navigator.of(context).pop(true);
+                }
               },
               child: const Text('FINALIZAR Y VOLVER'),
             ),
@@ -227,20 +413,37 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
         backgroundColor: AppPalette.surface,
         foregroundColor: AppPalette.textPrimary,
         elevation: 0,
+        leading: widget.onOpenMenuDrawer != null
+            ? IconButton(
+                icon: const Icon(Icons.menu),
+                onPressed: widget.onOpenMenuDrawer,
+                tooltip: 'Abrir Menú',
+              )
+            : (Navigator.canPop(context) ? const BackButton() : null),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Checkout Transaccional', style: AppTypography.title.copyWith(fontSize: 18)),
-            Text('Wizard de 5 Pasos • Ventas y Backorders', style: AppTypography.small.copyWith(color: AppPalette.secondary, fontSize: 12)),
+            Text('Flujo Secuencial de 5 Pasos • Ventas y Backorders', style: AppTypography.small.copyWith(color: AppPalette.secondary, fontSize: 12)),
           ],
         ),
+        actions: [
+          if (_controller.totalItemsCount > 0)
+            IconButton(
+              icon: const Icon(Icons.delete_sweep_outlined, color: AppPalette.error),
+              tooltip: 'Vaciar Carrito',
+              onPressed: () {
+                CartController.instance.vaciarCarrito();
+                _controller.clearAll();
+              },
+            ),
+        ],
       ),
       body: Column(
         children: [
           // Barra superior de progreso de pasos
           _buildStepProgressBar(),
 
-          // Mensaje de error general si ocurre
           if (_controller.errorMessage != null)
             Container(
               margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
@@ -255,7 +458,6 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               ),
             ),
 
-          // Contenido modular del paso actual
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(16),
@@ -263,7 +465,6 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
             ),
           ),
 
-          // Barra inferior de navegación
           _buildBottomNavigationButtons(),
         ],
       ),
@@ -340,7 +541,6 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     );
   }
 
-  // ── Contenido según Paso ──────────────────────────────────────────────────
   Widget _buildCurrentStepContent() {
     switch (_controller.currentStep) {
       case 0:
@@ -365,24 +565,45 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('1. Selección de Repuestos y Encargos', style: AppTypography.title.copyWith(fontSize: 16)),
-            Text('${_controller.totalItemsCount} artículos', style: AppTypography.small.copyWith(color: AppPalette.secondary, fontWeight: FontWeight.bold)),
+            Expanded(
+              child: Text(
+                '1. Selección de Repuestos y Encargos',
+                style: AppTypography.title.copyWith(fontSize: 16),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text('${_controller.totalItemsCount} artículos (\$${_controller.totalVenta})', style: AppTypography.small.copyWith(color: AppPalette.secondary, fontWeight: FontWeight.bold)),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 14),
 
-        // Botones para añadir Ítems Manuales o Reservas por Encargo
         Row(
           children: [
             Expanded(
-              child: OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(foregroundColor: AppPalette.primary, side: const BorderSide(color: AppPalette.primary)),
-                icon: const Icon(Icons.bookmark_add, size: 18),
-                label: const Text('Reserva Backorder', style: TextStyle(fontWeight: FontWeight.bold)),
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppPalette.secondary,
+                  foregroundColor: AppPalette.background,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                icon: const Icon(Icons.bookmark_add, size: 20),
+                label: const Text('Reserva Backorder', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                 onPressed: () async {
                   final reserva = await ModalBackorderForm.mostrar(context);
                   if (reserva != null) {
                     _controller.addReservaBackorder(reserva);
+                    CartController.instance.agregarReservaBackorder(
+                      idCategoria: reserva.idCategoriaRequerida,
+                      categoriaNombre: reserva.categoriaNombre,
+                      marca: reserva.marcaRequerida,
+                      modelo: reserva.modeloRequerido,
+                      anio: reserva.anioRequerido,
+                      precioAcordado: reserva.precioAcordado,
+                      montoAbonado: reserva.montoAbonado,
+                      notas: reserva.notasPreparacion,
+                    );
                   }
                 },
               ),
@@ -390,9 +611,14 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
             const SizedBox(width: 10),
             Expanded(
               child: OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(foregroundColor: AppPalette.secondary, side: const BorderSide(color: AppPalette.secondary)),
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Ítem Manual', style: TextStyle(fontWeight: FontWeight.bold)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppPalette.primary,
+                  side: const BorderSide(color: AppPalette.primary),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                icon: const Icon(Icons.edit_note, size: 20),
+                label: const Text('+ Ítem Manual', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                 onPressed: _abrirDialogoItemManual,
               ),
             ),
@@ -409,14 +635,21 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               children: [
                 const Icon(Icons.shopping_cart_outlined, color: AppPalette.textSecondary, size: 48),
                 const SizedBox(height: 10),
-                Text('El carrito está vacío', style: AppTypography.title.copyWith(fontSize: 15)),
+                Text('El carrito está actualmente vacío', style: AppTypography.title.copyWith(fontSize: 15)),
                 const SizedBox(height: 4),
-                Text('Añada productos de inventario, ítems manuales o reservas por encargo.', style: AppTypography.small.copyWith(color: AppPalette.textSecondary), textAlign: TextAlign.center),
+                Text('Añada productos desde el Catálogo, cargue ítems manuales o cree una Reserva por Encargo (Compra en Verde).', style: AppTypography.small.copyWith(color: AppPalette.textSecondary), textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                if (widget.onNavigateToCatalogo != null)
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(backgroundColor: AppPalette.primary, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)),
+                    icon: const Icon(Icons.storefront, size: 18),
+                    label: const Text('IR AL CATÁLOGO DE REPUESTOS'),
+                    onPressed: widget.onNavigateToCatalogo,
+                  ),
               ],
             ),
           )
         else ...[
-          // Repuestos de Inventario
           if (_controller.itemsInventariados.isNotEmpty) ...[
             Text('REPUESTOS EN INVENTARIO (${_controller.itemsInventariados.length})', style: AppTypography.small.copyWith(color: AppPalette.textSecondary, fontWeight: FontWeight.bold)),
             const SizedBox(height: 6),
@@ -434,7 +667,10 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                       Text('\$${item['precio']}', style: AppTypography.body.copyWith(fontWeight: FontWeight.bold, color: AppPalette.primary)),
                       IconButton(
                         icon: const Icon(Icons.delete_outline, color: AppPalette.error, size: 20),
-                        onPressed: () => _controller.removeItemInventariado(item['id_activo']),
+                        onPressed: () {
+                          _controller.removeItemInventariado(item['id_activo']);
+                          CartController.instance.eliminarItem(item['id_activo']);
+                        },
                       ),
                     ],
                   ),
@@ -444,7 +680,6 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
             const SizedBox(height: 12),
           ],
 
-          // Reservas Backorder
           if (_controller.reservas.isNotEmpty) ...[
             Text('RESERVAS POR ENCARGO / BACKORDER (${_controller.reservas.length})', style: AppTypography.small.copyWith(color: AppPalette.secondary, fontWeight: FontWeight.bold)),
             const SizedBox(height: 6),
@@ -469,7 +704,6 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
             const SizedBox(height: 12),
           ],
 
-          // Ítems Manuales
           if (_controller.itemsManuales.isNotEmpty) ...[
             Text('ÍTEMS MANUALES (${_controller.itemsManuales.length})', style: AppTypography.small.copyWith(color: AppPalette.textSecondary, fontWeight: FontWeight.bold)),
             const SizedBox(height: 6),
@@ -502,92 +736,201 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     );
   }
 
-  // ── PASO 2: CLIENTE CRM ───────────────────────────────────────────────────
+  // ── PASO 2: CLIENTE CRM UNIFICADO CON CONSUMIDOR FINAL ────────────────────
+  // ── PASO 2: CLIENTE CRM UNIFICADO CON CONSUMIDOR FINAL ────────────────────
   Widget _buildStep2Cliente() {
-    final cli = _controller.clienteSeleccionado;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('2. Selección y Validación de Cliente CRM', style: AppTypography.title.copyWith(fontSize: 16)),
+        Text('2. Datos del Cliente (Micro-CRM)', style: AppTypography.title.copyWith(fontSize: 16)),
         const SizedBox(height: 12),
 
-        // Buscador por RUT
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _rutSearchController,
-                style: AppTypography.body,
-                decoration: _inputDeco('Ingrese RUT del Cliente (ej: 19.999.888-7)', Icons.badge_outlined),
+        // Botón Interactivo Consumidor Final (Sin RUT) - Clickable en toda el área
+        Material(
+          color: _esClienteAnonimo ? AppPalette.secondary.withValues(alpha: 0.15) : AppPalette.surface,
+          borderRadius: BorderRadius.circular(10.0),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(10.0),
+            onTap: () => _toggleClienteAnonimo(!_esClienteAnonimo),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10.0),
+                border: Border.all(
+                  color: _esClienteAnonimo ? AppPalette.secondary : Colors.white12,
+                  width: _esClienteAnonimo ? 1.5 : 1.0,
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.no_accounts_outlined,
+                          size: 22,
+                          color: _esClienteAnonimo ? AppPalette.secondary : AppPalette.textSecondary,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Consumidor Final (Sin RUT)',
+                                style: AppTypography.body.copyWith(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: _esClienteAnonimo ? AppPalette.secondary : AppPalette.textPrimary,
+                                ),
+                              ),
+                              Text(
+                                'Toca aquí para venta rápida sin registrar datos',
+                                style: AppTypography.small.copyWith(color: AppPalette.textSecondary, fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Switch(
+                    key: const Key('switch_cliente_anonimo'),
+                    value: _esClienteAnonimo,
+                    activeThumbColor: AppPalette.secondary,
+                    onChanged: (val) => _toggleClienteAnonimo(val),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(width: 8),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(backgroundColor: AppPalette.primary, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14)),
-              icon: _isSearchingCliente
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Icon(Icons.search, size: 18),
-              label: const Text('Buscar'),
-              onPressed: _isSearchingCliente ? null : _buscarClientePorRut,
-            ),
-          ],
+          ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
 
-        // Tarjeta de Cliente Seleccionado
-        if (cli != null && !_isNuevoClienteForm) ...[
+        if (_esClienteAnonimo) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14.0),
+            decoration: BoxDecoration(
+              color: AppPalette.secondary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10.0),
+              border: Border.all(color: AppPalette.secondary.withValues(alpha: 0.4)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.info_outline, color: AppPalette.secondary, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Aviso: La orden se asignará al cliente Consumidor Final (RUT 6.666.666-6). El cliente solo podrá pagar y retirar en caja presentando su Número de Orden.',
+                    style: AppTypography.small.copyWith(
+                      color: AppPalette.secondary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ] else ...[
+          // Formulario Unificado de Cliente
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: AppPalette.surface,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppPalette.success, width: 1.2),
+              border: Border.all(color: Colors.white12),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('CLIENTE ASIGNADO', style: AppTypography.small.copyWith(color: AppPalette.success, fontWeight: FontWeight.bold)),
-                    IconButton(
-                      icon: const Icon(Icons.edit, size: 18, color: AppPalette.primary),
-                      onPressed: () => setState(() => _isNuevoClienteForm = true),
+                    Expanded(
+                      child: TextField(
+                        controller: _rutController,
+                        focusNode: _rutFocusNode,
+                        style: AppTypography.body,
+                        decoration: _inputDeco(
+                          'RUT Cliente (ej: 12.345.678-9) *',
+                          Icons.badge_outlined,
+                          suffix: _isSearchingCliente
+                              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppPalette.primary))
+                              : IconButton(
+                                  icon: const Icon(Icons.search, color: AppPalette.primary, size: 20),
+                                  tooltip: 'Buscar por RUT',
+                                  onPressed: _buscarClientePorRut,
+                                ),
+                        ),
+                        onChanged: (val) => _actualizarClienteLocal(),
+                      ),
                     ),
                   ],
                 ),
-                Text(cli.nombreCompleto, style: AppTypography.title.copyWith(fontSize: 16)),
-                Text('RUT: ${cli.rut} • Tel: ${cli.telefono ?? 'Sin teléfono'}', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
-                Text('Email: ${cli.correo ?? 'Sin correo'}', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
-              ],
-            ),
-          ),
-        ],
+                const SizedBox(height: 12),
 
-        // Formulario de nuevo cliente si no existe
-        if (_isNuevoClienteForm || cli == null) ...[
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: AppPalette.surface, borderRadius: BorderRadius.circular(12)),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Registrar Datos de Cliente:', style: AppTypography.body.copyWith(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 10),
-                TextField(controller: _clienteNombresController, style: AppTypography.body, decoration: _inputDeco('Nombres *', Icons.person)),
-                const SizedBox(height: 10),
-                TextField(controller: _clienteApellidosController, style: AppTypography.body, decoration: _inputDeco('Apellidos *', Icons.person_outline)),
-                const SizedBox(height: 10),
-                TextField(controller: _clienteTelefonoController, style: AppTypography.body, decoration: _inputDeco('Teléfono (+569...)', Icons.phone)),
-                const SizedBox(height: 10),
-                TextField(controller: _clienteEmailController, style: AppTypography.body, decoration: _inputDeco('Correo Electrónico', Icons.email_outlined)),
-                const SizedBox(height: 14),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(backgroundColor: AppPalette.success),
-                  icon: const Icon(Icons.save, size: 18),
-                  label: const Text('Asignar Cliente a la Orden'),
-                  onPressed: _guardarNuevoClienteLocal,
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _clienteNombresController,
+                        style: AppTypography.body,
+                        decoration: _inputDeco('Nombres *', Icons.person),
+                        onChanged: (val) => _actualizarClienteLocal(),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: TextField(
+                        controller: _clienteApellidosController,
+                        style: AppTypography.body,
+                        decoration: _inputDeco('Apellidos *', Icons.person_outline),
+                        onChanged: (val) => _actualizarClienteLocal(),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _clienteTelefonoController,
+                        style: AppTypography.body,
+                        keyboardType: TextInputType.phone,
+                        decoration: _inputDeco('Teléfono (+569...)', Icons.phone),
+                        onChanged: (val) => _actualizarClienteLocal(),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        initialValue: _comunaCliente,
+                        dropdownColor: AppPalette.surface,
+                        style: AppTypography.body,
+                        decoration: _inputDeco('Comuna', Icons.location_city),
+                        items: _comunasDisponibles.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() => _comunaCliente = val);
+                            _actualizarClienteLocal();
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                TextField(
+                  controller: _clienteEmailController,
+                  style: AppTypography.body,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: _inputDeco('Correo Electrónico (Opcional)', Icons.email_outlined),
+                  onChanged: (val) => _actualizarClienteLocal(),
                 ),
               ],
             ),
@@ -597,7 +940,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     );
   }
 
-  // ── PASO 3: LOGÍSTICA & DESPACHO ──────────────────────────────────────────
+  // ── PASO 3: LOGÍSTICA (RETIRO / DESPACHO / TRASLADO) ──────────────────────
   Widget _buildStep3Logistica() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -605,37 +948,39 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
         Text('3. Modalidad de Entrega y Despacho', style: AppTypography.title.copyWith(fontSize: 16)),
         const SizedBox(height: 14),
 
-        // Selector de tipo de entrega
+        // Selector de 3 Opciones: Retiro, Despacho, Traslado
         Row(
           children: [
-            Expanded(
-              child: ChoiceChip(
-                label: const Center(child: Text('Retiro en Tienda', style: TextStyle(fontWeight: FontWeight.bold))),
-                selected: _controller.tipoEntrega == 'Retiro',
-                selectedColor: AppPalette.primary,
-                backgroundColor: AppPalette.surface,
-                onSelected: (val) {
-                  if (val) _controller.setTipoEntrega('Retiro');
-                },
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: ChoiceChip(
-                label: const Center(child: Text('Despacho a Domicilio', style: TextStyle(fontWeight: FontWeight.bold))),
-                selected: _controller.tipoEntrega == 'Despacho Domicilio',
-                selectedColor: AppPalette.secondary,
-                backgroundColor: AppPalette.surface,
-                onSelected: (val) {
-                  if (val) _controller.setTipoEntrega('Despacho Domicilio');
-                },
-              ),
-            ),
+            _buildDeliveryChoice('Retiro en Tienda', 'Retiro', Icons.storefront_outlined),
+            const SizedBox(width: 8),
+            _buildDeliveryChoice('Despacho Domicilio', 'Despacho Domicilio', Icons.local_shipping_outlined),
+            const SizedBox(width: 8),
+            _buildDeliveryChoice('Traslado Sucursal', 'Traslado', Icons.sync_alt_outlined),
           ],
         ),
         const SizedBox(height: 16),
 
-        if (_controller.tipoEntrega == 'Despacho Domicilio') ...[
+        if (_controller.tipoEntrega == 'Retiro') ...[
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(color: AppPalette.surface, borderRadius: BorderRadius.circular(12)),
+            child: Row(
+              children: [
+                const Icon(Icons.storefront_rounded, color: AppPalette.success, size: 36),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Retiro en Mesón de Sucursal', style: AppTypography.body.copyWith(fontWeight: FontWeight.bold)),
+                      Text('El cliente retira los repuestos físicos directamente en el mesón tras completar el pago o abono.', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ] else if (_controller.tipoEntrega == 'Despacho Domicilio' || _controller.tipoEntrega == 'Despacho') ...[
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -650,45 +995,92 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                 const SizedBox(height: 12),
                 TextField(controller: _direccionController, style: AppTypography.body, decoration: _inputDeco('Dirección de entrega (Calle, Número, Depto) *', Icons.home_outlined)),
                 const SizedBox(height: 10),
-                TextField(controller: _receptorNombresController, style: AppTypography.body, decoration: _inputDeco('Nombre de quien recibe *', Icons.person)),
-                const SizedBox(height: 10),
-                TextField(controller: _receptorRutController, style: AppTypography.body, decoration: _inputDeco('RUT del Receptor *', Icons.badge)),
-                const SizedBox(height: 10),
-                TextField(controller: _receptorTelefonoController, style: AppTypography.body, decoration: _inputDeco('Teléfono de contacto *', Icons.phone)),
-                const SizedBox(height: 10),
-                DropdownButtonFormField<int>(
-                  initialValue: _comunaId,
+                DropdownButtonFormField<String>(
+                  initialValue: _comunaDespacho,
                   dropdownColor: AppPalette.surface,
                   style: AppTypography.body,
-                  decoration: _inputDeco('Comuna de Destino', Icons.map),
-                  items: const [
-                    DropdownMenuItem(value: 1, child: Text('Viña del Mar')),
-                    DropdownMenuItem(value: 2, child: Text('Valparaíso')),
-                    DropdownMenuItem(value: 3, child: Text('Concón')),
-                    DropdownMenuItem(value: 4, child: Text('Quilpué')),
-                    DropdownMenuItem(value: 5, child: Text('Villa Alemana')),
-                    DropdownMenuItem(value: 6, child: Text('Santiago')),
-                  ],
-                  onChanged: (val) => setState(() => _comunaId = val ?? 1),
+                  decoration: _inputDeco('Comuna Destino *', Icons.map),
+                  items: _comunasDisponibles.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                  onChanged: (val) => setState(() => _comunaDespacho = val ?? 'Viña del Mar'),
                 ),
+                const SizedBox(height: 10),
+                TextField(controller: _empresaTransporteController, style: AppTypography.body, decoration: _inputDeco('Empresa de Transporte *', Icons.local_shipping)),
+                const SizedBox(height: 10),
+                TextField(controller: _receptorRutController, style: AppTypography.body, decoration: _inputDeco('RUT Receptor *', Icons.badge)),
+                const SizedBox(height: 10),
+                TextField(controller: _receptorNombresController, style: AppTypography.body, decoration: _inputDeco('Nombre Receptor *', Icons.person)),
+                const SizedBox(height: 10),
+                TextField(controller: _receptorTelefonoController, keyboardType: TextInputType.phone, style: AppTypography.body, decoration: _inputDeco('Teléfono Receptor *', Icons.phone)),
               ],
             ),
           ),
-        ] else ...[
+        ] else if (_controller.tipoEntrega == 'Traslado') ...[
           Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(color: AppPalette.surface, borderRadius: BorderRadius.circular(12)),
-            child: Row(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppPalette.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppPalette.primary.withValues(alpha: 0.4)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.storefront_rounded, color: AppPalette.success, size: 36),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Retiro en Mesón de Sucursal', style: AppTypography.body.copyWith(fontWeight: FontWeight.bold)),
-                      Text('El cliente retira los repuestos físicos directamente en caja/mostrador.', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
+                Text('Configuración de Traslado Inter-Sucursal:', style: AppTypography.body.copyWith(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<int>(
+                  initialValue: _idSucursalDestino,
+                  dropdownColor: AppPalette.surface,
+                  style: AppTypography.body,
+                  decoration: _inputDeco('Sucursal de Destino *', Icons.swap_horiz),
+                  items: const [
+                    DropdownMenuItem(value: 1, child: Text('Sucursal Viña del Mar')),
+                    DropdownMenuItem(value: 2, child: Text('Sucursal Limache')),
+                  ],
+                  onChanged: (val) => setState(() => _idSucursalDestino = val ?? 1),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'ℹ️ Se generará automáticamente la orden de traslado logístico para que Bodega envíe la pieza a ${_idSucursalDestino == 1 ? "Viña del Mar" : "Limache"}.',
+                  style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
+                ),
+                const SizedBox(height: 10),
+                TextField(controller: _receptorRutController, style: AppTypography.body, decoration: _inputDeco('RUT quien retira en destino (Opcional)', Icons.badge)),
+                const SizedBox(height: 10),
+                TextField(controller: _receptorNombresController, style: AppTypography.body, decoration: _inputDeco('Nombre quien retira (Opcional)', Icons.person)),
+              ],
+            ),
+          ),
+        ],
+
+        if (_esVendedorOnline) ...[
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(color: AppPalette.surface, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Responsable de Entrega en Sucursal (Venta Online)', style: AppTypography.small.copyWith(fontWeight: FontWeight.bold, color: AppPalette.secondary)),
+                const SizedBox(height: 8),
+                DropdownButtonHideUnderline(
+                  child: DropdownButton<String?>(
+                    value: _idVendedorAsignado,
+                    dropdownColor: AppPalette.surface,
+                    isExpanded: true,
+                    icon: const Icon(Icons.arrow_drop_down, color: AppPalette.primary),
+                    items: [
+                      const DropdownMenuItem<String?>(
+                        value: null,
+                        child: Text('Mesón General (Cualquier vendedor)'),
+                      ),
+                      ..._vendedoresDisponibles.map(
+                        (v) => DropdownMenuItem<String?>(
+                          value: v.idUsuario,
+                          child: Text('Vendedor: ${v.nombreCompleto} (${v.rut})'),
+                        ),
+                      ),
                     ],
+                    onChanged: (val) => setState(() => _idVendedorAsignado = val),
                   ),
                 ),
               ],
@@ -696,6 +1088,34 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
           ),
         ],
       ],
+    );
+  }
+
+  Widget _buildDeliveryChoice(String label, String value, IconData icon) {
+    final isSelected = _controller.tipoEntrega == value;
+    return Expanded(
+      child: Material(
+        color: isSelected ? AppPalette.primary.withValues(alpha: 0.18) : AppPalette.surface,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: () => _controller.setTipoEntrega(value),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: isSelected ? AppPalette.primary : Colors.white12, width: isSelected ? 1.5 : 1),
+            ),
+            child: Column(
+              children: [
+                Icon(icon, size: 20, color: isSelected ? AppPalette.primary : AppPalette.textSecondary),
+                const SizedBox(height: 6),
+                Text(label, style: TextStyle(fontSize: 11, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: isSelected ? AppPalette.textPrimary : AppPalette.textSecondary), textAlign: TextAlign.center),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -707,7 +1127,6 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
         Text('4. Condiciones Comerciales y Abonos', style: AppTypography.title.copyWith(fontSize: 16)),
         const SizedBox(height: 14),
 
-        // Resumen Financiero
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(color: AppPalette.surface, borderRadius: BorderRadius.circular(12)),
@@ -719,14 +1138,44 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               const Divider(color: Colors.white24, height: 20),
               _buildResumenRow('TOTAL DE LA VENTA:', '\$${_controller.totalVenta}', isBold: true, color: AppPalette.primary),
               const SizedBox(height: 8),
-              _buildResumenRow('Abonos Compra en Verde (Backorder):', '\$${_controller.abonoReservas}', color: AppPalette.success),
+              _buildResumenRow('Total Abonos Acordados:', '\$${_controller.totalAbonos}', color: AppPalette.success),
               _buildResumenRow('Saldo Pendiente a Cobrar en Caja:', '\$${_controller.montoPendiente}', isBold: true, color: AppPalette.secondary),
             ],
           ),
         ),
         const SizedBox(height: 16),
 
-        // Notas Técnicas Generales para Bodega
+        // Campo de Abono / Anticipo Editable
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(color: AppPalette.surface, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Monto de Abono / Anticipo Inicial (\$):', style: AppTypography.small.copyWith(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _montoAbonoController,
+                keyboardType: TextInputType.number,
+                style: AppTypography.body,
+                decoration: _inputDeco('Ej: 50000 (Dejar vacío o 0 para pagar total en caja)', Icons.payments_outlined),
+                onChanged: (val) {
+                  final ab = int.tryParse(val.trim()) ?? 0;
+                  _controller.setAbonoAdicional(ab);
+                },
+              ),
+              const SizedBox(height: 6),
+              Text(
+                _controller.totalAbonos == 0
+                    ? 'ℹ️ El cliente liquidará el 100% de la orden en Caja.'
+                    : 'ℹ️ El cliente abonará \$${_controller.totalAbonos} y quedará un saldo de \$${_controller.montoPendiente} en Caja.',
+                style: AppTypography.small.copyWith(color: AppPalette.secondary, fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+
         Text('Instrucciones Generales de Preparación / Bodega:', style: AppTypography.small.copyWith(fontWeight: FontWeight.bold)),
         const SizedBox(height: 6),
         TextField(
@@ -758,16 +1207,19 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
             children: [
               Text('RESUMEN DE CLIENTE & ENTREGA', style: AppTypography.small.copyWith(color: AppPalette.secondary, fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),
-              Text('Cliente: ${cli?.nombreCompleto ?? "No seleccionado"} (${cli?.rut ?? ""})', style: AppTypography.body.copyWith(fontWeight: FontWeight.bold)),
+              Text('Cliente: ${cli?.nombreCompleto ?? "Consumidor Final"} (${cli?.rut ?? "6.666.666-6"})', style: AppTypography.body.copyWith(fontWeight: FontWeight.bold)),
               Text('Modalidad: ${_controller.tipoEntrega}', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
               if (_controller.tipoEntrega == 'Despacho Domicilio' && _controller.datosDespacho != null)
                 Text('Destino: ${_controller.datosDespacho!.direccionEnvio} • Receptor: ${_controller.datosDespacho!.receptorNombres}', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
+              if (_controller.tipoEntrega == 'Traslado')
+                Text('Traslado a: ${_idSucursalDestino == 1 ? "Viña del Mar" : "Limache"}', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
               const Divider(color: Colors.white24, height: 20),
 
               Text('DETALLE COMERCIAL', style: AppTypography.small.copyWith(color: AppPalette.secondary, fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),
               Text('• Total Artículos: ${_controller.totalItemsCount}', style: AppTypography.body),
               Text('• Total Venta: \$${_controller.totalVenta}', style: AppTypography.body.copyWith(fontWeight: FontWeight.bold, color: AppPalette.primary)),
+              Text('• Abono Acordado: \$${_controller.totalAbonos}', style: AppTypography.body.copyWith(color: AppPalette.success)),
               Text('• Saldo a Pagar en Caja: \$${_controller.montoPendiente}', style: AppTypography.body.copyWith(fontWeight: FontWeight.bold, color: AppPalette.secondary)),
             ],
           ),
@@ -803,7 +1255,6 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     );
   }
 
-  // ── Botones de Navegación ─────────────────────────────────────────────────
   Widget _buildBottomNavigationButtons() {
     return Container(
       color: AppPalette.surface,
@@ -823,10 +1274,33 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
 
           if (_controller.currentStep < 4)
             ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(backgroundColor: AppPalette.primary, foregroundColor: AppPalette.textPrimary, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppPalette.primary,
+                foregroundColor: AppPalette.textPrimary,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              ),
               icon: const Icon(Icons.arrow_forward, size: 16),
               label: const Text('Siguiente'),
-              onPressed: _controller.nextStep,
+              onPressed: () {
+                if (_controller.currentStep == 1) {
+                  if (_esClienteAnonimo) {
+                    _controller.setCliente(
+                      const ClienteWizardModel(
+                        idCliente: 'cli-cf',
+                        rut: '6.666.666-6',
+                        nombres: 'Consumidor',
+                        apellidos: 'Final',
+                        comuna: 'Viña del Mar',
+                        consentimientoLegal: true,
+                        estado: 'Activo',
+                      ),
+                    );
+                  } else {
+                    _actualizarClienteLocal();
+                  }
+                }
+                _controller.nextStep();
+              },
             ),
         ],
       ),
@@ -863,6 +1337,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               final precio = int.tryParse(precioCtrl.text) ?? 0;
               if (desc.isNotEmpty && precio > 0) {
                 _controller.addItemManual(ItemManualModel(descripcion: desc, cantidad: cant, precioUnitario: precio, precioFinal: precio * cant));
+                CartController.instance.agregarVentaLibre(descripcion: desc, monto: precio, cantidad: cant);
                 Navigator.of(ctx).pop();
               }
             },
@@ -873,15 +1348,19 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     );
   }
 
-  InputDecoration _inputDeco(String hint, IconData icon) {
+  InputDecoration _inputDeco(String hint, IconData icon, {Widget? suffix}) {
     return InputDecoration(
+      isDense: true,
       hintText: hint,
-      hintStyle: AppTypography.small.copyWith(color: AppPalette.textSecondary),
-      prefixIcon: Icon(icon, color: AppPalette.primary, size: 20),
+      hintStyle: AppTypography.small.copyWith(color: AppPalette.textSecondary, fontSize: 13),
+      prefixIcon: Icon(icon, color: AppPalette.primary, size: 18),
+      prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+      suffixIcon: suffix,
       filled: true,
       fillColor: AppPalette.background,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white24)),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white24)),
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppPalette.primary, width: 1.5)),
     );
   }

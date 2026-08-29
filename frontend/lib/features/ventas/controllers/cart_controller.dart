@@ -83,7 +83,34 @@ class CartController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Actualiza el precio acordado de un ítem (inventariado o venta libre)
+  /// Agrega una Reserva por Encargo (Compra en Verde / Backorder) al carrito
+  void agregarReservaBackorder({
+    required int idCategoria,
+    required String categoriaNombre,
+    required String marca,
+    required String modelo,
+    int? anio,
+    required int precioAcordado,
+    int montoAbonado = 0,
+    String? notas,
+  }) {
+    final cartItem = ReservaBackorderCartItem(
+      id: 'BO-${DateTime.now().millisecondsSinceEpoch}',
+      idCategoria: idCategoria,
+      categoriaNombre: categoriaNombre,
+      marca: marca,
+      modelo: modelo,
+      anio: anio,
+      precioAcordado: precioAcordado,
+      montoAbonado: montoAbonado,
+      notas: notas,
+    );
+
+    _items.add(cartItem);
+    notifyListeners();
+  }
+
+  /// Actualiza el precio acordado de un ítem (inventariado, venta libre o backorder)
   void actualizarPrecio(String itemId, int nuevoPrecio) {
     final index = _items.indexWhere((i) => i.id == itemId);
     if (index == -1) return;

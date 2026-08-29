@@ -6,6 +6,7 @@ class ClienteWizardModel {
   final String apellidos;
   final String? telefono;
   final String? correo;
+  final String? comuna;
   final bool consentimientoLegal;
   final String estado;
 
@@ -16,6 +17,7 @@ class ClienteWizardModel {
     required this.apellidos,
     this.telefono,
     this.correo,
+    this.comuna,
     this.consentimientoLegal = true,
     this.estado = 'Activo',
   });
@@ -30,10 +32,21 @@ class ClienteWizardModel {
       apellidos: json['apellidos']?.toString() ?? '',
       telefono: json['telefono']?.toString(),
       correo: json['correo']?.toString(),
+      comuna: json['comuna']?.toString(),
       consentimientoLegal: json['consentimiento_legal'] == true || json['consentimiento_legal'] == 1,
       estado: json['estado']?.toString() ?? 'Activo',
     );
   }
+
+  Map<String, dynamic> toClienteInputJson() => {
+    'rut_cliente': rut,
+    'nombres': nombres,
+    'apellidos': apellidos,
+    if (telefono != null && telefono!.isNotEmpty) 'telefono': telefono,
+    if (correo != null && correo!.isNotEmpty) 'correo': correo,
+    if (comuna != null && comuna!.isNotEmpty) 'comuna': comuna,
+    'consentimiento_legal': consentimientoLegal,
+  };
 }
 
 /// DTO para registrar características técnicas y comerciales de una Reserva Backorder (Compra en Verde)
@@ -100,7 +113,7 @@ class ReservaBackorderModel {
   };
 }
 
-/// DTO para datos de Despacho y Entrega a Domicilio
+/// DTO para datos de Despacho y Entrega a Domicilio o Traslado
 class DespachoModel {
   final String direccionEnvio;
   final String receptorNombres;
@@ -109,6 +122,8 @@ class DespachoModel {
   final int idComunaDestino;
   final String? comunaNombre;
   final String? empresaTransporte;
+  final String? tipoEntrega;
+  final int? idSucursalDestino;
 
   const DespachoModel({
     required this.direccionEnvio,
@@ -118,6 +133,8 @@ class DespachoModel {
     required this.idComunaDestino,
     this.comunaNombre,
     this.empresaTransporte,
+    this.tipoEntrega,
+    this.idSucursalDestino,
   });
 
   factory DespachoModel.fromJson(Map<String, dynamic> json) {
@@ -131,6 +148,8 @@ class DespachoModel {
           : int.tryParse(json['id_comuna_destino']?.toString() ?? '1') ?? 1,
       comunaNombre: json['comuna_nombre']?.toString(),
       empresaTransporte: json['empresa_transporte']?.toString(),
+      tipoEntrega: json['tipo_entrega']?.toString(),
+      idSucursalDestino: json['id_sucursal_destino'] != null ? int.tryParse(json['id_sucursal_destino'].toString()) : null,
     );
   }
 
@@ -141,6 +160,8 @@ class DespachoModel {
     'receptor_telefono': receptorTelefono,
     'id_comuna_destino': idComunaDestino,
     if (empresaTransporte != null) 'empresa_transporte': empresaTransporte,
+    if (tipoEntrega != null) 'tipo_entrega': tipoEntrega,
+    if (idSucursalDestino != null) 'id_sucursal_destino': idSucursalDestino,
   };
 }
 
@@ -185,20 +206,30 @@ class ItemManualModel {
 
 /// Payload unificado para emisión de órdenes vía Checkout Wizard (SPEC-HU-05)
 class CheckoutWizardRequestModel {
-  final String idCliente;
-  final String tipoEntrega; // 'Retiro' o 'Despacho Domicilio'
+  final String? idCliente;
+  final ClienteWizardModel? cliente;
+  final String tipoEntrega; // 'Retiro', 'Despacho Domicilio', 'Traslado'
+  final int? idSucursalDestino;
+  final String? idVendedorAsignado;
   final int totalVenta;
   final int montoPendiente;
+  final int? montoAbono;
+  final String? instruccionesBodega;
   final List<String> itemsInventariados;
   final List<ItemManualModel> itemsManuales;
   final List<ReservaBackorderModel> reservas;
   final DespachoModel? datosDespacho;
 
   const CheckoutWizardRequestModel({
-    required this.idCliente,
+    this.idCliente,
+    this.cliente,
     this.tipoEntrega = 'Retiro',
+    this.idSucursalDestino,
+    this.idVendedorAsignado,
     required this.totalVenta,
     required this.montoPendiente,
+    this.montoAbono,
+    this.instruccionesBodega,
     this.itemsInventariados = const [],
     this.itemsManuales = const [],
     this.reservas = const [],
@@ -206,10 +237,15 @@ class CheckoutWizardRequestModel {
   });
 
   Map<String, dynamic> toJson() => {
-    'id_cliente': idCliente,
+    if (idCliente != null && !idCliente!.startsWith('cli-')) 'id_cliente': idCliente,
+    if (cliente != null) 'cliente': cliente!.toClienteInputJson(),
     'tipo_entrega': tipoEntrega,
+    if (idSucursalDestino != null) 'id_sucursal_destino': idSucursalDestino,
+    if (idVendedorAsignado != null) 'id_vendedor_asignado': idVendedorAsignado,
     'total_venta': totalVenta,
     'monto_pendiente': montoPendiente,
+    if (montoAbono != null) 'monto_abono': montoAbono,
+    if (instruccionesBodega != null) 'instrucciones_bodega': instruccionesBodega,
     'items_inventariados': itemsInventariados,
     'items_manuales': itemsManuales.map((m) => m.toJson()).toList(),
     if (reservas.isNotEmpty) 'reservas': reservas.map((r) => r.toJson()).toList(),

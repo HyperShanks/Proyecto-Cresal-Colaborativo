@@ -12,6 +12,7 @@ import '../../services/catalogo_service.dart';
 import '../widgets/catalogo_item_card.dart';
 import '../widgets/filtros_drawer.dart';
 import '../widgets/venta_libre_dialog.dart';
+import '../widgets/modal_backorder_form.dart';
 import 'detalle_activo_screen.dart';
 
 /// Pantalla Principal del Catálogo de Ventas con Radar de Stock (HU-3.2).
@@ -307,8 +308,32 @@ class CatalogoScreenState extends State<CatalogoScreen> {
           },
           tooltip: 'Menú principal',
         ),
-        actions: const [
-          SizedBox.shrink(),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.bookmark_add_outlined, color: AppPalette.secondary),
+            tooltip: 'Crear Reserva por Encargo (Compra en Verde)',
+            onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
+              final reserva = await ModalBackorderForm.mostrar(context);
+              if (!mounted || reserva == null) return;
+              CartController.instance.agregarReservaBackorder(
+                idCategoria: reserva.idCategoriaRequerida,
+                categoriaNombre: reserva.categoriaNombre,
+                marca: reserva.marcaRequerida,
+                modelo: reserva.modeloRequerido,
+                anio: reserva.anioRequerido,
+                precioAcordado: reserva.precioAcordado,
+                montoAbonado: reserva.montoAbonado,
+                notas: reserva.notasPreparacion,
+              );
+              messenger.showSnackBar(
+                SnackBar(
+                  content: Text('Reserva por encargo (${reserva.marcaRequerida} ${reserva.modeloRequerido}) añadida al Checkout Wizard.'),
+                  backgroundColor: AppPalette.secondary,
+                ),
+              );
+            },
+          ),
         ],
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -603,8 +628,40 @@ class CatalogoScreenState extends State<CatalogoScreen> {
                 textAlign: TextAlign.center,
                 style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
               ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppPalette.secondary,
+                  foregroundColor: AppPalette.background,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                icon: const Icon(Icons.bookmark_add, size: 18),
+                label: const Text('¿NO ESTÁ? ENCARGAR POR BACKORDER', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                onPressed: () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  final reserva = await ModalBackorderForm.mostrar(context);
+                  if (!mounted || reserva == null) return;
+                  CartController.instance.agregarReservaBackorder(
+                    idCategoria: reserva.idCategoriaRequerida,
+                    categoriaNombre: reserva.categoriaNombre,
+                    marca: reserva.marcaRequerida,
+                    modelo: reserva.modeloRequerido,
+                    anio: reserva.anioRequerido,
+                    precioAcordado: reserva.precioAcordado,
+                    montoAbonado: reserva.montoAbonado,
+                    notas: reserva.notasPreparacion,
+                  );
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text('Reserva por encargo (${reserva.marcaRequerida} ${reserva.modeloRequerido}) añadida al Checkout Wizard.'),
+                      backgroundColor: AppPalette.secondary,
+                    ),
+                  );
+                },
+              ),
               if (_tieneFiltrosActivos || _searchController.text.isNotEmpty) ...[
-                const SizedBox(height: 16),
+                const SizedBox(height: 10),
                 TextButton(
                   onPressed: () {
                     _searchController.clear();

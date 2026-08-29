@@ -971,8 +971,10 @@ class DespachoDTO(BaseModel):
     receptor_nombres: str
     receptor_rut: str
     receptor_telefono: str
-    id_comuna_destino: int
-    empresa_transporte: Optional[str] = None
+    id_comuna_destino: Optional[int] = 1
+    empresa_transporte: Optional[str] = "Chilexpress"
+    tipo_entrega: Optional[str] = "Despacho"
+    id_sucursal_destino: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -989,10 +991,15 @@ class ItemManualDTO(BaseModel):
 
 class CheckoutWizardRequest(BaseModel):
     """Payload integral para procesar el checkout por pasos (Wizard)."""
-    id_cliente: UUID
-    tipo_entrega: str = "Retiro"  # 'Retiro' o 'Despacho Domicilio'
+    id_cliente: Optional[UUID] = None
+    cliente: Optional[ClienteOrdenInput] = None
+    tipo_entrega: str = "Retiro"  # 'Retiro', 'Despacho Domicilio', 'Traslado'
+    id_sucursal_destino: Optional[int] = None
+    id_vendedor_asignado: Optional[UUID] = None
     total_venta: int
     monto_pendiente: int
+    monto_abono: Optional[int] = 0
+    instrucciones_bodega: Optional[str] = None
     items_inventariados: List[UUID] = Field(default_factory=list)
     items_manuales: List[dict] = Field(default_factory=list)
     reservas: Optional[List[ReservaBackorderDTO]] = None

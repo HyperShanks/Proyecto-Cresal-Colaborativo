@@ -4,7 +4,7 @@ import '../../../../core/theme/tokens/app_typography.dart';
 import '../../../auth/services/auth_service.dart';
 import '../../services/inventario_service.dart';
 import '../../controllers/cart_controller.dart';
-import 'carrito_screen.dart';
+import 'checkout_wizard_screen.dart';
 import 'catalogo_screen.dart';
 import 'historial_screen.dart';
 import 'bandeja_precios_screen.dart';
@@ -337,7 +337,7 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
     }
 
     tabs.add(
-      CarritoScreen(
+      CheckoutWizardScreen(
         onOpenMenuDrawer: () => _scaffoldKey.currentState?.openDrawer(),
         onNavigateToCatalogo: () {
           _catalogoKey.currentState?.refrescarCatalogo();

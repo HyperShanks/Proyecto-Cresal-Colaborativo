@@ -1444,8 +1444,62 @@ def checkout_wizard(
             detail="Acceso restringido: Solo el personal de Ventas o Administración puede procesar el checkout."
         )
 
-    # 2. Validar Cliente
-    cliente = db.query(Cliente).filter(Cliente.id_cliente == request.id_cliente).first()
+    # 2. Validar o Crear Cliente (Micro-CRM / Consumidor Final)
+    cliente = None
+    if request.id_cliente:
+        cliente = db.query(Cliente).filter(Cliente.id_cliente == request.id_cliente).first()
+
+    if not cliente and request.cliente:
+        rut_limpio = request.cliente.rut_cliente.strip()
+        rut_norm = rut_limpio.replace(".", "").replace("-", "").upper()
+        es_consumidor_final = rut_norm in ["66666666", "6666666"] or "CONSUMIDOR" in request.cliente.nombres.upper()
+
+        if es_consumidor_final:
+            cliente = db.query(Cliente).filter(
+                Cliente.rut_cliente.in_(["6.666.666-6", "66666666-6", "6666666-6"])
+            ).first()
+            if not cliente:
+                cliente = Cliente(
+                    id_cliente=uuid.uuid4(),
+                    rut_cliente="6.666.666-6",
+                    nombres="Consumidor",
+                    apellidos="Final",
+                    consentimiento_legal=True,
+                    estado="Activo",
+                )
+                db.add(cliente)
+                db.flush()
+        else:
+            cliente = db.query(Cliente).filter(
+                (Cliente.rut_cliente == rut_limpio) | (Cliente.rut_cliente == rut_limpio.replace(".", ""))
+            ).first()
+            if not cliente:
+                id_comuna_cli = None
+                if request.cliente.comuna:
+                    com_cli = db.query(Comuna).filter(Comuna.nombre_comuna.ilike(request.cliente.comuna.strip())).first()
+                    if com_cli:
+                        id_comuna_cli = com_cli.id_comuna
+                cliente = Cliente(
+                    id_cliente=uuid.uuid4(),
+                    rut_cliente=rut_limpio,
+                    nombres=request.cliente.nombres.strip(),
+                    apellidos=request.cliente.apellidos.strip(),
+                    telefono=request.cliente.telefono.strip() if request.cliente.telefono else None,
+                    correo=request.cliente.correo.strip() if request.cliente.correo else None,
+                    id_comuna=id_comuna_cli,
+                    consentimiento_legal=request.cliente.consentimiento_legal,
+                    estado="Activo",
+                )
+                db.add(cliente)
+                db.flush()
+            else:
+                cliente.nombres = request.cliente.nombres.strip()
+                cliente.apellidos = request.cliente.apellidos.strip()
+                if request.cliente.telefono:
+                    cliente.telefono = request.cliente.telefono.strip()
+                if request.cliente.correo:
+                    cliente.correo = request.cliente.correo.strip()
+
     if not cliente or cliente.estado != "Activo":
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -1464,18 +1518,22 @@ def checkout_wizard(
         )
 
     # Validar datos de despacho si aplica
-    es_despacho = "despacho" in (request.tipo_entrega or "").lower()
+    tipo_ent = (request.tipo_entrega or "Retiro").strip()
+    es_despacho = "despacho" in tipo_ent.lower()
+    es_traslado = "traslado" in tipo_ent.lower()
+
     if es_despacho:
         if not request.datos_despacho:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Para entrega tipo 'Despacho Domicilio' se requieren los datos de despacho completos."
             )
-        comuna = db.query(Comuna).filter(Comuna.id_comuna == request.datos_despacho.id_comuna_destino).first()
+        comuna_id = request.datos_despacho.id_comuna_destino or 1
+        comuna = db.query(Comuna).filter(Comuna.id_comuna == comuna_id).first()
         if not comuna:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"La comuna destino con ID '{request.datos_despacho.id_comuna_destino}' no existe."
+                detail=f"La comuna destino con ID '{comuna_id}' no existe."
             )
         if not request.datos_despacho.direccion_envio.strip() or not request.datos_despacho.receptor_nombres.strip() or not request.datos_despacho.receptor_rut.strip():
             raise HTTPException(
@@ -1487,12 +1545,13 @@ def checkout_wizard(
         # A. Crear Cabecera de Orden de Venta
         id_orden = uuid.uuid4()
         sucursal_id = current_user.id_sucursal or 1
+        vendedor_asig = request.id_vendedor_asignado or current_user.id_usuario
 
         orden = Orden_Venta(
             id_orden=id_orden,
             id_cliente=cliente.id_cliente,
             id_vendedor=current_user.id_usuario,
-            id_vendedor_asignado=current_user.id_usuario,
+            id_vendedor_asignado=vendedor_asig,
             id_sucursal=sucursal_id,
             estado_orden="Reservada",
             total_venta=request.total_venta,
@@ -1607,25 +1666,48 @@ def checkout_wizard(
             )
             db.add(detalle_res)
 
-        # E. Procesar Despacho a Domicilio
+        # E. Procesar Despacho a Domicilio o Traslado a otra Sucursal
         despacho_generado = False
         if es_despacho and request.datos_despacho:
             d_data = request.datos_despacho
             despacho = Despacho(
                 id_despacho=uuid.uuid4(),
                 id_orden=orden.id_orden,
-                id_comuna_destino=d_data.id_comuna_destino,
+                id_comuna_destino=d_data.id_comuna_destino or 1,
                 direccion_envio=d_data.direccion_envio.strip(),
                 receptor_nombres=d_data.receptor_nombres.strip(),
                 receptor_rut=d_data.receptor_rut.strip(),
                 receptor_telefono=d_data.receptor_telefono.strip(),
-                empresa_transporte=d_data.empresa_transporte or "Por Asignar",
+                empresa_transporte=d_data.empresa_transporte or "Chilexpress",
                 costo_envio=0,
                 estado_despacho="Por Enviar",
                 estado="Activo",
                 fecha_creacion=datetime.now(timezone.utc)
             )
             db.add(despacho)
+            despacho_generado = True
+        elif es_traslado:
+            id_suc_dest = request.id_sucursal_destino or (request.datos_despacho.id_sucursal_destino if request.datos_despacho else 2)
+            nombre_dest = "Viña del Mar" if id_suc_dest == 1 else "Limache"
+            rec_rut = (request.datos_despacho.receptor_rut if request.datos_despacho and request.datos_despacho.receptor_rut else cliente.rut_cliente) or "S/R"
+            rec_nom = (request.datos_despacho.receptor_nombres if request.datos_despacho and request.datos_despacho.receptor_nombres else f"{cliente.nombres} {cliente.apellidos}".strip()) or "Cliente"
+            rec_tel = (request.datos_despacho.receptor_telefono if request.datos_despacho and request.datos_despacho.receptor_telefono else (cliente.telefono or "+56900000000")) or "+56900000000"
+
+            despacho_traslado = Despacho(
+                id_despacho=uuid.uuid4(),
+                id_orden=orden.id_orden,
+                id_comuna_destino=1 if id_suc_dest == 1 else 2,
+                direccion_envio=f"Traslado a Sucursal {nombre_dest}",
+                receptor_nombres=rec_nom,
+                receptor_rut=rec_rut,
+                receptor_telefono=rec_tel,
+                empresa_transporte="Interno",
+                costo_envio=0,
+                estado_despacho="Por Enviar",
+                estado="Activo",
+                fecha_creacion=datetime.now(timezone.utc)
+            )
+            db.add(despacho_traslado)
             despacho_generado = True
 
         db.commit()

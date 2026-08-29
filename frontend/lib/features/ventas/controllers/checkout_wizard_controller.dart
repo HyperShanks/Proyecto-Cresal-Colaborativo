@@ -18,7 +18,9 @@ class CheckoutWizardController extends ChangeNotifier {
   ClienteWizardModel? _clienteSeleccionado;
 
   // Paso 3: Logística y Despacho
-  String _tipoEntrega = 'Retiro'; // 'Retiro' o 'Despacho Domicilio'
+  String _tipoEntrega = 'Retiro'; // 'Retiro', 'Despacho Domicilio', 'Traslado'
+  int _idSucursalDestino = 1; // 1: Viña del Mar, 2: Limache
+  String? _idVendedorAsignado; // Para vendedor online
   DespachoModel? _datosDespacho;
 
   // Paso 4: Abonos y Notas
@@ -36,6 +38,8 @@ class CheckoutWizardController extends ChangeNotifier {
 
   ClienteWizardModel? get clienteSeleccionado => _clienteSeleccionado;
   String get tipoEntrega => _tipoEntrega;
+  int get idSucursalDestino => _idSucursalDestino;
+  String? get idVendedorAsignado => _idVendedorAsignado;
   DespachoModel? get datosDespacho => _datosDespacho;
   int get abonoAdicional => _abonoAdicional;
   String get notasGenerales => _notasGenerales;
@@ -109,7 +113,7 @@ class CheckoutWizardController extends ChangeNotifier {
   bool validateStep1() => totalItemsCount > 0;
   bool validateStep2() => _clienteSeleccionado != null && _clienteSeleccionado!.rut.trim().isNotEmpty;
   bool validateStep3() {
-    if (_tipoEntrega == 'Retiro') return true;
+    if (_tipoEntrega == 'Retiro' || _tipoEntrega == 'Traslado') return true;
     if (_datosDespacho == null) return false;
     return _datosDespacho!.direccionEnvio.trim().isNotEmpty &&
         _datosDespacho!.receptorNombres.trim().isNotEmpty &&
@@ -170,11 +174,22 @@ class CheckoutWizardController extends ChangeNotifier {
 
   void setCliente(ClienteWizardModel? cliente) {
     _clienteSeleccionado = cliente;
+    _errorMessage = null;
     notifyListeners();
   }
 
   void setTipoEntrega(String tipo) {
     _tipoEntrega = tipo;
+    notifyListeners();
+  }
+
+  void setIdSucursalDestino(int sucursalId) {
+    _idSucursalDestino = sucursalId;
+    notifyListeners();
+  }
+
+  void setIdVendedorAsignado(String? vendedorId) {
+    _idVendedorAsignado = vendedorId;
     notifyListeners();
   }
 
@@ -202,6 +217,8 @@ class CheckoutWizardController extends ChangeNotifier {
     _reservas.clear();
     _clienteSeleccionado = null;
     _tipoEntrega = 'Retiro';
+    _idSucursalDestino = 1;
+    _idVendedorAsignado = null;
     _datosDespacho = null;
     _abonoAdicional = 0;
     _notasGenerales = '';
@@ -223,13 +240,20 @@ class CheckoutWizardController extends ChangeNotifier {
     try {
       final request = CheckoutWizardRequestModel(
         idCliente: _clienteSeleccionado!.idCliente,
+        cliente: _clienteSeleccionado,
         tipoEntrega: _tipoEntrega,
+        idSucursalDestino: _tipoEntrega == 'Traslado' ? _idSucursalDestino : null,
+        idVendedorAsignado: _idVendedorAsignado,
         totalVenta: totalVenta,
         montoPendiente: montoPendiente,
+        montoAbono: totalAbonos,
+        instruccionesBodega: _notasGenerales,
         itemsInventariados: _itemsInventariados.map((i) => i['id_activo'].toString()).toList(),
         itemsManuales: _itemsManuales,
         reservas: _reservas,
-        datosDespacho: _tipoEntrega == 'Despacho Domicilio' ? _datosDespacho : null,
+        datosDespacho: _tipoEntrega == 'Despacho Domicilio' || _tipoEntrega == 'Despacho' || _tipoEntrega == 'Traslado'
+            ? _datosDespacho
+            : null,
       );
 
       final response = await VentasService.processCheckoutWizard(request, client: client);
