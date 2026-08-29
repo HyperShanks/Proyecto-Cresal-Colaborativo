@@ -99,13 +99,21 @@ class _TaskCardState extends State<TaskCard> {
     final idOrden = tarea.idOrden ?? (tarea.ordenRef?.replaceAll('ORDEN #', '').replaceAll('ORDEN ANULADA #', '').trim() ?? '');
     final skuInicial = tarea.skuQrFisico ?? '';
 
-    String pasilloInicial = '';
-    String palletInicial = '';
-    if (tarea.ubicacion.contains('-')) {
-      final parts = tarea.ubicacion.split('-');
-      if (parts.length >= 2) {
-        pasilloInicial = parts[0].trim().replaceAll('S/P', '');
-        palletInicial = parts[1].trim().replaceAll('S/P', '');
+    // Ubicación de origen donde debe devolverse la pieza
+    String pasilloInicial = (tarea.ubicacionPasillo != null && tarea.ubicacionPasillo!.isNotEmpty && tarea.ubicacionPasillo != 'S/P')
+        ? tarea.ubicacionPasillo!
+        : '';
+    String palletInicial = (tarea.ubicacionPallet != null && tarea.ubicacionPallet!.isNotEmpty && tarea.ubicacionPallet != 'S/P')
+        ? tarea.ubicacionPallet!
+        : '';
+
+    if (pasilloInicial.isEmpty || palletInicial.isEmpty) {
+      if (tarea.ubicacion.contains('-')) {
+        final parts = tarea.ubicacion.split('-');
+        if (parts.length >= 2) {
+          if (pasilloInicial.isEmpty) pasilloInicial = parts[0].trim().replaceAll('S/P', '');
+          if (palletInicial.isEmpty) palletInicial = parts[1].trim().replaceAll('S/P', '');
+        }
       }
     }
 
@@ -119,9 +127,10 @@ class _TaskCardState extends State<TaskCard> {
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) {
+      useRootNavigator: true,
+      builder: (dialogCtx) {
         return StatefulBuilder(
-          builder: (context, setModalState) {
+          builder: (stfContext, setModalState) {
             return AlertDialog(
               backgroundColor: AppPalette.surface,
               shape: RoundedRectangleBorder(
@@ -157,6 +166,7 @@ class _TaskCardState extends State<TaskCard> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Tarjeta informativa de la pieza
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -170,10 +180,28 @@ class _TaskCardState extends State<TaskCard> {
                           Text(_obtenerTituloFormateado(), style: AppTypography.body.copyWith(fontWeight: FontWeight.bold)),
                           const SizedBox(height: 4),
                           Text('Orden Anulada: ${tarea.ordenRef ?? idOrden}', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              const Icon(Icons.location_on, color: Color(0xFF00A3FF), size: 16),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  'Devolver a: ${pasilloInicial.isNotEmpty ? pasilloInicial : "S/P"} · ${palletInicial.isNotEmpty ? palletInicial : "S/P"}',
+                                  style: AppTypography.small.copyWith(
+                                    color: const Color(0xFF00A3FF),
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ],
                       ),
                     ),
                     const SizedBox(height: 16),
+
+                    // Escaneo de QR Físico
                     Text('Escaneo de QR Físico (Validación):', style: AppTypography.small.copyWith(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 6),
                     TextField(
@@ -191,6 +219,8 @@ class _TaskCardState extends State<TaskCard> {
                       ),
                     ),
                     const SizedBox(height: 14),
+
+                    // Ubicación Pasillo y Pallet (Pre-cargados)
                     Row(
                       children: [
                         Expanded(
@@ -259,7 +289,7 @@ class _TaskCardState extends State<TaskCard> {
               ),
               actions: [
                 TextButton(
-                  onPressed: isSubmitting ? null : () => Navigator.of(ctx).pop(false),
+                  onPressed: isSubmitting ? null : () => Navigator.of(dialogCtx).pop(false),
                   child: Text('Cancelar', style: AppTypography.button.copyWith(color: AppPalette.textSecondary)),
                 ),
                 ElevatedButton.icon(
@@ -295,8 +325,8 @@ class _TaskCardState extends State<TaskCard> {
                               ubicacionPallet: palletController.text.trim(),
                             );
 
-                            if (!ctx.mounted) return;
-                            Navigator.of(ctx).pop(true);
+                            if (!dialogCtx.mounted) return;
+                            Navigator.of(dialogCtx).pop(true);
                           } catch (e) {
                             setModalState(() {
                               isSubmitting = false;
@@ -321,7 +351,7 @@ class _TaskCardState extends State<TaskCard> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: AppPalette.success,
-          content: Text('✅ Reingreso completado y pieza paletizada/disponible.'),
+          content: Text('✅ Reingreso completado y pieza paletizada en su ubicación.'),
           duration: Duration(seconds: 3),
         ),
       );
@@ -330,11 +360,11 @@ class _TaskCardState extends State<TaskCard> {
   }
 
   // Método para desplegar el Modal de Acción
-  void _mostrarDetalleModal(
+  Future<void> _mostrarDetalleModal(
     BuildContext context,
     Color accentColor,
     Color buttonColor,
-  ) {
+  ) async {
     final tarea = widget.tarea;
     final tituloFormateado = _obtenerTituloFormateado();
     final esLiberada = tarea.tipoAlerta == 'LIBERADA';
@@ -342,8 +372,9 @@ class _TaskCardState extends State<TaskCard> {
     final esReingreso = tarea.tipoAlerta == 'REINGRESO';
     final esPreEntrega = !esLiberada && !esImpresion && !esReingreso;
 
-    showModalBottomSheet(
+    final accion = await showModalBottomSheet<String>(
       context: context,
+      useRootNavigator: true,
       backgroundColor: AppPalette.surface,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
@@ -439,7 +470,7 @@ class _TaskCardState extends State<TaskCard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'UBICACIÓN EXACTA',
+                      esReingreso ? 'UBICACIÓN ASIGNADA DE RETORNO' : 'UBICACIÓN EXACTA',
                       style: AppTypography.small.copyWith(fontSize: 11),
                     ),
                     const SizedBox(height: 4),
@@ -507,12 +538,7 @@ class _TaskCardState extends State<TaskCard> {
                   width: double.infinity,
                   height: 52,
                   child: ElevatedButton.icon(
-                    onPressed: _isProcessingListo
-                        ? null
-                        : () {
-                            Navigator.pop(ctx);
-                            _marcarListo();
-                          },
+                    onPressed: _isProcessingListo ? null : () => Navigator.pop(ctx, 'listo'),
                     icon: _isProcessingListo
                         ? const SizedBox(
                             width: 20,
@@ -539,10 +565,7 @@ class _TaskCardState extends State<TaskCard> {
                   width: double.infinity,
                   height: 52,
                   child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      _abrirDialogoConfirmarReingreso(context);
-                    },
+                    onPressed: () => Navigator.pop(ctx, 'reingreso'),
                     icon: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white),
                     label: Text(
                       'REINGRESAR / PALETIZAR',
@@ -563,15 +586,7 @@ class _TaskCardState extends State<TaskCard> {
                   width: double.infinity,
                   height: 52,
                   child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const AuditoriaSalidaScreen(),
-                        ),
-                      );
-                    },
+                    onPressed: () => Navigator.pop(ctx, 'barrera'),
                     icon: const Icon(Icons.qr_code_scanner, color: Colors.white),
                     label: Text(
                       'ESCANEAR EN BARRERA',
@@ -592,19 +607,7 @@ class _TaskCardState extends State<TaskCard> {
                   width: double.infinity,
                   height: 50,
                   child: OutlinedButton.icon(
-                    onPressed: () async {
-                      Navigator.pop(ctx);
-                      if (tarea.etiquetaData != null) {
-                        final resultado = await Navigator.pushNamed(
-                          context,
-                          '/etiqueta-preview',
-                          arguments: tarea.etiquetaData,
-                        );
-                        if (resultado == true) {
-                          widget.onActualizar?.call();
-                        }
-                      }
-                    },
+                    onPressed: () => Navigator.pop(ctx, 'imprimir'),
                     icon: const Icon(Icons.print, color: AppPalette.textPrimary),
                     label: Text(
                       'GENERAR ETIQUETA QR',
@@ -623,6 +626,28 @@ class _TaskCardState extends State<TaskCard> {
         );
       },
     );
+
+    if (!mounted || accion == null) return;
+
+    if (accion == 'listo') {
+      _marcarListo();
+    } else if (accion == 'reingreso') {
+      _abrirDialogoConfirmarReingreso(context);
+    } else if (accion == 'barrera') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const AuditoriaSalidaScreen()),
+      );
+    } else if (accion == 'imprimir' && tarea.etiquetaData != null) {
+      final resultado = await Navigator.pushNamed(
+        context,
+        '/etiqueta-preview',
+        arguments: tarea.etiquetaData,
+      );
+      if (resultado == true && mounted) {
+        widget.onActualizar?.call();
+      }
+    }
   }
 
   @override
@@ -801,7 +826,7 @@ class _TaskCardState extends State<TaskCard> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'UBICACIÓN DE RETIRO / PALLET',
+                    esReingreso ? 'UBICACIÓN DE RETORNO / PALLET' : 'UBICACIÓN DE RETIRO / PALLET',
                     style: AppTypography.small.copyWith(fontSize: 10),
                   ),
                   const SizedBox(height: 4),

@@ -21,6 +21,9 @@ class TareaAlerta {
   final String? idOrden;
   final String? skuQrFisico;
   final String? motivoAnulacion;
+  final String? ubicacionPasillo;
+  final String? ubicacionPallet;
+  final String? ubicacionGalpon;
 
   const TareaAlerta({
     required this.idTarea,
@@ -43,6 +46,9 @@ class TareaAlerta {
     this.idOrden,
     this.skuQrFisico,
     this.motivoAnulacion,
+    this.ubicacionPasillo,
+    this.ubicacionPallet,
+    this.ubicacionGalpon,
   });
 
   factory TareaAlerta.fromJson(Map<String, dynamic> json) {
@@ -70,6 +76,9 @@ class TareaAlerta {
       idOrden: json['id_orden']?.toString(),
       skuQrFisico: json['sku_qr_fisico']?.toString(),
       motivoAnulacion: json['motivo_anulacion']?.toString(),
+      ubicacionPasillo: json['ubicacion_pasillo']?.toString(),
+      ubicacionPallet: json['ubicacion_pallet']?.toString(),
+      ubicacionGalpon: json['ubicacion_galpon']?.toString(),
     );
   }
 }

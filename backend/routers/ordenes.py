@@ -1174,15 +1174,21 @@ def anular_orden_post(
         detalles = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == id_orden).all()
         activos_afectados = 0
 
+        estado_disponible = db.query(Estado_Activo).filter(Estado_Activo.nombre_estado == "Disponible").first()
+        if not estado_disponible:
+            estado_disponible = Estado_Activo(id_estado=1, nombre_estado="Disponible")
+            db.add(estado_disponible)
+            db.flush()
+
         for d in detalles:
             if d.id_activo:
                 activo = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == d.id_activo).first()
                 if activo:
-                    if activo.id_estado in [1, 7]:
-                        activo.id_estado = 5  # Pendiente de paletizado / reingreso
+                    activo.id_estado = estado_disponible.id_estado
                     activo.version_lock = (activo.version_lock or 1) + 1
                     activo.fecha_actualizacion = datetime.now(timezone.utc)
                     activos_afectados += 1
+                d.estado_preparacion = "Reingreso Pendiente"
 
         db.commit()
         db.refresh(orden)
@@ -1265,6 +1271,7 @@ def anular_orden_patch(
                     activo.id_estado = estado_disponible.id_estado
                     activo.version_lock = (activo.version_lock or 1) + 1
                     activos_liberados += 1
+                d.estado_preparacion = "Reingreso Pendiente"
 
         db.commit()
         db.refresh(orden)

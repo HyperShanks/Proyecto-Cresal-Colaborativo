@@ -109,7 +109,7 @@ def obtener_resumen_alertas(
         .join(Activo_Inventariado, Detalle_Orden.id_activo == Activo_Inventariado.id_activo)
         .filter(
             Orden_Venta.estado_orden == "Anulada",
-            Activo_Inventariado.id_estado.notin_([1, 7]),
+            Detalle_Orden.estado_preparacion != "Reingresado",
             Activo_Inventariado.estado == "Activo",
             (Activo_Inventariado.id_sucursal_actual == target_sucursal) | (Orden_Venta.id_sucursal == target_sucursal),
         )
@@ -228,7 +228,7 @@ def obtener_tareas_pendientes(
         .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
         .filter(
             Orden_Venta.estado_orden == "Anulada",
-            Activo_Inventariado.id_estado.notin_([1, 7]),  # No Disponible ni Paletizado
+            Detalle_Orden.estado_preparacion != "Reingresado",
             Activo_Inventariado.estado == "Activo",
             (Activo_Inventariado.id_sucursal_actual == sucursal_id) | (Orden_Venta.id_sucursal == sucursal_id),
         )
@@ -252,6 +252,9 @@ def obtener_tareas_pendientes(
                 categoria=cat_nombre,
                 tipo_repuesto=cat_nombre,
                 ubicacion=f"{activo.ubicacion_pasillo or 'S/P'} - {activo.ubicacion_pallet or 'S/P'}",
+                ubicacion_pasillo=activo.ubicacion_pasillo,
+                ubicacion_pallet=activo.ubicacion_pallet,
+                ubicacion_galpon=activo.ubicacion_galpon,
                 nota_especial="Reingreso a inventario / paletizado por anulación de orden",
                 estado_bloqueo=None,
                 accion_requerida="REINGRESAR / PALETIZAR",
@@ -261,7 +264,7 @@ def obtener_tareas_pendientes(
                 sku_qr_fisico=activo.sku_qr_fisico,
                 id_sucursal_origen=activo.id_sucursal_actual,
                 es_traslado=False,
-                estado_preparacion="Reingreso Pendiente",
+                estado_preparacion=detalle.estado_preparacion or "Reingreso Pendiente",
             )
         )
 
@@ -697,7 +700,7 @@ def obtener_reingresos_pendientes(
         .outerjoin(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
         .filter(
             Orden_Venta.estado_orden == "Anulada",
-            Activo_Inventariado.id_estado.notin_([1, 7]),  # No paletizado ni disponible aún
+            Detalle_Orden.estado_preparacion != "Reingresado",
             Activo_Inventariado.estado == "Activo",
         )
     )
@@ -796,40 +799,45 @@ def confirmar_reingreso(
         )
 
     # 3. Validar si ya fue reingresado
-    if activo.id_estado in [1, 7]:
+    if detalle.estado_preparacion == "Reingresado":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"El repuesto '{sku_busqueda}' ya fue reingresado y se encuentra en estado Paletizado/Disponible."
+            detail=f"El repuesto '{sku_busqueda}' ya fue reingresado y se encuentra en su ubicación de pallet."
         )
 
     try:
-        # Estado Paletizado (7) o Disponible (1)
-        estado_paletizado = db.query(Estado_Activo).filter(Estado_Activo.nombre_estado == "Paletizado").first()
-        if not estado_paletizado:
-            estado_paletizado = Estado_Activo(id_estado=7, nombre_estado="Paletizado")
-            db.add(estado_paletizado)
+        # Estado Disponible (1)
+        estado_disponible = db.query(Estado_Activo).filter(Estado_Activo.nombre_estado == "Disponible").first()
+        if not estado_disponible:
+            estado_disponible = Estado_Activo(id_estado=1, nombre_estado="Disponible")
+            db.add(estado_disponible)
             db.flush()
 
-        # Actualizar ubicación si fue suministrada
-        if payload.ubicacion_pasillo is not None:
+        # Actualizar ubicación si fue suministrada y válida
+        if payload.ubicacion_pasillo is not None and payload.ubicacion_pasillo.strip():
             activo.ubicacion_pasillo = payload.ubicacion_pasillo.strip().upper()
-        if payload.ubicacion_pallet is not None:
+        if payload.ubicacion_pallet is not None and payload.ubicacion_pallet.strip():
             activo.ubicacion_pallet = payload.ubicacion_pallet.strip().upper()
 
         # Mutación con control de concurrencia optimista
-        activo.id_estado = estado_paletizado.id_estado
+        activo.id_estado = estado_disponible.id_estado
         activo.version_lock = (activo.version_lock or 1) + 1
         activo.fecha_actualizacion = datetime.now(timezone.utc)
-        activo.observacion_estado = f"Reingreso confirmado tras anulación orden #{str(orden.id_orden)[:8].upper()} por {usuario_logeado.nombres} {usuario_logeado.apellidos}"
+        activo.observacion_estado = f"Reingreso físico confirmado tras anulación orden #{str(orden.id_orden)[:8].upper()} por {usuario_logeado.nombres} {usuario_logeado.apellidos}"
+
+        # Marcar Detalle_Orden como Reingresado para limpiar de tareas en bodega
+        detalle.estado_preparacion = "Reingresado"
+        detalle.fecha_preparacion = datetime.now(timezone.utc)
 
         db.commit()
         db.refresh(activo)
+        db.refresh(detalle)
 
         return ConfirmarReingresoResponse(
-            msg="Activo paletizado/disponible exitosamente",
+            msg="Activo reingresado y paletizado exitosamente",
             id_activo=activo.id_activo,
             sku_qr_fisico=activo.sku_qr_fisico,
-            nuevo_estado="Paletizado",
+            nuevo_estado="Disponible",
             ubicacion_pasillo=activo.ubicacion_pasillo,
             ubicacion_pallet=activo.ubicacion_pallet,
         )

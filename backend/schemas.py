@@ -847,6 +847,9 @@ class TareaAlertaResponse(BaseModel):
     id_orden: Optional[UUID] = None
     sku_qr_fisico: Optional[str] = None
     motivo_anulacion: Optional[str] = None
+    ubicacion_pasillo: Optional[str] = None
+    ubicacion_pallet: Optional[str] = None
+    ubicacion_galpon: Optional[str] = None
 
 
 class CompletarPreentregaResponse(BaseModel):
