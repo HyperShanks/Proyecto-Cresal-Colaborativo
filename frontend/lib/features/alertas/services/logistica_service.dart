@@ -282,4 +282,67 @@ class LogisticaService {
       throw Exception('Error al marcar listo: $e');
     }
   }
+
+  /// Consulta el resumen consolidado de alertas de bodega para el Badge (SPEC-HU-06)
+  static Future<ResumenAlertasModel> obtenerResumenAlertas({int? sucursalId, http.Client? client}) async {
+    final httpClient = client ?? http.Client();
+    try {
+      final token = await AuthService.getToken();
+      final headers = {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      };
+
+      int targetSucursal = sucursalId ?? 1;
+      final uri = Uri.parse('${ApiConstants.bodegaEndpoint}/resumen-alertas?sucursal_id=$targetSucursal');
+
+      final response = await httpClient.get(uri, headers: headers);
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
+        return ResumenAlertasModel.fromJson(data);
+      } else {
+        return ResumenAlertasModel.vacio();
+      }
+    } catch (_) {
+      return ResumenAlertasModel.vacio();
+    } finally {
+      if (client == null) {
+        httpClient.close();
+      }
+    }
+  }
+}
+
+/// DTO de respuesta para el resumen consolidado de alertas de bodega (SPEC-HU-06)
+class ResumenAlertasModel {
+  final int totalTareas;
+  final int desglosePreparacion;
+  final int desgloseEntregas;
+  final int desgloseReingresos;
+
+  const ResumenAlertasModel({
+    required this.totalTareas,
+    required this.desglosePreparacion,
+    required this.desgloseEntregas,
+    required this.desgloseReingresos,
+  });
+
+  factory ResumenAlertasModel.fromJson(Map<String, dynamic> json) {
+    return ResumenAlertasModel(
+      totalTareas: json['total_tareas'] ?? 0,
+      desglosePreparacion: json['desglose_preparacion'] ?? 0,
+      desgloseEntregas: json['desglose_entregas'] ?? 0,
+      desgloseReingresos: json['desglose_reingresos'] ?? 0,
+    );
+  }
+
+  factory ResumenAlertasModel.vacio() {
+    return const ResumenAlertasModel(
+      totalTareas: 0,
+      desglosePreparacion: 0,
+      desgloseEntregas: 0,
+      desgloseReingresos: 0,
+    );
+  }
 }

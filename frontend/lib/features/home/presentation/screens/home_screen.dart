@@ -3,6 +3,7 @@ import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../../auth/services/auth_service.dart';
 import '../../../alertas/services/bodega_polling_service.dart';
+import '../../../alertas/presentation/widgets/panel_tareas_desplegable.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HOME SCREEN — Panel principal de Bodega (Terminal Bodega) protegido por sesión
@@ -94,38 +95,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _iniciarServicioPolling({int? sucursalId}) async {
     final targetSucursalId = sucursalId ?? await AuthService.getSucursalId();
-    BodegaPollingService.instance.onNotificacion = (titulo, cuerpo) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: AppPalette.surface,
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 4),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-              side: const BorderSide(color: AppPalette.secondary, width: 1.5),
-            ),
-            content: Row(
-              children: [
-                const Icon(Icons.notifications_active, color: AppPalette.secondary, size: 24),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(titulo, style: AppTypography.title.copyWith(fontSize: 14, color: AppPalette.secondary)),
-                      const SizedBox(height: 2),
-                      Text(cuerpo, style: AppTypography.small.copyWith(fontSize: 12, color: AppPalette.textPrimary)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }
-    };
     BodegaPollingService.instance.iniciarPolling(sucursalId: targetSucursalId);
   }
 
@@ -195,6 +164,37 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           tooltip: 'Menú',
         ),
       ),
+      actions: [
+        ValueListenableBuilder<int>(
+          valueListenable: BodegaPollingService.instance.totalPendientesNotifier,
+          builder: (context, totalPendientes, _) {
+            return IconButton(
+              key: const Key('btn_appbar_tareas_badge'),
+              tooltip: 'Tareas pendientes ($totalPendientes)',
+              icon: Badge(
+                key: const Key('badge_appbar_contador'),
+                isLabelVisible: totalPendientes > 0,
+                label: Text(
+                  '$totalPendientes',
+                  style: const TextStyle(
+                    color: AppPalette.background,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 10,
+                  ),
+                ),
+                backgroundColor: AppPalette.secondary,
+                child: const Icon(
+                  Icons.assignment_outlined,
+                  color: AppPalette.textPrimary,
+                  size: 24,
+                ),
+              ),
+              onPressed: () => PanelTareasDesplegable.mostrar(context),
+            );
+          },
+        ),
+        const SizedBox(width: 6),
+      ],
     );
   }
 

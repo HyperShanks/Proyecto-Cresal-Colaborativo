@@ -1024,8 +1024,15 @@ class CheckoutWizardResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+# ==========================================
+# ESQUEMAS PARA ALERTAS Y RESUMEN OPERATIVO (SPEC-HU-06)
+# ==========================================
 
+class ResumenAlertasDTO(BaseModel):
+    """Resumen consolidado de tareas operativas pendientes de Bodega (Badge de Alertas)."""
+    total_tareas: int
+    desglose_preparacion: int
+    desglose_entregas: int
+    desglose_reingresos: int
 
-
-
-
+    model_config = ConfigDict(from_attributes=True)
