@@ -4,7 +4,7 @@
 # autogenere la documentación Swagger.
 
 import uuid
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, text
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, text, CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from database import Base
@@ -206,6 +206,12 @@ class Cliente(Base):
 
 class Orden_Venta(Base):
     __tablename__ = "Orden_Venta"
+    __table_args__ = (
+        CheckConstraint(
+            "estado_orden IN ('Reservada', 'Pagada', 'Despachada', 'Completada', 'Anulada')",
+            name="check_orden_venta_estado_orden",
+        ),
+    )
 
     id_orden = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     id_cliente = Column(UUID(as_uuid=True), ForeignKey("Cliente.id_cliente"), nullable=False)
@@ -303,6 +309,12 @@ class Tracking_Logistico(Base):
 
 class Despacho(Base):
     __tablename__ = "Despacho"
+    __table_args__ = (
+        CheckConstraint(
+            "estado_despacho IN ('Por Enviar', 'Enviado')",
+            name="check_despacho_estado_despacho",
+        ),
+    )
 
     id_despacho = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     id_orden = Column(UUID(as_uuid=True), ForeignKey("Orden_Venta.id_orden"), nullable=False, unique=True)

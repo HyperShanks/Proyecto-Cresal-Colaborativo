@@ -590,7 +590,7 @@ def listar_entregas_envios(
             .filter(
                 Orden_Venta.id_sucursal == sucursal_id,
                 Orden_Venta.estado_orden.in_(["Reservada", "Pagada"]),
-                Despacho.estado_despacho.in_(["Por Enviar", "En Preparacion"]),
+                Despacho.estado_despacho == "Por Enviar",
             )
         )
         ordenes_resultado.extend([("Despacho", o) for o in q_despachos.all()])
@@ -818,8 +818,8 @@ def confirmar_entrega_tienda(
         )
 
     try:
-        # Actualizar Orden a 'Despachada'
-        orden.estado_orden = "Despachada"
+        # Actualizar Orden a 'Completada'
+        orden.estado_orden = "Completada"
         orden.fecha_actualizacion = datetime.now()
 
         # Obtener o crear estado 'Entregado' / 'Finalizado'
@@ -857,7 +857,7 @@ def confirmar_entrega_tienda(
             id_orden=orden.id_orden,
             folio=folio,
             estado_orden=orden.estado_orden,
-            mensaje="¡Entrega en tienda confirmada exitosamente! Orden actualizada a Despachada.",
+            mensaje="¡Entrega en tienda confirmada exitosamente! Orden actualizada a Completada.",
             activos_finalizados=activos_actualizados,
             fecha_entrega=datetime.now().isoformat(),
         )

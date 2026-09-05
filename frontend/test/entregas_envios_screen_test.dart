@@ -131,7 +131,7 @@ void main() {
           jsonEncode({
             'id_orden': '11111111-1111-1111-1111-111111111111',
             'folio': 'ORD-RET-001',
-            'estado_orden': 'Despachada',
+            'estado_orden': 'Completada',
             'mensaje': 'Entrega confirmada',
             'activos_finalizados': 1,
             'fecha_entrega': '2026-08-17T12:30:00',

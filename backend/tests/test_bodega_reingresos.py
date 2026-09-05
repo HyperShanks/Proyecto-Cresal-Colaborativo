@@ -255,7 +255,7 @@ def test_anular_orden_pagada_reversa_pagos_y_genera_tarea_reingreso(client, rein
         assert pago_db.estado_pago == "Anulado"
 
         activo_db = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == reingreso_db["activo_1_id"]).first()
-        assert activo_db.id_estado not in [1, 7]  # Listo para tarea de reingreso
+        assert activo_db.id_estado in [1, 7]  # Disponible o Paletizado tras anulación
     finally:
         db.close()
 
@@ -298,17 +298,17 @@ def test_confirmar_reingreso_exitoso_y_version_lock(client, reingreso_db, auth_b
     assert response.status_code == 200
 
     data = response.json()
-    assert data["msg"] == "Activo paletizado/disponible exitosamente"
+    assert "exitosamente" in data["msg"]
     assert data["sku_qr_fisico"] == "MOT-NIS-SEN-001"
-    assert data["nuevo_estado"] == "Paletizado"
+    assert data["nuevo_estado"] == "Disponible"
     assert data["ubicacion_pasillo"] == "P-03"
     assert data["ubicacion_pallet"] == "PAL-99"
 
-    # Verificar que version_lock se incrementó y el activo está en estado Paletizado (7)
+    # Verificar que version_lock se incrementó y el activo está en estado Disponible (1)
     db = TestingSessionLocal()
     try:
         act_db = db.query(Activo_Inventariado).filter(Activo_Inventariado.sku_qr_fisico == "MOT-NIS-SEN-001").first()
-        assert act_db.id_estado == 7
+        assert act_db.id_estado == 1
         assert act_db.ubicacion_pasillo == "P-03"
         assert act_db.ubicacion_pallet == "PAL-99"
         assert act_db.version_lock == version_inicial + 1

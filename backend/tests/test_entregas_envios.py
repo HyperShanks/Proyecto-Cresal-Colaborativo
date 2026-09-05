@@ -343,7 +343,7 @@ def test_confirmar_entrega_tienda_y_marcar_despacho_enviado(client, auth_headers
         res_ret = client.patch(f"/api/v1/ordenes/{orden_ret.id_orden}/entregar", headers=auth_headers)
         assert res_ret.status_code == 200, res_ret.text
         data_ret = res_ret.json()
-        assert data_ret["estado_orden"] == "Despachada"
+        assert data_ret["estado_orden"] == "Completada"
         assert data_ret["activos_finalizados"] == 1
 
         db.refresh(activo_ret)
