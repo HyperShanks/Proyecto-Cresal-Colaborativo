@@ -822,7 +822,7 @@ class _CarritoScreenState extends State<CarritoScreen> {
                       Switch(
                         key: const Key('switch_cliente_anonimo'),
                         value: _esClienteAnonimo,
-                        activeColor: AppPalette.secondary,
+                        activeThumbColor: AppPalette.secondary,
                         onChanged: (val) {
                           setState(() {
                             _esClienteAnonimo = val;

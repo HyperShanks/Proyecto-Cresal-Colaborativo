@@ -423,3 +423,66 @@ def test_impacto_en_alertas_bodega_tras_pago(client, db_session, auth_headers_ca
         assert act_bodega_db.id_estado == 3, f"Se esperaba estado 3 (Vendido), pero tiene {act_bodega_db.id_estado}"
     finally:
         db.close()
+
+
+def test_pago_orden_miscelaneos_sin_qr(client, db_session, auth_headers_cajera):
+    """
+    Tarea 2: Verifica que al liquidar una orden en /pagar cuyos ítems no tienen id_activo
+    (solo servicios o piezas misceláneas sin serial físico), la orden pasa a 'Pagada'
+    pero el campo qr_transaccional_salida permanece en None.
+    """
+    db = TestingSessionLocal()
+    try:
+        ord_misc_id = uuid.uuid4()
+        ord_misc = Orden_Venta(
+            id_orden=ord_misc_id,
+            id_cliente=db_session["cliente_1_id"],
+            id_vendedor=db_session["u_vendedor_id"],
+            id_sucursal=1,
+            estado_orden="Reservada",
+            qr_transaccional_salida=None,
+            total_venta=30000,
+            monto_pendiente=30000,
+            fecha_creacion=datetime.now(),
+        )
+        db.add(ord_misc)
+
+        det_misc = Detalle_Orden(
+            id_detalle=uuid.uuid4(),
+            id_orden=ord_misc_id,
+            id_activo=None,
+            descripcion_manual="Mano de Obra y Montaje",
+            cantidad=1,
+            precio_unitario=30000,
+            precio_final=30000,
+        )
+        db.add(det_misc)
+        db.commit()
+    finally:
+        db.close()
+
+    payload = {
+        "metodo_pago": "Efectivo",
+        "monto": 30000,
+        "observaciones": "Liquidación de servicios"
+    }
+
+    response = client.post(
+        f"/api/v1/ordenes/{ord_misc_id}/pagar",
+        json=payload,
+        headers=auth_headers_cajera
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["estado_orden"] == "Pagada"
+    assert data["monto_pendiente"] == 0
+    assert data["qr_transaccional_salida"] is None
+
+    # Verificar en BD
+    db = TestingSessionLocal()
+    try:
+        ord_db = db.query(Orden_Venta).filter(Orden_Venta.id_orden == ord_misc_id).first()
+        assert ord_db.estado_orden == "Pagada"
+        assert ord_db.qr_transaccional_salida is None
+    finally:
+        db.close()

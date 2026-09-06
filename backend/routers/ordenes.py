@@ -202,39 +202,30 @@ def crear_orden(
                 db.flush()
 
         # ── Paso A.2: Cabecera Orden_Venta ──────────────────────────────────
-        qr_salida = f"ORD-{uuid.uuid4().hex[:8].upper()}"
+        # Tarea 2: Toda orden creada en Mesón nace en 'Reservada' con qr_transaccional_salida = NULL.
+        # El acuerdo de abono comercial solo se registra como propuesta y monto pendiente sin generar registros en Transaccion_Pago.
+        now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
 
         monto_abono_val = orden_in.monto_abono if (orden_in.monto_abono is not None and orden_in.monto_abono > 0) else 0
         if monto_abono_val > total_calculado:
             monto_abono_val = total_calculado
 
         monto_pendiente_calc = total_calculado - monto_abono_val
-        estado_inicial = "Pagada" if monto_pendiente_calc == 0 else "Reservada"
 
         nueva_orden = Orden_Venta(
             id_cliente=cliente.id_cliente,
             id_vendedor=current_user.id_usuario,
             id_vendedor_asignado=orden_in.id_vendedor_asignado,
             id_sucursal=id_sucursal_orden,
-            estado_orden=estado_inicial,
-            qr_transaccional_salida=qr_salida,
+            estado_orden="Reservada",
+            qr_transaccional_salida=None,
             total_venta=total_calculado,
             monto_pendiente=monto_pendiente_calc,
+            fecha_creacion=now_utc,
+            fecha_actualizacion=now_utc,
         )
         db.add(nueva_orden)
         db.flush()
-
-        if monto_abono_val > 0:
-            transaccion_abono = Transaccion_Pago(
-                id_pago=uuid.uuid4(),
-                id_orden=nueva_orden.id_orden,
-                monto=monto_abono_val,
-                metodo_pago="Abono Inicial",
-                estado_pago="Procesado",
-                fecha_pago=datetime.now(),
-            )
-            db.add(transaccion_abono)
-            db.flush()
 
         # ── Paso A.3: Despacho (Exclusivo para envíos a clientes a domicilio/taller) ──
         if orden_in.requiere_despacho and orden_in.despacho:
@@ -1035,11 +1026,7 @@ def pagar_orden(
                 detail="El monto a pagar debe ser mayor a 0."
             )
 
-        # Generación de token único de alta entropía para el handshake QR
-        # Formato: TX-QR-<ID_ORDEN_8>-<RANDOM_HEX_12>
-        token_entropy = uuid.uuid4().hex[:12].upper()
-        qr_token = f"TX-QR-{str(orden.id_orden)[:8].upper()}-{token_entropy}"
-        print(f"🔑 [PAGO] QR Transaccional generado: {qr_token}")
+        now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
 
         # 1. Registrar la transacción de pago en PostgreSQL
         nuevo_pago = Transaccion_Pago(
@@ -1048,36 +1035,51 @@ def pagar_orden(
             monto=monto_a_pagar,
             metodo_pago=pago_in.metodo_pago or "Efectivo",
             estado_pago="Procesado",
-            fecha_pago=datetime.now(),
+            fecha_pago=now_utc,
         )
         db.add(nuevo_pago)
         print(f"📝 [PAGO] Registro de Transaccion_Pago creado: ID {nuevo_pago.id_pago} - Monto: ${monto_a_pagar} ({nuevo_pago.metodo_pago})")
 
         # 2. Actualizar la cabecera de la orden
-        orden.estado_orden = "Pagada"
-        orden.monto_pendiente = max(0, orden.monto_pendiente - monto_a_pagar)
+        nuevo_saldo = max(0, orden.monto_pendiente - monto_a_pagar)
+        orden.monto_pendiente = nuevo_saldo
         orden.id_cajera = current_user.id_usuario
-        orden.qr_transaccional_salida = qr_token
-        orden.fecha_actualizacion = datetime.now()
-
-        # 3. Actualizar los repuestos físicos inventariados a estado 'Vendido' (ID 3)
-        estado_vendido = db.query(Estado_Activo).filter(Estado_Activo.nombre_estado == "Vendido").first()
-        if not estado_vendido:
-            estado_vendido = Estado_Activo(id_estado=3, nombre_estado="Vendido")
-            db.add(estado_vendido)
-            db.flush()
+        orden.fecha_actualizacion = now_utc
 
         detalles = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == orden.id_orden).all()
-        activos_vendidos = 0
+        tiene_activo_fisico = any(d.id_activo is not None for d in detalles)
 
-        for d in detalles:
-            if d.id_activo:
-                activo = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == d.id_activo).first()
-                if activo:
-                    activo.id_estado = estado_vendido.id_estado
-                    activo.version_lock = (activo.version_lock or 1) + 1
-                    activo.fecha_actualizacion = datetime.now()
-                    activos_vendidos += 1
+        if nuevo_saldo == 0:
+            orden.estado_orden = "Pagada"
+            if tiene_activo_fisico:
+                token_entropy = uuid.uuid4().hex[:12].upper()
+                qr_token = f"TX-QR-{str(orden.id_orden)[:8].upper()}-{token_entropy}"
+                orden.qr_transaccional_salida = qr_token
+                print(f"🔑 [PAGO] QR Transaccional generado: {qr_token}")
+            else:
+                orden.qr_transaccional_salida = None
+                print("ℹ️ [PAGO] Orden pagada sin activos inventariados (misceláneos/servicios). QR permanece nulo.")
+        else:
+            orden.estado_orden = "Reservada"
+            orden.qr_transaccional_salida = None
+
+        # 3. Actualizar los repuestos físicos inventariados a estado 'Vendido' (ID 3) si está pagada
+        if orden.estado_orden == "Pagada":
+            estado_vendido = db.query(Estado_Activo).filter(Estado_Activo.nombre_estado == "Vendido").first()
+            if not estado_vendido:
+                estado_vendido = Estado_Activo(id_estado=3, nombre_estado="Vendido")
+                db.add(estado_vendido)
+                db.flush()
+
+            activos_vendidos = 0
+            for d in detalles:
+                if d.id_activo:
+                    activo = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == d.id_activo).first()
+                    if activo:
+                        activo.id_estado = estado_vendido.id_estado
+                        activo.version_lock = (activo.version_lock or 1) + 1
+                        activo.fecha_actualizacion = now_utc
+                        activos_vendidos += 1
 
         print(f"📦 [PAGO] {activos_vendidos} repuesto(s) físico(s) actualizados a estado 'Vendido' (ID {estado_vendido.id_estado}).")
 

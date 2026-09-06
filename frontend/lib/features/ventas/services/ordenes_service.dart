@@ -1033,6 +1033,14 @@ class EntregaEnvioModel {
 
   bool get estaPagada => montoPendiente == 0;
   bool get tieneSaldoPendiente => montoPendiente > 0;
+  bool get esReservada => estadoOrden.toLowerCase() == 'reservada';
+  bool get esPagada =>
+      estadoOrden.toLowerCase() == 'pagada' ||
+      estadoOrden.toLowerCase() == 'completada';
+  bool get tieneQrDisponible =>
+      esPagada &&
+      qrTransaccionalSalida != null &&
+      qrTransaccionalSalida!.trim().isNotEmpty;
   String get totalVentaFormateado => OrdenResponseModel._formatearMonto(totalVenta);
   String get montoPendienteFormateado =>
       OrdenResponseModel._formatearMonto(montoPendiente);

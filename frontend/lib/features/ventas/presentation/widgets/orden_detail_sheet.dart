@@ -367,8 +367,8 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
         ),
       );
 
-      // Desplegar automáticamente el modal del Ticket Digital QR
-      if (mounted) {
+      // Desplegar automáticamente el modal del Ticket Digital QR solo si se generó QR
+      if (mounted && _orden.tieneQrDisponible) {
         QrTicketDialog.mostrar(context, _orden);
       }
     } catch (e) {

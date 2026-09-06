@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 import pytest
 
 from models import (
@@ -219,7 +219,17 @@ def db_session(setup_database):
             precio_final=100000,
             estado_preparacion="Pendiente",
         )
-        db.add_all([det1, det2])
+        det_ord2 = Detalle_Orden(
+            id_detalle=uuid.uuid4(),
+            id_orden=orden2.id_orden,
+            id_activo=activo1.id_activo,
+            descripcion_manual="Caja de Cambio MG ZS 1.5",
+            cantidad=1,
+            precio_unitario=200000,
+            precio_final=200000,
+            estado_preparacion="Pendiente",
+        )
+        db.add_all([det1, det2, det_ord2])
 
         # 9. Reserva Backorder
         res1 = Reservas_Backorder(
@@ -633,3 +643,74 @@ def test_registrar_cobro_documento_no_encontrado_404(client, db_session):
     response = client.post("/api/v1/caja/cobros/registrar", json=payload, headers=headers)
     assert response.status_code == 404
     assert "No se encontró" in response.json()["detail"]
+
+
+def test_registrar_cobro_orden_sin_activos_mantiene_qr_nulo(client, db_session):
+    """
+    Tarea 2: Verifica que al liquidar una orden de venta cuyos ítems son únicamente
+    misceláneos o servicios (todos con id_activo = NULL), la orden pasa a 'Pagada'
+    pero el campo qr_transaccional_salida permanece en None.
+    """
+    user_caja = db_session["caja_user"]
+    user_vendedor = db_session["vendedor_user"]
+    headers = get_auth_header(user_caja)
+
+    db = TestingSessionLocal()
+    try:
+        orden_misc = Orden_Venta(
+            id_orden=uuid.uuid4(),
+            id_cliente=db_session["orden1"].id_cliente,
+            id_vendedor=user_vendedor.id_usuario,
+            id_sucursal=1,
+            estado_orden="Reservada",
+            qr_transaccional_salida=None,
+            total_venta=75000,
+            monto_pendiente=75000,
+            fecha_creacion=datetime.now(timezone.utc).replace(tzinfo=None),
+        )
+        db.add(orden_misc)
+        db.flush()
+
+        det_misc = Detalle_Orden(
+            id_detalle=uuid.uuid4(),
+            id_orden=orden_misc.id_orden,
+            id_activo=None,
+            descripcion_manual="Servicio de Diagnóstico y Limpieza",
+            cantidad=1,
+            precio_unitario=75000,
+            precio_final=75000,
+            estado_preparacion="Listo",
+        )
+        db.add(det_misc)
+        db.commit()
+        id_orden_misc = orden_misc.id_orden
+    finally:
+        db.close()
+
+    payload = {
+        "tipo_operacion": "ORDEN",
+        "id_documento": str(id_orden_misc),
+        "modalidad": "LIQUIDACION",
+        "monto_declarado": 75000,
+        "pagos": [
+            {"metodo": "Transferencia", "monto": 75000}
+        ]
+    }
+
+    response = client.post("/api/v1/caja/cobros/registrar", json=payload, headers=headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert data["nuevo_saldo_pendiente"] == 0
+    assert data["estado_actualizado"] == "Pagada"
+    assert data["qr_generado"] is None
+
+    # Verificar en BD
+    db = TestingSessionLocal()
+    try:
+        orden_db = db.query(Orden_Venta).filter(Orden_Venta.id_orden == id_orden_misc).first()
+        assert orden_db.estado_orden == "Pagada"
+        assert orden_db.monto_pendiente == 0
+        assert orden_db.qr_transaccional_salida is None
+    finally:
+        db.close()

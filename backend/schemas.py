@@ -509,7 +509,7 @@ class OrdenPagoResponse(BaseModel):
     monto_pagado: int
     monto_pendiente: int
     metodo_pago: str
-    qr_transaccional_salida: str
+    qr_transaccional_salida: Optional[str] = None
     id_cajera: UUID
     mensaje: str
     fecha_pago: str

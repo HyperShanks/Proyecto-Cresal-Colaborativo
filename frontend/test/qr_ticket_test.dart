@@ -212,6 +212,67 @@ void main() {
 
       expect(find.text('TICKET DE SALIDA'), findsNothing);
     });
+
+    testWidgets('Bloquea visualmente el QR si la orden está Reservada y muestra aviso de pago pendiente', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () => QrTicketDialog.mostrar(context, ordenReservadaMock),
+                child: const Text('Abrir QR Reservada'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Abrir QR Reservada'));
+      await tester.pumpAndSettle();
+
+      // No debe existir QrImageView
+      expect(find.byType(QrImageView), findsNothing);
+      expect(find.text('TICKET BLOQUEADO'), findsOneWidget);
+      expect(find.text('ORDEN RESERVADA - PAGO PENDIENTE'), findsOneWidget);
+      expect(find.text('CÓDIGO QR BLOQUEADO'), findsOneWidget);
+      expect(find.textContaining('Saldo pendiente:'), findsOneWidget);
+      expect(find.text('\$300.000'), findsWidgets);
+
+      // Cerrar con botón cerrar del header
+      await tester.tap(find.byIcon(Icons.close));
+      await tester.pumpAndSettle();
+      expect(find.text('TICKET BLOQUEADO'), findsNothing);
+    });
+
+    testWidgets('Muestra estado Sin Retiro PDA si la orden está Pagada pero no tiene activos inventariados', (tester) async {
+      final ordenServiciosPagada = ordenPagadaMock.copyWith(qrTransaccionalSalida: null);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () => QrTicketDialog.mostrar(context, ordenServiciosPagada),
+                child: const Text('Abrir QR Servicios'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Abrir QR Servicios'));
+      await tester.pumpAndSettle();
+
+      // No debe existir QrImageView
+      expect(find.byType(QrImageView), findsNothing);
+      expect(find.text('COMPROBANTE DE VENTA'), findsOneWidget);
+      expect(find.text('PAGO CONFIRMADO - SIN RETIRO PDA'), findsOneWidget);
+      expect(find.text('SIN RETIRO FÍSICO PDA'), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.close));
+      await tester.pumpAndSettle();
+      expect(find.text('COMPROBANTE DE VENTA'), findsNothing);
+    });
   });
 
   // ===========================================================================

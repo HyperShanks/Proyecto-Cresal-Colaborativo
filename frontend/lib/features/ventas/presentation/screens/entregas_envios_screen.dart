@@ -824,17 +824,53 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen>
                       Expanded(
                         child: OutlinedButton.icon(
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: AppPalette.primary,
-                            side: const BorderSide(color: AppPalette.primary),
+                            foregroundColor: orden.tieneQrDisponible
+                                ? AppPalette.primary
+                                : AppPalette.textSecondary,
+                            side: BorderSide(
+                              color: orden.tieneQrDisponible
+                                  ? AppPalette.primary
+                                  : Colors.white24,
+                            ),
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           ),
                           onPressed: () {
+                            if (!orden.tieneQrDisponible) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  backgroundColor: AppPalette.surface,
+                                  behavior: SnackBarBehavior.floating,
+                                  content: Row(
+                                    children: [
+                                      const Icon(Icons.lock_clock_rounded,
+                                          color: AppPalette.warning, size: 20),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          saldoPendiente
+                                              ? 'QR bloqueado: Orden con saldo pendiente de ${orden.montoPendienteFormateado}. Requiere confirmación de pago en Caja.'
+                                              : 'Esta orden no requiere código QR para retiro en bodega.',
+                                          style: const TextStyle(color: AppPalette.warning),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                              return;
+                            }
                             Navigator.of(ctx).pop();
                             _abrirQrModal(orden);
                           },
-                          icon: const Icon(Icons.qr_code_2, size: 18),
-                          label: const Text('VER TICKET QR', style: TextStyle(fontWeight: FontWeight.bold)),
+                          icon: Icon(
+                            orden.tieneQrDisponible ? Icons.qr_code_2 : Icons.lock_outline,
+                            size: 18,
+                          ),
+                          label: Text(
+                            orden.tieneQrDisponible ? 'VER TICKET QR' : 'QR BLOQUEADO',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -1367,21 +1403,51 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen>
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   InkWell(
-                    onTap: () => _abrirQrModal(orden),
+                    onTap: () {
+                      if (!orden.tieneQrDisponible) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            backgroundColor: AppPalette.surface,
+                            behavior: SnackBarBehavior.floating,
+                            content: Row(
+                              children: [
+                                const Icon(Icons.lock_clock_rounded,
+                                    color: AppPalette.warning, size: 20),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    saldoPendiente
+                                        ? 'QR bloqueado: Orden con saldo pendiente de ${orden.montoPendienteFormateado}. Requiere confirmación de pago en Caja.'
+                                        : 'Esta orden no requiere código QR para retiro en bodega.',
+                                    style: const TextStyle(color: AppPalette.warning),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                        return;
+                      }
+                      _abrirQrModal(orden);
+                    },
                     borderRadius: BorderRadius.circular(8),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.qr_code_2, color: AppPalette.primary, size: 22),
+                          Icon(
+                            orden.tieneQrDisponible ? Icons.qr_code_2 : Icons.lock_outline,
+                            color: orden.tieneQrDisponible ? AppPalette.primary : AppPalette.warning,
+                            size: 20,
+                          ),
                           const SizedBox(width: 6),
                           Text(
-                            'Ver Detalle',
+                            orden.tieneQrDisponible ? 'Ticket QR' : 'QR Bloqueado',
                             style: AppTypography.body.copyWith(
-                              color: AppPalette.textSecondary,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
+                              color: orden.tieneQrDisponible ? AppPalette.primary : AppPalette.warning,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ],

@@ -343,11 +343,20 @@ def registrar_cobro(
             nuevo_saldo = orden.monto_pendiente - payload.monto_declarado
             qr_hash: Optional[str] = None
 
-            # Transiciones de Estado y Hash QR (SPEC-HU-04 Sec 3.2)
+            # Transiciones de Estado y Hash QR (SPEC-HU-04 Sec 3.2 / Tarea 2)
             if nuevo_saldo == 0:
                 orden.estado_orden = "Pagada"
-                qr_hash = f"TX-QR-{uuid.uuid4()}"
-                orden.qr_transaccional_salida = qr_hash
+                tiene_activos_inventariados = db.query(Detalle_Orden).filter(
+                    Detalle_Orden.id_orden == orden.id_orden,
+                    Detalle_Orden.id_activo.isnot(None)
+                ).first() is not None
+
+                if tiene_activos_inventariados:
+                    qr_hash = f"TX-QR-{uuid.uuid4()}"
+                    orden.qr_transaccional_salida = qr_hash
+                else:
+                    qr_hash = None
+                    orden.qr_transaccional_salida = None
             else:
                 orden.estado_orden = "Reservada"
                 orden.qr_transaccional_salida = None

@@ -8,7 +8,7 @@ from models import (
     Region, Comuna, Sucursal, Rol, Usuario,
     Categoria_Activo, Estado_Activo, Vehiculo_Origen,
     Activo_Inventariado, Detalle_Motor, Orden_Venta,
-    Detalle_Orden, Despacho, Cliente
+    Detalle_Orden, Despacho, Cliente, Transaccion_Pago
 )
 from core.security import create_access_token
 from conftest import TestingSessionLocal
@@ -212,7 +212,7 @@ def test_crear_orden_camino_feliz_hibrido(client, db_session, auth_headers):
     assert data["total_venta"] == 550000  # 520.000 + (15.000 * 2)
     assert data["monto_pendiente"] == 550000
     assert data["total_items"] == 2
-    assert data["qr_transaccional_salida"].startswith("ORD-")
+    assert data["qr_transaccional_salida"] is None
 
     id_orden = data["id_orden"]
 
@@ -224,6 +224,8 @@ def test_crear_orden_camino_feliz_hibrido(client, db_session, auth_headers):
         assert orden_db is not None
         assert orden_db.total_venta == 550000
         assert orden_db.estado_orden == "Reservada"
+        assert orden_db.qr_transaccional_salida is None
+        assert db.query(Transaccion_Pago).filter_by(id_orden=orden_db.id_orden).count() == 0
 
         # Cliente
         cliente_db = db.query(Cliente).filter_by(id_cliente=orden_db.id_cliente).first()
