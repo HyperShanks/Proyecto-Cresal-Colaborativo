@@ -32,6 +32,7 @@ class ApiConstants {
   static const String clientesEndpoint = '$_baseUrl/v1/clientes';
   static const String despachosEndpoint = '$_baseUrl/v1/despachos';
   static const String cajaEndpoint = '$_baseUrl/v1/caja';
+  static const String carritoEndpoint = '$_baseUrl/v1/carrito';
 
   static String get baseUrl => _baseUrl;
 }

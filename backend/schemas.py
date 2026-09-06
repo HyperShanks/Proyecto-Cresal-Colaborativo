@@ -406,7 +406,10 @@ class CatalogoItemResponse(BaseModel):
     # Ubicación y estado
     ubicacion_pasillo: Optional[str] = None
     ubicacion_pallet: Optional[str] = None
+    id_estado: Optional[int] = None
     estado_activo: Optional[str] = None
+    version_lock: int = 1
+    reservado_por: Optional[UUID] = None
     qr_impreso: bool = False
     imagenes: List[str] = []
 
@@ -417,6 +420,51 @@ class PaginatedCatalogoResponse(BaseModel):
     total_count: int
     limit: int
     offset: int
+
+
+# ==========================================
+# ESQUEMAS PARA RESERVA TEMPORAL DE CARRITO (SPEC-HU-TAREA-3)
+# ==========================================
+
+class ReservaCarritoRequest(BaseModel):
+    """Solicitud de bloqueo / reserva temporal de un activo único en el carrito."""
+    model_config = ConfigDict(from_attributes=True)
+    id_activo: UUID
+    version_lock_esperado: int
+
+
+class ReservaCarritoResponse(BaseModel):
+    """Respuesta exitosa de reserva temporal."""
+    model_config = ConfigDict(from_attributes=True)
+    id_activo: UUID
+    version_lock: int
+    reservado_por: UUID
+    reserva_expira_en: datetime
+    mensaje: str
+
+
+class LiberarCarritoResponse(BaseModel):
+    """Respuesta al liberar voluntariamente una reserva temporal."""
+    id_activo: UUID
+    version_lock: int
+    mensaje: str
+
+
+class HeartbeatCarritoResponse(BaseModel):
+    """Respuesta al refrescar la caducidad de reservas por actividad (Heartbeat)."""
+    mensaje: str
+    activos_renovados: int
+    nueva_expiracion: datetime
+
+
+class MisReservasItemResponse(BaseModel):
+    """Resumen de un ítem reservado actualmente por el usuario."""
+    model_config = ConfigDict(from_attributes=True)
+    id_activo: UUID
+    sku_qr_fisico: str
+    version_lock: int
+    reserva_expira_en: datetime
+    segundos_restantes: int
 
 
 # ==========================================

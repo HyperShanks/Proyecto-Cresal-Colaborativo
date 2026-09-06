@@ -311,7 +311,7 @@ def registrar_cobro(
     if total_pagos != payload.monto_declarado:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"El monto total ingresado no cubre el saldo pendiente de la orden (${payload.monto_declarado:,})."
+            detail=f"Descuadre financiero: El monto total ingresado no cubre el saldo pendiente de la orden (${payload.monto_declarado:,})."
         )
 
     # 2. Validación de montos individuales > 0 (CA-06)

@@ -59,14 +59,14 @@ A continuación, se define cómo se le debe explicar cada error al usuario sin f
    - *Mensaje UI*: `"No fue posible asegurar tu reserva debido a un problema de red. Reintentando..."` (No debe crashear ni perder estado).
 
 ## 4. Checklist de Tareas de Implementación (TDD)
-- [ ] **Tarea 1 (Backend - Schemas & Modelos)**: Modificar `Activo_Inventariado` para soportar campos de reserva temporal o crear tabla espejo. Definir `ReservaCarritoRequest` en `schemas.py`.
-- [ ] **Tarea 2 (Backend - Endpoints Concurrentes)**: Implementar lógica de UPDATE atómico con `version_lock`. Levantar excepción controlada si `rowcount == 0`.
-- [ ] **Tarea 3 (Backend - Limpieza Automática)**: Implementar lógica para invalidar reservas caducadas.
-- [ ] **Tarea 4 (Backend - Pruebas Pytest)**: Simular dos requests simultáneos de reserva para el mismo `id_activo` y asegurar que uno reciba 409 y el otro 200.
-- [ ] **Tarea 5 (Frontend - Interfaz de Catálogo)**: Reaccionar al estado bloqueado (`id_estado = 2`), desactivando visualmente el botón de compra en todos los terminales. Usar guardas `if (!mounted) return;`.
-- [ ] **Tarea 6 (Frontend - Manejo de Errores Contextual)**: Mapear explícitamente en el interceptor o en el catch local los errores indicados en la sección 3.
-- [ ] **Tarea 7 (Frontend - Timer Visual)**: Añadir un indicador de tiempo (countdown) en el carrito que invoque `heartbeat` o limpie el carrito local si llega a 0.
-- [ ] **Tarea 8 (Documentación OBLIGATORIA)**: Al finalizar, crear el archivo `DICCIONARIO_ERRORES_TAREA3.md` detallando todos los mensajes de error programados en esta HU, el nombre de la excepción/endpoint que lo dispara, y las acciones recomendadas.
+- [x] **Tarea 1 (Backend - Schemas & Modelos)**: Modificar `Activo_Inventariado` para soportar campos de reserva temporal o crear tabla espejo. Definir `ReservaCarritoRequest` en `schemas.py`.
+- [x] **Tarea 2 (Backend - Endpoints Concurrentes)**: Implementar lógica de UPDATE atómico con `version_lock`. Levantar excepción controlada si `rowcount == 0`.
+- [x] **Tarea 3 (Backend - Limpieza Automática)**: Implementar lógica para invalidar reservas caducadas.
+- [x] **Tarea 4 (Backend - Pruebas Pytest)**: Simular dos requests simultáneos de reserva para el mismo `id_activo` y asegurar que uno reciba 409 y el otro 200.
+- [x] **Tarea 5 (Frontend - Interfaz de Catálogo)**: Reaccionar al estado bloqueado (`id_estado = 2`), desactivando visualmente el botón de compra en todos los terminales. Usar guardas `if (!mounted) return;`.
+- [x] **Tarea 6 (Frontend - Manejo de Errores Contextual)**: Mapear explícitamente en el interceptor o en el catch local los errores indicados en la sección 3.
+- [x] **Tarea 7 (Frontend - Timer Visual)**: Añadir un indicador de tiempo (countdown) en el carrito que invoque `heartbeat` o limpie el carrito local si llega a 0.
+- [x] **Tarea 8 (Documentación OBLIGATORIA)**: Al finalizar, incluye en `DICCIONARIO_ERRORES.md` detallando todos los mensajes de error programados en esta tarea, el nombre de la excepción/endpoint que lo dispara, y las acciones recomendadas.
 
 ## 5. Criterios de Validación Automatizada
 - Backend Tests: Ejecutar `pytest tests/test_carrito_concurrencia.py -v`.
