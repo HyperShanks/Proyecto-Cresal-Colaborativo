@@ -87,8 +87,35 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         else:
             campos_invalidos.append(f"El formato del campo '{campo}' es inválido.")
 
-    detalle_amigable = " ".join(campos_invalidos) if campos_invalidos else "Los datos ingresados no tienen un formato válido."
-    
+    detalle_amigable = (
+        " ".join(campos_invalidos)
+        if campos_invalidos
+        else "Los datos ingresados no tienen un formato válido."
+    )
+
+    es_error_rut = any(
+        "rut" in str(err.get("loc", ())).lower()
+        or "rut" in str(err.get("msg", "")).lower()
+        for err in exc.errors()
+    )
+    if es_error_rut:
+        response_dto = ErrorResponseDTO(
+            error_code="ERR_INVALID_RUT",
+            message_user=(
+                "El RUT ingresado no es válido legalmente. "
+                "Verifica que el dígito verificador sea correcto."
+            ),
+            message_dev=detalle_amigable,
+            detail=(
+                "El RUT ingresado no es válido legalmente. "
+                "Verifica que el dígito verificador sea correcto."
+            ),
+        )
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content=response_dto.model_dump(),
+        )
+
     response_dto = ErrorResponseDTO(
         error_code="VALIDATION_ERROR",
         message_user="Los datos ingresados no tienen un formato válido o faltan campos requeridos.",

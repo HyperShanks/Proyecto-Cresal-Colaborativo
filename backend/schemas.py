@@ -5,6 +5,51 @@ from datetime import datetime
 from enum import Enum
 import re
 
+from core.utils.validators import validar_rut_modulo11
+
+
+# ==========================================
+# ESQUEMA BASE TRANSVERSAL PARA RUT (HU-12)
+# ==========================================
+
+class BaseRutSchema(BaseModel):
+    """
+    Esquema base que aplica validación matemática Módulo 11
+    a cualquier campo de RUT estándar (rut_cliente, receptor_rut, rut_usuario).
+    """
+    model_config = ConfigDict(from_attributes=True)
+
+    @field_validator(
+        'rut_cliente', 'receptor_rut', 'rut_usuario',
+        mode='before', check_fields=False
+    )
+    def normalizar_y_validar_rut(cls, v: str) -> str:
+        if not v:
+            return v
+        es_valido, rut_limpio = validar_rut_modulo11(v)
+        if not es_valido:
+            raise ValueError(
+                "El RUT ingresado no es matemáticamente válido "
+                "(falla en dígito verificador)."
+            )
+        return rut_limpio
+
+
+class ClienteCreateRequest(BaseRutSchema):
+    """Payload para registro de nuevo cliente en Micro-CRM (HU-12)."""
+    rut_cliente: str = Field(..., description="RUT chileno del cliente")
+    nombres: str = Field(..., min_length=1, description="Nombres del cliente")
+    apellidos: str = Field(
+        ..., min_length=1, description="Apellidos del cliente"
+    )
+    telefono: Optional[str] = Field(None, description="Teléfono de contacto")
+    correo: Optional[str] = Field(None, description="Correo electrónico")
+    id_comuna: Optional[int] = Field(None, description="ID de la comuna")
+    comuna: Optional[str] = Field(None, description="Nombre de la comuna")
+    consentimiento_legal: bool = Field(
+        True, description="Aceptación Ley N° 21.719"
+    )
+
 
 # ==========================================
 # ESQUEMAS PARA VEHÍCULOS (HU-2.2 Ingesta)
