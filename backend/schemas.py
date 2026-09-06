@@ -405,7 +405,10 @@ class CatalogoItemResponse(BaseModel):
     
     # Ubicación y estado
     ubicacion_pasillo: Optional[str] = None
+    ubicacion_galpon: Optional[str] = None
     ubicacion_pallet: Optional[str] = None
+    observacion_estado: Optional[str] = None
+    numero_motor: Optional[str] = None
     id_estado: Optional[int] = None
     estado_activo: Optional[str] = None
     version_lock: int = 1
@@ -803,6 +806,39 @@ class AsignarPrecioResponse(BaseModel):
     precio_referencia: int
     estado_activo: str
     mensaje: str
+
+
+# ==========================================
+# ESQUEMAS PARA EDICIÓN DE ACTIVOS EN BODEGA PDA (HU-11)
+# ==========================================
+
+class EditarActivoRequest(BaseModel):
+    """Payload para editar ubicación técnica y notas de un activo en bodega PDA."""
+    model_config = ConfigDict(from_attributes=True)
+
+    ubicacion_pasillo: Optional[str] = None
+    ubicacion_galpon: Optional[str] = None
+    ubicacion_pallet: Optional[str] = None
+    observacion_estado: Optional[str] = None
+    numero_motor: Optional[str] = None
+    cilindrada: Optional[str] = None
+    version_lock_esperado: int
+
+
+class EditarActivoResponse(BaseModel):
+    """DTO de respuesta tras edición técnica exitosa con nuevo version_lock."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_activo: UUID
+    sku_qr_fisico: str
+    ubicacion_pasillo: Optional[str] = None
+    ubicacion_galpon: Optional[str] = None
+    ubicacion_pallet: Optional[str] = None
+    observacion_estado: Optional[str] = None
+    numero_motor: Optional[str] = None
+    cilindrada: Optional[str] = None
+    version_lock: int
+    mensaje: str = "Activo actualizado exitosamente."
 
 
 # ==========================================

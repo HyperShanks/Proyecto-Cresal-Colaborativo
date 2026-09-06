@@ -12,14 +12,14 @@ class ResultadoCard extends StatelessWidget {
   final String estado;
 
   const ResultadoCard({
-    Key? key,
+    super.key,
     required this.itemCompleto,
     required this.marca,
     required this.modelo,
     required this.sku,
     required this.ubicacion,
     required this.estado,
-  }) : super(key: key);
+  });
 
   String _formatearUbicacionHumana() {
     final pasillo = (itemCompleto['pasillo']?.toString() ?? '').trim();

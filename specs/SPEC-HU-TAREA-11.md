@@ -58,14 +58,14 @@ A continuación, se define cómo se le debe explicar cada error al usuario en es
    - *Mensaje UI*: `"Este artículo ya fue despachado o cobrado. Ya no es posible modificar su ubicación técnica."`
 
 ## 4. Checklist de Tareas de Implementación (TDD)
-- [ ] **Tarea 1 (Backend - Schemas)**: Definir `EditarActivoRequest` en `schemas.py` asegurando la omisión de `sku_qr_fisico` y campos transaccionales en Pydantic.
-- [ ] **Tarea 2 (Backend - Endpoints ACID)**: Implementar `PATCH /api/v1/inventario/{id_activo}`. Incluir el bloque transaccional atómico y la cláusula SQL de incremento de `version_lock`.
-- [ ] **Tarea 3 (Backend - Pruebas Pytest)**: Probar exitosamente el endpoint, probar una colisión intencional de `version_lock` (esperando 409) y probar un fallo por rol inválido.
-- [ ] **Tarea 4 (Frontend - Interfaz Lápiz)**: Inyectar botón tipo lápiz en la cabecera de la vista de detalle de la pieza, visible únicamente si el rol lo permite.
-- [ ] **Tarea 5 (Frontend - Formulario y Guardas)**: Implementar `editar_activo_modal.dart`. Configurar `onWillPop` para la intercepción de campos sucios (Dirty Form) y obligar el uso de `if (!mounted) return;`.
-- [ ] **Tarea 6 (Frontend - UX y Mensajes)**: Mapear e implementar los mensajes exactos indicados en la Sección 3 mediante Snackbars amigables. Refrescar la vista subyacente de forma reactiva al guardar con éxito.
-- [ ] **Tarea 7 (Frontend - Pruebas Widget)**: Testear la apertura del diálogo de "Cambios sin guardar" (dirty check).
-- [ ] **Tarea 8 (Documentación OBLIGATORIA)**: Al finalizar todo el código, crear el archivo `DICCIONARIO_ERRORES_TAREA11.md` en la raíz del proyecto. Debe detallar todos los mensajes de error mostrados al usuario, el componente/backend que los dispara y el contexto en que ocurren.
+- [x] **Tarea 1 (Backend - Schemas)**: Definir `EditarActivoRequest` en `schemas.py` asegurando la omisión de `sku_qr_fisico` y campos transaccionales en Pydantic.
+- [x] **Tarea 2 (Backend - Endpoints ACID)**: Implementar `PATCH /api/v1/inventario/{id_activo}`. Incluir el bloque transaccional atómico y la cláusula SQL de incremento de `version_lock`.
+- [x] **Tarea 3 (Backend - Pruebas Pytest)**: Probar exitosamente el endpoint, probar una colisión intencional de `version_lock` (esperando 409) y probar un fallo por rol inválido.
+- [x] **Tarea 4 (Frontend - Interfaz Lápiz)**: Inyectar botón tipo lápiz en la cabecera de la vista de detalle de la pieza, visible únicamente si el rol lo permite.
+- [x] **Tarea 5 (Frontend - Formulario y Guardas)**: Implementar `editar_activo_modal.dart`. Configurar `onWillPop` para la intercepción de campos sucios (Dirty Form) y obligar el uso de `if (!mounted) return;`.
+- [x] **Tarea 6 (Frontend - UX y Mensajes)**: Mapear e implementar los mensajes exactos indicados en la Sección 3 mediante Snackbars amigables. Refrescar la vista subyacente de forma reactiva al guardar con éxito.
+- [x] **Tarea 7 (Frontend - Pruebas Widget)**: Testear la apertura del diálogo de "Cambios sin guardar" (dirty check).
+- [x] **Tarea 8 (Documentación OBLIGATORIA)**: Al finalizar todo el código, inserta en el archivo `DICCIONARIO_ERRORES.md` en la raíz del proyecto. Debe detallar todos los mensajes de error mostrados al usuario, el componente/backend que los dispara y el contexto en que ocurren.
 
 ## 5. Criterios de Validación Automatizada
 - Backend Tests: Ejecutar `pytest tests/test_inventario_edicion.py -v`.

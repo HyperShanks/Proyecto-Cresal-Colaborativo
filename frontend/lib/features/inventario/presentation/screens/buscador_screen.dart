@@ -394,7 +394,7 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
                       },
                       icon: const Icon(Icons.check, size: 20),
                       label: Text(
-                        'APLICAR FILTROS (${_activeFiltersCount})',
+                        'APLICAR FILTROS ($_activeFiltersCount)',
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       style: ElevatedButton.styleFrom(
@@ -718,7 +718,7 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
         const SizedBox(height: 6),
         DropdownButtonFormField<String>(
           isExpanded: true,
-          value: value,
+          initialValue: value,
           decoration: InputDecoration(
             filled: true,
             fillColor: AppPalette.background,
@@ -767,7 +767,7 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
                   overflow: TextOverflow.ellipsis,
                 ),
               );
-            }).toList(),
+            }),
           ],
           onChanged: _isUpdatingFiltros ? null : onChanged,
         ),
