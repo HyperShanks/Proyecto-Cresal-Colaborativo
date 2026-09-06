@@ -15,7 +15,6 @@ import '../features/ventas/presentation/screens/checkout_crm_screen.dart';
 import '../features/ventas/presentation/screens/bandeja_precios_screen.dart';
 import '../features/ventas/presentation/screens/entregas_envios_screen.dart';
 import '../features/ventas/presentation/screens/checkout_wizard_screen.dart';
-import '../features/bodega/presentation/screens/reingreso_tareas_screen.dart';
 
 /// Registro central de rutas y guardas de seguridad RBAC.
 class AppRoutes {

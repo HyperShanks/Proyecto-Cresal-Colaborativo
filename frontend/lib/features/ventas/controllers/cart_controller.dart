@@ -1,8 +1,10 @@
 // lib/features/ventas/controllers/cart_controller.dart
 
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../models/cart_item_model.dart';
 import '../models/catalogo_model.dart';
+import '../services/carrito_service.dart';
 
 /// Controlador Reactivo de Estado Global para el Carrito Híbrido (HU-3.3).
 /// Implementado como Singleton con ChangeNotifier (100% Flutter nativo).
@@ -155,14 +157,29 @@ class CartController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Elimina un ítem específico del carrito por su ID
-  void eliminarItem(String itemId) {
-    _items.removeWhere((item) => item.id == itemId);
+  /// Elimina un ítem específico del carrito por su ID y libera su reserva si es inventariado
+  void eliminarItem(String itemId, {bool liberarEnBackend = true}) {
+    final index = _items.indexWhere((item) => item.id == itemId);
+    if (index == -1) return;
+
+    final item = _items[index];
+    if (liberarEnBackend && item.esInventariado) {
+      unawaited(CarritoService.liberarActivo(item.id));
+    }
+
+    _items.removeAt(index);
     notifyListeners();
   }
 
   /// Vacía por completo el carrito
-  void vaciarCarrito() {
+  void vaciarCarrito({bool liberarEnBackend = false}) {
+    if (liberarEnBackend) {
+      for (final item in _items) {
+        if (item.esInventariado) {
+          unawaited(CarritoService.liberarActivo(item.id));
+        }
+      }
+    }
     _items.clear();
     notifyListeners();
   }

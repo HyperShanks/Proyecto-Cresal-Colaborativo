@@ -78,7 +78,7 @@ class CheckoutWizardController extends ChangeNotifier {
       return false;
     }
     if (_currentStep == 1 && !validateStep2()) {
-      _errorMessage = 'Por favor, ingresa o busca el RUT del cliente antes de continuar.';
+      _errorMessage = 'Falta identificar al cliente. Por favor, ingresa un RUT válido antes de proceder con la reserva de estos activos.';
       notifyListeners();
       return false;
     }

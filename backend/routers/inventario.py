@@ -25,6 +25,7 @@ from schemas import (
     AsignarPrecioRequest,
     AsignarPrecioResponse,
 )
+from routers.carrito import limpiar_reservas_expiradas
 
 router = APIRouter(prefix="/api/v1/inventario", tags=["Buscador Inventario"])
 
@@ -264,6 +265,7 @@ def obtener_catalogo(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
+    limpiar_reservas_expiradas(db)
     query = (
         db.query(
             Activo_Inventariado,
@@ -406,7 +408,10 @@ def obtener_catalogo(
             transmision_tipo=transmision_val,
             ubicacion_pasillo=activo.ubicacion_pasillo,
             ubicacion_pallet=activo.ubicacion_pallet,
+            id_estado=activo.id_estado,
             estado_activo=est.nombre_estado,
+            version_lock=activo.version_lock or 1,
+            reservado_por=activo.reservado_por,
             qr_impreso=activo.qr_impreso if activo.qr_impreso is not None else False,
             imagenes=fotos_map.get(activo.id_activo, []),
         )
