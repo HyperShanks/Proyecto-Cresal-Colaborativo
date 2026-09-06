@@ -6,7 +6,6 @@ import 'package:frontend/features/tickets/presentation/screens/tickets_screen.da
 import 'package:frontend/features/tickets/presentation/screens/crear_ticket_screen.dart';
 import 'package:frontend/features/tickets/presentation/widgets/soporte_desktop_view.dart';
 import 'package:frontend/features/tickets/presentation/widgets/ticket_card.dart';
-import 'package:frontend/features/tickets/presentation/widgets/ticket_detail_sheet.dart';
 import 'package:frontend/features/tickets/presentation/widgets/ticket_detail_dialog.dart';
 import 'package:frontend/features/caja/presentation/screens/caja_main_screen.dart';
 import 'package:frontend/features/caja/presentation/widgets/caja_drawer.dart';

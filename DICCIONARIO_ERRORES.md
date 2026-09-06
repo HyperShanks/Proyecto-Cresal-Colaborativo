@@ -36,6 +36,7 @@ Este documento constituye la **Matriz Exhaustiva de Errores, Sanitización y Men
 | **Carrito** | `STOCK_COLLISION` | Al confirmar la orden, otro vendedor acaba de reservar uno de los repuestos en concurrencia. | *"Este repuesto acaba de ser reservado por otro vendedor."* | `409 Conflict` | Remover el ítem reservado o buscar repuesto sustituto. |
 | **Carrito** | `INVALID_ORDER_DATA` | La orden contiene datos inconsistentes o parámetros vacíos. | *"Datos de la orden inválidos. Revisa el formulario."* | `400 Bad Request` | Corregir los campos destacados en el Stepper. |
 | **Carrito** | `DESPACHO_INCOMPLETE` | Se seleccionó despacho a domicilio pero faltan datos del receptor o dirección. | *"Complete todos los campos obligatorios para el despacho a domicilio."* | N/A (Local) | Completar dirección, RUT y nombre del receptor. |
+| **Carrito / CRM** | `ERR_INVALID_RUT` | Ingreso o envío de RUT que no supera el algoritmo matemático Módulo 11 (falla en dígito verificador). | *"El RUT ingresado no es válido legalmente. Verifica que el dígito verificador sea correcto."* (En UI: *"RUT inválido. Verifique el número ingresado."*) | `422 Unprocessable Entity` / Local UI | Bloquea el botón de avance y muestra texto rojo; en API responde 422 estandarizado. |
 | **Carrito** | `ABONO_EXCEEDS_TOTAL` | El monto de abono ingresado supera el valor total de la venta. | *"El monto de abono no puede ser superior al total de la venta."* | N/A (Local) | Ajustar el valor del abono a un monto menor o igual al total. |
 
 ---

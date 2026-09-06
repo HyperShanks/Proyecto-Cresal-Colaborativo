@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../core/utils/rut_formatter.dart';
+import '../../../../core/utils/rut_validator.dart';
 import '../../../auth/services/auth_service.dart';
 import '../../controllers/cart_controller.dart';
 import '../../models/cart_item_model.dart';
@@ -1107,6 +1110,18 @@ class _CarritoScreenState extends State<CarritoScreen> {
                     hint: '12.345.678-9',
                     isRequired: !_esClienteAnonimo,
                     keyboardType: TextInputType.text,
+                    inputFormatters: [RutFormatter()],
+                    validator: (val) {
+                      if (!_esClienteAnonimo) {
+                        if (val == null || val.trim().isEmpty) {
+                          return 'Campo requerido';
+                        }
+                        if (!RutValidator.isValid(val)) {
+                          return 'RUT inválido. Verifique el número ingresado.';
+                        }
+                      }
+                      return null;
+                    },
                     suffixIcon: _isSearchingClient
                         ? const Padding(
                             padding: EdgeInsets.all(12.0),
@@ -1266,6 +1281,16 @@ class _CarritoScreenState extends State<CarritoScreen> {
                           label: 'RUT Receptor *',
                           hint: '12.345.678-9',
                           isRequired: true,
+                          inputFormatters: [RutFormatter()],
+                          validator: (val) {
+                            if (val == null || val.trim().isEmpty) {
+                              return 'Campo requerido';
+                            }
+                            if (!RutValidator.isValid(val)) {
+                              return 'RUT inválido. Verifique el número ingresado.';
+                            }
+                            return null;
+                          },
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -1528,6 +1553,8 @@ class _CarritoScreenState extends State<CarritoScreen> {
     TextInputType keyboardType = TextInputType.text,
     FocusNode? focusNode,
     Widget? suffixIcon,
+    List<TextInputFormatter>? inputFormatters,
+    String? Function(String?)? validator,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1545,15 +1572,17 @@ class _CarritoScreenState extends State<CarritoScreen> {
           controller: controller,
           focusNode: focusNode,
           keyboardType: keyboardType,
+          inputFormatters: inputFormatters,
           style: AppTypography.body.copyWith(fontSize: 13),
-          validator: isRequired
-              ? (val) {
-                  if (val == null || val.trim().isEmpty) {
-                    return 'Campo requerido';
-                  }
-                  return null;
-                }
-              : null,
+          validator: validator ??
+              (isRequired
+                  ? (val) {
+                      if (val == null || val.trim().isEmpty) {
+                        return 'Campo requerido';
+                      }
+                      return null;
+                    }
+                  : null),
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: AppTypography.small.copyWith(

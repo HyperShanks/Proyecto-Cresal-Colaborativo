@@ -1,6 +1,7 @@
 // lib/features/ventas/services/ordenes_service.dart
 
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../../../core/constants/api_constants.dart';
@@ -749,11 +750,11 @@ class OrdenesService {
 
       final payload = {
         'metodo_pago': metodoPago,
-        if (monto != null) 'monto': monto,
+        'monto': ?monto,
         if (observaciones != null && observaciones.isNotEmpty) 'observaciones': observaciones,
       };
 
-      print('💳 [SERVICE] Enviando confirmación de pago para orden ID: $idOrden ($metodoPago)');
+      debugPrint('💳 [SERVICE] Enviando confirmación de pago para orden ID: $idOrden ($metodoPago)');
 
       final response = await httpClient
           .post(
@@ -779,7 +780,7 @@ class OrdenesService {
 
       if (response.statusCode == 200) {
         if (decodedBody is Map<String, dynamic>) {
-          print('✅ [SERVICE] Pago exitoso recibido. QR: ${decodedBody['qr_transaccional_salida']}');
+          debugPrint('✅ [SERVICE] Pago exitoso recibido. QR: ${decodedBody['qr_transaccional_salida']}');
           return OrdenPagoResponseModel.fromJson(decodedBody);
         }
         throw Exception('Respuesta del servidor no válida al procesar el pago.');
@@ -795,7 +796,7 @@ class OrdenesService {
         throw Exception(detail?.toString() ?? 'Error al procesar el pago (${response.statusCode}).');
       }
     } catch (e) {
-      print('💥 [SERVICE] Error en pagarOrden: $e');
+      debugPrint('💥 [SERVICE] Error en pagarOrden: $e');
       if (e is Exception) rethrow;
       throw Exception('Error inesperado al procesar el pago: $e');
     } finally {

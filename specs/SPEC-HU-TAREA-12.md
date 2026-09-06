@@ -55,13 +55,13 @@ De acuerdo a las directivas de blindaje visual y UX:
    - *Mensaje Payload JSON*: El exception handler global responderá con `{"error_code": "ERR_INVALID_RUT", "message_user": "El RUT ingresado no es válido legalmente. Verifica que el dígito verificador sea correcto."}`
 
 ## 4. Checklist de Tareas de Implementación (TDD)
-- [ ] **Tarea 1 (Backend - Utils)**: Desarrollar `backend/core/utils/validators.py` con el algoritmo Módulo 11 en Python puro.
-- [ ] **Tarea 2 (Backend - Schemas Pydantic)**: Aplicar el validador `normalizar_y_validar_rut` a todos los esquemas relevantes en `backend/schemas.py`.
-- [ ] **Tarea 3 (Backend - Pruebas Pytest)**: Escribir unit tests introduciendo RUTs válidos, inválidos e inventados (ej. `1.111.111-1`) y validar el rechazo de Pydantic (HTTP 422).
-- [ ] **Tarea 4 (Frontend - Utils y Formatter)**: Programar `RutValidator` y `RutFormatter` en `lib/core/utils/` replicando exactamente el comportamiento matemático en Dart.
-- [ ] **Tarea 5 (Frontend - UI y Validaciones)**: Inyectar validadores reactivos en el Wizard de Mesón y modal de clientes para bloquear botones de acción y desplegar el texto de advertencia rojo. Utilizar `if (!mounted) return;` en cualquier submisión.
-- [ ] **Tarea 6 (Frontend - Pruebas Widget)**: Redactar un Test en Flutter para asegurar que `RutValidator.isValid('12345678-5')` (rut falso) devuelva `false` y deshabilite el botón mock.
-- [ ] **Tarea 7 (Documentación OBLIGATORIA)**: Finalizado el código, anexar o crear un archivo `DICCIONARIO_ERRORES_TAREA12.md` detallando las capas (Front/Back) donde salta el error de RUT, la captura del `422` y los textos asociados requeridos.
+- [x] **Tarea 1 (Backend - Utils)**: Desarrollar `backend/core/utils/validators.py` con el algoritmo Módulo 11 en Python puro.
+- [x] **Tarea 2 (Backend - Schemas Pydantic)**: Aplicar el validador `normalizar_y_validar_rut` a todos los esquemas relevantes en `backend/schemas.py`.
+- [x] **Tarea 3 (Backend - Pruebas Pytest)**: Escribir unit tests introduciendo RUTs válidos, inválidos e inventados (ej. `1.111.111-1`) y validar el rechazo de Pydantic (HTTP 422).
+- [x] **Tarea 4 (Frontend - Utils y Formatter)**: Programar `RutValidator` y `RutFormatter` en `lib/core/utils/` replicando exactamente el comportamiento matemático en Dart.
+- [x] **Tarea 5 (Frontend - UI y Validaciones)**: Inyectar validadores reactivos en el Wizard de Mesón y modal de clientes para bloquear botones de acción y desplegar el texto de advertencia rojo. Utilizar `if (!mounted) return;` en cualquier submisión.
+- [x] **Tarea 6 (Frontend - Pruebas Widget)**: Redactar un Test en Flutter para asegurar que `RutValidator.isValid('12345678-5')` (rut falso) devuelva `false` y deshabilite el botón mock.
+- [x] **Tarea 7 (Documentación OBLIGATORIA)**: Finalizado el código, anexar o crear un archivo `DICCIONARIO_ERRORES_TAREA12.md` detallando las capas (Front/Back) donde salta el error de RUT, la captura del `422` y los textos asociados requeridos.
 
 ## 5. Criterios de Validación Automatizada
 - Backend Tests: Ejecutar `pytest tests/test_rut_validator.py -v`.
