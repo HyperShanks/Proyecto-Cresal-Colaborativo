@@ -5,6 +5,51 @@ from datetime import datetime
 from enum import Enum
 import re
 
+from core.utils.validators import validar_rut_modulo11
+
+
+# ==========================================
+# ESQUEMA BASE TRANSVERSAL PARA RUT (HU-12)
+# ==========================================
+
+class BaseRutSchema(BaseModel):
+    """
+    Esquema base que aplica validación matemática Módulo 11
+    a cualquier campo de RUT estándar (rut_cliente, receptor_rut, rut_usuario).
+    """
+    model_config = ConfigDict(from_attributes=True)
+
+    @field_validator(
+        'rut_cliente', 'receptor_rut', 'rut_usuario',
+        mode='before', check_fields=False
+    )
+    def normalizar_y_validar_rut(cls, v: str) -> str:
+        if not v:
+            return v
+        es_valido, rut_limpio = validar_rut_modulo11(v)
+        if not es_valido:
+            raise ValueError(
+                "El RUT ingresado no es matemáticamente válido "
+                "(falla en dígito verificador)."
+            )
+        return rut_limpio
+
+
+class ClienteCreateRequest(BaseRutSchema):
+    """Payload para registro de nuevo cliente en Micro-CRM (HU-12)."""
+    rut_cliente: str = Field(..., description="RUT chileno del cliente")
+    nombres: str = Field(..., min_length=1, description="Nombres del cliente")
+    apellidos: str = Field(
+        ..., min_length=1, description="Apellidos del cliente"
+    )
+    telefono: Optional[str] = Field(None, description="Teléfono de contacto")
+    correo: Optional[str] = Field(None, description="Correo electrónico")
+    id_comuna: Optional[int] = Field(None, description="ID de la comuna")
+    comuna: Optional[str] = Field(None, description="Nombre de la comuna")
+    consentimiento_legal: bool = Field(
+        True, description="Aceptación Ley N° 21.719"
+    )
+
 
 # ==========================================
 # ESQUEMAS PARA VEHÍCULOS (HU-2.2 Ingesta)
@@ -405,8 +450,14 @@ class CatalogoItemResponse(BaseModel):
     
     # Ubicación y estado
     ubicacion_pasillo: Optional[str] = None
+    ubicacion_galpon: Optional[str] = None
     ubicacion_pallet: Optional[str] = None
+    observacion_estado: Optional[str] = None
+    numero_motor: Optional[str] = None
+    id_estado: Optional[int] = None
     estado_activo: Optional[str] = None
+    version_lock: int = 1
+    reservado_por: Optional[UUID] = None
     qr_impreso: bool = False
     imagenes: List[str] = []
 
@@ -417,6 +468,51 @@ class PaginatedCatalogoResponse(BaseModel):
     total_count: int
     limit: int
     offset: int
+
+
+# ==========================================
+# ESQUEMAS PARA RESERVA TEMPORAL DE CARRITO (SPEC-HU-TAREA-3)
+# ==========================================
+
+class ReservaCarritoRequest(BaseModel):
+    """Solicitud de bloqueo / reserva temporal de un activo único en el carrito."""
+    model_config = ConfigDict(from_attributes=True)
+    id_activo: UUID
+    version_lock_esperado: int
+
+
+class ReservaCarritoResponse(BaseModel):
+    """Respuesta exitosa de reserva temporal."""
+    model_config = ConfigDict(from_attributes=True)
+    id_activo: UUID
+    version_lock: int
+    reservado_por: UUID
+    reserva_expira_en: datetime
+    mensaje: str
+
+
+class LiberarCarritoResponse(BaseModel):
+    """Respuesta al liberar voluntariamente una reserva temporal."""
+    id_activo: UUID
+    version_lock: int
+    mensaje: str
+
+
+class HeartbeatCarritoResponse(BaseModel):
+    """Respuesta al refrescar la caducidad de reservas por actividad (Heartbeat)."""
+    mensaje: str
+    activos_renovados: int
+    nueva_expiracion: datetime
+
+
+class MisReservasItemResponse(BaseModel):
+    """Resumen de un ítem reservado actualmente por el usuario."""
+    model_config = ConfigDict(from_attributes=True)
+    id_activo: UUID
+    sku_qr_fisico: str
+    version_lock: int
+    reserva_expira_en: datetime
+    segundos_restantes: int
 
 
 # ==========================================
@@ -755,6 +851,39 @@ class AsignarPrecioResponse(BaseModel):
     precio_referencia: int
     estado_activo: str
     mensaje: str
+
+
+# ==========================================
+# ESQUEMAS PARA EDICIÓN DE ACTIVOS EN BODEGA PDA (HU-11)
+# ==========================================
+
+class EditarActivoRequest(BaseModel):
+    """Payload para editar ubicación técnica y notas de un activo en bodega PDA."""
+    model_config = ConfigDict(from_attributes=True)
+
+    ubicacion_pasillo: Optional[str] = None
+    ubicacion_galpon: Optional[str] = None
+    ubicacion_pallet: Optional[str] = None
+    observacion_estado: Optional[str] = None
+    numero_motor: Optional[str] = None
+    cilindrada: Optional[str] = None
+    version_lock_esperado: int
+
+
+class EditarActivoResponse(BaseModel):
+    """DTO de respuesta tras edición técnica exitosa con nuevo version_lock."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id_activo: UUID
+    sku_qr_fisico: str
+    ubicacion_pasillo: Optional[str] = None
+    ubicacion_galpon: Optional[str] = None
+    ubicacion_pallet: Optional[str] = None
+    observacion_estado: Optional[str] = None
+    numero_motor: Optional[str] = None
+    cilindrada: Optional[str] = None
+    version_lock: int
+    mensaje: str = "Activo actualizado exitosamente."
 
 
 # ==========================================

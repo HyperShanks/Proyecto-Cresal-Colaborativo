@@ -1,11 +1,16 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../core/utils/rut_formatter.dart';
+import '../../../../core/utils/rut_validator.dart';
 import '../../../auth/services/auth_service.dart';
 import '../../controllers/cart_controller.dart';
 import '../../models/cart_item_model.dart';
 import '../../services/ordenes_service.dart';
+import '../../services/carrito_service.dart';
 import '../widgets/cart_item_tile.dart';
 import '../widgets/venta_libre_dialog.dart';
 
@@ -73,11 +78,19 @@ class _CarritoScreenState extends State<CarritoScreen> {
     'Santiago',
   ];
 
+  // Temporizadores para Reserva Concurrente (HU-03)
+  Timer? _countdownTimer;
+  Timer? _heartbeatTimer;
+  int _segundosRestantes = 900; // 15 minutos base
+  bool _isExtendingTime = false;
+
   @override
   void initState() {
     super.initState();
     _rutFocusNode.addListener(_onRutFocusChange);
+    CartController.instance.addListener(_onCartChanged);
     _cargarVendedores();
+    _iniciarCountdown();
   }
 
   Future<void> _cargarVendedores() async {
@@ -99,8 +112,139 @@ class _CarritoScreenState extends State<CarritoScreen> {
     } catch (_) {}
   }
 
+  void _onCartChanged() {
+    final tieneInventariados = CartController.instance.items.any((i) => i.esInventariado);
+    if (tieneInventariados) {
+      if (_countdownTimer == null || !_countdownTimer!.isActive) {
+        _iniciarCountdown();
+      }
+    } else {
+      _countdownTimer?.cancel();
+      _heartbeatTimer?.cancel();
+    }
+  }
+
+  void _iniciarCountdown() {
+    _countdownTimer?.cancel();
+    _heartbeatTimer?.cancel();
+
+    final tieneInventariados = CartController.instance.items.any((i) => i.esInventariado);
+    if (!tieneInventariados) {
+      _segundosRestantes = 900;
+      return;
+    }
+
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_segundosRestantes > 1) {
+        setState(() {
+          _segundosRestantes--;
+        });
+      } else {
+        timer.cancel();
+        _onReservaExpirada();
+      }
+    });
+
+    // Heartbeat automático cada 3 minutos si hay repuestos en reserva
+    _heartbeatTimer = Timer.periodic(const Duration(minutes: 3), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      _enviarHeartbeatSilencioso();
+    });
+  }
+
+  void _enviarHeartbeatSilencioso() async {
+    final tieneInventariados = CartController.instance.items.any((i) => i.esInventariado);
+    if (!tieneInventariados) return;
+    try {
+      await CarritoService.heartbeat(client: widget.httpClient);
+    } catch (_) {}
+  }
+
+  Future<void> _extenderTiempoReserva() async {
+    setState(() {
+      _isExtendingTime = true;
+    });
+
+    try {
+      await CarritoService.heartbeat(client: widget.httpClient);
+      if (!mounted) return;
+
+      setState(() {
+        _segundosRestantes = 900;
+        _isExtendingTime = false;
+      });
+
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppPalette.surface,
+          duration: const Duration(seconds: 2),
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle, color: AppPalette.primary, size: 20),
+              const SizedBox(width: 10),
+              Text(
+                'Tiempo de reserva extendido por 15 minutos más.',
+                style: AppTypography.small.copyWith(color: AppPalette.textPrimary),
+              ),
+            ],
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isExtendingTime = false;
+      });
+    }
+  }
+
+  void _onReservaExpirada() {
+    _countdownTimer?.cancel();
+    _heartbeatTimer?.cancel();
+
+    // Vaciar el carrito y liberar reservas en backend
+    CartController.instance.vaciarCarrito(liberarEnBackend: true);
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: AppPalette.surface,
+        duration: const Duration(seconds: 5),
+        behavior: SnackBarBehavior.floating,
+        content: Row(
+          children: [
+            const Icon(Icons.alarm_off, color: AppPalette.error, size: 22),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Tu tiempo de reserva ha finalizado por inactividad. Los artículos han sido devueltos al catálogo general.',
+                style: AppTypography.small.copyWith(
+                  color: AppPalette.textPrimary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
+    _countdownTimer?.cancel();
+    _heartbeatTimer?.cancel();
+    CartController.instance.removeListener(_onCartChanged);
     _rutFocusNode.removeListener(_onRutFocusChange);
     _rutFocusNode.dispose();
     _rutController.dispose();
@@ -382,8 +526,7 @@ class _CarritoScreenState extends State<CarritoScreen> {
           'monto_abono': abonoNum,
         if (_tipoEntrega == 'Traslado')
           'id_sucursal_destino': _idSucursalDestino,
-        if (despachoPayload != null)
-          'despacho': despachoPayload,
+        'despacho': ?despachoPayload,
         'consentimiento_legal': true,
         'items': itemsPayload,
       };
@@ -688,6 +831,82 @@ class _CarritoScreenState extends State<CarritoScreen> {
     );
   }
 
+  /// Banner de Countdown de Reserva Temporal (HU-03)
+  Widget _buildReservationCountdownBanner(CartController cart) {
+    final tieneInventariados = cart.items.any((i) => i.esInventariado);
+    if (!tieneInventariados) return const SizedBox.shrink();
+
+    final minutos = _segundosRestantes ~/ 60;
+    final segundos = _segundosRestantes % 60;
+    final tiempoStr = '${minutos.toString().padLeft(2, '0')}:${segundos.toString().padLeft(2, '0')}';
+
+    final bool esUrgente = _segundosRestantes < 180; // Menos de 3 minutos
+    final Color colorBanner = esUrgente ? AppPalette.error : AppPalette.primary;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16.0),
+      padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
+      decoration: BoxDecoration(
+        color: colorBanner.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10.0),
+        border: Border.all(
+          color: colorBanner.withValues(alpha: 0.4),
+          width: 1.2,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            esUrgente ? Icons.hourglass_bottom_rounded : Icons.timer_outlined,
+            color: colorBanner,
+            size: 22,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Reserva Temporal Activa',
+                  style: AppTypography.small.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: colorBanner,
+                    fontSize: 12,
+                  ),
+                ),
+                Text(
+                  'Expira en: $tiempoStr minutos',
+                  style: AppTypography.small.copyWith(
+                    color: AppPalette.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton.icon(
+            onPressed: _isExtendingTime ? null : _extenderTiempoReserva,
+            icon: _isExtendingTime
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.refresh, size: 16),
+            label: const Text('Extender'),
+            style: TextButton.styleFrom(
+              foregroundColor: colorBanner,
+              textStyle: AppTypography.small.copyWith(fontWeight: FontWeight.bold),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Cuerpo Continuo: Lista de Carrito + Formulario Micro-CRM
   Widget _buildUnifiedBody(BuildContext context, CartController cart) {
     return Form(
@@ -739,7 +958,11 @@ class _CarritoScreenState extends State<CarritoScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
+
+            // ── Banner de Countdown de Reserva Temporal (HU-03) ───────────────
+            _buildReservationCountdownBanner(cart),
+            const SizedBox(height: 8),
 
             // ── 2. Lista de Productos (shrinkWrap: true) ────────────────────
             ListView.builder(
@@ -887,6 +1110,18 @@ class _CarritoScreenState extends State<CarritoScreen> {
                     hint: '12.345.678-9',
                     isRequired: !_esClienteAnonimo,
                     keyboardType: TextInputType.text,
+                    inputFormatters: [RutFormatter()],
+                    validator: (val) {
+                      if (!_esClienteAnonimo) {
+                        if (val == null || val.trim().isEmpty) {
+                          return 'Campo requerido';
+                        }
+                        if (!RutValidator.isValid(val)) {
+                          return 'RUT inválido. Verifique el número ingresado.';
+                        }
+                      }
+                      return null;
+                    },
                     suffixIcon: _isSearchingClient
                         ? const Padding(
                             padding: EdgeInsets.all(12.0),
@@ -1046,6 +1281,16 @@ class _CarritoScreenState extends State<CarritoScreen> {
                           label: 'RUT Receptor *',
                           hint: '12.345.678-9',
                           isRequired: true,
+                          inputFormatters: [RutFormatter()],
+                          validator: (val) {
+                            if (val == null || val.trim().isEmpty) {
+                              return 'Campo requerido';
+                            }
+                            if (!RutValidator.isValid(val)) {
+                              return 'RUT inválido. Verifique el número ingresado.';
+                            }
+                            return null;
+                          },
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -1308,6 +1553,8 @@ class _CarritoScreenState extends State<CarritoScreen> {
     TextInputType keyboardType = TextInputType.text,
     FocusNode? focusNode,
     Widget? suffixIcon,
+    List<TextInputFormatter>? inputFormatters,
+    String? Function(String?)? validator,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1325,15 +1572,17 @@ class _CarritoScreenState extends State<CarritoScreen> {
           controller: controller,
           focusNode: focusNode,
           keyboardType: keyboardType,
+          inputFormatters: inputFormatters,
           style: AppTypography.body.copyWith(fontSize: 13),
-          validator: isRequired
-              ? (val) {
-                  if (val == null || val.trim().isEmpty) {
-                    return 'Campo requerido';
-                  }
-                  return null;
-                }
-              : null,
+          validator: validator ??
+              (isRequired
+                  ? (val) {
+                      if (val == null || val.trim().isEmpty) {
+                        return 'Campo requerido';
+                      }
+                      return null;
+                    }
+                  : null),
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: AppTypography.small.copyWith(

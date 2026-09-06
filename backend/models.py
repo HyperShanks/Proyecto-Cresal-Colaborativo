@@ -161,6 +161,8 @@ class Activo_Inventariado(Base):
     fecha_creacion = Column(DateTime, nullable=False, server_default=text("now()"))
     fecha_actualizacion = Column(DateTime, nullable=True)
     qr_impreso = Column(Boolean, nullable=False, default=False)
+    reservado_por = Column(UUID(as_uuid=True), ForeignKey("Usuario.id_usuario"), nullable=True)
+    reserva_expira_en = Column(DateTime, nullable=True)
 
 class Detalle_Motor(Base):
     __tablename__ = "Detalle_Motor"

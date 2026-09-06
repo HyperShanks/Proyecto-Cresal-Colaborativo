@@ -20,6 +20,9 @@ class CatalogoItem {
   final String? ubicacionPallet;
   final String? estadoActivo;
   final List<String> imagenes;
+  final int versionLock;
+  final int? idEstado;
+  final String? reservadoPor;
 
   const CatalogoItem({
     required this.idActivo,
@@ -41,7 +44,62 @@ class CatalogoItem {
     this.ubicacionPallet,
     this.estadoActivo,
     this.imagenes = const [],
+    this.versionLock = 1,
+    this.idEstado,
+    this.reservadoPor,
   });
+
+  bool get esReservado => idEstado == 2 || estadoActivo?.toLowerCase() == 'reservado';
+
+  CatalogoItem copyWith({
+    String? idActivo,
+    String? skuQrFisico,
+    int? precioReferencia,
+    int? idCategoria,
+    String? nombreCategoria,
+    int? idSucursalActual,
+    String? nombreSucursal,
+    String? idVehiculo,
+    String? marca,
+    String? modelo,
+    int? anio,
+    String? traccion,
+    String? cilindrada,
+    String? combustible,
+    String? transmisionTipo,
+    String? ubicacionPasillo,
+    String? ubicacionPallet,
+    String? estadoActivo,
+    List<String>? imagenes,
+    int? versionLock,
+    int? idEstado,
+    String? reservadoPor,
+  }) {
+    return CatalogoItem(
+      idActivo: idActivo ?? this.idActivo,
+      skuQrFisico: skuQrFisico ?? this.skuQrFisico,
+      precioReferencia: precioReferencia ?? this.precioReferencia,
+      idCategoria: idCategoria ?? this.idCategoria,
+      nombreCategoria: nombreCategoria ?? this.nombreCategoria,
+      idSucursalActual: idSucursalActual ?? this.idSucursalActual,
+      nombreSucursal: nombreSucursal ?? this.nombreSucursal,
+      idVehiculo: idVehiculo ?? this.idVehiculo,
+      marca: marca ?? this.marca,
+      modelo: modelo ?? this.modelo,
+      anio: anio ?? this.anio,
+      traccion: traccion ?? this.traccion,
+      cilindrada: cilindrada ?? this.cilindrada,
+      combustible: combustible ?? this.combustible,
+      transmisionTipo: transmisionTipo ?? this.transmisionTipo,
+      ubicacionPasillo: ubicacionPasillo ?? this.ubicacionPasillo,
+      ubicacionPallet: ubicacionPallet ?? this.ubicacionPallet,
+      estadoActivo: estadoActivo ?? this.estadoActivo,
+      imagenes: imagenes ?? this.imagenes,
+      versionLock: versionLock ?? this.versionLock,
+      idEstado: idEstado ?? this.idEstado,
+      reservadoPor: reservadoPor ?? this.reservadoPor,
+    );
+  }
 
   factory CatalogoItem.fromJson(Map<String, dynamic> json) {
     return CatalogoItem(
@@ -64,6 +122,9 @@ class CatalogoItem {
       ubicacionPallet: json['ubicacion_pallet']?.toString(),
       estadoActivo: json['estado_activo']?.toString(),
       imagenes: (json['imagenes'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? const [],
+      versionLock: json['version_lock'] as int? ?? 1,
+      idEstado: json['id_estado'] as int?,
+      reservadoPor: json['reservado_por']?.toString(),
     );
   }
 
@@ -88,6 +149,9 @@ class CatalogoItem {
       'ubicacion_pallet': ubicacionPallet,
       'estado_activo': estadoActivo,
       'imagenes': imagenes,
+      'version_lock': versionLock,
+      'id_estado': idEstado,
+      'reservado_por': reservadoPor,
     };
   }
 

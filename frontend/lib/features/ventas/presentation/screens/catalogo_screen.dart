@@ -9,6 +9,7 @@ import '../../../auth/services/auth_service.dart';
 import '../../controllers/cart_controller.dart';
 import '../../models/catalogo_model.dart';
 import '../../services/catalogo_service.dart';
+import '../../services/carrito_service.dart';
 import '../widgets/catalogo_item_card.dart';
 import '../widgets/filtros_drawer.dart';
 import '../widgets/venta_libre_dialog.dart';
@@ -179,7 +180,7 @@ class CatalogoScreenState extends State<CatalogoScreen> {
       if (!mounted) return;
 
       final itemsDisponibles = response.items
-          .where((i) => i.estadoActivo?.toLowerCase() == 'disponible')
+          .where((i) => i.estadoActivo?.toLowerCase() != 'vendido' && i.estadoActivo?.toLowerCase() != 'de baja')
           .toList();
 
       setState(() {
@@ -217,34 +218,138 @@ class CatalogoScreenState extends State<CatalogoScreen> {
     );
   }
 
-  void _onAddToCart(CatalogoItem item) {
-    final agregado = CartController.instance.agregarInventariado(item);
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: AppPalette.surface,
-        duration: const Duration(seconds: 2),
-        content: Row(
-          children: [
-            Icon(
-              agregado ? Icons.check_circle : Icons.info_outline,
-              color: agregado ? AppPalette.primary : AppPalette.secondary,
-              size: 20,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                agregado
-                    ? '${item.tituloRepuesto} agregado al carrito'
-                    : 'Este activo ya está en el carrito',
-                style: AppTypography.small.copyWith(color: AppPalette.textPrimary),
-                overflow: TextOverflow.ellipsis,
+  Future<void> _onAddToCart(CatalogoItem item) async {
+    if (item.esReservado) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppPalette.surface,
+          duration: const Duration(seconds: 3),
+          content: Row(
+            children: [
+              const Icon(Icons.warning_amber_rounded, color: AppPalette.error, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '¡Lo sentimos! Este repuesto acaba de ser reservado por otro vendedor hace un instante.',
+                  style: AppTypography.small.copyWith(color: AppPalette.textPrimary),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
-    );
+      );
+      return;
+    }
+
+    if (CartController.instance.estaEnCarrito(item.idActivo)) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppPalette.surface,
+          duration: const Duration(seconds: 2),
+          content: Row(
+            children: [
+              const Icon(Icons.info_outline, color: AppPalette.secondary, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Este activo ya está en el carrito',
+                  style: AppTypography.small.copyWith(color: AppPalette.textPrimary),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      return;
+    }
+
+    try {
+      final reserva = await CarritoService.reservarActivo(
+        item.idActivo,
+        item.versionLock,
+      );
+
+      if (!mounted) return;
+
+      final updatedItem = item.copyWith(
+        versionLock: reserva['version_lock'] as int? ?? (item.versionLock + 1),
+      );
+
+      final agregado = CartController.instance.agregarInventariado(updatedItem);
+
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppPalette.surface,
+          duration: const Duration(seconds: 2),
+          content: Row(
+            children: [
+              Icon(
+                agregado ? Icons.check_circle : Icons.info_outline,
+                color: agregado ? AppPalette.primary : AppPalette.secondary,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  agregado
+                      ? '${item.tituloRepuesto} agregado al carrito'
+                      : 'Este activo ya está en el carrito',
+                  style: AppTypography.small.copyWith(color: AppPalette.textPrimary),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    } on CarritoException catch (e) {
+      if (!mounted) return;
+
+      if (e.statusCode == 409 || e.errorCode == 'RESERVATION_COLLISION') {
+        setState(() {
+          final idx = _items.indexWhere((it) => it.idActivo == item.idActivo);
+          if (idx != -1) {
+            _items[idx] = _items[idx].copyWith(idEstado: 2, estadoActivo: 'Reservado');
+          }
+        });
+      }
+
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppPalette.surface,
+          duration: const Duration(seconds: 4),
+          content: Row(
+            children: [
+              const Icon(Icons.warning_amber_rounded, color: AppPalette.error, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  e.message,
+                  style: AppTypography.small.copyWith(color: AppPalette.textPrimary),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppPalette.surface,
+          content: Text(
+            e.toString().replaceFirst('Exception: ', ''),
+            style: AppTypography.small.copyWith(color: AppPalette.error),
+          ),
+        ),
+      );
+    }
   }
 
   void _onVentaRapida() {

@@ -299,13 +299,19 @@ def registrar_cobro(
     Endpoint transaccional para registro de cobros en caja (SPEC-HU-03).
     Soporta pago único o dividido (split payment) sobre Orden_Venta y Reservas_Backorder.
     """
-    # 1. Validación de Cuadratura Matemática (CA-05)
+    # 0. Validación de Métodos Seleccionados (SPEC-HU-07)
+    if not payload.pagos or len(payload.pagos) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Selecciona un método de pago antes de procesar."
+        )
+
+    # 1. Validación de Cuadratura Matemática (CA-05 / SPEC-HU-07)
     total_pagos = sum(p.monto for p in payload.pagos)
     if total_pagos != payload.monto_declarado:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Descuadre financiero: La suma de los métodos de pago (${total_pagos:,}) "
-                   f"no coincide con el monto declarado a cobrar (${payload.monto_declarado:,})."
+            detail=f"Descuadre financiero: El monto total ingresado no cubre el saldo pendiente de la orden (${payload.monto_declarado:,})."
         )
 
     # 2. Validación de montos individuales > 0 (CA-06)

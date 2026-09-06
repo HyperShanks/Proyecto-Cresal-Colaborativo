@@ -255,7 +255,7 @@ def test_anular_orden_pagada_reversa_pagos_y_genera_tarea_reingreso(client, rein
         assert pago_db.estado_pago == "Anulado"
 
         activo_db = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == reingreso_db["activo_1_id"]).first()
-        assert activo_db.id_estado in [1, 7]  # Disponible o Paletizado tras anulación
+        assert activo_db.id_estado == 1  # Disponible en catálogo inmediatamente
     finally:
         db.close()
 

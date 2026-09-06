@@ -90,7 +90,7 @@ void main() {
     test('Validación de paso impide avanzar sin ítems (Paso 0 -> Paso 1)', () {
       expect(controller.nextStep(), isFalse);
       expect(controller.currentStep, equals(0));
-      expect(controller.errorMessage, contains('al menos un producto'));
+      expect(controller.errorMessage, contains('al menos un artículo'));
 
       controller.addItemInventariado(
         idActivo: 'act-001',

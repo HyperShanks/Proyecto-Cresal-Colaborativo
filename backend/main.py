@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from database import engine, Base
-from routers import vehiculos, auth, tickets, bodega, inventario, ordenes, clientes, despachos, caja
+from routers import vehiculos, auth, tickets, bodega, inventario, ordenes, clientes, despachos, caja, carrito
 from fastapi.middleware.cors import CORSMiddleware
+from core.exceptions import register_exception_handlers
 import models
 import os
 
@@ -14,6 +15,9 @@ app = FastAPI(
     description="Backend transaccional para gestión de inventario y barrera digital",
     version="1.0.0"
 )
+
+# Registrar Manejadores de Excepciones Globales y Sanitización (SPEC-HU-07)
+register_exception_handlers(app)
 
 # Configuración de CORS para permitir peticiones desde Flutter Web u otros orígenes
 app.add_middleware(
@@ -45,4 +49,5 @@ app.include_router(inventario.router)
 app.include_router(ordenes.router)
 app.include_router(clientes.router)
 app.include_router(despachos.router)
-app.include_router(caja.router)
+app.include_router(caja.router)
+app.include_router(carrito.router, prefix="/api/v1/carrito", tags=["Carrito y Reserva Temporal"])

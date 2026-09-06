@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../core/utils/rut_formatter.dart';
+import '../../../../core/utils/rut_validator.dart';
 import '../../../auth/services/auth_service.dart';
 import '../../controllers/cart_controller.dart';
 import '../../models/cart_item_model.dart';
@@ -372,7 +374,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Folio: ${res.idOrden.length >= 8 ? "ORD-" + res.idOrden.substring(0, 8).toUpperCase() : res.idOrden}', style: AppTypography.small.copyWith(color: AppPalette.secondary, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+              Text('Folio: ${res.idOrden.length >= 8 ? "ORD-${res.idOrden.substring(0, 8).toUpperCase()}" : res.idOrden}', style: AppTypography.small.copyWith(color: AppPalette.secondary, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               Text('Total Venta: \$${res.totalVenta}', style: AppTypography.body.copyWith(fontWeight: FontWeight.bold)),
               Text('Monto Pendiente en Caja: \$${res.montoPendiente}', style: AppTypography.body.copyWith(color: AppPalette.secondary)),
@@ -836,62 +838,89 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
           ),
         ] else ...[
           // Formulario Unificado de Cliente
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppPalette.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white12),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _rutController,
-                        focusNode: _rutFocusNode,
-                        style: AppTypography.body,
-                        decoration: _inputDeco(
-                          'RUT Cliente (ej: 12.345.678-9) *',
-                          Icons.badge_outlined,
-                          suffix: _isSearchingCliente
-                              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppPalette.primary))
-                              : IconButton(
-                                  icon: const Icon(Icons.search, color: AppPalette.primary, size: 20),
-                                  tooltip: 'Buscar por RUT',
-                                  onPressed: _buscarClientePorRut,
-                                ),
-                        ),
-                        onChanged: (val) => _actualizarClienteLocal(),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
+          Builder(
+            builder: (context) {
+              final rutText = _rutController.text.trim();
+              final bool rutInvalido = !_esClienteAnonimo &&
+                  rutText.isNotEmpty &&
+                  !RutValidator.isValid(rutText);
+              final String? rutError = rutInvalido
+                  ? 'RUT inválido. Verifique el número ingresado.'
+                  : null;
 
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _clienteNombresController,
-                        style: AppTypography.body,
-                        decoration: _inputDeco('Nombres *', Icons.person),
-                        onChanged: (val) => _actualizarClienteLocal(),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextField(
-                        controller: _clienteApellidosController,
-                        style: AppTypography.body,
-                        decoration: _inputDeco('Apellidos *', Icons.person_outline),
-                        onChanged: (val) => _actualizarClienteLocal(),
-                      ),
-                    ),
-                  ],
+              return Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppPalette.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white12),
                 ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            key: const Key('input_rut_cliente'),
+                            controller: _rutController,
+                            focusNode: _rutFocusNode,
+                            style: AppTypography.body,
+                            inputFormatters: [RutFormatter()],
+                            decoration: _inputDeco(
+                              'RUT Cliente (ej: 12.345.678-9) *',
+                              Icons.badge_outlined,
+                              errorText: rutError,
+                              suffix: _isSearchingCliente
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: AppPalette.primary))
+                                  : IconButton(
+                                      icon: const Icon(Icons.search,
+                                          color: AppPalette.primary, size: 20),
+                                      tooltip: 'Buscar por RUT',
+                                      onPressed: _buscarClientePorRut,
+                                    ),
+                            ),
+                            onChanged: (val) {
+                              setState(() {});
+                              _actualizarClienteLocal();
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            key: const Key('input_cliente_nombres'),
+                            controller: _clienteNombresController,
+                            style: AppTypography.body,
+                            decoration: _inputDeco('Nombres *', Icons.person),
+                            onChanged: (val) {
+                              setState(() {});
+                              _actualizarClienteLocal();
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextField(
+                            key: const Key('input_cliente_apellidos'),
+                            controller: _clienteApellidosController,
+                            style: AppTypography.body,
+                            decoration: _inputDeco('Apellidos *', Icons.person_outline),
+                            onChanged: (val) => _actualizarClienteLocal(),
+                          ),
+                        ),
+                      ],
+                    ),
                 const SizedBox(height: 12),
 
                 Row(
@@ -934,7 +963,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                 ),
               ],
             ),
-          ),
+          );
+        },
+      ),
         ],
       ],
     );
@@ -981,38 +1012,79 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
             ),
           ),
         ] else if (_controller.tipoEntrega == 'Despacho Domicilio' || _controller.tipoEntrega == 'Despacho') ...[
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppPalette.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppPalette.secondary.withValues(alpha: 0.4)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Datos del Receptor y Dirección de Envío:', style: AppTypography.body.copyWith(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 12),
-                TextField(controller: _direccionController, style: AppTypography.body, decoration: _inputDeco('Dirección de entrega (Calle, Número, Depto) *', Icons.home_outlined)),
-                const SizedBox(height: 10),
-                DropdownButtonFormField<String>(
-                  initialValue: _comunaDespacho,
-                  dropdownColor: AppPalette.surface,
-                  style: AppTypography.body,
-                  decoration: _inputDeco('Comuna Destino *', Icons.map),
-                  items: _comunasDisponibles.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-                  onChanged: (val) => setState(() => _comunaDespacho = val ?? 'Viña del Mar'),
+          Builder(
+            builder: (context) {
+              final receptorRutText = _receptorRutController.text.trim();
+              final bool receptorRutInvalido = receptorRutText.isNotEmpty &&
+                  !RutValidator.isValid(receptorRutText);
+              final String? receptorRutError = receptorRutInvalido
+                  ? 'RUT inválido. Verifique el número ingresado.'
+                  : null;
+
+              return Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppPalette.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppPalette.secondary.withValues(alpha: 0.4)),
                 ),
-                const SizedBox(height: 10),
-                TextField(controller: _empresaTransporteController, style: AppTypography.body, decoration: _inputDeco('Empresa de Transporte *', Icons.local_shipping)),
-                const SizedBox(height: 10),
-                TextField(controller: _receptorRutController, style: AppTypography.body, decoration: _inputDeco('RUT Receptor *', Icons.badge)),
-                const SizedBox(height: 10),
-                TextField(controller: _receptorNombresController, style: AppTypography.body, decoration: _inputDeco('Nombre Receptor *', Icons.person)),
-                const SizedBox(height: 10),
-                TextField(controller: _receptorTelefonoController, keyboardType: TextInputType.phone, style: AppTypography.body, decoration: _inputDeco('Teléfono Receptor *', Icons.phone)),
-              ],
-            ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Datos del Receptor y Dirección de Envío:', style: AppTypography.body.copyWith(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _direccionController,
+                      style: AppTypography.body,
+                      decoration: _inputDeco('Dirección de entrega (Calle, Número, Depto) *', Icons.home_outlined),
+                      onChanged: (val) => setState(() {}),
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      initialValue: _comunaDespacho,
+                      dropdownColor: AppPalette.surface,
+                      style: AppTypography.body,
+                      decoration: _inputDeco('Comuna Destino *', Icons.map),
+                      items: _comunasDisponibles.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                      onChanged: (val) => setState(() => _comunaDespacho = val ?? 'Viña del Mar'),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _empresaTransporteController,
+                      style: AppTypography.body,
+                      decoration: _inputDeco('Empresa de Transporte *', Icons.local_shipping),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      key: const Key('input_receptor_rut'),
+                      controller: _receptorRutController,
+                      style: AppTypography.body,
+                      inputFormatters: [RutFormatter()],
+                      decoration: _inputDeco(
+                        'RUT Receptor *',
+                        Icons.badge,
+                        errorText: receptorRutError,
+                      ),
+                      onChanged: (val) => setState(() {}),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _receptorNombresController,
+                      style: AppTypography.body,
+                      decoration: _inputDeco('Nombre Receptor *', Icons.person),
+                      onChanged: (val) => setState(() {}),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _receptorTelefonoController,
+                      keyboardType: TextInputType.phone,
+                      style: AppTypography.body,
+                      decoration: _inputDeco('Teléfono Receptor *', Icons.phone),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
         ] else if (_controller.tipoEntrega == 'Traslado') ...[
           Container(
@@ -1256,6 +1328,33 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
   }
 
   Widget _buildBottomNavigationButtons() {
+    final bool puedeAvanzar;
+    if (_controller.currentStep == 1) {
+      if (_esClienteAnonimo) {
+        puedeAvanzar = true;
+      } else {
+        final rut = _rutController.text.trim();
+        final nom = _clienteNombresController.text.trim();
+        puedeAvanzar =
+            rut.isNotEmpty && nom.isNotEmpty && RutValidator.isValid(rut);
+      }
+    } else if (_controller.currentStep == 2) {
+      if (_controller.tipoEntrega == 'Despacho Domicilio' ||
+          _controller.tipoEntrega == 'Despacho') {
+        final rRut = _receptorRutController.text.trim();
+        final dir = _direccionController.text.trim();
+        final rNom = _receptorNombresController.text.trim();
+        puedeAvanzar = dir.isNotEmpty &&
+            rNom.isNotEmpty &&
+            rRut.isNotEmpty &&
+            RutValidator.isValid(rRut);
+      } else {
+        puedeAvanzar = true;
+      }
+    } else {
+      puedeAvanzar = true;
+    }
+
     return Container(
       color: AppPalette.surface,
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
@@ -1264,7 +1363,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
         children: [
           if (_controller.currentStep > 0)
             OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(foregroundColor: AppPalette.textSecondary, side: const BorderSide(color: Colors.white24)),
+              style: OutlinedButton.styleFrom(
+                  foregroundColor: AppPalette.textSecondary,
+                  side: const BorderSide(color: Colors.white24)),
               icon: const Icon(Icons.arrow_back, size: 16),
               label: const Text('Anterior'),
               onPressed: _controller.isLoading ? null : _controller.previousStep,
@@ -1274,33 +1375,39 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
 
           if (_controller.currentStep < 4)
             ElevatedButton.icon(
+              key: const Key('btn_siguiente_wizard'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppPalette.primary,
                 foregroundColor: AppPalette.textPrimary,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                disabledBackgroundColor: AppPalette.surface,
+                disabledForegroundColor: AppPalette.textSecondary,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               ),
               icon: const Icon(Icons.arrow_forward, size: 16),
               label: const Text('Siguiente'),
-              onPressed: () {
-                if (_controller.currentStep == 1) {
-                  if (_esClienteAnonimo) {
-                    _controller.setCliente(
-                      const ClienteWizardModel(
-                        idCliente: 'cli-cf',
-                        rut: '6.666.666-6',
-                        nombres: 'Consumidor',
-                        apellidos: 'Final',
-                        comuna: 'Viña del Mar',
-                        consentimientoLegal: true,
-                        estado: 'Activo',
-                      ),
-                    );
-                  } else {
-                    _actualizarClienteLocal();
-                  }
-                }
-                _controller.nextStep();
-              },
+              onPressed: puedeAvanzar
+                  ? () {
+                      if (_controller.currentStep == 1) {
+                        if (_esClienteAnonimo) {
+                          _controller.setCliente(
+                            const ClienteWizardModel(
+                              idCliente: 'cli-cf',
+                              rut: '6.666.666-6',
+                              nombres: 'Consumidor',
+                              apellidos: 'Final',
+                              comuna: 'Viña del Mar',
+                              consentimientoLegal: true,
+                              estado: 'Activo',
+                            ),
+                          );
+                        } else {
+                          _actualizarClienteLocal();
+                        }
+                      }
+                      _controller.nextStep();
+                    }
+                  : null,
             ),
         ],
       ),
@@ -1348,7 +1455,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     );
   }
 
-  InputDecoration _inputDeco(String hint, IconData icon, {Widget? suffix}) {
+  InputDecoration _inputDeco(String hint, IconData icon, {Widget? suffix, String? errorText}) {
     return InputDecoration(
       isDense: true,
       hintText: hint,
@@ -1356,11 +1463,15 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
       prefixIcon: Icon(icon, color: AppPalette.primary, size: 18),
       prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 36),
       suffixIcon: suffix,
+      errorText: errorText,
+      errorStyle: const TextStyle(color: AppPalette.error, fontSize: 11, fontWeight: FontWeight.bold),
       filled: true,
       fillColor: AppPalette.background,
       contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white24)),
       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white24)),
+      errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppPalette.error, width: 1.5)),
+      focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppPalette.error, width: 1.5)),
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppPalette.primary, width: 1.5)),
     );
   }

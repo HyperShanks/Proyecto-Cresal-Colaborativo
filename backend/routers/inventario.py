@@ -1,8 +1,8 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
-from sqlalchemy import func, or_, case
+from sqlalchemy import func, or_, case, update
 from typing import Dict, List, Optional
 
 from database import get_db
@@ -17,14 +17,21 @@ from models import (
     Sucursal,
     Usuario,
 )
-from core.security import get_current_user, verificar_rol_jefe_ventas
+from core.security import (
+    get_current_user,
+    verificar_rol_jefe_ventas,
+    require_bodeguero_or_admin,
+)
 from schemas import (
     CatalogoItemResponse,
     PaginatedCatalogoResponse,
     ActivoPendientePrecioResponse,
     AsignarPrecioRequest,
     AsignarPrecioResponse,
+    EditarActivoRequest,
+    EditarActivoResponse,
 )
+from routers.carrito import limpiar_reservas_expiradas
 
 router = APIRouter(prefix="/api/v1/inventario", tags=["Buscador Inventario"])
 
@@ -243,6 +250,7 @@ def buscar_inventario(
                 "transmision": transmision_val or "N/A",
                 "numero_motor": motor.numero_motor if motor else None,
                 "observacion": getattr(activo, "observacion_estado", "Sin observaciones registradas."),
+                "version_lock": activo.version_lock or 1,
                 "imagenes": lista_fotos,
             }
         )
@@ -264,6 +272,7 @@ def obtener_catalogo(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
+    limpiar_reservas_expiradas(db)
     query = (
         db.query(
             Activo_Inventariado,
@@ -406,7 +415,10 @@ def obtener_catalogo(
             transmision_tipo=transmision_val,
             ubicacion_pasillo=activo.ubicacion_pasillo,
             ubicacion_pallet=activo.ubicacion_pallet,
+            id_estado=activo.id_estado,
             estado_activo=est.nombre_estado,
+            version_lock=activo.version_lock or 1,
+            reservado_por=activo.reservado_por,
             qr_impreso=activo.qr_impreso if activo.qr_impreso is not None else False,
             imagenes=fotos_map.get(activo.id_activo, []),
         )
@@ -645,8 +657,133 @@ def obtener_detalle_activo(
         combustible=combustible_val,
         transmision_tipo=transmision_val,
         ubicacion_pasillo=activo.ubicacion_pasillo,
+        ubicacion_galpon=activo.ubicacion_galpon,
         ubicacion_pallet=activo.ubicacion_pallet,
+        observacion_estado=activo.observacion_estado,
+        numero_motor=motor.numero_motor if motor else None,
+        id_estado=est.id_estado,
         estado_activo=est.nombre_estado,
+        version_lock=activo.version_lock or 1,
+        reservado_por=activo.reservado_por,
         qr_impreso=activo.qr_impreso if activo.qr_impreso is not None else False,
         imagenes=lista_fotos,
     )
+
+
+@router.patch(
+    "/{id_activo}",
+    response_model=EditarActivoResponse,
+    summary="Edición Directa de Activo Inventariado (HU-11)",
+    description="Permite a operarios de Bodega y Administradores actualizar ubicación física "
+                "y notas técnicas con control de concurrencia optimista (version_lock).",
+)
+def editar_activo_inventariado(
+    id_activo: UUID,
+    payload: EditarActivoRequest,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_bodeguero_or_admin),
+):
+    # 1. Verificar existencia previa
+    activo_existente = (
+        db.query(Activo_Inventariado)
+        .filter(Activo_Inventariado.id_activo == id_activo)
+        .first()
+    )
+    if not activo_existente:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Activo inventariado con ID '{id_activo}' no encontrado.",
+        )
+
+    # 2. Regla de Negocio: Pieza vendida o despachada no puede modificarse
+    # id_estado: 3 = Vendido, 6 = Entregado
+    estado_obj = (
+        db.query(Estado_Activo)
+        .filter(Estado_Activo.id_estado == activo_existente.id_estado)
+        .first()
+    )
+    nombre_estado = estado_obj.nombre_estado if estado_obj else ""
+    if activo_existente.id_estado in [3, 6] or nombre_estado in ["Vendido", "Entregado"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Este artículo ya fue despachado o cobrado. Ya no es posible modificar su ubicación técnica.",
+        )
+
+    # 3. Transacción atómica con control de concurrencia optimista
+    try:
+        update_values = {
+            "version_lock": Activo_Inventariado.version_lock + 1,
+            "fecha_actualizacion": datetime.now(timezone.utc).replace(tzinfo=None),
+        }
+        if payload.ubicacion_pasillo is not None:
+            update_values["ubicacion_pasillo"] = payload.ubicacion_pasillo
+        if payload.ubicacion_galpon is not None:
+            update_values["ubicacion_galpon"] = payload.ubicacion_galpon
+        if payload.ubicacion_pallet is not None:
+            update_values["ubicacion_pallet"] = payload.ubicacion_pallet
+        if payload.observacion_estado is not None:
+            update_values["observacion_estado"] = payload.observacion_estado
+
+        stmt = (
+            update(Activo_Inventariado)
+            .where(
+                Activo_Inventariado.id_activo == id_activo,
+                Activo_Inventariado.version_lock == payload.version_lock_esperado,
+            )
+            .values(**update_values)
+        )
+        result = db.execute(stmt)
+
+        if result.rowcount == 0:
+            # Falló por colisión de concurrencia optimista
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="La información de este repuesto fue modificada por otro usuario recientemente. "
+                       "Los datos se actualizarán ahora para que revises los cambios antes de volver a editar.",
+            )
+
+        # 4. Actualizar Detalle_Motor si se proporcionan campos de motor
+        motor = db.query(Detalle_Motor).filter(Detalle_Motor.id_activo == id_activo).first()
+        if payload.numero_motor is not None or payload.cilindrada is not None:
+            if motor:
+                if payload.numero_motor is not None:
+                    motor.numero_motor = payload.numero_motor
+                if payload.cilindrada is not None:
+                    motor.cilindrada = payload.cilindrada
+            else:
+                motor = Detalle_Motor(
+                    id_activo=id_activo,
+                    numero_motor=payload.numero_motor,
+                    cilindrada=payload.cilindrada,
+                )
+                db.add(motor)
+
+        db.commit()
+
+        # Recargar activo actualizado
+        db.refresh(activo_existente)
+        if motor:
+            db.refresh(motor)
+
+        return EditarActivoResponse(
+            id_activo=activo_existente.id_activo,
+            sku_qr_fisico=activo_existente.sku_qr_fisico,
+            ubicacion_pasillo=activo_existente.ubicacion_pasillo,
+            ubicacion_galpon=activo_existente.ubicacion_galpon,
+            ubicacion_pallet=activo_existente.ubicacion_pallet,
+            observacion_estado=activo_existente.observacion_estado,
+            numero_motor=motor.numero_motor if motor else None,
+            cilindrada=motor.cilindrada if motor else None,
+            version_lock=activo_existente.version_lock,
+            mensaje="Activo actualizado exitosamente.",
+        )
+
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error transaccional: {str(e)}",
+        )

@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../auth/services/auth_service.dart';
 import '../../../paletizado/domain/models/etiqueta_data.dart';
+import '../widgets/editar_activo_modal.dart';
 
 class DetalleActivoScreen extends StatefulWidget {
   final Map<String, dynamic> activo;
 
-  const DetalleActivoScreen({Key? key, required this.activo}) : super(key: key);
+  const DetalleActivoScreen({super.key, required this.activo});
 
   @override
   State<DetalleActivoScreen> createState() => _DetalleActivoScreenState();
@@ -18,24 +20,88 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
   // Refleja localmente el estado qr_impreso para actualizar el botón
   // sin tener que recargar toda la pantalla desde el backend.
   late bool _qrImpreso;
+  late Map<String, dynamic> _activo;
+  bool _puedeEditar = false;
 
   @override
   void initState() {
     super.initState();
-    _qrImpreso = widget.activo['qr_impreso'] as bool? ?? false;
+    _activo = Map<String, dynamic>.from(widget.activo);
+    _qrImpreso = _activo['qr_impreso'] as bool? ?? false;
+    _verificarRolUsuario();
+  }
+
+  Future<void> _verificarRolUsuario() async {
+    final idRol = await AuthService.getIdRol();
+    final rol = await AuthService.getRol();
+    final rLower = rol?.toLowerCase() ?? '';
+    final esBodegueroOAdmin = idRol == 1 ||
+        idRol == 5 ||
+        rLower == 'bodeguero' ||
+        rLower == 'administrador' ||
+        rLower == 'admin';
+
+    if (mounted) {
+      setState(() {
+        _puedeEditar = esBodegueroOAdmin;
+      });
+    }
+  }
+
+  Future<void> _abrirModalEdicion() async {
+    final resultado = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => EditarActivoModal(activo: _activo),
+    );
+
+    if (!mounted || resultado == null) return;
+
+    if (resultado['conflict'] == true) {
+      return;
+    }
+
+    setState(() {
+      if (resultado['ubicacion_pasillo'] != null) {
+        _activo['pasillo'] = resultado['ubicacion_pasillo'];
+        _activo['ubicacion_pasillo'] = resultado['ubicacion_pasillo'];
+      }
+      if (resultado['ubicacion_pallet'] != null) {
+        _activo['pallet'] = resultado['ubicacion_pallet'];
+        _activo['ubicacion_pallet'] = resultado['ubicacion_pallet'];
+      }
+      if (resultado['ubicacion_galpon'] != null) {
+        _activo['galpon'] = resultado['ubicacion_galpon'];
+        _activo['ubicacion_galpon'] = resultado['ubicacion_galpon'];
+      }
+      if (resultado['observacion_estado'] != null) {
+        _activo['observacion'] = resultado['observacion_estado'];
+        _activo['observacion_estado'] = resultado['observacion_estado'];
+      }
+      if (resultado['numero_motor'] != null) {
+        _activo['numero_motor'] = resultado['numero_motor'];
+      }
+      if (resultado['cilindrada'] != null) {
+        _activo['cilindrada'] = resultado['cilindrada'];
+      }
+      if (resultado['version_lock'] != null) {
+        _activo['version_lock'] = resultado['version_lock'];
+      }
+    });
   }
 
   String _formatearUbicacionHumana() {
-    final pasillo = widget.activo['pasillo']?.toString().trim() ?? '';
-    final pallet = widget.activo['pallet']?.toString().trim() ?? '';
-    final galpon = widget.activo['galpon']?.toString().trim() ?? '';
+    final pasillo = _activo['pasillo']?.toString().trim() ?? '';
+    final pallet = _activo['pallet']?.toString().trim() ?? '';
+    final galpon = _activo['galpon']?.toString().trim() ?? '';
 
     final bool tienePasillo = pasillo.isNotEmpty && pasillo != 'S/P' && pasillo != 'null';
     final bool tienePallet = pallet.isNotEmpty && pallet != 'S/P' && pallet != 'null';
     final bool tieneGalpon = galpon.isNotEmpty && galpon != 'S/G' && galpon != 'null';
 
     if (!tienePasillo && !tienePallet && !tieneGalpon) {
-      final rawUbicacion = widget.activo['ubicacion']?.toString().trim() ?? '';
+      final rawUbicacion = _activo['ubicacion']?.toString().trim() ?? '';
       if (rawUbicacion.isNotEmpty &&
           rawUbicacion != 'S/P - S/P' &&
           rawUbicacion != 'No asignada' &&
@@ -54,45 +120,45 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final String categoria = widget.activo['categoria']?.toString() ?? 'Activo';
+    final String categoria = _activo['categoria']?.toString() ?? 'Activo';
     final bool esMotor =
         categoria.toUpperCase() == 'MOTOR' ||
         categoria.toUpperCase() == 'MOTORES';
 
-    final String marca = widget.activo['marca']?.toString() ?? 'Desconocida';
-    final String modelo = widget.activo['modelo']?.toString() ?? 'Desconocido';
-    final String sku = widget.activo['sku']?.toString() ?? 'S/N';
-    final String estado = widget.activo['estado']?.toString() ?? 'DISPONIBLE';
+    final String marca = _activo['marca']?.toString() ?? 'Desconocida';
+    final String modelo = _activo['modelo']?.toString() ?? 'Desconocido';
+    final String sku = _activo['sku']?.toString() ?? 'S/N';
+    final String estado = _activo['estado']?.toString() ?? 'DISPONIBLE';
 
     final String numeroIngreso =
-        widget.activo['numero_ingreso']?.toString() ?? 'N/A';
+        _activo['numero_ingreso']?.toString() ?? 'N/A';
 
-    final String cilindrada = widget.activo['cilindrada']?.toString() ?? 'N/A';
+    final String cilindrada = _activo['cilindrada']?.toString() ?? 'N/A';
     final String combustible =
-        widget.activo['combustible']?.toString() ?? 'N/A';
+        _activo['combustible']?.toString() ?? 'N/A';
     final String transmision =
-        widget.activo['transmision']?.toString() ?? 'N/A';
+        _activo['transmision']?.toString() ?? 'N/A';
     final String observacion =
-        widget.activo['observacion']?.toString() ??
+        _activo['observacion']?.toString() ??
         'Sin observaciones registradas.';
 
-    final List<dynamic> rawImages = widget.activo['imagenes'] ?? [];
+    final List<dynamic> rawImages = _activo['imagenes'] ?? [];
     final List<String> imagenesReales = rawImages.isNotEmpty
         ? rawImages.map((e) => e.toString()).toList()
         : ['NO_IMAGE'];
 
     final etiqueta = EtiquetaData(
-      idActivo: widget.activo['id_activo']?.toString() ?? '',
+      idActivo: _activo['id_activo']?.toString() ?? '',
       numeroIngreso: numeroIngreso,
       marca: marca,
       modelo: modelo,
-      anio: (widget.activo['anio'] as num?)?.toInt() ?? 0,
+      anio: (_activo['anio'] as num?)?.toInt() ?? 0,
       cilindrada: cilindrada == 'N/A' ? null : cilindrada,
       combustible: combustible == 'N/A' ? null : combustible,
       transmision: transmision == 'N/A' ? null : transmision,
-      galpon: widget.activo['galpon']?.toString() ?? '',
-      pasillo: widget.activo['pasillo']?.toString() ?? '',
-      pallet: widget.activo['pallet']?.toString() ?? '',
+      galpon: _activo['galpon']?.toString() ?? '',
+      pasillo: _activo['pasillo']?.toString() ?? '',
+      pallet: _activo['pallet']?.toString() ?? '',
       skuQrFisico: sku,
     );
 
@@ -112,6 +178,15 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
           onPressed: () => Navigator.of(context).pop(),
           tooltip: 'Volver',
         ),
+        actions: [
+          if (_puedeEditar)
+            IconButton(
+              key: const Key('btn_editar_activo'),
+              icon: const Icon(Icons.edit_outlined, color: AppPalette.primary),
+              tooltip: 'Editar activo',
+              onPressed: _abrirModalEdicion,
+            ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.only(bottom: 32),

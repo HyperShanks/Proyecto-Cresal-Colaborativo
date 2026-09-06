@@ -143,4 +143,20 @@ def require_caja_role(
         )
     return current_user
 
+
+def require_bodeguero_or_admin(
+    current_user: Usuario = Depends(get_current_user)
+) -> Usuario:
+    """
+    Valida que el usuario autenticado posea permisos de Bodeguero (id_rol == 1) o Administrador (id_rol == 5).
+    Lanza 403 Forbidden si el rol no está autorizado.
+    """
+    if current_user.id_rol not in [1, 5]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso restringido: Se requieren permisos de Bodeguero o Administrador."
+        )
+    return current_user
+
+
 
