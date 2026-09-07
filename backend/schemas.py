@@ -1,9 +1,13 @@
+import os
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional, List
 from uuid import UUID
 from datetime import datetime
 from enum import Enum
 import re
+
+# Configuro __path__ dinámico para permitir importar submódulos desde el directorio schemas/
+__path__ = [os.path.join(os.path.dirname(__file__), "schemas")]
 
 from core.utils.validators import validar_rut_modulo11
 
@@ -1171,3 +1175,15 @@ class ResumenAlertasDTO(BaseModel):
     desglose_reingresos: int
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ==========================================
+# ESQUEMAS PARA GERENCIA Y DASHBOARD EJECUTIVO (HU-5.1)
+# ==========================================
+
+from schemas.gerencia_schemas import (  # noqa: E402
+    KpiFinancieroDTO,
+    DesglosePagoDTO,
+    ResumenPagosDTO,
+    FlujoOperativoDTO,
+)

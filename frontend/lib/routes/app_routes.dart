@@ -15,6 +15,7 @@ import '../features/ventas/presentation/screens/checkout_crm_screen.dart';
 import '../features/ventas/presentation/screens/bandeja_precios_screen.dart';
 import '../features/ventas/presentation/screens/entregas_envios_screen.dart';
 import '../features/ventas/presentation/screens/checkout_wizard_screen.dart';
+import '../features/gerencia/presentation/screens/dashboard_gerencia_view.dart';
 
 /// Registro central de rutas y guardas de seguridad RBAC.
 class AppRoutes {
@@ -23,6 +24,7 @@ class AppRoutes {
   static const String home = '/home';
   static const String ventasMain = '/ventas_main';
   static const String caja = '/caja';
+  static const String gerencia = '/gerencia';
   static const String recepcion = '/recepcion';
   static const String tickets = '/tickets';
   static const String paletizado = '/paletizado';
@@ -120,6 +122,7 @@ class AppRoutes {
       login: (context) => const PinLoginScreen(),
       home: (context) => const HomeScreen(),
       caja: (context) => const CajaMainScreen(),
+      gerencia: (context) => const DashboardGerenciaView(),
       ventasMain: (context) => const VentasMainScreen(),
       recepcion: (context) => const RecepcionVehiculoScreen(),
       tickets: (context) => const TicketsScreen(),
@@ -136,3 +139,4 @@ class AppRoutes {
     };
   }
 }
+

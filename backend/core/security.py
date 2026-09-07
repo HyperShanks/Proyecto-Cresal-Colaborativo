@@ -159,4 +159,20 @@ def require_bodeguero_or_admin(
     return current_user
 
 
+def require_gerencia_role(
+    current_user: Usuario = Depends(get_current_user)
+) -> Usuario:
+    """
+    Valido que el usuario autenticado posea rol de Gerencia (id_rol == 4) o Administrador (id_rol == 5).
+    Lanzo 403 Forbidden si el rol no está autorizado para acceder al panel gerencial (HU-5.1).
+    """
+    if current_user.id_rol not in [4, 5]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso restringido: Se requieren privilegios gerenciales o de Administrador."
+        )
+    return current_user
+
+
+
 
