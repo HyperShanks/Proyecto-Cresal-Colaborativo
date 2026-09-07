@@ -73,48 +73,52 @@ class _MetodosPagoChartState extends State<MetodosPagoChart> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text(
-                    'RECAUDACIÓN',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.8,
-                      color: Color(0xFF64748B),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Text(
+                      'RECAUDACIÓN',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.8,
+                        color: Color(0xFF64748B),
+                      ),
                     ),
-                  ),
-                  SizedBox(height: 2),
-                  Text(
-                    'Medios de Pago',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFF0F172A),
+                    SizedBox(height: 2),
+                    Text(
+                      'Medios de Pago',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF0F172A),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
+              const SizedBox(width: 4),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: AppPalette.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
+                    const Icon(
                       Icons.verified_user,
                       size: 14,
                       color: AppPalette.primary,
                     ),
                     const SizedBox(width: 4),
-                    Text(
+                    const Text(
                       'Conciliado',
                       style: TextStyle(
                         fontSize: 11,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w800,
                         color: AppPalette.primary,
                       ),
                     ),
@@ -314,15 +318,20 @@ class _MetodosPagoChartState extends State<MetodosPagoChart> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildSubtotal(
-                'Efectivo Físico',
-                widget.resumen.efectivoFisico,
-                const Color(0xFF38BDF8),
+              Flexible(
+                child: _buildSubtotal(
+                  'Efectivo Físico',
+                  widget.resumen.efectivoFisico,
+                  const Color(0xFF38BDF8),
+                ),
               ),
-              _buildSubtotal(
-                'Canales Electrónicos',
-                widget.resumen.canalesElectronicos,
-                const Color(0xFF004C89),
+              const SizedBox(width: 8),
+              Flexible(
+                child: _buildSubtotal(
+                  'Canales Electrónicos',
+                  widget.resumen.canalesElectronicos,
+                  const Color(0xFF004C89),
+                ),
               ),
             ],
           ),
@@ -333,6 +342,7 @@ class _MetodosPagoChartState extends State<MetodosPagoChart> {
 
   Widget _buildSubtotal(String label, int monto, Color dotColor) {
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Container(
           width: 8,
@@ -343,26 +353,33 @@ class _MetodosPagoChartState extends State<MetodosPagoChart> {
           ),
         ),
         const SizedBox(width: 6),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 10,
-                color: Color(0xFF64748B),
-                fontWeight: FontWeight.w600,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 10,
+                  color: Color(0xFF64748B),
+                  fontWeight: FontWeight.w600,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-            ),
-            Text(
-              CurrencyFormatter.formatCLP(monto),
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF0F172A),
+              Text(
+                CurrencyFormatter.formatCLP(monto),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF0F172A),
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ],
     );

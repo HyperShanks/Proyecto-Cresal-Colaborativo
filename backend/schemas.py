@@ -1056,6 +1056,8 @@ class HistorialOrdenItemResponse(BaseModel):
     cliente_rut: Optional[str] = None
     vendedor_nombre: str
     cajera_nombre: str
+    sucursal_nombre: Optional[str] = Field(default=None, description="Nombre de la sucursal de emisión")
+    id_sucursal: Optional[int] = Field(default=None, description="ID de la sucursal")
 
     # Estados y Pagos
     estado_orden: str = Field(description="'Pagada', 'Despachada', 'Reservada', 'Anulada'")
@@ -1063,6 +1065,7 @@ class HistorialOrdenItemResponse(BaseModel):
     metodos_resumen: str = Field(description="Ej: Débito: $420.000 + Transferencia: $180.000")
     total_venta: int
     abono_previo: int = 0
+    monto_pendiente: Optional[int] = Field(default=0, description="Saldo pendiente de pago")
     total_liquidado: int = Field(description="Monto total pagado en ventanilla")
 
     # Desgloses Detallados para Auditoría
@@ -1078,10 +1081,15 @@ class HistorialCajaResponse(BaseModel):
     pagina_actual: int
     limite_por_pagina: int
     total_paginas: int
-    resumen_cuadre: ResumenCuadreCajaDTO
+    resumen_cuadre: Optional[ResumenCuadreCajaDTO] = None
+    total_monto_consolidado: Optional[int] = Field(default=0, description="Suma total de ventas")
     items: List[HistorialOrdenItemResponse]
 
     model_config = ConfigDict(from_attributes=True)
+
+
+HistorialOrdenesAuditoriaResponse = HistorialCajaResponse
+
 
 
 # ==========================================
@@ -1181,7 +1189,7 @@ class ResumenAlertasDTO(BaseModel):
 # ESQUEMAS PARA GERENCIA Y DASHBOARD EJECUTIVO (HU-5.1)
 # ==========================================
 
-from schemas.gerencia_schemas import (  # noqa: E402
+from schemas.gerencia_schemas import (  # noqa: E402, F401
     KpiFinancieroDTO,
     DesglosePagoDTO,
     ResumenPagosDTO,

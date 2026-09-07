@@ -332,6 +332,30 @@ class DetalleAuditoriaDialog extends StatelessWidget {
                     ),
                   ],
                 ),
+                if (orden.sucursalNombre.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.storefront_rounded,
+                        size: 14,
+                        color: AppPalette.secondary,
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          'Sucursal: ${orden.sucursalNombre}',
+                          style: AppTypography.small.copyWith(
+                            color: AppPalette.textSecondaryLight,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
@@ -536,7 +560,7 @@ class DetalleAuditoriaDialog extends StatelessWidget {
                       Expanded(
                         child: Text(
                           pago.idTransaccion != null
-                              ? 'TX: ${pago.idTransaccion!.substring(0, 8).toUpperCase()}'
+                              ? 'TX: ${(pago.idTransaccion!.length > 8 ? pago.idTransaccion!.substring(0, 8) : pago.idTransaccion!).toUpperCase()}'
                               : 'Transacción Directa',
                           style: AppTypography.small.copyWith(
                             color: AppPalette.textSecondaryLight,

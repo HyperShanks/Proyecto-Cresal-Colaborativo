@@ -8,6 +8,10 @@ import '../../models/gerencia_models.dart';
 import '../../services/gerencia_service.dart';
 import '../widgets/kpi_card_widget.dart';
 import '../widgets/metodos_pago_chart.dart';
+import 'ordenes_gerencia_view.dart';
+
+/// Enumeración de vistas principales del panel gerencial (HU-5.1 y HU-5.2).
+enum VistaGerencia { dashboard, ordenes, inventario, backorders }
 
 /// Vista principal del Dashboard Ejecutivo para Gerencia (HU-5.1).
 /// Diseñé esta pantalla integrando la barra superior de filtros de sucursal,
@@ -35,6 +39,9 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
   ResumenPagosModel? _pagos;
   FlujoOperativoModel? _flujo;
   String _nombreUsuario = 'Roberto Gerente';
+
+  VistaGerencia _vistaActiva = VistaGerencia.dashboard;
+  bool _sidebarOpen = true;
 
   late AnimationController _spinController;
 
@@ -167,46 +174,362 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppPalette.backgroundLight,
-      body: Column(
+      body: Row(
         children: [
-          // 1. Topbar Corporativa Ejecutiva
-          _buildTopbar(),
+          // Sidebar Corporativo Deep Blue (#004c89 / AppPalette.tertiary)
+          _buildSidebar(),
 
-          // 2. Contenido Scrollable
+          // Área Principal (Topbar + Contenido Dinámico)
           Expanded(
-            child: _cargando && _kpis == null
-                ? const Center(
-                    child: CircularProgressIndicator(
-                      color: AppPalette.primary,
-                    ),
-                  )
-                : _mensajeError != null && _kpis == null
-                    ? _buildErrorState()
-                    : RefreshIndicator(
-                        onRefresh: () => _cargarDashboard(mostrarToast: true),
-                        color: AppPalette.primary,
-                        child: SingleChildScrollView(
-                          physics: const AlwaysScrollableScrollPhysics(),
+            child: Column(
+              children: [
+                _buildTopbar(),
+                Expanded(
+                  child: _vistaActiva == VistaGerencia.dashboard
+                      ? _buildDashboardContent()
+                      : Padding(
                           padding: const EdgeInsets.all(24),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Banner de Bienvenida y Fecha
-                              _buildWelcomeBanner(),
-                              const SizedBox(height: 20),
-
-                              // Grid Superior de 4 KPIs
-                              _buildKpiGrid(),
-                              const SizedBox(height: 24),
-
-                              // Bento Trío de Visualizaciones
-                              _buildBentoSection(),
-                            ],
+                          child: OrdenesGerenciaView(
+                            idSucursalInicial: _sucursalSeleccionada,
                           ),
                         ),
-                      ),
+                ),
+              ],
+            ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildDashboardContent() {
+    return _cargando && _kpis == null
+        ? const Center(
+            child: CircularProgressIndicator(
+              color: AppPalette.primary,
+            ),
+          )
+        : _mensajeError != null && _kpis == null
+            ? _buildErrorState()
+            : RefreshIndicator(
+                onRefresh: () => _cargarDashboard(mostrarToast: true),
+                color: AppPalette.primary,
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Banner de Bienvenida y Fecha
+                      _buildWelcomeBanner(),
+                      const SizedBox(height: 20),
+
+                      // Grid Superior de 4 KPIs
+                      _buildKpiGrid(),
+                      const SizedBox(height: 24),
+
+                      // Bento Trío de Visualizaciones
+                      _buildBentoSection(),
+                    ],
+                  ),
+                ),
+              );
+  }
+
+  Widget _buildSidebar() {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      width: _sidebarOpen ? 240 : 68,
+      decoration: const BoxDecoration(
+        color: AppPalette.tertiary,
+        border: Border(
+          right: BorderSide(
+            color: Colors.white12,
+            width: 1,
+          ),
+        ),
+      ),
+      child: Column(
+        children: [
+          // Header del Sidebar con Llave Mecánica Oficial
+          Container(
+            height: 64,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: Colors.white12)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.2),
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.build_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+                if (_sidebarOpen) ...[
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Text(
+                          'PANEL EJECUTIVO',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.4,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          'Control Ejecutivo V1',
+                          style: TextStyle(
+                            color: Color(0xFFBAE6FD),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          // Navegación de las 4 Vistas Principales (HU 5.1 a 5.4)
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 16),
+              children: [
+                if (_sidebarOpen)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8, bottom: 8),
+                    child: Text(
+                      'SUPERVISIÓN Y CONTROL',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.5),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                  ),
+
+                // 1. Dashboard Ejecutivo
+                _buildSidebarNavItem(
+                  icon: Icons.dashboard_rounded,
+                  label: 'Dashboard Ejecutivo',
+                  isSelected: _vistaActiva == VistaGerencia.dashboard,
+                  onTap: () {
+                    if (_vistaActiva != VistaGerencia.dashboard) {
+                      setState(() => _vistaActiva = VistaGerencia.dashboard);
+                    }
+                  },
+                ),
+
+                const SizedBox(height: 6),
+
+                // 2. Historial de Órdenes
+                _buildSidebarNavItem(
+                  icon: Icons.receipt_long_rounded,
+                  label: 'Historial de Órdenes',
+                  isSelected: _vistaActiva == VistaGerencia.ordenes,
+                  onTap: () {
+                    if (_vistaActiva != VistaGerencia.ordenes) {
+                      setState(() => _vistaActiva = VistaGerencia.ordenes);
+                    }
+                  },
+                ),
+
+                const SizedBox(height: 6),
+
+                // 3. Maestro de Inventario y Tasación
+                _buildSidebarNavItem(
+                  icon: Icons.inventory_2_rounded,
+                  label: 'Inventario y Tasación',
+                  isSelected: false,
+                  badgeText: 'HU 5.3',
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Módulo de Inventario y Tasación disponible en HU-5.3',
+                        ),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                ),
+
+                const SizedBox(height: 6),
+
+                // 4. Visor Centralizado de Backorders
+                _buildSidebarNavItem(
+                  icon: Icons.bookmark_added_rounded,
+                  label: 'Visor de Backorders',
+                  isSelected: false,
+                  badgeText: 'HU 5.4',
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Visor Centralizado de Backorders disponible en HU-5.4',
+                        ),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+
+          // Footer del Sidebar: Perfil Gerencial y Toggle
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: Colors.white12)),
+              color: Colors.black12,
+            ),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 16,
+                  backgroundColor: Colors.white24,
+                  child: Text(
+                    _nombreUsuario.isNotEmpty
+                        ? _nombreUsuario[0].toUpperCase()
+                        : 'G',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+                if (_sidebarOpen) ...[
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _nombreUsuario,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const Text(
+                          'gerente@cresal.cl',
+                          style: TextStyle(
+                            color: Color(0xFFBAE6FD),
+                            fontSize: 10,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                IconButton(
+                  icon: Icon(
+                    _sidebarOpen
+                        ? Icons.keyboard_double_arrow_left_rounded
+                        : Icons.keyboard_double_arrow_right_rounded,
+                    color: Colors.white70,
+                    size: 18,
+                  ),
+                  tooltip: _sidebarOpen ? 'Colapsar menú' : 'Expandir menú',
+                  onPressed: () => setState(() => _sidebarOpen = !_sidebarOpen),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSidebarNavItem({
+    required IconData icon,
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+    String? badgeText,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? Colors.white.withValues(alpha: 0.2)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: isSelected ? const Color(0xFF7DD3FC) : Colors.white70,
+            ),
+            if (_sidebarOpen) ...[
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (badgeText != null)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.white12,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    badgeText,
+                    style: const TextStyle(
+                      color: Color(0xFFBAE6FD),
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -242,8 +565,10 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                     color: AppPalette.tertiary,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(
-                    Icons.dashboard_customize,
+                  child: Icon(
+                    _vistaActiva == VistaGerencia.dashboard
+                        ? Icons.dashboard_customize
+                        : Icons.receipt_long,
                     color: Colors.white,
                     size: 20,
                   ),
@@ -253,8 +578,8 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text(
+                    children: [
+                      const Text(
                         'CRESAL GERENCIA',
                         style: TextStyle(
                           fontSize: 14,
@@ -266,8 +591,10 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                         overflow: TextOverflow.ellipsis,
                       ),
                       Text(
-                        'Dashboard Ejecutivo y Pulso Operativo',
-                        style: TextStyle(
+                        _vistaActiva == VistaGerencia.dashboard
+                            ? 'Dashboard Ejecutivo y Pulso Operativo'
+                            : 'Historial y Auditoría de Órdenes',
+                        style: const TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w500,
                           color: Color(0xFF64748B),
@@ -905,129 +1232,132 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text(
-                          'BODEGA & SALIDAS',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0.8,
-                            color: Color(0xFF64748B),
+      child: SingleChildScrollView(
+        physics: const NeverScrollableScrollPhysics(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: const [
+                          Text(
+                            'BODEGA & SALIDAS',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.8,
+                              color: Color(0xFF64748B),
+                            ),
                           ),
-                        ),
-                        SizedBox(height: 2),
-                        Text(
-                          'Flujo de Despacho',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFF0F172A),
+                          SizedBox(height: 2),
+                          Text(
+                            'Flujo de Despacho',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF0F172A),
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: AppPalette.success.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      children: const [
-                        Icon(Icons.circle, size: 8, color: AppPalette.success),
-                        SizedBox(width: 4),
-                        Text(
-                          'Flujo Normal',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            color: AppPalette.success,
+                    const SizedBox(width: 8),
+                    Container(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppPalette.success.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        children: const [
+                          Icon(Icons.circle, size: 8, color: AppPalette.success),
+                          SizedBox(width: 4),
+                          Text(
+                            'Flujo Normal',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              color: AppPalette.success,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                'Seguimiento en vivo de preparación, retiro y courier',
-                style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
-              ),
-              const SizedBox(height: 16),
-
-              // 3 Etapas Logísticas
-              _buildEtapaFila(
-                numero: '1',
-                titulo: 'En Preparación (Rack)',
-                descripcion: 'Piezas bajando para embalaje',
-                conteo: flujo.enPreparacion,
-                badgeBg: const Color(0xFFFEF3C7),
-                badgeTextColor: const Color(0xFF92400E),
-              ),
-              const SizedBox(height: 10),
-
-              _buildEtapaFila(
-                numero: '2',
-                titulo: 'Listo Mostrador',
-                descripcion: 'Esperando retiro cliente',
-                conteo: flujo.listosMostrador,
-                badgeBg: const Color(0xFFDCFCE7),
-                badgeTextColor: const Color(0xFF166534),
-              ),
-              const SizedBox(height: 10),
-
-              _buildEtapaFila(
-                numero: '3',
-                titulo: 'Despacho Courier',
-                descripcion: 'Starken & Chilexpress en ruta',
-                conteo: flujo.enviadosCourier,
-                badgeBg: const Color(0xFFE0F2FE),
-                badgeTextColor: const Color(0xFF075985),
-              ),
-            ],
-          ),
-
-          // Footer Bento 3
-          const Divider(height: 24, thickness: 1, color: Color(0xFFF1F5F9)),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
-              Expanded(
-                child: Text(
-                  'Tiempo prom. preparación:',
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                  ],
                 ),
-              ),
-              SizedBox(width: 8),
-              Text(
-                '24 minutos',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF0F172A),
+                const SizedBox(height: 4),
+                const Text(
+                  'Seguimiento en vivo de preparación, retiro y courier',
+                  style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
                 ),
-              ),
-            ],
-          ),
-        ],
+                const SizedBox(height: 16),
+
+                // 3 Etapas Logísticas
+                _buildEtapaFila(
+                  numero: '1',
+                  titulo: 'En Preparación (Rack)',
+                  descripcion: 'Piezas bajando para embalaje',
+                  conteo: flujo.enPreparacion,
+                  badgeBg: const Color(0xFFFEF3C7),
+                  badgeTextColor: const Color(0xFF92400E),
+                ),
+                const SizedBox(height: 10),
+
+                _buildEtapaFila(
+                  numero: '2',
+                  titulo: 'Listo Mostrador',
+                  descripcion: 'Esperando retiro cliente',
+                  conteo: flujo.listosMostrador,
+                  badgeBg: const Color(0xFFDCFCE7),
+                  badgeTextColor: const Color(0xFF166534),
+                ),
+                const SizedBox(height: 10),
+
+                _buildEtapaFila(
+                  numero: '3',
+                  titulo: 'Despacho Courier',
+                  descripcion: 'Starken & Chilexpress en ruta',
+                  conteo: flujo.enviadosCourier,
+                  badgeBg: const Color(0xFFE0F2FE),
+                  badgeTextColor: const Color(0xFF075985),
+                ),
+              ],
+            ),
+
+            // Footer Bento 3
+            const Divider(height: 24, thickness: 1, color: Color(0xFFF1F5F9)),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: const [
+                Expanded(
+                  child: Text(
+                    'Tiempo prom. preparación:',
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                  ),
+                ),
+                SizedBox(width: 8),
+                Text(
+                  '24 minutos',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

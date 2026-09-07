@@ -174,5 +174,22 @@ def require_gerencia_role(
     return current_user
 
 
-
+def require_auditoria_or_caja_role(
+    current_user: Usuario = Depends(get_current_user)
+) -> Usuario:
+    """
+    Valido que el usuario autenticado posea rol de Caja (id_rol == 3),
+    Gerencia General (id_rol == 4) o Administrador (id_rol == 5) para
+    acceder al historial y visor de auditoría de órdenes (HU-5.2).
+    Lanzo 403 Forbidden si el rol no está autorizado.
+    """
+    if current_user.id_rol not in [3, 4, 5]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Acceso restringido: Se requieren permisos de "
+                "Auditoría, Gerencia o Caja."
+            )
+        )
+    return current_user
 
