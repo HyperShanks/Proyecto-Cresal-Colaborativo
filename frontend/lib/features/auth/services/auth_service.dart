@@ -315,6 +315,15 @@ class AuthService {
     return rLower == 'administrador' || rLower == 'admin';
   }
 
+  /// Verifica si el usuario actual posee rol Gerente (id_rol == 4).
+  static Future<bool> esGerente() async {
+    final idRol = await getIdRol();
+    if (idRol != null) return idRol == 4;
+    final rol = await getRol();
+    final rLower = rol?.toLowerCase() ?? '';
+    return rLower == 'gerente';
+  }
+
   /// Verifica si el usuario actual pertenece al módulo de ventas (Vendedor [2], Jefe de Ventas [6], Vendedor Online [7]).
   static Future<bool> esModuloVentas() async {
     final idRol = await getIdRol();

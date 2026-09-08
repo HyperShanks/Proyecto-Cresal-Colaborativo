@@ -1,36 +1,21 @@
 import 'package:flutter/material.dart';
+import '../../../routes/app_routes.dart';
 import '../services/auth_service.dart';
 
 /// Controlador de autenticación y enrutamiento post-login por rol.
 class LoginController {
-  /// Redirige al operario a su vista correspondiente según su rol asignado.
-  ///
-  /// • Rol 3 (Caja)                -> `/caja`
-  /// • Rol 2, 6, 7 (Ventas)         -> `/ventas_main`
-  /// • Rol 1 u otros (Bodega/Gral) -> `/home`
+  /// Redirige al operario a su vista correspondiente según la fuente única de verdad (AppRoutes).
   static Future<void> handlePostLoginNavigation(
     BuildContext context, {
     int? idRol,
     String? rol,
   }) async {
     final effectiveIdRol = idRol ?? await AuthService.getIdRol();
-    final effectiveRol = (rol ?? await AuthService.getRol())?.trim().toLowerCase() ?? '';
 
     if (!context.mounted) return;
 
-    if (effectiveIdRol == 3 || effectiveRol == 'caja' || effectiveRol == 'operario de caja') {
-      Navigator.of(context).pushReplacementNamed('/caja');
-      return;
-    }
-
-    final esVentas = await AuthService.esModuloVentas();
-    if (!context.mounted) return;
-
-    if (esVentas) {
-      Navigator.of(context).pushReplacementNamed('/ventas_main');
-    } else {
-      Navigator.of(context).pushReplacementNamed('/home');
-    }
+    final targetRoute = AppRoutes.getHomeRouteForRole(effectiveIdRol);
+    Navigator.of(context).pushReplacementNamed(targetRoute);
   }
 
   /// Ejecuta el flujo de login por PIN y despacha la navegación correspondiente si es exitoso.

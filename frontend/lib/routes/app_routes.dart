@@ -73,8 +73,9 @@ class AppRoutes {
     caja,
   ];
 
-  /// Retorna la ruta inicial o panel principal correspondiente a un rol.
+  /// Retorna la ruta inicial o panel principal correspondiente a un rol (SSOT).
   static String getHomeRouteForRole(int? idRol) {
+    if (idRol == 4) return gerencia;
     if (idRol == 3) return caja;
     if (idRol == 2 || idRol == 6 || idRol == 7) return ventasMain;
     return home;

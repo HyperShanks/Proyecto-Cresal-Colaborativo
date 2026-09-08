@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../routes/app_routes.dart';
 import '../../services/auth_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -57,20 +58,10 @@ class _SplashScreenState extends State<SplashScreen>
     if (!mounted) return;
 
     if (token != null && token.isNotEmpty) {
-      final esCaja = await AuthService.esCaja();
+      final idRol = await AuthService.getIdRol();
       if (!mounted) return;
-      if (esCaja) {
-        Navigator.of(context).pushReplacementNamed('/caja');
-        return;
-      }
-
-      final esVentas = await AuthService.esModuloVentas();
-      if (!mounted) return;
-      if (esVentas) {
-        Navigator.of(context).pushReplacementNamed('/ventas_main');
-      } else {
-        Navigator.of(context).pushReplacementNamed('/home');
-      }
+      final targetRoute = AppRoutes.getHomeRouteForRole(idRol);
+      Navigator.of(context).pushReplacementNamed(targetRoute);
     } else {
       final isEnrolled = await AuthService.isTerminalEnrolled();
       if (!mounted) return;

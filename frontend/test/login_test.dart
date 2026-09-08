@@ -6,6 +6,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:frontend/features/auth/services/auth_service.dart';
 import 'package:frontend/features/auth/presentation/screens/splash_screen.dart';
 import 'package:frontend/features/home/presentation/screens/home_screen.dart';
+import 'package:frontend/routes/app_routes.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -51,6 +52,27 @@ void main() {
 
       await const FlutterSecureStorage().write(key: 'user_id_rol', value: '2');
       expect(await AuthService.esVendedorOnline(), isFalse);
+    });
+
+    test('esGerente retorna true solo para id_rol 4 o rol Gerente', () async {
+      await const FlutterSecureStorage().write(key: 'user_id_rol', value: '4');
+      await const FlutterSecureStorage().write(key: 'user_rol', value: 'Gerente');
+      expect(await AuthService.esGerente(), isTrue);
+
+      await const FlutterSecureStorage().write(key: 'user_id_rol', value: '1');
+      await const FlutterSecureStorage().write(key: 'user_rol', value: 'Bodeguero');
+      expect(await AuthService.esGerente(), isFalse);
+    });
+
+    test('AppRoutes.getHomeRouteForRole resuelve rutas según SSOT', () {
+      expect(AppRoutes.getHomeRouteForRole(4), equals(AppRoutes.gerencia));
+      expect(AppRoutes.getHomeRouteForRole(3), equals(AppRoutes.caja));
+      expect(AppRoutes.getHomeRouteForRole(2), equals(AppRoutes.ventasMain));
+      expect(AppRoutes.getHomeRouteForRole(6), equals(AppRoutes.ventasMain));
+      expect(AppRoutes.getHomeRouteForRole(7), equals(AppRoutes.ventasMain));
+      expect(AppRoutes.getHomeRouteForRole(1), equals(AppRoutes.home));
+      expect(AppRoutes.getHomeRouteForRole(5), equals(AppRoutes.home)); // Admin técnico permanece en home
+      expect(AppRoutes.getHomeRouteForRole(null), equals(AppRoutes.home));
     });
   });
 
@@ -186,6 +208,68 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('VENTAS_MAIN_SCREEN'), findsOneWidget);
+    });
+
+    testWidgets('Gerente (id_rol == 4) en HomeScreen es interceptado y redirigido a /gerencia', (tester) async {
+      await const FlutterSecureStorage().write(key: 'access_token', value: 'mock-token-4');
+      await const FlutterSecureStorage().write(key: 'user_id_rol', value: '4');
+      await const FlutterSecureStorage().write(key: 'user_rol', value: 'Gerente');
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: const HomeScreen(),
+          routes: {
+            '/login': (context) => const Scaffold(body: Text('LOGIN_SCREEN')),
+            '/gerencia': (context) => const Scaffold(body: Text('GERENCIA_SCREEN')),
+          },
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('GERENCIA_SCREEN'), findsOneWidget);
+    });
+
+    testWidgets('Gerente (id_rol == 4) en SplashScreen redirige directamente a /gerencia', (tester) async {
+      await const FlutterSecureStorage().write(key: 'access_token', value: 'mock-token-4');
+      await const FlutterSecureStorage().write(key: 'user_id_rol', value: '4');
+      await const FlutterSecureStorage().write(key: 'user_rol', value: 'Gerente');
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: const SplashScreen(),
+          routes: {
+            '/login': (context) => const Scaffold(body: Text('LOGIN_SCREEN')),
+            '/gerencia': (context) => const Scaffold(body: Text('GERENCIA_SCREEN')),
+          },
+        ),
+      );
+
+      await tester.pump(const Duration(milliseconds: 1600));
+      await tester.pumpAndSettle();
+
+      expect(find.text('GERENCIA_SCREEN'), findsOneWidget);
+    });
+
+    testWidgets('Administrador (id_rol == 5) en SplashScreen aterriza en /home', (tester) async {
+      await const FlutterSecureStorage().write(key: 'access_token', value: 'mock-token-5');
+      await const FlutterSecureStorage().write(key: 'user_id_rol', value: '5');
+      await const FlutterSecureStorage().write(key: 'user_rol', value: 'Administrador');
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: const SplashScreen(),
+          routes: {
+            '/login': (context) => const Scaffold(body: Text('LOGIN_SCREEN')),
+            '/home': (context) => const Scaffold(body: Text('HOME_SCREEN')),
+          },
+        ),
+      );
+
+      await tester.pump(const Duration(milliseconds: 1600));
+      await tester.pumpAndSettle();
+
+      expect(find.text('HOME_SCREEN'), findsOneWidget);
     });
   });
 }
