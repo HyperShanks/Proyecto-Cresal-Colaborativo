@@ -472,6 +472,7 @@ class PaginatedCatalogoResponse(BaseModel):
     total_count: int
     limit: int
     offset: int
+    pendientes_tasacion_count: Optional[int] = 0
 
 
 # ==========================================
@@ -1194,4 +1195,7 @@ from schemas.gerencia_schemas import (  # noqa: E402, F401
     DesglosePagoDTO,
     ResumenPagosDTO,
     FlujoOperativoDTO,
+    BackorderGerenciaItemDTO,
+    BackorderGerenciaListResponse,
+    BackorderGerenciaKpisDTO,
 )

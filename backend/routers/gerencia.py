@@ -6,10 +6,10 @@ el pulso financiero y la carga operativa de bodega.
 """
 
 from datetime import datetime, time, timezone
-from typing import Optional
+from typing import Optional, List
 from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import or_
+from sqlalchemy import or_, and_, func, cast, String
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -21,13 +21,20 @@ from models import (
     Activo_Inventariado,
     Estado_Activo,
     Despacho,
+    Cliente,
+    Sucursal,
+    Categoria_Activo,
+    Reservas_Backorder,
 )
 from core.security import require_gerencia_role
-from schemas.gerencia_schemas import (
+from schemas import (
     KpiFinancieroDTO,
     ResumenPagosDTO,
     DesglosePagoDTO,
     FlujoOperativoDTO,
+    BackorderGerenciaItemDTO,
+    BackorderGerenciaListResponse,
+    BackorderGerenciaKpisDTO,
 )
 
 # Inicializo el router con el prefijo /api/v1/gerencia y tag para Swagger
@@ -335,4 +342,198 @@ def obtener_flujo_operativo(
         enviados_courier=enviados_courier,
         alertas_saldo_pendiente=alertas_saldo_pendiente,
         cuellos_botella_paletizados=cuellos_botella_paletizados,
+    )
+
+
+# ==========================================
+# VISOR CENTRALIZADO DE BACKORDERS (HU-5.4)
+# ==========================================
+
+def format_relative_chile_date(dt: Optional[datetime]) -> str:
+    """
+    Formatea la fecha de creación en hora local de Chile a un formato amigable:
+    - 'Hoy HH:MM'
+    - 'Ayer HH:MM'
+    - 'Hace N días'
+    - 'DD/MM/YYYY HH:MM'
+    """
+    if not dt:
+        return "Fecha desconocida"
+    if dt.tzinfo is None:
+        dt_utc = dt.replace(tzinfo=timezone.utc)
+    else:
+        dt_utc = dt.astimezone(timezone.utc)
+    dt_local = dt_utc.astimezone(tz_chile)
+    ahora_local = datetime.now(tz_chile)
+
+    dias_diff = (ahora_local.date() - dt_local.date()).days
+    hora_str = dt_local.strftime("%H:%M")
+
+    if dias_diff == 0:
+        return f"Hoy {hora_str}"
+    elif dias_diff == 1:
+        return f"Ayer {hora_str}"
+    elif 2 <= dias_diff <= 7:
+        return f"Hace {dias_diff} días"
+    else:
+        return dt_local.strftime("%d/%m/%Y %H:%M")
+
+
+@router.get(
+    "/backorders",
+    response_model=BackorderGerenciaListResponse,
+    summary="Listado Maestro de Backorders para Gerencia (HU-5.4)",
+)
+def obtener_backorders_gerencia(
+    id_sucursal: Optional[int] = Query(None, description="Filtrar por ID de sucursal"),
+    estado: Optional[str] = Query(None, description="Filtrar por estado de reserva (Pendiente, Confirmada, Completada, Anulada)"),
+    q: Optional[str] = Query(None, description="Búsqueda predictiva (Folio, Cliente, Vendedor, Marca, Modelo)"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    current_user: Usuario = Depends(require_gerencia_role),
+    db: Session = Depends(get_db),
+):
+    query = (
+        db.query(
+            Reservas_Backorder,
+            Cliente,
+            Usuario,
+            Sucursal,
+            Categoria_Activo,
+            Activo_Inventariado,
+        )
+        .join(Cliente, Reservas_Backorder.id_cliente == Cliente.id_cliente)
+        .join(Usuario, Reservas_Backorder.id_vendedor == Usuario.id_usuario)
+        .join(Sucursal, Reservas_Backorder.id_sucursal_registro == Sucursal.id_sucursal)
+        .outerjoin(Categoria_Activo, Reservas_Backorder.id_categoria_requerida == Categoria_Activo.id_categoria)
+        .outerjoin(Activo_Inventariado, Reservas_Backorder.id_activo_asignado == Activo_Inventariado.id_activo)
+    )
+
+    if id_sucursal is not None:
+        query = query.filter(Reservas_Backorder.id_sucursal_registro == id_sucursal)
+
+    if estado and estado.strip() and estado.lower() != "todos":
+        query = query.filter(Reservas_Backorder.estado_reserva == estado.strip())
+
+    if q and q.strip():
+        term = f"%{q.strip().lower()}%"
+        query = query.filter(
+            or_(
+                func.lower(Reservas_Backorder.marca_requerida).ilike(term),
+                func.lower(Reservas_Backorder.modelo_requerido).ilike(term),
+                func.lower(Cliente.nombres).ilike(term),
+                func.lower(Cliente.apellidos).ilike(term),
+                func.lower(Cliente.rut_cliente).ilike(term),
+                func.lower(Usuario.nombres).ilike(term),
+                func.lower(Usuario.apellidos).ilike(term),
+                cast(Reservas_Backorder.id_reserva, String).ilike(term),
+            )
+        )
+
+    total_count = query.count()
+
+    total_senas = (
+        query.with_entities(func.coalesce(func.sum(Reservas_Backorder.monto_abonado), 0)).scalar()
+        if total_count > 0 else 0
+    )
+
+    query = query.order_by(Reservas_Backorder.fecha_creacion.desc())
+    rows = query.offset(offset).limit(limit).all()
+
+    items = []
+    for res, cli, ven, suc, cat, act in rows:
+        folio_str = f"RES-{str(res.id_reserva).replace('-', '')[:4].upper()}"
+        fecha_amigable = format_relative_chile_date(res.fecha_creacion)
+        fecha_iso = res.fecha_creacion.isoformat() if res.fecha_creacion else ""
+        cliente_nombre_completo = f"{cli.nombres or ''} {cli.apellidos or ''}".strip() or "Cliente no registrado"
+        vendedor_nombre_completo = f"{ven.nombres or ''} {ven.apellidos or ''}".strip() or "Vendedor no registrado"
+        cat_nombre = cat.nombre_categoria if cat else "Repuesto"
+        sku_fisico = act.sku_qr_fisico if act else None
+
+        saldo_calc = max(0, res.precio_acordado - (res.monto_abonado or 0))
+
+        item_dto = BackorderGerenciaItemDTO(
+            id_reserva=str(res.id_reserva),
+            folio=folio_str,
+            fecha_creacion=fecha_amigable,
+            fecha_creacion_iso=fecha_iso,
+            id_cliente=str(res.id_cliente),
+            cliente_nombre=cliente_nombre_completo,
+            cliente_telefono=getattr(cli, "telefono", None) or getattr(cli, "correo", None),
+            cliente_rut=cli.rut_cliente,
+            id_vendedor=str(res.id_vendedor),
+            vendedor_nombre=vendedor_nombre_completo,
+            id_sucursal=res.id_sucursal_registro,
+            sucursal_nombre=suc.nombre_sucursal if suc else f"Sucursal {res.id_sucursal_registro}",
+            id_categoria_requerida=res.id_categoria_requerida,
+            categoria_nombre=cat_nombre,
+            marca_requerida=res.marca_requerida,
+            modelo_requerido=res.modelo_requerido,
+            anio_requerido=res.anio_requerido,
+            cilindrada_requerida=res.cilindrada_requerida,
+            combustible_requerido=res.combustible_requerido,
+            transmision_requerida=res.transmision_requerida,
+            notas_preparacion=res.notas_preparacion,
+            precio_acordado=res.precio_acordado,
+            monto_abonado=res.monto_abonado or 0,
+            saldo_pendiente=saldo_calc,
+            estado_reserva=res.estado_reserva,
+            id_activo_asignado=str(res.id_activo_asignado) if res.id_activo_asignado else None,
+            activo_asignado_sku=sku_fisico,
+            id_orden=str(res.id_orden) if res.id_orden else None,
+        )
+        items.append(item_dto)
+
+    return BackorderGerenciaListResponse(
+        items=items,
+        total_count=total_count,
+        total_recaudado_senas=total_senas,
+    )
+
+
+@router.get(
+    "/backorders/kpis",
+    response_model=BackorderGerenciaKpisDTO,
+    summary="Cabecera Analítica de KPIs de Backorders (HU-5.4)",
+)
+def obtener_kpis_backorders_gerencia(
+    id_sucursal: Optional[int] = Query(None, description="Filtrar por sucursal"),
+    current_user: Usuario = Depends(require_gerencia_role),
+    db: Session = Depends(get_db),
+):
+    query = db.query(Reservas_Backorder)
+    if id_sucursal is not None:
+        query = query.filter(Reservas_Backorder.id_sucursal_registro == id_sucursal)
+
+    # 1. Total Backorders Activos (Pendiente o Confirmada)
+    total_activos = query.filter(
+        Reservas_Backorder.estado_reserva.in_(["Pendiente", "Confirmada"])
+    ).count()
+
+    # 2. Capital Retenido en Abonos (Suma de señas de reservas activas)
+    capital_retenido = (
+        query.filter(Reservas_Backorder.estado_reserva.in_(["Pendiente", "Confirmada"]))
+        .with_entities(func.coalesce(func.sum(Reservas_Backorder.monto_abonado), 0))
+        .scalar()
+    ) or 0
+
+    # 3. Listos para Liquidar (Activos con match físico asignado)
+    listos_para_liquidar = query.filter(
+        Reservas_Backorder.estado_reserva.in_(["Pendiente", "Confirmada"]),
+        Reservas_Backorder.id_activo_asignado.isnot(None),
+    ).count()
+
+    # Totales globales
+    total_registrados = query.count()
+    total_recaudado_senas = (
+        query.with_entities(func.coalesce(func.sum(Reservas_Backorder.monto_abonado), 0))
+        .scalar()
+    ) or 0
+
+    return BackorderGerenciaKpisDTO(
+        total_activos=total_activos,
+        capital_retenido=capital_retenido,
+        listos_para_liquidar=listos_para_liquidar,
+        total_registrados=total_registrados,
+        total_recaudado_senas=total_recaudado_senas,
     )

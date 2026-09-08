@@ -129,6 +129,22 @@ def verificar_rol_jefe_ventas(
     return current_user
 
 
+def verificar_rol_tasacion(
+    current_user: Usuario = Depends(get_current_user)
+) -> Usuario:
+    """
+    Valida que el usuario autenticado posea rol de Gerencia (id_rol == 4),
+    Administrador (id_rol == 5) o Jefe de Ventas (id_rol == 6) para fijar o
+    actualizar precios de referencia comercial (HU-3.8 y HU-5.3).
+    """
+    if current_user.id_rol not in [4, 5, 6]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso restringido: Se requieren privilegios de Gerencia, Administración o Jefatura de Ventas para fijar precios."
+        )
+    return current_user
+
+
 def require_caja_role(
     current_user: Usuario = Depends(get_current_user)
 ) -> Usuario:

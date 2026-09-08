@@ -182,7 +182,7 @@ def db_session_gerencia(setup_database):
 
         # 7. Órdenes y Pagos
         ahora_chile = datetime.now(tz_chile)
-        hoy_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+        hoy_utc = ahora_chile.astimezone(timezone.utc).replace(tzinfo=None)
 
         # Orden 1 en Sucursal 101: Pagada
         ord1 = Orden_Venta(
@@ -193,7 +193,7 @@ def db_session_gerencia(setup_database):
             estado_orden="Pagada",
             total_venta=1000000,
             monto_pendiente=0,
-            fecha_creacion=hoy_utc - timedelta(hours=2),
+            fecha_creacion=hoy_utc,
         )
         db.add(ord1)
 
@@ -203,7 +203,7 @@ def db_session_gerencia(setup_database):
             monto=300000,
             metodo_pago="Efectivo",
             estado_pago="Procesado",
-            fecha_pago=hoy_utc - timedelta(hours=2),
+            fecha_pago=hoy_utc,
         )
         pago1_debito = Transaccion_Pago(
             id_pago=uuid.uuid4(),
@@ -211,7 +211,7 @@ def db_session_gerencia(setup_database):
             monto=700000,
             metodo_pago="Débito",
             estado_pago="Procesado",
-            fecha_pago=hoy_utc - timedelta(hours=2),
+            fecha_pago=hoy_utc,
         )
         det1 = Detalle_Orden(
             id_detalle=uuid.uuid4(),
@@ -232,7 +232,7 @@ def db_session_gerencia(setup_database):
             estado_orden="Reservada",
             total_venta=500000,
             monto_pendiente=300000,
-            fecha_creacion=hoy_utc - timedelta(hours=1),
+            fecha_creacion=hoy_utc,
         )
         db.add(ord2)
 
@@ -242,7 +242,7 @@ def db_session_gerencia(setup_database):
             monto=200000,
             metodo_pago="Transferencia",
             estado_pago="Procesado",
-            fecha_pago=hoy_utc - timedelta(hours=1),
+            fecha_pago=hoy_utc,
         )
         pago2_anulado = Transaccion_Pago(
             id_pago=uuid.uuid4(),
@@ -250,7 +250,7 @@ def db_session_gerencia(setup_database):
             monto=150000,
             metodo_pago="Efectivo",
             estado_pago="Anulado",
-            fecha_pago=hoy_utc - timedelta(hours=1),
+            fecha_pago=hoy_utc,
         )
         det2 = Detalle_Orden(
             id_detalle=uuid.uuid4(),
@@ -270,7 +270,7 @@ def db_session_gerencia(setup_database):
             estado_orden="Despachada",
             total_venta=500000,
             monto_pendiente=0,
-            fecha_creacion=hoy_utc - timedelta(minutes=30),
+            fecha_creacion=hoy_utc,
         )
         db.add(ord3)
 
@@ -280,7 +280,7 @@ def db_session_gerencia(setup_database):
             monto=500000,
             metodo_pago="Crédito",
             estado_pago="Procesado",
-            fecha_pago=hoy_utc - timedelta(minutes=30),
+            fecha_pago=hoy_utc,
         )
         desp3 = Despacho(
             id_despacho=uuid.uuid4(),

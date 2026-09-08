@@ -3,7 +3,9 @@ import 'dart:convert';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/services/api_service.dart';
 import '../models/gerencia_models.dart';
+import '../models/backorder_gerencia_models.dart';
 import '../../caja/models/historial_caja_model.dart';
+import '../../ventas/models/catalogo_model.dart';
 
 /// Servicio de integración para el módulo de Gerencia (HU-5.1).
 /// Implementé métodos asíncronos para consultar los 3 endpoints analíticos,
@@ -222,4 +224,184 @@ class GerenciaService {
       );
     }
   }
+
+  /// Consulta el Maestro de Inventario Global multi-sucursal con filtros avanzados (HU-5.3).
+  static Future<PaginatedCatalogoResponse> obtenerMaestroInventario({
+    int? idSucursal,
+    int? idCategoria,
+    int? idEstado,
+    String? estado,
+    String? combustible,
+    String? transmision,
+    String? ubicacion,
+    bool soloSinTasar = false,
+    String? busqueda,
+    int limite = 15,
+    int offset = 0,
+  }) async {
+    try {
+      final queryParams = <String, String>{
+        'limit': limite.toString(),
+        'offset': offset.toString(),
+      };
+      if (idSucursal != null) queryParams['id_sucursal'] = idSucursal.toString();
+      if (idCategoria != null) queryParams['id_categoria'] = idCategoria.toString();
+      if (idEstado != null) queryParams['id_estado'] = idEstado.toString();
+      if (estado != null && estado != 'todos') queryParams['estado'] = estado;
+      if (combustible != null && combustible != 'todos') queryParams['combustible'] = combustible;
+      if (transmision != null && transmision != 'todas') queryParams['transmision'] = transmision;
+      if (ubicacion != null && ubicacion != 'todas') queryParams['ubicacion'] = ubicacion;
+      if (soloSinTasar) queryParams['solo_sin_tasar'] = 'true';
+      if (busqueda != null && busqueda.trim().isNotEmpty) queryParams['q'] = busqueda.trim();
+
+      final uri = Uri.parse('${ApiConstants.inventarioEndpoint}/maestro').replace(queryParameters: queryParams);
+      final response = await ApiService.get(uri);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        return PaginatedCatalogoResponse.fromJson(data);
+      } else {
+        final msg = ApiService.extraerMensajeError(
+          response,
+          fallback: 'No fue posible cargar el inventario maestro.',
+        );
+        throw CustomApiException(
+          messageUser: msg,
+          errorCode: 'INVENTARIO_MAESTRO_DATA_ERROR',
+          statusCode: response.statusCode,
+        );
+      }
+    } on CustomApiException {
+      rethrow;
+    } catch (e) {
+      throw CustomApiException(
+        messageUser: 'Error de red al consultar el inventario maestro.',
+        errorCode: 'INVENTARIO_MAESTRO_NETWORK_ERROR',
+        messageDev: e.toString(),
+      );
+    }
+  }
+
+  /// Fija o actualiza el precio de tasación comercial de un repuesto paletizado (HU-5.3).
+  static Future<Map<String, dynamic>> tasarActivo({
+    required String idActivo,
+    required int precioReferencia,
+  }) async {
+    try {
+      final uri = Uri.parse('${ApiConstants.inventarioEndpoint}/$idActivo/precio');
+      final response = await ApiService.patch(
+        uri,
+        body: jsonEncode({'precio_referencia': precioReferencia}),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      } else {
+        final msg = ApiService.extraerMensajeError(
+          response,
+          fallback: 'No fue posible fijar el precio de tasación.',
+        );
+        throw CustomApiException(
+          messageUser: msg,
+          errorCode: 'TASACION_ERROR',
+          statusCode: response.statusCode,
+        );
+      }
+    } on CustomApiException {
+      rethrow;
+    } catch (e) {
+      throw CustomApiException(
+        messageUser: 'Error de conexión al procesar la tasación comercial.',
+        errorCode: 'TASACION_NETWORK_ERROR',
+        messageDev: e.toString(),
+      );
+    }
+  }
+
+  /// Consulta los encargos de compra por encargo (Backorders) para el visor de supervisión de gerencia (HU-5.4).
+  static Future<PaginatedBackordersResponse> obtenerBackorders({
+    int? idSucursal,
+    String? estado,
+    String? busqueda,
+    int pagina = 1,
+    int limite = 20,
+  }) async {
+    try {
+      final queryParameters = <String, String>{
+        'limit': limite.toString(),
+        'offset': ((pagina - 1) * limite).toString(),
+      };
+      if (idSucursal != null) {
+        queryParameters['id_sucursal'] = idSucursal.toString();
+      }
+      if (estado != null && estado.isNotEmpty && estado != 'todos') {
+        queryParameters['estado'] = estado;
+      }
+      if (busqueda != null && busqueda.trim().isNotEmpty) {
+        queryParameters['q'] = busqueda.trim();
+      }
+
+      final uri = Uri.parse('${ApiConstants.gerenciaEndpoint}/backorders')
+          .replace(queryParameters: queryParameters);
+
+      final response = await ApiService.get(uri);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        return PaginatedBackordersResponse.fromJson(data);
+      } else {
+        final msg = ApiService.extraerMensajeError(
+          response,
+          fallback: 'No fue posible cargar la lista de backorders.',
+        );
+        throw CustomApiException(
+          messageUser: msg,
+          errorCode: 'BACKORDERS_DATA_ERROR',
+          statusCode: response.statusCode,
+        );
+      }
+    } on CustomApiException {
+      rethrow;
+    } catch (e) {
+      throw CustomApiException(
+        messageUser: 'Error de red al consultar el panel de backorders.',
+        errorCode: 'BACKORDERS_NETWORK_ERROR',
+        messageDev: e.toString(),
+      );
+    }
+  }
+
+  /// Consulta los KPIs consolidados de backorders (HU-5.4).
+  static Future<BackordersKpisModel> obtenerBackordersKpis({int? idSucursal}) async {
+    try {
+      final queryParam = idSucursal != null ? '?id_sucursal=$idSucursal' : '';
+      final uri = Uri.parse('${ApiConstants.gerenciaEndpoint}/backorders/kpis$queryParam');
+
+      final response = await ApiService.get(uri);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        return BackordersKpisModel.fromJson(data);
+      } else {
+        final msg = ApiService.extraerMensajeError(
+          response,
+          fallback: 'No fue posible cargar las métricas de backorders.',
+        );
+        throw CustomApiException(
+          messageUser: msg,
+          errorCode: 'BACKORDERS_KPIS_ERROR',
+          statusCode: response.statusCode,
+        );
+      }
+    } on CustomApiException {
+      rethrow;
+    } catch (e) {
+      throw CustomApiException(
+        messageUser: 'Error de conexión al obtener los KPIs de backorders.',
+        errorCode: 'BACKORDERS_KPIS_NETWORK_ERROR',
+        messageDev: e.toString(),
+      );
+    }
+  }
 }
+

@@ -508,17 +508,24 @@ def listar_ordenes_auditoria(
             )
         )
 
-    # Orden cronológico descendente
-    query = query.order_by(Orden_Venta.fecha_creacion.desc())
-
     total_registros = query.count()
     total_paginas = max(1, (total_registros + limite - 1) // limite)
 
-    # Cálculo consolidado del monto total vendido en la consulta
-    total_monto_consolidado = query.with_entities(func.coalesce(func.sum(Orden_Venta.total_venta), 0)).scalar() or 0
+    # Cálculo consolidado del monto total vendido en la consulta (sin ORDER BY para evitar GroupingError en PostgreSQL)
+    total_monto_consolidado = (
+        query.order_by(None)
+        .with_entities(func.coalesce(func.sum(Orden_Venta.total_venta), 0))
+        .scalar()
+        or 0
+    )
 
-    # Paginación
-    resultados_paginados = query.offset((pagina - 1) * limite).limit(limite).all()
+    # Paginación con orden cronológico descendente
+    resultados_paginados = (
+        query.order_by(Orden_Venta.fecha_creacion.desc())
+        .offset((pagina - 1) * limite)
+        .limit(limite)
+        .all()
+    )
 
     items: List[HistorialOrdenItemResponse] = []
     for orden, cliente, vendedor, cajera, sucursal in resultados_paginados:
