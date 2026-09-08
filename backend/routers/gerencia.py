@@ -196,13 +196,16 @@ def obtener_resumen_pagos(
     pagos = query_pagos.all()
 
     metodos_montos = {}
+    metodos_cantidades = {}
     efectivo_fisico = 0
     canales_electronicos = 0
     total_recaudado = 0
+    total_transacciones = len(pagos)
 
     for p in pagos:
         metodo = (p.metodo_pago or "Otro").strip()
         metodos_montos[metodo] = metodos_montos.get(metodo, 0) + p.monto
+        metodos_cantidades[metodo] = metodos_cantidades.get(metodo, 0) + 1
         total_recaudado += p.monto
         if "efectivo" in metodo.lower():
             efectivo_fisico += p.monto
@@ -214,22 +217,31 @@ def obtener_resumen_pagos(
         metodos_montos.items(), key=lambda x: x[1], reverse=True
     )
     for metodo, monto in items_ordenados:
-        porcentaje = (
+        cant = metodos_cantidades.get(metodo, 1)
+        porcentaje_monto = (
             round((monto / total_recaudado) * 100, 2)
             if total_recaudado > 0
+            else 0.0
+        )
+        porcentaje_cant = (
+            round((cant / total_transacciones) * 100, 2)
+            if total_transacciones > 0
             else 0.0
         )
         desglose.append(
             DesglosePagoDTO(
                 metodo_pago=metodo,
                 monto_total=monto,
-                porcentaje=porcentaje,
+                porcentaje=porcentaje_monto,
+                cantidad=cant,
+                porcentaje_cantidad=porcentaje_cant,
             )
         )
 
     return ResumenPagosDTO(
         efectivo_fisico=efectivo_fisico,
         canales_electronicos=canales_electronicos,
+        total_transacciones=total_transacciones,
         desglose=desglose,
     )
 

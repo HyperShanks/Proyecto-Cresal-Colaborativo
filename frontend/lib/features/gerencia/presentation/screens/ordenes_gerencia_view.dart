@@ -5,10 +5,9 @@ import '../../../../core/services/api_service.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../../caja/models/historial_caja_model.dart';
-import '../../../caja/presentation/widgets/cobro_pendiente_card.dart';
-import '../../../caja/presentation/widgets/detalle_auditoria_dialog.dart';
-import '../../../caja/presentation/widgets/historial_tabla_view.dart';
 import '../../services/gerencia_service.dart';
+import '../widgets/auditoria_detalle_dialog.dart';
+import '../widgets/auditoria_tabla_view.dart';
 import '../widgets/panel_filtros_avanzados.dart';
 
 /// Vista de Auditoría y Visor Centralizado de Órdenes de Venta (HU-5.2).
@@ -176,81 +175,23 @@ class _OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
 
         const SizedBox(height: 14),
 
-        // ── 2. BANNER DE TOTAL CONSOLIDADO EN VISTA ──
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          decoration: BoxDecoration(
-            color: AppPalette.surfaceLight,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: AppPalette.neutral.withValues(alpha: 0.18),
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  const Icon(
-                    Icons.format_list_bulleted_rounded,
-                    size: 16,
-                    color: AppPalette.tertiary,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Mostrando ',
-                    style: AppTypography.small.copyWith(
-                      color: AppPalette.textSecondaryLight,
-                    ),
-                  ),
-                  Text(
-                    '$totalRegistros órdenes',
-                    style: AppTypography.small.copyWith(
-                      color: AppPalette.tertiary,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  Text(
-                    ' registradas',
-                    style: AppTypography.small.copyWith(
-                      color: AppPalette.textSecondaryLight,
-                    ),
-                  ),
-                ],
-              ),
-              Row(
-                children: [
-                  Text(
-                    'Total Consolidado en Vista: ',
-                    style: AppTypography.small.copyWith(
-                      color: AppPalette.textSecondaryLight,
-                    ),
-                  ),
-                  Text(
-                    CobroPendienteCard.formatClp(totalConsolidado),
-                    style: AppTypography.body.copyWith(
-                      color: AppPalette.tertiary,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 14),
-
-        // ── 3. CONTENIDO PRINCIPAL (TABLA, LOADING O ERROR) ──
+        // ── 2. TABLA FORENSE DE AUDITORÍA CON 10 COLUMNAS E ÍCONOS DEL MOCKUP ──
         Expanded(
-          child: _buildContenidoPrincipal(items),
+          child: _buildContenidoPrincipal(
+            items,
+            totalRegistros: totalRegistros,
+            totalConsolidado: totalConsolidado,
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildContenidoPrincipal(List<HistorialOrdenItemModel> items) {
+  Widget _buildContenidoPrincipal(
+    List<HistorialOrdenItemModel> items, {
+    required int totalRegistros,
+    required int totalConsolidado,
+  }) {
     if (_isLoading && _data == null) {
       return const Center(
         child: CircularProgressIndicator(color: AppPalette.primary),
@@ -296,52 +237,14 @@ class _OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
       );
     }
 
-    if (items.isEmpty) {
-      return Center(
-        child: Container(
-          padding: const EdgeInsets.all(32),
-          decoration: BoxDecoration(
-            color: AppPalette.surfaceLight,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppPalette.neutral.withValues(alpha: 0.2)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.search_off_rounded,
-                size: 48,
-                color: AppPalette.neutral,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'No se encontraron órdenes',
-                style: AppTypography.body.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: AppPalette.tertiary,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Prueba ajustando los filtros de período, sucursal, estado o búsqueda.',
-                style: AppTypography.small.copyWith(
-                  color: AppPalette.textSecondaryLight,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return HistorialTablaView(
+    return AuditoriaTablaView(
       items: items,
       paginaActual: _paginaActual,
       totalPaginas: _data?.totalPaginas ?? 1,
-      isReadOnly: true,
-      mostrarSucursal: _idSucursal == null,
+      totalRegistros: totalRegistros,
+      totalConsolidado: totalConsolidado,
       onCambiarPagina: (nuevaPagina) => _cargarOrdenes(pagina: nuevaPagina),
-      onVerDetalle: (orden) => DetalleAuditoriaDialog.show(context, orden),
+      onVerDetalle: (orden) => AuditoriaDetalleDialog.show(context, orden),
     );
   }
 }

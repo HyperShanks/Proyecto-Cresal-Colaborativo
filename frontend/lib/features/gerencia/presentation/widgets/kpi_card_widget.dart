@@ -44,23 +44,23 @@ class _KpiCardWidgetState extends State<KpiCardWidget> {
       onExit: (_) => setState(() => _isHovered = false),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: _isHovered
                 ? AppPalette.primary.withValues(alpha: 0.4)
-                : AppPalette.borderLight,
+                : const Color(0xFFE2E8F0),
             width: _isHovered ? 1.5 : 1.0,
           ),
           boxShadow: [
             BoxShadow(
               color: _isHovered
                   ? AppPalette.primary.withValues(alpha: 0.08)
-                  : Colors.black.withValues(alpha: 0.03),
-              blurRadius: _isHovered ? 12 : 6,
-              offset: Offset(0, _isHovered ? 4 : 2),
+                  : Colors.black.withValues(alpha: 0.02),
+              blurRadius: _isHovered ? 12 : 4,
+              offset: Offset(0, _isHovered ? 4 : 1),
             ),
           ],
         ),
@@ -88,9 +88,9 @@ class _KpiCardWidgetState extends State<KpiCardWidget> {
                           widget.titulo.toUpperCase(),
                           style: const TextStyle(
                             fontSize: 11,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w800,
                             letterSpacing: 0.8,
-                            color: Color(0xFF64748B), // Slate 500
+                            color: Color(0xFF94A3B8), // Slate 400
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -103,46 +103,47 @@ class _KpiCardWidgetState extends State<KpiCardWidget> {
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 8,
-                      vertical: 3,
+                      vertical: 2,
                     ),
                     decoration: BoxDecoration(
-                      color: effectiveBadgeColor.withValues(alpha: 0.12),
+                      color: effectiveBadgeColor.withValues(alpha: 0.10),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
-                        color: effectiveBadgeColor.withValues(alpha: 0.3),
+                        color: effectiveBadgeColor.withValues(alpha: 0.35),
                       ),
                     ),
                     child: Text(
                       widget.badgeTexto!,
                       style: TextStyle(
                         fontSize: 11,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w800,
                         color: effectiveBadgeColor,
                       ),
                     ),
                   ),
               ],
             ),
-            const SizedBox(height: 12),
 
-            // Valor Principal Destacado
-            Text(
-              widget.valor,
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w900,
-                letterSpacing: -0.5,
-                color: widget.valorColor ?? AppPalette.textPrimaryLight,
+            // Valor Principal Destacado (con FittedBox para resiliencia responsiva)
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                widget.valor,
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.5,
+                  color: widget.valorColor ?? const Color(0xFF0F172A),
+                ),
+                maxLines: 1,
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: 8),
 
-            // Subtítulo descriptivo o Widget de contexto
+            // Subtítulo descriptivo o Widget de contexto (mantiene altura uniforme)
             if (widget.subtituloWidget != null)
               widget.subtituloWidget!
-            else
+            else if (widget.subtitulo.trim().isNotEmpty)
               Text(
                 widget.subtitulo,
                 style: const TextStyle(
@@ -152,7 +153,9 @@ class _KpiCardWidgetState extends State<KpiCardWidget> {
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-              ),
+              )
+            else
+              const SizedBox(height: 14),
           ],
         ),
       ),

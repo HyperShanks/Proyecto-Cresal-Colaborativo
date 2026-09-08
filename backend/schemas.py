@@ -1006,7 +1006,7 @@ class CompletarPreentregaResponse(BaseModel):
 class HistorialPagoDetalleDTO(BaseModel):
     id_transaccion: Optional[UUID] = None
     metodo_pago: str = Field(description="Efectivo, Débito, Crédito, Transferencia o Cheque")
-    monto: int = Field(ge=0, description="Monto cubierto por este método específico")
+    monto: int = Field(description="Monto cubierto o ajustado por este método específico")
     fecha_pago: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
