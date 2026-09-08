@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/theme/theme_controller.dart';
 import '../../../routes/app_routes.dart';
 import '../services/auth_service.dart';
 
@@ -11,6 +12,7 @@ class LoginController {
     String? rol,
   }) async {
     final effectiveIdRol = idRol ?? await AuthService.getIdRol();
+    ThemeController.actualizarPorRol(effectiveIdRol);
 
     if (!context.mounted) return;
 

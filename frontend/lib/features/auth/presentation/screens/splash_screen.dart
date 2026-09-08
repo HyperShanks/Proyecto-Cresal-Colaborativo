@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../core/theme/theme_controller.dart';
 import '../../../../routes/app_routes.dart';
 import '../../services/auth_service.dart';
 
@@ -59,6 +60,7 @@ class _SplashScreenState extends State<SplashScreen>
 
     if (token != null && token.isNotEmpty) {
       final idRol = await AuthService.getIdRol();
+      ThemeController.actualizarPorRol(idRol);
       if (!mounted) return;
       final targetRoute = AppRoutes.getHomeRouteForRole(idRol);
       Navigator.of(context).pushReplacementNamed(targetRoute);

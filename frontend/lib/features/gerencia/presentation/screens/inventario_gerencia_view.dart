@@ -383,11 +383,15 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
         style: const TextStyle(fontSize: 12, color: Color(0xFF0F172A)),
         decoration: const InputDecoration(
           isDense: true,
+          filled: true,
+          fillColor: Color(0xFFF8FAFC),
           contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           prefixIcon: Icon(Icons.search, size: 18, color: Color(0xFF94A3B8)),
           hintText: 'Buscar por SKU, Marca, Pasillo (A, B, C), Pallet o N° Ingreso...',
           hintStyle: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
           border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
         ),
       ),
     );
@@ -578,6 +582,7 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: value,
+          dropdownColor: Colors.white,
           icon: const Icon(Icons.expand_more, size: 16, color: Color(0xFF64748B)),
           style: const TextStyle(
             fontSize: 12,
@@ -1016,32 +1021,37 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Expanded(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.vertical,
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: DataTable(
-                        headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
-                        headingTextStyle: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF475569),
-                          letterSpacing: 0.5,
-                        ),
-                        dataTextStyle: const TextStyle(fontSize: 12, color: Color(0xFF1E293B)),
-                        dataRowMinHeight: 52,
-                        dataRowMaxHeight: 64,
-                        horizontalMargin: 16,
-                        columnSpacing: 24,
-                        columns: const [
-                          DataColumn(label: Text('SKU / QR FÍSICO')),
-                          DataColumn(label: Text('PIEZA / FICHA TÉCNICA')),
-                          DataColumn(label: Text('UBICACIÓN FÍSICA')),
-                          DataColumn(label: Text('SUCURSAL')),
-                          DataColumn(label: Text('ESTADO FÍSICO')),
-                          DataColumn(label: Text('PRECIO TASACIÓN')),
-                          DataColumn(label: Text('ACCIÓN')),
-                        ],
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final tableWidth = constraints.maxWidth < 1100 ? 1100.0 : constraints.maxWidth;
+                      return SingleChildScrollView(
+                        scrollDirection: Axis.vertical,
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(minWidth: tableWidth),
+                            child: DataTable(
+                              headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
+                              headingTextStyle: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF475569),
+                                letterSpacing: 0.5,
+                              ),
+                              dataTextStyle: const TextStyle(fontSize: 12, color: Color(0xFF1E293B)),
+                              dataRowMinHeight: 52,
+                              dataRowMaxHeight: 64,
+                              horizontalMargin: 16,
+                              columnSpacing: 24,
+                              columns: const [
+                                DataColumn(label: Text('SKU / QR FÍSICO')),
+                                DataColumn(label: Text('PIEZA / FICHA TÉCNICA')),
+                                DataColumn(label: Text('UBICACIÓN FÍSICA')),
+                                DataColumn(label: Text('SUCURSAL')),
+                                DataColumn(label: Text('ESTADO FÍSICO')),
+                                DataColumn(numeric: true, label: Text('PRECIO TASACIÓN')),
+                                DataColumn(label: Center(child: Text('ACCIÓN'))),
+                              ],
                         rows: _items.map((item) {
                           final tienePrecio = item.precioReferencia != null && item.precioReferencia! > 0;
                           final estadoNombre = item.estadoActivo ?? 'Disponible';
@@ -1152,29 +1162,31 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                                       ),
                               ),
                               DataCell(
-                                esBloqueado
-                                    ? const Text(
-                                        'Bloqueado',
-                                        style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8), fontWeight: FontWeight.bold),
-                                      )
-                                    : ElevatedButton.icon(
-                                        onPressed: () => _abrirModalTasacion(item),
-                                        icon: Icon(
-                                          !tienePrecio || esPaletizado ? Icons.sell : Icons.edit,
-                                          size: 13,
+                                Center(
+                                  child: esBloqueado
+                                      ? const Text(
+                                          'Bloqueado',
+                                          style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8), fontWeight: FontWeight.bold),
+                                        )
+                                      : ElevatedButton.icon(
+                                          onPressed: () => _abrirModalTasacion(item),
+                                          icon: Icon(
+                                            !tienePrecio || esPaletizado ? Icons.sell : Icons.edit,
+                                            size: 13,
+                                          ),
+                                          label: Text(!tienePrecio || esPaletizado ? 'Tasar' : 'Precio'),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: !tienePrecio || esPaletizado
+                                                ? const Color(0xFFEA580C)
+                                                : AppPalette.tertiary,
+                                            foregroundColor: Colors.white,
+                                            elevation: 0,
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                            textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                                          ),
                                         ),
-                                        label: Text(!tienePrecio || esPaletizado ? 'Tasar' : 'Precio'),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: !tienePrecio || esPaletizado
-                                              ? const Color(0xFFEA580C)
-                                              : AppPalette.tertiary,
-                                          foregroundColor: Colors.white,
-                                          elevation: 0,
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                          textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-                                        ),
-                                      ),
+                                ),
                               ),
                             ],
                           );
@@ -1182,7 +1194,10 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                       ),
                     ),
                   ),
-                ),
+                );
+              },
+            ),
+          ),
                 // Footer de Resumen de la Tabla
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -1277,6 +1292,12 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                   minimumSize: const Size(0, 32),
                   padding: const EdgeInsets.symmetric(horizontal: 10),
                   textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                  foregroundColor: AppPalette.primary,
+                  disabledForegroundColor: const Color(0xFF94A3B8),
+                  disabledIconColor: const Color(0xFF94A3B8),
+                  side: BorderSide(
+                    color: _paginaActual > 1 ? AppPalette.primary : const Color(0xFFE2E8F0),
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
@@ -1302,6 +1323,12 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                   minimumSize: const Size(0, 32),
                   padding: const EdgeInsets.symmetric(horizontal: 10),
                   textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                  foregroundColor: AppPalette.primary,
+                  disabledForegroundColor: const Color(0xFF94A3B8),
+                  disabledIconColor: const Color(0xFF94A3B8),
+                  side: BorderSide(
+                    color: _paginaActual < _totalPaginas ? AppPalette.primary : const Color(0xFFE2E8F0),
+                  ),
                 ),
               ),
             ],

@@ -277,14 +277,14 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
         ],
       ),
       child: Wrap(
-        spacing: 12,
-        runSpacing: 12,
-        alignment: WrapAlignment.spaceBetween,
+        spacing: 10,
+        runSpacing: 10,
+        alignment: WrapAlignment.start,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           // Campo de búsqueda predictiva
           ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 280, maxWidth: 420),
+            constraints: const BoxConstraints(minWidth: 280, maxWidth: 380),
             child: TextField(
               controller: _busquedaController,
               onChanged: _onBusquedaChanged,
@@ -340,6 +340,7 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
                 value: _filtroEstado,
+                dropdownColor: Colors.white,
                 isDense: true,
                 icon: const Icon(Icons.arrow_drop_down, size: 20, color: Color(0xFF64748B)),
                 style: const TextStyle(

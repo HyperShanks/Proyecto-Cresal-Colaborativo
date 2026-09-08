@@ -4,6 +4,8 @@ import 'core/services/api_service.dart';
 import 'features/auth/presentation/screens/splash_screen.dart';
 import 'routes/app_routes.dart';
 
+import 'core/theme/theme_controller.dart';
+
 void main() {
   runApp(const MyApp());
 }
@@ -18,19 +20,24 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Cresal Capstone',
-      debugShowCheckedModeBanner: false,
-      navigatorKey: ApiService.navigatorKey,
-      scaffoldMessengerKey: ApiService.scaffoldMessengerKey,
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.dark, // Oscuro por defecto industrial
-      // Pantalla inicial: Splash que decide la ruta según sesión
-      home: const SplashScreen(),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeController.themeMode,
+      builder: (context, currentThemeMode, _) {
+        return MaterialApp(
+          title: 'Cresal Capstone',
+          debugShowCheckedModeBanner: false,
+          navigatorKey: ApiService.navigatorKey,
+          scaffoldMessengerKey: ApiService.scaffoldMessengerKey,
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: currentThemeMode,
+          // Pantalla inicial: Splash que decide la ruta según sesión
+          home: const SplashScreen(),
 
-      // Rutas centralizadas y unificadas bajo Single Source of Truth (SSOT)
-      routes: AppRoutes.getRoutes(),
+          // Rutas centralizadas y unificadas bajo Single Source of Truth (SSOT)
+          routes: AppRoutes.getRoutes(),
+        );
+      },
     );
   }
 }

@@ -675,67 +675,8 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Selector Dropdown de Sucursal
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppPalette.backgroundLight,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppPalette.borderLight),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<int?>(
-                    value: _sucursalSeleccionada,
-                    icon: const Icon(Icons.expand_more, size: 18),
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF0F172A),
-                    ),
-                    items: const [
-                      DropdownMenuItem<int?>(
-                        value: null,
-                        child: Row(
-                          children: [
-                            Icon(Icons.domain, size: 16, color: AppPalette.primary),
-                            SizedBox(width: 8),
-                            Text('Todas las Sucursales'),
-                          ],
-                        ),
-                      ),
-                      DropdownMenuItem<int?>(
-                        value: 1,
-                        child: Row(
-                          children: [
-                            Icon(Icons.storefront,
-                                size: 16, color: AppPalette.primary),
-                            SizedBox(width: 8),
-                            Text('Sucursal 1: Casa Matriz (Viña)'),
-                          ],
-                        ),
-                      ),
-                      DropdownMenuItem<int?>(
-                        value: 2,
-                        child: Row(
-                          children: [
-                            Icon(Icons.warehouse,
-                                size: 16, color: AppPalette.primary),
-                            SizedBox(width: 8),
-                            Text('Sucursal 2: Patio Desarme (Limache)'),
-                          ],
-                        ),
-                      ),
-                    ],
-                    onChanged: (nuevoId) {
-                      setState(() => _sucursalSeleccionada = nuevoId);
-                      if (_vistaActiva == VistaGerencia.dashboard) {
-                        _cargarDashboard();
-                      }
-                    },
-                  ),
-                ),
-              ),
+              // Selector Dropdown de Sucursal (Tarjeta Ejecutiva Foto 4)
+              _buildSelectorSucursales(),
               const SizedBox(width: 10),
 
               // Botón Refrescar con Spin
@@ -926,6 +867,156 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSelectorSucursales() {
+    final Map<int?, ({String titulo, String subtitulo, IconData icon})> sucursales = {
+      null: (
+        titulo: 'Todas las Sucursales (Consolidado)',
+        subtitulo: 'Consolidado general',
+        icon: Icons.domain_rounded,
+      ),
+      1: (
+        titulo: 'Sucursal 1: Casa Matriz (Viña)',
+        subtitulo: 'Viña del Mar (Mesón & Ventas)',
+        icon: Icons.storefront_rounded,
+      ),
+      2: (
+        titulo: 'Sucursal 2: Patio Desarme (Limache)',
+        subtitulo: 'Limache (Desarme & Bodega)',
+        icon: Icons.warehouse_rounded,
+      ),
+    };
+
+    final actual = sucursales[_sucursalSeleccionada] ?? sucursales[null]!;
+
+    return Theme(
+      data: Theme.of(context).copyWith(
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+      ),
+      child: PopupMenuButton<int?>(
+        tooltip: 'Seleccionar sucursal de auditoría',
+        color: Colors.white,
+        surfaceTintColor: Colors.white,
+        elevation: 8,
+        shadowColor: Colors.black.withValues(alpha: 0.12),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0xFFE2E8F0)),
+        ),
+        offset: const Offset(0, 42),
+        initialValue: _sucursalSeleccionada,
+        onSelected: (nuevoId) {
+          setState(() => _sucursalSeleccionada = nuevoId);
+          if (_vistaActiva == VistaGerencia.dashboard) {
+            _cargarDashboard();
+          }
+        },
+        itemBuilder: (context) {
+          return sucursales.entries.map((entry) {
+            final id = entry.key;
+            final data = entry.value;
+            final isSelected = id == _sucursalSeleccionada;
+
+            return PopupMenuItem<int?>(
+              value: id,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isSelected ? const Color(0xFFF0F9FF) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      data.icon,
+                      size: 20,
+                      color: isSelected ? const Color(0xFF0284C7) : const Color(0xFF64748B),
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          data.titulo,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w700,
+                            color: isSelected ? const Color(0xFF0284C7) : const Color(0xFF0F172A),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          data.subtitulo,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF64748B),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(width: 20),
+                    if (isSelected)
+                      const Icon(
+                        Icons.check_rounded,
+                        size: 18,
+                        color: Color(0xFF0284C7),
+                      )
+                    else
+                      const SizedBox(width: 18),
+                  ],
+                ),
+              ),
+            );
+          }).toList();
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.storefront_rounded,
+                size: 16,
+                color: AppPalette.primary,
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Sucursal: ',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF64748B),
+                ),
+              ),
+              Text(
+                actual.titulo,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(
+                Icons.expand_more_rounded,
+                size: 16,
+                color: Color(0xFF64748B),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
