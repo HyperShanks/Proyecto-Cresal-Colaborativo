@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
@@ -78,29 +79,20 @@ def obtener_resumen_alertas(
     conteo_impresiones = (
         db.query(Activo_Inventariado)
         .filter(
-            Activo_Inventariado.qr_impreso == False,
-            Activo_Inventariado.id_estado == 1,
+            or_(
+                Activo_Inventariado.qr_impreso == False,
+                Activo_Inventariado.qr_impreso.is_(None),
+            ),
             Activo_Inventariado.estado == "Activo",
-            Activo_Inventariado.ubicacion_pasillo.isnot(None),
-            Activo_Inventariado.ubicacion_pasillo != "",
-            Activo_Inventariado.ubicacion_pasillo != "S/P",
-            Activo_Inventariado.ubicacion_pallet.isnot(None),
-            Activo_Inventariado.ubicacion_pallet != "",
-            Activo_Inventariado.ubicacion_pallet != "S/P",
             Activo_Inventariado.id_sucursal_actual == target_sucursal,
         )
         .count()
     )
 
-    conteo_entregas_barrera = (
-        db.query(Orden_Venta)
-        .filter(
-            Orden_Venta.id_sucursal == target_sucursal,
-            Orden_Venta.estado_orden == "Pagada",
-        )
-        .count()
-    )
-    conteo_entregas = conteo_impresiones + conteo_entregas_barrera
+    # Las tareas de entrega en barrera (LIBERADA) ya están contabilizadas dentro de conteo_preparacion
+    # (órdenes con estado_preparacion != 'Listo' y estado_orden in ['Reservada', 'Pagada']).
+    # Por lo tanto, conteo_entregas refleja las impresiones de etiquetas QR pendientes.
+    conteo_entregas = conteo_impresiones
 
     # 3. Reingresos de Logística Inversa
     conteo_reingresos = (
@@ -206,6 +198,9 @@ def obtener_tareas_pendientes(
                 categoria=cat_nombre,
                 tipo_repuesto=cat_nombre,
                 ubicacion=f"{activo.ubicacion_pasillo or 'S/P'} - {activo.ubicacion_pallet or 'S/P'}",
+                ubicacion_pasillo=activo.ubicacion_pasillo,
+                ubicacion_pallet=activo.ubicacion_pallet,
+                ubicacion_galpon=activo.ubicacion_galpon,
                 nota_especial=detalle.notas_preparacion,
                 estado_bloqueo=bloqueo,
                 accion_requerida=accion,
@@ -273,19 +268,15 @@ def obtener_tareas_pendientes(
     # ---------------------------------------------------------
     activos_sin_qr = (
         db.query(Activo_Inventariado, Vehiculo_Origen, Detalle_Motor, Detalle_Caja_Cambio)
-        .join(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
+        .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
         .outerjoin(Detalle_Motor, Activo_Inventariado.id_activo == Detalle_Motor.id_activo)
         .outerjoin(Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo)
         .filter(
-            Activo_Inventariado.qr_impreso == False,
-            Activo_Inventariado.id_estado == 1,  # Solo piezas Disponibles / ya paletizadas
+            or_(
+                Activo_Inventariado.qr_impreso == False,
+                Activo_Inventariado.qr_impreso.is_(None),
+            ),
             Activo_Inventariado.estado == "Activo",
-            Activo_Inventariado.ubicacion_pasillo.isnot(None),
-            Activo_Inventariado.ubicacion_pasillo != "",
-            Activo_Inventariado.ubicacion_pasillo != "S/P",
-            Activo_Inventariado.ubicacion_pallet.isnot(None),
-            Activo_Inventariado.ubicacion_pallet != "",
-            Activo_Inventariado.ubicacion_pallet != "S/P",
             Activo_Inventariado.id_sucursal_actual == sucursal_id,
         )
         .all()
@@ -300,7 +291,11 @@ def obtener_tareas_pendientes(
             transmision_val = None
 
         cat_nombre = "Motor" if activo.id_categoria == 1 else ("Caja de Cambios" if activo.id_categoria == 2 else "Repuesto")
-        titulo = f"{cat_nombre} - {vehiculo.marca} {vehiculo.modelo}" if vehiculo else cat_nombre
+        if vehiculo:
+            anio_str = f" ({vehiculo.anio})" if vehiculo.anio else ""
+            titulo = f"{cat_nombre} - {vehiculo.marca} {vehiculo.modelo}{anio_str}"
+        else:
+            titulo = f"{cat_nombre} - {activo.sku_qr_fisico}" if activo.sku_qr_fisico else cat_nombre
 
         etiqueta_data = {
             "id_activo": str(activo.id_activo),
@@ -326,6 +321,9 @@ def obtener_tareas_pendientes(
                 categoria=cat_nombre,
                 tipo_repuesto=cat_nombre,
                 ubicacion=f"{activo.ubicacion_pasillo or 'S/P'} - {activo.ubicacion_pallet or 'S/P'}",
+                ubicacion_pasillo=activo.ubicacion_pasillo,
+                ubicacion_pallet=activo.ubicacion_pallet,
+                ubicacion_galpon=activo.ubicacion_galpon,
                 nota_especial="GENERAR Y PEGAR ETIQUETA QR",
                 accion_requerida="GENERAR QR AHORA",
                 etiqueta_data=etiqueta_data,

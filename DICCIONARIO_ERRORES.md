@@ -119,6 +119,43 @@ Este documento constituye la **Matriz Exhaustiva de Errores, Sanitización y Men
 
 ---
 
+### 📦 Módulo 8: Centro de Alertas y Tareas de Bodega PDA (`SPEC-HU-TAREA-13`)
+
+| Módulo | Código de Error (`error_code`) | Disparador (Cuándo se activa) | Mensaje al Usuario (`message_user`) | HTTP Status | Acción Sugerida en UI |
+| :--- | :--- | :--- | :--- | :---: | :--- |
+| **Bodega Alertas** | `BODEGA_ALERTA_NETWORK_ERROR` | Falla de conexión o timeout al cargar las tareas pendientes segmentadas (`/tareas-pendientes`). | *"No se pudieron cargar las tareas. Reintentando conexión con la bodega..."* | N/A (Socket / Timeout) | Despliega vista de error con icono `wifi_off` y botón interactivo de **"Reintentar"**. |
+| **Bodega Alertas** | `BODEGA_TAREA_COMPLETAR_ERROR` | Error de red o respuesta HTTP no exitosa al marcar una preparación como lista (`/tareas/{id}/completar-preentrega`). | *"Ocurrió un error al intentar marcar la pieza como lista. Verifique su conexión y vuelva a intentarlo."* | `500 Internal` / N/A | Muestra `SnackBar` de error en rojo y mantiene el estado de la tarea para reintentar. |
+
+---
+
+### 🏷️ Módulo 9: Paletizado Directo por N° de Ingreso (`SPEC-HU-TAREA-14`)
+
+| Módulo | Código de Error (`error_code`) | Disparador (Cuándo se activa) | Mensaje al Usuario (`message_user`) | HTTP Status | Acción Sugerida en UI |
+| :--- | :--- | :--- | :--- | :---: | :--- |
+| **Paletizado** | `INVENTARIO_INGRESO_NOT_FOUND` | Búsqueda directa por N° de ingreso físico que no existe en `Vehiculo_Origen` (`GET /api/v1/inventario/ingreso/{numero_ingreso}`). | *"Número de ingreso no encontrado en la base de datos."* | `404 Not Found` | Despliega `SnackBar` en color de error y conserva el foco en el `TextField` para corrección inmediata. |
+| **Paletizado** | `INVENTARIO_INGRESO_YA_PALETIZADO` | Consulta de un vehículo cuyos repuestos ya fueron paletizados previamente o no requieren el flujo de paletizado (`id_estado != 5` / sin piezas pendientes). | *"El activo asociado a este número ya fue paletizado previamente o no requiere este flujo."* | `400 Bad Request` | Despliega `SnackBar` informativo en color secundario/ámbar sin redirigir al formulario. |
+| **Paletizado** | `INVENTARIO_INGRESO_NETWORK_ERROR` | Pérdida de conectividad, timeout o fallo de socket al consultar el endpoint de ingreso desde el Home o Paletizado. | *"Error de conexión. Reintentando la búsqueda..."* | N/A (Socket / Timeout) | Despliega `SnackBar` de error de red sin colapsar el Home ni congelar la terminal de bodega. |
+
+---
+
+### 🖼️ Módulo 10: Visualización de Imágenes en Tasación (`SPEC-HU-TAREA-15`)
+
+| Módulo | Código de Error (`error_code`) | Disparador (Cuándo se activa) | Mensaje al Usuario (`message_user`) | HTTP Status | Acción Sugerida en UI |
+| :--- | :--- | :--- | :--- | :---: | :--- |
+| **Tasación Galería** | `TASACION_IMAGEN_EMPTY_STATE` | El activo a tasar no posee fotografías asociadas en `Multimedia_Activo` (`fotografias` está vacío). | *"Activo sin fotografías registradas."* | N/A (Local Empty State) | Despliega un recuadro gris central con icono informativo en el modal de tasación, permitiendo continuar con la valuación manual. |
+| **Tasación Galería** | `TASACION_IMAGEN_NETWORK_ERROR` | Fallo de conexión de red, timeout o URL de almacenamiento inaccesible al intentar renderizar una fotografía. | *"Error al cargar la imagen. Presione para reintentar."* | N/A (Image Load Exception) | Despliega un recuadro con icono de advertencia y botón de reintento interactivo dentro del carrusel, sin bloquear la digitación del precio. |
+
+---
+
+### 🏢 Módulo 11: Filtros de Estado y Ubicación en Inventario y Alertas (`SPEC-HU-TAREA-16`)
+
+| Módulo | Código de Error (`error_code`) | Disparador (Cuándo se activa) | Mensaje al Usuario (`message_user`) | HTTP Status | Acción Sugerida en UI |
+| :--- | :--- | :--- | :--- | :---: | :--- |
+| **Inventario / Alertas** | `INVENTARIO_ACTIVO_HUERFANO_UBICACION` | Activo ingresado en el sistema o migrado que no posee asignada ninguna ubicación física (`ubicacion_galpon`, `ubicacion_pasillo`, `ubicacion_pallet` nulos o vacíos). | *"Sin Galpón / Sin Ubicación asignada"* | N/A (Local Warning UI) | Muestra un aviso preventivo destacado en color ámbar en la tarjeta del activo o tarea, instigando a editar o asignar ubicación física. |
+| **Inventario Buscador** | `INVENTARIO_FILTRO_OFFLINE` | El operario cambia de filtro de estado (Disponibles, Reservados, Vendidos, Paletizados) sin conectividad con el servidor backend. | *"No hay conexión para aplicar este filtro. Mostrando caché temporal."* | N/A (Socket / Timeout) | Despliega un `SnackBar` informativo en color secundario sin borrar la lista previa y restableciendo visualmente el filtro anterior. |
+
+---
+
 ## 3. Guía de Uso del Componente `CustomErrorSnackbar`
 
 Para desplegar un error estandarizado con opción de reintento en cualquier vista de Flutter:

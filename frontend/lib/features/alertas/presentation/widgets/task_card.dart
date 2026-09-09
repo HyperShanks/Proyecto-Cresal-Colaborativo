@@ -12,7 +12,7 @@ class TaskCard extends StatefulWidget {
   final TareaAlerta tarea;
   final VoidCallback? onActualizar;
 
-  const TaskCard({Key? key, required this.tarea, this.onActualizar}) : super(key: key);
+  const TaskCard({super.key, required this.tarea, this.onActualizar});
 
   @override
   State<TaskCard> createState() => _TaskCardState();
@@ -69,7 +69,7 @@ class _TaskCardState extends State<TaskCard> {
       if (!mounted) return;
 
       if (exito) {
-        BodegaPollingService.instance.decrementarPendiente();
+        BodegaPollingService.instance.decrementarPendiente(tipoAlerta: widget.tarea.tipoAlerta);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -84,8 +84,10 @@ class _TaskCardState extends State<TaskCard> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('❌ Error al completar preparación: $e'),
+        const SnackBar(
+          content: Text(
+            'Ocurrió un error al intentar marcar la pieza como lista. Verifique su conexión y vuelva a intentarlo.',
+          ),
           backgroundColor: AppPalette.error,
         ),
       );
@@ -455,7 +457,7 @@ class _TaskCardState extends State<TaskCard> {
               ],
               const SizedBox(height: 20),
 
-              // Recuadro de Ubicación
+              // Recuadro de Ubicación (SPEC-HU-TAREA-16)
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
@@ -473,11 +475,67 @@ class _TaskCardState extends State<TaskCard> {
                       esReingreso ? 'UBICACIÓN ASIGNADA DE RETORNO' : 'UBICACIÓN EXACTA',
                       style: AppTypography.small.copyWith(fontSize: 11),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      tarea.ubicacion,
-                      style: AppTypography.title.copyWith(fontSize: 22),
-                    ),
+                    const SizedBox(height: 8),
+                    if (tarea.ubicacion.isEmpty ||
+                        tarea.ubicacion == 'Ubicación Pendiente' ||
+                        (tarea.ubicacion == 'S/P - S/P' &&
+                            (tarea.ubicacionGalpon == null || tarea.ubicacionGalpon!.isEmpty))) ...[
+                      Row(
+                        children: [
+                          const Icon(Icons.warning_amber_rounded, size: 18, color: AppPalette.warning),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Sin Galpón / Sin Ubicación asignada',
+                            style: AppTypography.body.copyWith(
+                              color: AppPalette.warning,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ] else ...[
+                      Row(
+                        children: [
+                          if (tarea.ubicacionGalpon != null &&
+                              tarea.ubicacionGalpon!.isNotEmpty &&
+                              tarea.ubicacionGalpon != 'S/G') ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: AppPalette.primary.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: AppPalette.primary, width: 1.5),
+                              ),
+                              child: Text(
+                                'GALPÓN: ${tarea.ubicacionGalpon}',
+                                style: AppTypography.small.copyWith(
+                                  color: AppPalette.primary,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                          ],
+                          Expanded(
+                            child: Text(
+                              (tarea.ubicacionPasillo != null &&
+                                      tarea.ubicacionPallet != null &&
+                                      tarea.ubicacionPasillo!.isNotEmpty)
+                                  ? 'Pasillo ${tarea.ubicacionPasillo} - Pallet ${tarea.ubicacionPallet}'
+                                  : tarea.ubicacion,
+                              style: AppTypography.title.copyWith(fontSize: 18, fontWeight: FontWeight.w900),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        tarea.ubicacion,
+                        style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -829,13 +887,79 @@ class _TaskCardState extends State<TaskCard> {
                     esReingreso ? 'UBICACIÓN DE RETORNO / PALLET' : 'UBICACIÓN DE RETIRO / PALLET',
                     style: AppTypography.small.copyWith(fontSize: 10),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    tarea.ubicacion,
-                    style: AppTypography.title.copyWith(
-                      fontWeight: FontWeight.w900,
+                  const SizedBox(height: 6),
+                  if (tarea.ubicacion.isEmpty ||
+                      tarea.ubicacion == 'Ubicación Pendiente' ||
+                      (tarea.ubicacion == 'S/P - S/P' &&
+                          (tarea.ubicacionGalpon == null || tarea.ubicacionGalpon!.isEmpty))) ...[
+                    Row(
+                      children: [
+                        const Icon(Icons.warning_amber_rounded, size: 16, color: AppPalette.warning),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Sin Galpón / Sin Ubicación asignada',
+                          style: AppTypography.small.copyWith(
+                            color: AppPalette.warning,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
+                  ] else ...[
+                    Row(
+                      children: [
+                        if (tarea.ubicacionGalpon != null &&
+                            tarea.ubicacionGalpon!.isNotEmpty &&
+                            tarea.ubicacionGalpon != 'S/G') ...[
+                          Container(
+                            key: const Key('chip_galpon_tarea'),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: AppPalette.primary.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: AppPalette.primary, width: 1.2),
+                            ),
+                            child: Text(
+                              'GALPÓN: ${tarea.ubicacionGalpon}',
+                              style: AppTypography.small.copyWith(
+                                color: AppPalette.primary,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                        ],
+                        Expanded(
+                          child: Text(
+                            (tarea.ubicacionPasillo != null &&
+                                    tarea.ubicacionPallet != null &&
+                                    tarea.ubicacionPasillo!.isNotEmpty)
+                                ? 'Pasillo ${tarea.ubicacionPasillo} - Pallet ${tarea.ubicacionPallet}'
+                                : tarea.ubicacion,
+                            style: AppTypography.title.copyWith(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 14,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (tarea.ubicacionPasillo != null &&
+                        tarea.ubicacionPallet != null &&
+                        tarea.ubicacionPasillo!.isNotEmpty &&
+                        tarea.ubicacion != 'Pasillo ${tarea.ubicacionPasillo} - Pallet ${tarea.ubicacionPallet}') ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        tarea.ubicacion,
+                        style: AppTypography.small.copyWith(
+                          color: AppPalette.textSecondary,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ],
                 ],
               ),
             ),

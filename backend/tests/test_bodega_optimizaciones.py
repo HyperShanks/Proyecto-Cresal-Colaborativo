@@ -563,11 +563,11 @@ def test_traslado_validaciones_sucursales_invalidas(client, db_session, auth_hea
     assert "La sucursal de origen y destino no pueden ser iguales" in res_2.json()["detail"]
 
 
-def test_alertas_impresion_qr_solo_piezas_paletizadas_y_disponibles(client, db_session, auth_headers_bodega_vina):
+def test_alertas_impresion_qr_todos_activos_sin_qr(client, db_session, auth_headers_bodega_vina):
     """
-    Verifica que la bandeja de impresión QR en bodega:
-    - Incluya activos con qr_impreso = False, id_estado = 1 (Disponible) y ubicación física asignada.
-    - Excluya activos con id_estado = 5 (En Desarme) o sin ubicación asignada (S/P o None).
+    Verifica que la bandeja de impresión / re-impresión QR en bodega:
+    - Incluya TODOS los activos con qr_impreso = False (independientemente del id_estado o si ya tienen pasillo/pallet asignado).
+    - Excluya activos con qr_impreso = True o pertenecientes a otra sucursal.
     """
     # 1. Crear vehículo
     veh = Vehiculo_Origen(
@@ -596,7 +596,7 @@ def test_alertas_impresion_qr_solo_piezas_paletizadas_y_disponibles(client, db_s
         estado="Activo",
     )
 
-    # Activo B: En Desarme (5) con qr_impreso = False -> NO DEBE APARECER
+    # Activo B: En Desarme (5) con qr_impreso = False -> DEBE APARECER
     act_b = Activo_Inventariado(
         id_activo=uuid.uuid4(),
         sku_qr_fisico=f"SKU-QRB-{uuid.uuid4().hex[:4].upper()}",
@@ -611,7 +611,7 @@ def test_alertas_impresion_qr_solo_piezas_paletizadas_y_disponibles(client, db_s
         estado="Activo",
     )
 
-    # Activo C: Disponible (1) pero sin pasillo/pallet ("S/P") -> NO DEBE APARECER
+    # Activo C: Disponible (1) pero sin pasillo/pallet ("S/P") con qr_impreso = False -> DEBE APARECER
     act_c = Activo_Inventariado(
         id_activo=uuid.uuid4(),
         sku_qr_fisico=f"SKU-QRC-{uuid.uuid4().hex[:4].upper()}",
@@ -626,7 +626,37 @@ def test_alertas_impresion_qr_solo_piezas_paletizadas_y_disponibles(client, db_s
         estado="Activo",
     )
 
-    db_session.add_all([act_a, act_b, act_c])
+    # Activo D: Con qr_impreso = True -> NO DEBE APARECER
+    act_d = Activo_Inventariado(
+        id_activo=uuid.uuid4(),
+        sku_qr_fisico=f"SKU-QRD-{uuid.uuid4().hex[:4].upper()}",
+        id_categoria=1,
+        id_estado=1,
+        id_sucursal_actual=1,
+        id_vehiculo=veh.id_vehiculo,
+        ubicacion_pasillo="P-01",
+        ubicacion_pallet="PAL-01",
+        precio_referencia=500000,
+        qr_impreso=True,
+        estado="Activo",
+    )
+
+    # Activo E: Otra sucursal (2) con qr_impreso = False -> NO DEBE APARECER en sucursal 1
+    act_e = Activo_Inventariado(
+        id_activo=uuid.uuid4(),
+        sku_qr_fisico=f"SKU-QRE-{uuid.uuid4().hex[:4].upper()}",
+        id_categoria=1,
+        id_estado=1,
+        id_sucursal_actual=2,
+        id_vehiculo=veh.id_vehiculo,
+        ubicacion_pasillo="P-02",
+        ubicacion_pallet="PAL-02",
+        precio_referencia=500000,
+        qr_impreso=False,
+        estado="Activo",
+    )
+
+    db_session.add_all([act_a, act_b, act_c, act_d, act_e])
     db_session.commit()
 
     # 2. Consultar tareas pendientes de bodega en Viña
@@ -637,6 +667,9 @@ def test_alertas_impresion_qr_solo_piezas_paletizadas_y_disponibles(client, db_s
     ids_impresion = [t["id_activo"] for t in tareas if t["tipo_alerta"] == "IMPRESION"]
 
     assert str(act_a.id_activo) in ids_impresion, "El activo A (Disponible y Paletizado) DEBE aparecer en impresión"
-    assert str(act_b.id_activo) not in ids_impresion, "El activo B (En Desarme / estado 5) NO debe aparecer en impresión"
-    assert str(act_c.id_activo) not in ids_impresion, "El activo C (Sin ubicación física) NO debe aparecer en impresión"
+    assert str(act_b.id_activo) in ids_impresion, "El activo B (En Desarme / estado 5) DEBE aparecer en impresión"
+    assert str(act_c.id_activo) in ids_impresion, "El activo C (Sin ubicación física) DEBE aparecer en impresión"
+    assert str(act_d.id_activo) not in ids_impresion, "El activo D (con qr_impreso = True) NO debe aparecer en impresión"
+    assert str(act_e.id_activo) not in ids_impresion, "El activo E (otra sucursal) NO debe aparecer en impresión de sucursal 1"
+
 

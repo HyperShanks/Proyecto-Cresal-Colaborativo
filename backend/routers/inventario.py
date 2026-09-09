@@ -133,6 +133,7 @@ def buscar_inventario(
     cilindrada: Optional[str] = None,
     combustible: Optional[str] = None,
     transmision: Optional[str] = None,
+    estado: Optional[str] = Query(None, description="Filtro operativo: Disponibles, Reservados, Vendidos, Paletizados, Todos"),
     limit: Optional[int] = Query(None, ge=1, le=100, description="Límite de elementos por página"),
     offset: int = Query(0, ge=0, description="Desplazamiento para paginación"),
     db: Session = Depends(get_db),
@@ -154,12 +155,48 @@ def buscar_inventario(
         .join(Estado_Activo, Activo_Inventariado.id_estado == Estado_Activo.id_estado)
     )
 
-    # ⚠️ REGLA DE NEGOCIO: Filtrar únicamente repuestos físicamente en bodega (1: Disponible, 2: Reservado)
-    # Excluye explícitamente Entregado (4), Vendido (3) y De Baja / En Desarme (5)
-    query = query.filter(
-        Activo_Inventariado.id_estado.in_([1, 2]),
-        Activo_Inventariado.estado == "Activo",
-    )
+    # Filtro por Estado Operativo (SPEC-HU-TAREA-16)
+    if estado and estado.strip():
+        est_clean = estado.strip().upper()
+        if est_clean in ["DISPONIBLES", "DISPONIBLE"]:
+            query = query.filter(
+                or_(
+                    Activo_Inventariado.id_estado == 1,
+                    func.lower(Estado_Activo.nombre_estado) == "disponible",
+                )
+            )
+        elif est_clean in ["RESERVADOS", "RESERVADO"]:
+            query = query.filter(
+                or_(
+                    Activo_Inventariado.id_estado == 2,
+                    func.lower(Estado_Activo.nombre_estado) == "reservado",
+                )
+            )
+        elif est_clean in ["VENDIDOS", "VENDIDO"]:
+            query = query.filter(
+                or_(
+                    Activo_Inventariado.id_estado == 3,
+                    func.lower(Estado_Activo.nombre_estado) == "vendido",
+                )
+            )
+        elif est_clean in ["PALETIZADOS", "PALETIZADO"]:
+            query = query.filter(
+                func.lower(Estado_Activo.nombre_estado) == "paletizado"
+            )
+        elif est_clean in ["TODOS", "TODO"]:
+            query = query.filter(
+                or_(
+                    Activo_Inventariado.id_estado.in_([1, 2, 3]),
+                    func.lower(Estado_Activo.nombre_estado) == "paletizado",
+                )
+            )
+    else:
+        # Default retrocompatible: repuestos operativos en bodega (1: Disponible, 2: Reservado)
+        query = query.filter(
+            Activo_Inventariado.id_estado.in_([1, 2]),
+        )
+
+    query = query.filter(Activo_Inventariado.estado == "Activo")
 
     # Búsqueda por Texto Libre
     if q and q.strip():
@@ -244,6 +281,9 @@ def buscar_inventario(
                 "pasillo": activo.ubicacion_pasillo or "",
                 "pallet": activo.ubicacion_pallet or "",
                 "galpon": getattr(activo, "ubicacion_galpon", "") or "",
+                "ubicacion_pasillo": activo.ubicacion_pasillo or "",
+                "ubicacion_pallet": activo.ubicacion_pallet or "",
+                "ubicacion_galpon": getattr(activo, "ubicacion_galpon", "") or "",
                 "estado": est.nombre_estado,
                 "categoria": cat.nombre_categoria,
                 "cilindrada": motor.cilindrada if motor else "N/A",
@@ -444,6 +484,11 @@ def obtener_catalogo(
     description="Consulta todos los activos inventariados/paletizados por bodega que tienen "
                 "precio_referencia nulo o igual a 0. Requiere rol de Jefe de Ventas (id_rol == 6).",
 )
+@router.get(
+    "/bandeja-precios",
+    response_model=List[ActivoPendientePrecioResponse],
+    summary="Bandeja de Entrada de Activos Pendientes de Precio (SPEC-HU-TAREA-15)",
+)
 def obtener_pendientes_precio(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(verificar_rol_jefe_ventas),
@@ -480,6 +525,19 @@ def obtener_pendientes_precio(
     )
 
     resultados = query.all()
+
+    # Tarea 1: Extracción en lote (Batch) de fotografías sin N+1
+    activo_ids = [activo.id_activo for activo, _, _, _, _, _, _ in resultados]
+    multimedia_por_activo = {}
+    if activo_ids:
+        multimedias = (
+            db.query(Multimedia_Activo.id_activo, Multimedia_Activo.url_storage)
+            .filter(Multimedia_Activo.id_activo.in_(activo_ids))
+            .all()
+        )
+        for id_act, url in multimedias:
+            if url:
+                multimedia_por_activo.setdefault(id_act, []).append(url)
 
     respuesta: List[ActivoPendientePrecioResponse] = []
     for activo, vehiculo, cat, est, suc, motor, caja in resultados:
@@ -528,10 +586,27 @@ def obtener_pendientes_precio(
             titulo_repuesto=titulo,
             estado_activo=est.nombre_estado,
             fecha_creacion=activo.fecha_creacion.isoformat() if activo.fecha_creacion else None,
+            fotografias=multimedia_por_activo.get(activo.id_activo, []),
         )
         respuesta.append(item)
 
     return respuesta
+
+
+# Router adicional para endpoints bajo /api/v1/ventas (SPEC-HU-TAREA-15)
+ventas_router = APIRouter(prefix="/api/v1/ventas", tags=["Ventas Bandeja Precios"])
+
+
+@ventas_router.get(
+    "/bandeja-precios",
+    response_model=List[ActivoPendientePrecioResponse],
+    summary="Bandeja de Precios para Jefe de Ventas (SPEC-HU-TAREA-15)",
+)
+def obtener_bandeja_precios_ventas(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(verificar_rol_jefe_ventas),
+):
+    return obtener_pendientes_precio(db=db, current_user=current_user)
 
 
 @router.get(
@@ -1010,3 +1085,95 @@ def editar_activo_inventariado(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error transaccional: {str(e)}",
         )
+
+
+@router.get("/ingreso/{numero_ingreso}", status_code=200)
+def buscar_activo_por_numero_ingreso(
+    numero_ingreso: str,
+    db: Session = Depends(get_db),
+    usuario_logeado: Usuario = Depends(get_current_user),
+):
+    """
+    SPEC-HU-TAREA-14: Búsqueda directa de activo/vehículo por número de ingreso
+    para acceso rápido al flujo de paletizado y enriquecimiento.
+    """
+    folio = numero_ingreso.strip()
+    if not folio:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El número de ingreso no puede estar vacío.",
+        )
+
+    vehiculo = db.query(Vehiculo_Origen).filter(
+        Vehiculo_Origen.numero_ingreso == folio
+    ).first()
+
+    if not vehiculo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Número de ingreso no encontrado en la base de datos.",
+        )
+
+    # Buscar activos asociados al vehículo
+    activos = db.query(Activo_Inventariado).filter(
+        Activo_Inventariado.id_vehiculo == vehiculo.id_vehiculo,
+        Activo_Inventariado.estado == "Activo",
+    ).all()
+
+    # Un activo está pendiente de paletizado si id_estado == 5 (En Desarme) o no tiene ubicación física válida
+    activos_pendientes = [
+        a for a in activos
+        if a.id_estado == 5
+        or not a.ubicacion_pasillo
+        or a.ubicacion_pasillo in ("", "S/P")
+        or not a.ubicacion_pallet
+        or a.ubicacion_pallet in ("", "S/P")
+    ]
+
+    if not activos or not activos_pendientes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El activo asociado a este número ya fue paletizado previamente o no requiere este flujo.",
+        )
+
+    # Obtener detalles de motor (Categoría 1)
+    activo_motor = next((a for a in activos if a.id_categoria == 1), None)
+    detalle_motor = None
+    if activo_motor:
+        detalle_motor = db.query(Detalle_Motor).filter(Detalle_Motor.id_activo == activo_motor.id_activo).first()
+
+    # Obtener detalles de caja de cambios (Categoría 2)
+    activo_caja = next((a for a in activos if a.id_categoria == 2), None)
+    detalle_caja = None
+    if activo_caja:
+        detalle_caja = db.query(Detalle_Caja_Cambio).filter(Detalle_Caja_Cambio.id_activo == activo_caja.id_activo).first()
+
+    return {
+        "id_vehiculo": str(vehiculo.id_vehiculo),
+        "numero_ingreso": vehiculo.numero_ingreso,
+        "pendiente_paletizado": True,
+        "vehiculo": {
+            "id_vehiculo": str(vehiculo.id_vehiculo),
+            "marca": vehiculo.marca,
+            "modelo": vehiculo.modelo,
+            "anio": vehiculo.anio,
+            "patente": vehiculo.patente,
+            "numero_ingreso": vehiculo.numero_ingreso,
+        },
+        "motor": {
+            "id_activo": str(activo_motor.id_activo) if activo_motor else None,
+            "id_estado": activo_motor.id_estado if activo_motor else None,
+            "numero_motor": detalle_motor.numero_motor if detalle_motor else "S/A",
+            "cilindrada": detalle_motor.cilindrada if detalle_motor else "S/A",
+            "combustible": detalle_motor.combustible if detalle_motor else "S/A",
+            "transmision_tipo": detalle_motor.transmision_tipo if detalle_motor else "S/A",
+            "pendiente": activo_motor in activos_pendientes if activo_motor else False,
+        },
+        "caja_cambios": {
+            "id_activo": str(activo_caja.id_activo) if activo_caja else None,
+            "id_estado": activo_caja.id_estado if activo_caja else None,
+            "transmision_tipo": detalle_caja.transmision_tipo if detalle_caja else "S/A",
+            "pendiente": activo_caja in activos_pendientes if activo_caja else False,
+        },
+        "total_pendientes": len(activos_pendientes),
+    }
