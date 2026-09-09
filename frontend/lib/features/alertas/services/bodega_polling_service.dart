@@ -33,6 +33,15 @@ class BodegaPollingService {
   final ValueNotifier<List<TareaAlerta>> tareasNotifier = ValueNotifier<List<TareaAlerta>>([]);
   final ValueNotifier<ResumenAlertasModel> resumenNotifier = ValueNotifier<ResumenAlertasModel>(ResumenAlertasModel.vacio());
 
+  /// Notifiers segmentados por categoría para navegación en pestañas (SPEC-HU-TAREA-13)
+  final ValueNotifier<List<TareaAlerta>> preentregaNotifier = ValueNotifier<List<TareaAlerta>>([]);
+  final ValueNotifier<List<TareaAlerta>> reimpresionNotifier = ValueNotifier<List<TareaAlerta>>([]);
+  final ValueNotifier<List<TareaAlerta>> reintegracionNotifier = ValueNotifier<List<TareaAlerta>>([]);
+
+  final ValueNotifier<int> conteoPreentregaNotifier = ValueNotifier<int>(0);
+  final ValueNotifier<int> conteoReimpresionNotifier = ValueNotifier<int>(0);
+  final ValueNotifier<int> conteoReintegracionNotifier = ValueNotifier<int>(0);
+
   bool _isPolling = false;
 
   Set<String> get tareasNotificadas => Set.unmodifiable(_tareasNotificadas);
@@ -67,12 +76,29 @@ class BodegaPollingService {
     tieneTrasladosNotifier.value = false;
     tareasNotifier.value = [];
     resumenNotifier.value = ResumenAlertasModel.vacio();
+
+    preentregaNotifier.value = [];
+    reimpresionNotifier.value = [];
+    reintegracionNotifier.value = [];
+    conteoPreentregaNotifier.value = 0;
+    conteoReimpresionNotifier.value = 0;
+    conteoReintegracionNotifier.value = 0;
   }
 
   /// Decrementa manualmente el contador reactivo tras completar una tarea (Zero Latency UI)
-  void decrementarPendiente() {
+  void decrementarPendiente({String? tipoAlerta}) {
     if (totalPendientesNotifier.value > 0) {
       totalPendientesNotifier.value--;
+    }
+    if (tipoAlerta != null) {
+      final tipo = tipoAlerta.toUpperCase();
+      if (tipo == 'IMPRESION') {
+        if (conteoReimpresionNotifier.value > 0) conteoReimpresionNotifier.value--;
+      } else if (tipo == 'REINGRESO') {
+        if (conteoReintegracionNotifier.value > 0) conteoReintegracionNotifier.value--;
+      } else {
+        if (conteoPreentregaNotifier.value > 0) conteoPreentregaNotifier.value--;
+      }
     }
   }
 
@@ -106,11 +132,30 @@ class BodegaPollingService {
         resumen = futures[1] as ResumenAlertasModel;
       }
 
-      // Actualizar estados reactivos para la UI (Badge y Panel)
+      // Segmentación por Tipo de Operación (SPEC-HU-TAREA-13)
+      final preentrega = tareas
+          .where((t) =>
+              t.tipoAlerta == 'PREPARACION' ||
+              t.tipoAlerta == 'LIBERADA' ||
+              t.tipoAlerta == 'TRASLADO')
+          .toList();
+      final reimpresion = tareas.where((t) => t.tipoAlerta == 'IMPRESION').toList();
+      final reintegracion = tareas.where((t) => t.tipoAlerta == 'REINGRESO').toList();
+
+      // Actualizar estados reactivos para la UI (Badge, Panel y Pestañas)
       tareasNotifier.value = tareas;
       resumenNotifier.value = resumen;
+
+      preentregaNotifier.value = preentrega;
+      reimpresionNotifier.value = reimpresion;
+      reintegracionNotifier.value = reintegracion;
+
+      conteoPreentregaNotifier.value = preentrega.length;
+      conteoReimpresionNotifier.value = reimpresion.length;
+      conteoReintegracionNotifier.value = reintegracion.length;
+
       // Sincronizar el total pendiente con el valor más preciso
-      totalPendientesNotifier.value = resumen.totalTareas > 0 ? resumen.totalTareas : tareas.length;
+      totalPendientesNotifier.value = tareas.isNotEmpty ? tareas.length : resumen.totalTareas;
       tieneTrasladosNotifier.value = tareas.any((t) => t.esTraslado || t.tipoAlerta == 'TRASLADO');
 
       // ── Deduplicación y Notificaciones Opcionales ─────────────────────────

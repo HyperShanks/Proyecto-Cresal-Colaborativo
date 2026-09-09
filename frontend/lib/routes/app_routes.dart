@@ -28,6 +28,7 @@ class AppRoutes {
   static const String recepcion = '/recepcion';
   static const String tickets = '/tickets';
   static const String paletizado = '/paletizado';
+  static const String paletizadoDetallePrefix = '/paletizado/detalle';
   static const String etiquetaPreview = '/etiqueta-preview';
   static const String alertas = '/alertas';
   static const String buscador = '/buscador';
@@ -105,6 +106,7 @@ class AppRoutes {
 
     // Bodeguero (id_rol == 1)
     if (idRol == 1) {
+      if (route.startsWith(paletizadoDetallePrefix)) return true;
       return _bodegaRoutes.contains(route);
     }
 
@@ -114,6 +116,18 @@ class AppRoutes {
     }
 
     return false;
+  }
+
+  /// Manejador de rutas dinámicas (/paletizado/detalle/{id}).
+  static Route<dynamic>? onGenerateRoute(RouteSettings settings) {
+    if (settings.name != null && settings.name!.startsWith('$paletizadoDetallePrefix/')) {
+      final id = settings.name!.substring('$paletizadoDetallePrefix/'.length);
+      return MaterialPageRoute(
+        builder: (context) => PaletizadoScreen(numeroIngresoInicial: id),
+        settings: settings,
+      );
+    }
+    return null;
   }
 
   /// Mapa global de rutas de la aplicación.
@@ -127,7 +141,10 @@ class AppRoutes {
       ventasMain: (context) => const VentasMainScreen(),
       recepcion: (context) => const RecepcionVehiculoScreen(),
       tickets: (context) => const TicketsScreen(),
-      paletizado: (context) => const PaletizadoScreen(),
+      paletizado: (context) {
+        final args = ModalRoute.of(context)?.settings.arguments as String?;
+        return PaletizadoScreen(numeroIngresoInicial: args);
+      },
       etiquetaPreview: (context) => const EtiquetaPreviewScreen(),
       alertas: (context) => const AlertasScreen(),
       buscador: (context) => const BuscadorScreen(),

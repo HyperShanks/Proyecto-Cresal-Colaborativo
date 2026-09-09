@@ -8,10 +8,10 @@ class ApiConstants {
   // URL DE PRODUCCIÓN (Render)
   //static const String _baseUrl = 'https://cresal-backend-dev.onrender.com/api';
   // Red local
-  //static const String _baseUrl = 'http://192.168.1.4:8000/api';
+  static const String _baseUrl = 'http://127.0.0.1:8000/api';
 
   // URL DE DESARROLLO (Emulador Android apuntando a localhost)
-  static const String _baseUrl = 'http://127.0.0.1:8000/api';
+  //static const String _baseUrl = 'http://127.0.0.1:8000/api';
 
   // URL DE DESARROLLO (Emulador Android)
   //static const String _baseUrl = 'http://10.0.2.2:8000/api';

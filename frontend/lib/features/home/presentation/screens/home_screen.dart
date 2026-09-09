@@ -4,13 +4,14 @@ import '../../../../core/theme/tokens/app_typography.dart';
 import '../../../../routes/app_routes.dart';
 import '../../../auth/services/auth_service.dart';
 import '../../../alertas/services/bodega_polling_service.dart';
-import '../../../alertas/presentation/widgets/panel_tareas_desplegable.dart';
+import '../../../paletizado/services/paletizado_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HOME SCREEN — Panel principal de Bodega (Terminal Bodega) protegido por sesión
 // ─────────────────────────────────────────────────────────────────────────────
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final PaletizadoService? paletizadoService;
+  const HomeScreen({super.key, this.paletizadoService});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -23,6 +24,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int? _userSucursalId;
   DateTime? _pausedTime;
 
+  final TextEditingController _paletizadoIngresoController = TextEditingController();
+  final FocusNode _paletizadoFocusNode = FocusNode();
+  bool _isSearchingPaletizado = false;
+
   @override
   void initState() {
     super.initState();
@@ -34,6 +39,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     BodegaPollingService.instance.detenerPolling();
+    _paletizadoIngresoController.dispose();
+    _paletizadoFocusNode.dispose();
     super.dispose();
   }
 
@@ -162,37 +169,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           tooltip: 'Menú',
         ),
       ),
-      actions: [
-        ValueListenableBuilder<int>(
-          valueListenable: BodegaPollingService.instance.totalPendientesNotifier,
-          builder: (context, totalPendientes, _) {
-            return IconButton(
-              key: const Key('btn_appbar_tareas_badge'),
-              tooltip: 'Tareas pendientes ($totalPendientes)',
-              icon: Badge(
-                key: const Key('badge_appbar_contador'),
-                isLabelVisible: totalPendientes > 0,
-                label: Text(
-                  '$totalPendientes',
-                  style: const TextStyle(
-                    color: AppPalette.background,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 10,
-                  ),
-                ),
-                backgroundColor: AppPalette.secondary,
-                child: const Icon(
-                  Icons.assignment_outlined,
-                  color: AppPalette.textPrimary,
-                  size: 24,
-                ),
-              ),
-              onPressed: () => PanelTareasDesplegable.mostrar(context),
-            );
-          },
-        ),
-        const SizedBox(width: 6),
-      ],
     );
   }
 
@@ -410,8 +386,46 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
+  Future<void> _ejecutarBusquedaPaletizadoDirecto() async {
+    final folio = _paletizadoIngresoController.text.trim();
+    if (folio.isEmpty) return; // Validación Vacía: no realiza ninguna petición HTTP
+
+    setState(() => _isSearchingPaletizado = true);
+
+    final service = widget.paletizadoService ?? PaletizadoService();
+    final resultado = await service.consultarIngresoParaPaletizado(folio);
+
+    if (!mounted) return;
+    setState(() => _isSearchingPaletizado = false);
+
+    if (resultado.exitoso) {
+      _paletizadoIngresoController.clear();
+      Navigator.pushNamed(
+        context,
+        '/paletizado',
+        arguments: folio,
+      );
+    } else {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(resultado.mensajeError ?? 'Error al consultar número de ingreso.'),
+          backgroundColor: resultado.statusCode == 404
+              ? AppPalette.error
+              : (resultado.statusCode == 400 ? AppPalette.secondary : AppPalette.error),
+        ),
+      );
+
+      // 1. Activo No Encontrado (404): Mantener foco en input para corrección rápida
+      if (resultado.statusCode == 404) {
+        _paletizadoFocusNode.requestFocus();
+      }
+    }
+  }
+
   Widget _buildFrequentActionsGrid(BuildContext context) {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
           child: _buildActionCard(
@@ -424,15 +438,131 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: _buildActionCard(
-            context: context,
-            title: 'Paletizado de Piezas',
-            subtitle: 'Validación OCR o selección manual del N° de ingreso',
-            icon: Icons.inventory_2_outlined,
-            onTap: () => Navigator.pushNamed(context, '/paletizado'),
-          ),
+          child: _buildPaletizadoDirectoCard(context),
         ),
       ],
+    );
+  }
+
+  Widget _buildPaletizadoDirectoCard(BuildContext context) {
+    return Material(
+      color: AppPalette.surface,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        height: 160,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppPalette.primary.withValues(alpha: 0.25), width: 1.2),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: AppPalette.primary.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.inventory_2_outlined, color: AppPalette.primary, size: 22),
+                ),
+                InkWell(
+                  onTap: () => Navigator.pushNamed(context, '/paletizado'),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    child: Text(
+                      'Manual >',
+                      style: AppTypography.small.copyWith(
+                        color: AppPalette.primary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            InkWell(
+              onTap: () => Navigator.pushNamed(context, '/paletizado'),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Paletizado de Piezas',
+                    style: AppTypography.title.copyWith(fontSize: 13, fontWeight: FontWeight.bold, height: 1.1),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Validación OCR o selección manual del N° de ingreso',
+                    style: AppTypography.small.copyWith(fontSize: 10, color: AppPalette.textSecondary, height: 1.1),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(
+              height: 38,
+              child: TextField(
+                key: const Key('input_numero_ingreso_home'),
+                controller: _paletizadoIngresoController,
+                focusNode: _paletizadoFocusNode,
+                keyboardType: TextInputType.number,
+                textInputAction: TextInputAction.search,
+                style: const TextStyle(color: AppPalette.textPrimary, fontSize: 12),
+                decoration: InputDecoration(
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  hintText: 'N° Ingreso...',
+                  hintStyle: const TextStyle(color: AppPalette.textSecondary, fontSize: 11),
+                  prefixIcon: const Icon(Icons.tag, color: AppPalette.primary, size: 16),
+                  prefixIconConstraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  suffixIconConstraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  suffixIcon: _isSearchingPaletizado
+                      ? const Padding(
+                          padding: EdgeInsets.all(8.0),
+                          child: SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: AppPalette.primary),
+                          ),
+                        )
+                      : IconButton(
+                          key: const Key('btn_buscar_paletizado_home'),
+                          icon: const Icon(Icons.search, color: AppPalette.primary, size: 18),
+                          onPressed: _ejecutarBusquedaPaletizadoDirecto,
+                          tooltip: 'Buscar ingreso',
+                          padding: EdgeInsets.zero,
+                        ),
+                  filled: true,
+                  fillColor: AppPalette.background,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: AppPalette.primary.withValues(alpha: 0.3)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: AppPalette.primary.withValues(alpha: 0.2)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: AppPalette.primary, width: 1.5),
+                  ),
+                ),
+                onSubmitted: (_) => _ejecutarBusquedaPaletizadoDirecto(),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

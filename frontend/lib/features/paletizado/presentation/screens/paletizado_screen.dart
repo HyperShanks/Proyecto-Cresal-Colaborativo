@@ -7,10 +7,16 @@ import '../../domain/exceptions/printer_exceptions.dart';
 import '../../domain/models/etiqueta_data.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
-import '../../../auth/services/auth_service.dart';
 
 class PaletizadoScreen extends StatefulWidget {
-  const PaletizadoScreen({super.key});
+  final String? numeroIngresoInicial;
+  final PaletizadoService? paletizadoService;
+
+  const PaletizadoScreen({
+    super.key,
+    this.numeroIngresoInicial,
+    this.paletizadoService,
+  });
 
   @override
   State<PaletizadoScreen> createState() => _PaletizadoScreenState();
@@ -18,7 +24,7 @@ class PaletizadoScreen extends StatefulWidget {
 
 class _PaletizadoScreenState extends State<PaletizadoScreen> {
   final TextEditingController _searchController = TextEditingController();
-  final PaletizadoService _paletizadoService = PaletizadoService();
+  late final PaletizadoService _paletizadoService;
 
   final TextEditingController _galponController = TextEditingController();
   final TextEditingController _pasilloController = TextEditingController();
@@ -27,8 +33,6 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
 
   bool _isLoading = false;
   bool _vehiculoEncontrado = false;
-  bool _isLoadingPendientes = false;
-  List<dynamic> _pendientesPaletizado = [];
 
   String _marca = "";
   String _modelo = "";
@@ -44,30 +48,23 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
   int _ocrFailedAttempts = 0;
 
   final ImagePicker _picker = ImagePicker();
-  List<XFile> _fotosComerciales = [];
+  final List<XFile> _fotosComerciales = [];
 
   @override
   void initState() {
     super.initState();
-    _cargarPendientes();
+    _paletizadoService = widget.paletizadoService ?? PaletizadoService();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _inicializarIngreso();
+    });
   }
 
-  Future<void> _cargarPendientes() async {
-    setState(() => _isLoadingPendientes = true);
-    try {
-      final sucursalId = await AuthService.getSucursalId();
-      final pendientes =
-          await _paletizadoService.obtenerPendientesPaletizado(sucursalId: sucursalId);
-      if (!mounted) return;
-      setState(() {
-        _pendientesPaletizado = pendientes;
-      });
-    } catch (e) {
-      debugPrint('Error al cargar pendientes de paletizado: $e');
-    } finally {
-      if (mounted) {
-        setState(() => _isLoadingPendientes = false);
-      }
+  void _inicializarIngreso() {
+    final folio = widget.numeroIngresoInicial ??
+        (ModalRoute.of(context)?.settings.arguments as String?);
+    if (folio != null && folio.trim().isNotEmpty) {
+      _searchController.text = folio.trim();
+      _buscarVehiculo();
     }
   }
 
@@ -141,8 +138,9 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
       source: ImageSource.camera,
       imageQuality: 80,
     );
-    if (fotoOcr == null)
+    if (fotoOcr == null) {
       return; // Si el usuario cancela la cámara, no hacemos nada
+    }
 
     // 3. Bloquear la UI (Botón de carga activado para OCR + Subida a la nube)
     setState(() => _isValidatingOCR = true);
@@ -428,7 +426,6 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
       _fotosComerciales.clear();
       _tipoActivoSeleccionado = 'Motor';
     });
-    _cargarPendientes();
   }
 
   // ── HU-2.4: Modal Bottom Sheet con 3 acciones post-guardado ──────────────
@@ -463,46 +460,28 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
       _vehiculoEncontrado = false;
     });
 
-    final datosVehiculo = await _paletizadoService.buscarVehiculoPorIngreso(
-      folio,
-    );
+    final consulta = await _paletizadoService.consultarIngresoParaPaletizado(folio);
 
     if (!mounted) return;
 
-    if (datosVehiculo != null) {
-      // Guardamos los diccionarios de las piezas
+    if (consulta.exitoso && consulta.datos != null) {
+      final datosVehiculo = consulta.datos!;
       final datosMotorTemp = datosVehiculo['motor'] ?? {};
       final datosCajaTemp = datosVehiculo['caja_cambios'] ?? {};
 
-      // ⚠️ LÓGICA DE BLOQUEO: Solo agregamos los que están en estado 5 (En Desarme)
       List<String> opcionesDisponibles = [];
-      if (datosMotorTemp['id_estado'] == 5) {
+      if (datosMotorTemp['pendiente'] == true || datosMotorTemp['id_estado'] == 5) {
         opcionesDisponibles.add('Motor');
       }
-      if (datosCajaTemp['id_estado'] == 5) {
+      if (datosCajaTemp['pendiente'] == true || datosCajaTemp['id_estado'] == 5) {
         opcionesDisponibles.add('Caja de Cambios');
       }
 
-      // Si la lista quedó vacía, significa que ambos ya fueron paletizados (estado 1 u otro)
       if (opcionesDisponibles.isEmpty) {
-        setState(() {
-          _isLoading = false;
-          _vehiculoEncontrado = false;
-        });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                '✅ Todos los repuestos de este folio ya se encuentran paletizados.',
-              ),
-              backgroundColor: AppPalette.success,
-            ),
-          );
-        }
-        return; // Cortamos la ejecución aquí, no mostramos el formulario
+        if (datosMotorTemp['id_activo'] != null) opcionesDisponibles.add('Motor');
+        if (datosCajaTemp['id_activo'] != null) opcionesDisponibles.add('Caja de Cambios');
       }
 
-      // Si hay piezas pendientes, actualizamos la pantalla
       setState(() {
         _isLoading = false;
         _vehiculoEncontrado = true;
@@ -515,10 +494,62 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
         _datosMotor = datosMotorTemp;
         _datosCaja = datosCajaTemp;
 
-        _opcionesRepuestos = opcionesDisponibles; // Asignamos la lista filtrada
-        _tipoActivoSeleccionado =
-            _opcionesRepuestos.first; // Seleccionamos el primero por defecto
+        _opcionesRepuestos = opcionesDisponibles;
+        _tipoActivoSeleccionado = _opcionesRepuestos.isNotEmpty ? _opcionesRepuestos.first : 'Motor';
       });
+    } else {
+      // Fallback a buscarVehiculoPorIngreso
+      final fallbackDatos = await _paletizadoService.buscarVehiculoPorIngreso(folio);
+      if (!mounted) return;
+
+      if (fallbackDatos != null) {
+        final datosMotorTemp = fallbackDatos['motor'] ?? {};
+        final datosCajaTemp = fallbackDatos['caja_cambios'] ?? {};
+
+        List<String> opcionesDisponibles = [];
+        if (datosMotorTemp['id_estado'] == 5) opcionesDisponibles.add('Motor');
+        if (datosCajaTemp['id_estado'] == 5) opcionesDisponibles.add('Caja de Cambios');
+
+        if (opcionesDisponibles.isEmpty) {
+          setState(() {
+            _isLoading = false;
+            _vehiculoEncontrado = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('El activo asociado a este número ya fue paletizado previamente o no requiere este flujo.'),
+              backgroundColor: AppPalette.secondary,
+            ),
+          );
+          return;
+        }
+
+        setState(() {
+          _isLoading = false;
+          _vehiculoEncontrado = true;
+
+          final vehiculo = fallbackDatos['vehiculo'] ?? {};
+          _marca = vehiculo['marca'] ?? 'Desconocida';
+          _modelo = vehiculo['modelo'] ?? 'Desconocido';
+          _anio = vehiculo['anio']?.toString() ?? 'S/A';
+
+          _datosMotor = datosMotorTemp;
+          _datosCaja = datosCajaTemp;
+          _opcionesRepuestos = opcionesDisponibles;
+          _tipoActivoSeleccionado = _opcionesRepuestos.first;
+        });
+      } else {
+        setState(() {
+          _isLoading = false;
+          _vehiculoEncontrado = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(consulta.mensajeError ?? 'Número de ingreso no encontrado en la base de datos.'),
+            backgroundColor: AppPalette.error,
+          ),
+        );
+      }
     }
   }
 
@@ -919,211 +950,54 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
                 ),
               ),
             ] else ...[
-              // ── 2. SECCIÓN DE PIEZAS PENDIENTES O EMPTY STATE ────
-              if (_isLoadingPendientes)
-                const Center(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(vertical: 48.0),
-                    child: CircularProgressIndicator(color: AppPalette.primary),
-                  ),
-                )
-              else if (_pendientesPaletizado.isEmpty)
-                Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 48.0, horizontal: 16.0),
+              // ── 2. MODO DE PALETIZADO DIRECTO (SPEC-HU-TAREA-14) ──
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 40.0, horizontal: 16.0),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
+                    decoration: BoxDecoration(
+                      color: AppPalette.surface,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                    ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Container(
-                          padding: const EdgeInsets.all(24),
+                          width: 64,
+                          height: 64,
                           decoration: BoxDecoration(
-                            color: AppPalette.surface,
+                            color: AppPalette.primary.withValues(alpha: 0.12),
                             shape: BoxShape.circle,
-                            border: Border.all(
-                              color: AppPalette.success.withValues(alpha: 0.3),
-                              width: 2,
-                            ),
                           ),
                           child: const Icon(
-                            Icons.check_circle_outline,
-                            size: 56,
-                            color: AppPalette.success,
+                            Icons.inventory_2_outlined,
+                            color: AppPalette.primary,
+                            size: 32,
                           ),
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 16),
                         Text(
-                          'No hay piezas pendientes para paletizar',
-                          style: AppTypography.title.copyWith(fontSize: 18),
+                          'Modo de Paletizado Directo',
+                          style: AppTypography.cardTitle.copyWith(fontSize: 16),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Todos los activos ingresados cuentan con ubicación física asignada en bodega.',
-                          style: AppTypography.small.copyWith(
+                          'Ingresa el número de ingreso físico en el buscador superior para cargar de inmediato los datos del vehículo y enriquecer sus repuestos.',
+                          style: AppTypography.body.copyWith(
+                            fontSize: 13,
                             color: AppPalette.textSecondary,
                           ),
                           textAlign: TextAlign.center,
                         ),
-                        const SizedBox(height: 24),
-                        OutlinedButton.icon(
-                          onPressed: _cargarPendientes,
-                          icon: const Icon(Icons.refresh, color: AppPalette.primary, size: 18),
-                          label: const Text(
-                            'Actualizar Lista',
-                            style: TextStyle(color: AppPalette.primary),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: AppPalette.primary),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 12,
-                            ),
-                          ),
-                        ),
                       ],
                     ),
                   ),
-                )
-              else ...[
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Piezas Disponibles para Paletizar (${_pendientesPaletizado.length})',
-                      style: AppTypography.title.copyWith(fontSize: 16),
-                    ),
-                    IconButton(
-                      icon: const Icon(
-                        Icons.refresh,
-                        color: AppPalette.primary,
-                        size: 20,
-                      ),
-                      onPressed: _cargarPendientes,
-                      tooltip: 'Actualizar lista',
-                    ),
-                  ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'Selecciona una pieza para autocompletar o busca por Folio arriba.',
-                  style: AppTypography.small.copyWith(
-                    color: AppPalette.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: _pendientesPaletizado.length,
-                  separatorBuilder: (context, index) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final item = _pendientesPaletizado[index];
-                    final folio = item['numero_ingreso']?.toString() ?? 'S/F';
-                    final marca = item['marca']?.toString() ?? 'Desconocida';
-                    final modelo = item['modelo']?.toString() ?? 'Desconocido';
-                    final anio = item['anio']?.toString() ?? '';
-                    final categoria = item['tipo_repuesto']?.toString() ?? 'Repuesto';
-                    final sku = item['sku_qr_fisico']?.toString() ?? '';
-
-                    return InkWell(
-                      key: Key('item_pendiente_paletizado_$index'),
-                      onTap: () {
-                        _searchController.text = folio;
-                        _buscarVehiculo();
-                      },
-                      borderRadius: BorderRadius.circular(12),
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppPalette.surface,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.08),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 48,
-                              height: 48,
-                              decoration: BoxDecoration(
-                                color: AppPalette.primary.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Icon(
-                                categoria.toUpperCase().contains('MOTOR')
-                                    ? Icons.settings
-                                    : Icons.swap_horiz,
-                                color: AppPalette.primary,
-                                size: 26,
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 2,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: AppPalette.primary.withValues(alpha: 0.2),
-                                          borderRadius: BorderRadius.circular(4),
-                                        ),
-                                        child: Text(
-                                          'Folio: $folio',
-                                          style: const TextStyle(
-                                            color: AppPalette.primary,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 11,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        categoria,
-                                        style: AppTypography.small.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    '$marca $modelo $anio'.trim(),
-                                    style: AppTypography.body.copyWith(
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  if (sku.isNotEmpty) ...[
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      'SKU: $sku',
-                                      style: AppTypography.small.copyWith(
-                                        color: AppPalette.textSecondary,
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                            const Icon(
-                              Icons.arrow_forward_ios,
-                              color: AppPalette.textSecondary,
-                              size: 16,
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ],
+              ),
             ],
           ],
         ),
