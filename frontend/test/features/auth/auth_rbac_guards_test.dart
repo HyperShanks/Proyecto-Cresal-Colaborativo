@@ -121,7 +121,7 @@ void main() {
       expect(AppRoutes.getHomeRouteForRole(6), '/ventas_main');
       expect(AppRoutes.getHomeRouteForRole(7), '/ventas_main');
       expect(AppRoutes.getHomeRouteForRole(1), '/home');
-      expect(AppRoutes.getHomeRouteForRole(4), '/home');
+      expect(AppRoutes.getHomeRouteForRole(4), '/gerencia');
       expect(AppRoutes.getHomeRouteForRole(5), '/home');
       expect(AppRoutes.getHomeRouteForRole(null), '/home');
     });

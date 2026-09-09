@@ -102,14 +102,22 @@ class _FiltroRangoFechasDialogState extends State<FiltroRangoFechasDialog> {
       firstDate: DateTime(2020),
       lastDate: DateTime(2030),
       builder: (context, child) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(
-              primary: AppPalette.primary,
-              onPrimary: Colors.white,
-              surface: AppPalette.surfaceLight,
-              onSurface: AppPalette.textPrimaryLight,
-            ),
+            colorScheme: isDark
+                ? ColorScheme.dark(
+                    primary: AppPalette.primary,
+                    onPrimary: Colors.white,
+                    surface: AppPalette.surface,
+                    onSurface: AppPalette.textPrimary,
+                  )
+                : ColorScheme.light(
+                    primary: AppPalette.primary,
+                    onPrimary: Colors.white,
+                    surface: AppPalette.surfaceLight,
+                    onSurface: AppPalette.textPrimaryLight,
+                  ),
           ),
           child: child!,
         );
@@ -132,14 +140,22 @@ class _FiltroRangoFechasDialogState extends State<FiltroRangoFechasDialog> {
       firstDate: _fechaDesde,
       lastDate: DateTime(2030),
       builder: (context, child) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(
-              primary: AppPalette.primary,
-              onPrimary: Colors.white,
-              surface: AppPalette.surfaceLight,
-              onSurface: AppPalette.textPrimaryLight,
-            ),
+            colorScheme: isDark
+                ? ColorScheme.dark(
+                    primary: AppPalette.primary,
+                    onPrimary: Colors.white,
+                    surface: AppPalette.surface,
+                    onSurface: AppPalette.textPrimary,
+                  )
+                : ColorScheme.light(
+                    primary: AppPalette.primary,
+                    onPrimary: Colors.white,
+                    surface: AppPalette.surfaceLight,
+                    onSurface: AppPalette.textPrimaryLight,
+                  ),
           ),
           child: child!,
         );

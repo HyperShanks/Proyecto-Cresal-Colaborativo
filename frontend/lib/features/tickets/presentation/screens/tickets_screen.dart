@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import 'crear_ticket_screen.dart';
@@ -9,9 +8,11 @@ import '../widgets/soporte_desktop_view.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TICKETS SCREEN — Pantalla principal del módulo de soporte (Theme-Aware)
-// Se adapta dinámicamente:
-// - Escritorio / Caja (ancho >= 768px): Renderiza SoporteDesktopView con tabla estructurada y formulario según prototipo HTML.
-// - PDA Sunmi L3 / Celulares (ancho < 768px): Renderiza vista compacta TabBar en Dark Mode.
+// Se adapta dinámicamente según la arquitectura ortogonal (SSOT):
+// - Tema cromático: Heredado del usuario autenticado (ThemeController / Theme.of(context)).
+// - Layout geométrico:
+//   * Pantallas amplias (ancho >= 768px): Renderiza SoporteDesktopView con tabla estructurada y formulario.
+//   * Pantallas compactas (ancho < 768px): Renderiza vista compacta TabBarView.
 // ─────────────────────────────────────────────────────────────────────────────
 class TicketsScreen extends StatelessWidget {
   const TicketsScreen({super.key});
@@ -19,38 +20,29 @@ class TicketsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDesktop = MediaQuery.sizeOf(context).width >= 768;
-    final themeData = isDesktop ? AppTheme.lightTheme : AppTheme.darkTheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgScreen = isDark ? AppPalette.background : AppPalette.backgroundLight;
 
-    return Theme(
-      data: themeData,
-      child: Builder(
-        builder: (context) {
-          if (isDesktop) {
-            return const Scaffold(
-              backgroundColor: AppPalette.backgroundLight,
-              body: SafeArea(
-                child: SoporteDesktopView(),
-              ),
-            );
-          }
+    if (isDesktop) {
+      return Scaffold(
+        backgroundColor: bgScreen,
+        body: const SafeArea(
+          child: SoporteDesktopView(),
+        ),
+      );
+    }
 
-          final isDark = Theme.of(context).brightness == Brightness.dark;
-          final bgScreen = isDark ? AppPalette.background : AppPalette.backgroundLight;
-
-          return DefaultTabController(
-            length: 2,
-            child: Scaffold(
-              backgroundColor: bgScreen,
-              appBar: _buildAppBar(context, isDark),
-              body: const TabBarView(
-                children: [
-                  CrearTicketScreen(),
-                  TicketsListScreen(),
-                ],
-              ),
-            ),
-          );
-        },
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: bgScreen,
+        appBar: _buildAppBar(context, isDark),
+        body: const TabBarView(
+          children: [
+            CrearTicketScreen(),
+            TicketsListScreen(),
+          ],
+        ),
       ),
     );
   }

@@ -2,8 +2,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/features/caja/models/historial_caja_model.dart';
-import 'package:frontend/features/caja/presentation/widgets/detalle_auditoria_dialog.dart';
-import 'package:frontend/features/caja/presentation/widgets/historial_tabla_view.dart';
 import 'package:frontend/features/gerencia/presentation/screens/ordenes_gerencia_view.dart';
 import 'package:frontend/features/gerencia/presentation/widgets/auditoria_detalle_dialog.dart';
 import 'package:frontend/features/gerencia/presentation/widgets/auditoria_tabla_view.dart';

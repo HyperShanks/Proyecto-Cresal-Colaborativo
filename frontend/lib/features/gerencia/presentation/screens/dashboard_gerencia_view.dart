@@ -590,8 +590,8 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final isCompact = constraints.maxWidth < 1120;
-          final isNarrow = constraints.maxWidth < 900;
+          final isCompact = constraints.maxWidth < 1000;
+          final isNarrow = constraints.maxWidth < 800;
 
           return Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,

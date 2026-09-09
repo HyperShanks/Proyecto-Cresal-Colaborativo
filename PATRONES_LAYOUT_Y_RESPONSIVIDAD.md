@@ -25,15 +25,94 @@ $$\text{Constraints go down } \longrightarrow \text{ Sizes go up } \longrightarr
 
 En Cresal conviven perfiles con hardware y escenarios de trabajo radicalmente diferentes:
 
-| Perfil / Rol | Dispositivo Principal | Entorno Operativo | Requerimiento de Layout |
-| :--- | :--- | :--- | :--- |
-| **Rol 1 (Bodeguero / Operario)** | PDA Sunmi / Zebra (~400px ancho) | Patio de desarme, luz solar, guantes, escaneo QR | Vista vertical única, botones táctiles grandes, sin scroll horizontal, alto contraste. |
-| **Roles 2 y 3 (Vendedor / Caja)** | Touch POS o Laptop (1024px – 1366px) | Mesón de atención rápida | Split-screen (catálogo a la izquierda, carrito/pago a la derecha), diálogos modales ágiles. |
-| **Roles 4 y 5 (Gerente / Admin)** | Monitor Desktop (1366px – 1920px+) | Oficina ejecutiva, análisis financiero | Sidebar lateral colapsable, cuadros de mando con KPIs, tablas densas y visualización de datos. |
+| Perfil / Rol | Dispositivo Principal | Entorno Operativo | Requerimiento de Layout | Tema Visual Asignado |
+| :--- | :--- | :--- | :--- | :--- |
+| **Rol 1 (Bodeguero / Operario)** | PDA Sunmi / Zebra (~400px ancho) | Patio de desarme, luz solar, guantes, escaneo QR | Vista vertical única, botones táctiles grandes (≥48dp), sin scroll horizontal. | **Dark Mode** (`ThemeMode.dark`) |
+| **Rol 2 (Vendedor Mesón)** | Touch POS o Laptop (1024px – 1366px) | Mesón de atención rápida | Split-screen (catálogo a la izquierda, carrito a la derecha), diálogos modales ágiles. | **Light Mode** (`ThemeMode.light`) |
+| **Rol 3 (Caja)** | Desktop POS (1024px – 1366px) | Mostrador de cobro con teclado numérico | Formulario compacto, keypad grande, resumen de órdenes y QR de barrera. | **Light Mode** (`ThemeMode.light`) |
+| **Rol 4 (Gerente)** | Monitor Desktop (1366px – 1920px+) | Oficina ejecutiva, análisis financiero | Sidebar lateral colapsable, cuadros de mando con KPIs, tablas densas y visualización de datos. | **Light Mode** (`ThemeMode.light`) |
+| **Rol 5 (Administrador Técnico)** | Monitor / Laptop Desarrollo | Oficina técnica / Auditoría | Paneles de auditoría, gestión de usuarios, acceso irrestricto multi-pantalla. | **Light Mode** (`ThemeMode.light`) |
+| **Rol 6 (Jefe de Ventas)** | Laptop / Monitor Desktop | Oficina comercial y mesón | Bandeja de tasación de precios paletizados, métricas de conversión y descuentos. | **Light Mode** (`ThemeMode.light`) |
+| **Rol 7 (Vendedor Online)** | Monitor Desktop Omnicanal | Estación de despacho y CRM | Coordinación de envíos regionales, tracking de guías y chat con clientes. | **Light Mode** (`ThemeMode.light`) |
 
 ---
 
-## 3. Las 5 Técnicas de la Industria para Layouts Adaptativos
+## 3. Separación Ortogonal: Layout (Geometría) vs. Theme (Ergonomía y Contexto)
+
+Uno de los pilares arquitectónicos más importantes en el diseño de software profesional de clase mundial (Material 3, Apple Human Interface Guidelines, Salesforce Lightning) es la **independencia ortogonal entre la geometría y el tema cromático**:
+
+$$\text{Layout} = f(\text{Espacio Disponible / Viewport Width})$$
+$$\text{Theme} = f(\text{Rol del Usuario / Ergonomía / Iluminación Ambiental})$$
+
+```
+                   ┌─────────────────────────────────────────────────────────┐
+                   │                     ESTADO GLOBAL                       │
+                   └───────────┬─────────────────────────────────┬───────────┘
+                               │                                 │
+                               ▼                                 ▼
+                   ┌───────────────────────┐         ┌───────────────────────┐
+                   │  ANCHO DEL VIEWPORT   │         │    ROL DEL USUARIO    │
+                   │  (LayoutBuilder / dp) │         │  (ThemeController)    │
+                   └───────────┬───────────┘         └───────────┬───────────┘
+                               │                                 │
+                               ▼                                 ▼
+                     GEOMETRÍA DEL LAYOUT                  TEMA Y CONTRASTE
+                    ┌─────────────────────┐               ┌─────────────────────┐
+                    │  < 768px : Compact  │               │ Rol 1   : DarkMode  │
+                    │  >=768px : Expanded │               │ Roles2-7: LightMode │
+                    └─────────────────────┘               └─────────────────────┘
+                               │                                 │
+                               └────────────────┬────────────────┘
+                                                ▼
+                                    ┌───────────────────────┐
+                                    │    INTERFAZ FINAL     │
+                                    │   (ARMONÍA TOTAL)     │
+                                    └───────────────────────┘
+```
+
+### ❌ El Anti-Patrón Detectado: Conmutar Tema por Ancho de Ventana
+```dart
+// ❌ ANTIPATRÓN GRAVE DE LA INDUSTRIA:
+final isDesktop = MediaQuery.sizeOf(context).width >= 768;
+final themeData = isDesktop ? AppTheme.lightTheme : AppTheme.darkTheme;
+return Theme(data: themeData, child: ...);
+```
+
+#### ¿Por qué es un error inaceptable en producción?
+1. **Viola la Ergonomía del Operario**: Si un bodeguero con PDA abre la app en una tablet grande o en un monitor de patio para revisar pallets, el sistema le arrojaría una pantalla blanca cegadora bajo el sol. Viceversa, si un cajero reduce su ventana a la mitad para consultar un manual o una boleta, la pantalla se le oscurecería violentamente.
+2. **Parpadeo Visual Destructivo (Theme Flickering)**: Al redimensionar una ventana en el límite de los `768px`, toda la vista se desmonta y reconstruye, invirtiendo fondos, contrastes y colores.
+3. **Ruptura de la Fuente Única de Verdad (SSOT)**: Pasa por encima de `ThemeController.themeMode` definido en `main.dart`, causando que modales flotantes, `SnackBar`s o la barra de estado se pinten con un tema discordante al cuerpo.
+
+###  El Patrón Industrial Correcto: "Theme-Aware Adaptive Views"
+Cada vista (tanto la versión móvil compacta como la versión de escritorio) debe ser **Theme-Aware**; es decir, tener la capacidad de renderizarse con elegancia tanto en Modo Oscuro como en Modo Claro:
+
+```dart
+//  PATRÓN INDUSTRIAL CORRECTO:
+class TicketsScreen extends StatelessWidget {
+  const TicketsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    // 1. El tema se hereda fielmente del ThemeController del rol:
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    // 2. La geometría se adapta únicamente al espacio disponible:
+    final isDesktop = MediaQuery.sizeOf(context).width >= 768;
+
+    if (isDesktop) {
+      // Vista expandida con tabla estructurada, pero respetando isDark del usuario
+      return SoporteDesktopView(isDark: isDark);
+    }
+
+    // Vista compacta con TabBar, respetando isDark del usuario
+    return SoporteMobileView(isDark: isDark);
+  }
+}
+```
+
+---
+
+## 4. Las 5 Técnicas de la Industria para Layouts Adaptativos
 
 En lugar de calcular píxeles fijos, la industria utiliza 5 patrones complementarios:
 
@@ -177,7 +256,7 @@ En lugar de calcular píxeles fijos, la industria utiliza 5 patrones complementa
 
 ---
 
-## 4. Los 4 Errores de Diseño Más Comunes y su Vacuna
+## 5. Los 4 Errores de Diseño Más Comunes y su Vacuna
 
 ### ❌ Error A: `RIGHT OVERFLOWED BY XX PIXELS` en un `Row`
 - **Causa:** El `Row` contiene un `Text` largo dentro de una columna sin acotar. Como el `Row` entrega ancho infinito a sus hijos no expandidos, el texto empuja el borde hacia afuera.
@@ -234,7 +313,7 @@ En lugar de calcular píxeles fijos, la industria utiliza 5 patrones complementa
 
 ---
 
-## 5. Checklist de Verificación para Desarrolladores
+## 6. Checklist de Verificación para Desarrolladores
 
 Antes de dar por terminada cualquier nueva vista o componente en Cresal-SaaS, realiza este chequeo mental de 6 puntos:
 
