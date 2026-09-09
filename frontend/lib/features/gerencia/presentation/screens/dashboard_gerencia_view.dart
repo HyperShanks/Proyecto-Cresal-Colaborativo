@@ -147,8 +147,8 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
   }
 
   String _obtenerNombreSucursal(int? id) {
-    if (id == null) return 'Todas las Sucursales (Consolidado)';
-    if (id == 1 || id == 101) return 'Casa Matriz (Viña del Mar)';
+    if (id == null || id == -1) return 'Todas las Sucursales';
+    if (id == 1 || id == 101) return 'Casa Matriz (Viña)';
     if (id == 2 || id == 102) return 'Patio Desarme (Limache)';
     return 'Sucursal $id';
   }
@@ -574,7 +574,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
 
     return Container(
       height: 64,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
       decoration: BoxDecoration(
         color: Colors.white,
         border: const Border(
@@ -588,293 +588,327 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
           ),
         ],
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Lado Izquierdo: Botón Colapsar Menú + Identidad Ejecutiva
-          Expanded(
-            child: Row(
-              children: [
-                IconButton(
-                  icon: Icon(
-                    _sidebarOpen ? Icons.menu_open_rounded : Icons.menu_rounded,
-                    color: const Color(0xFF0F172A),
-                    size: 22,
-                  ),
-                  tooltip: _sidebarOpen ? 'Colapsar menú lateral' : 'Expandir menú lateral',
-                  onPressed: () => setState(() => _sidebarOpen = !_sidebarOpen),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: AppPalette.tertiary,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(
-                    _vistaActiva == VistaGerencia.dashboard
-                        ? Icons.dashboard_customize
-                        : _vistaActiva == VistaGerencia.ordenes
-                            ? Icons.receipt_long
-                            : _vistaActiva == VistaGerencia.inventario
-                                ? Icons.inventory_2
-                                : Icons.bookmark_added_rounded,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _vistaActiva == VistaGerencia.dashboard
-                            ? 'CRESAL GERENCIA'
-                            : _vistaActiva == VistaGerencia.ordenes
-                                ? 'HISTORIAL DE ÓRDENES'
-                                : _vistaActiva == VistaGerencia.inventario
-                                    ? 'MAESTRO DE INVENTARIO Y TASACIÓN'
-                                    : 'VISOR CENTRALIZADO DE RESERVAS Y BACKORDERS',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.5,
-                          color: Color(0xFF0F172A),
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        _vistaActiva == VistaGerencia.dashboard
-                            ? 'Dashboard Ejecutivo y Pulso Operativo'
-                            : _vistaActiva == VistaGerencia.ordenes
-                                ? 'Historial y Auditoría de Órdenes'
-                                : _vistaActiva == VistaGerencia.inventario
-                                    ? 'Control de stock físico, ubicaciones en rack y fijación de precios comerciales'
-                                    : 'Monitoreo de compras en verde y asignación automática de vehículos donantes',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xFF64748B),
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isCompact = constraints.maxWidth < 1120;
+          final isNarrow = constraints.maxWidth < 900;
 
-          // Lado Derecho: Selector de Sucursal, Botón Refrescar y Campana
-          Row(
-            mainAxisSize: MainAxisSize.min,
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Selector Dropdown de Sucursal (Tarjeta Ejecutiva Foto 4)
-              _buildSelectorSucursales(),
-              const SizedBox(width: 10),
-
-              // Botón Refrescar con Spin
-              OutlinedButton.icon(
-                onPressed: _cargando
-                    ? null
-                    : () => _cargarDashboard(mostrarToast: true),
-                icon: RotationTransition(
-                  turns: _spinController,
-                  child: const Icon(Icons.sync, size: 16),
-                ),
-                label: Text(
-                  _cargando ? 'Actualizando...' : 'Actualizar',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF0F172A),
-                  side: const BorderSide(color: AppPalette.borderLight),
-                  backgroundColor: Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-
-              // Campana de Notificaciones Ejecutivas con Badge
-              PopupMenuButton<String>(
-                tooltip: 'Alertas y Notificaciones Ejecutivas',
-                offset: const Offset(0, 48),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: const BorderSide(color: AppPalette.borderLight),
-                ),
-                icon: Stack(
-                  clipBehavior: Clip.none,
+              // Lado Izquierdo: Botón Colapsar Menú + Identidad Ejecutiva
+              Expanded(
+                child: Row(
                   children: [
+                    IconButton(
+                      icon: Icon(
+                        _sidebarOpen ? Icons.menu_open_rounded : Icons.menu_rounded,
+                        color: const Color(0xFF0F172A),
+                        size: 22,
+                      ),
+                      tooltip: _sidebarOpen ? 'Colapsar menú lateral' : 'Expandir menú lateral',
+                      onPressed: () => setState(() => _sidebarOpen = !_sidebarOpen),
+                    ),
+                    const SizedBox(width: 8),
                     Container(
                       width: 38,
                       height: 38,
                       decoration: BoxDecoration(
-                        color: AppPalette.backgroundLight,
+                        color: AppPalette.tertiary,
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppPalette.borderLight),
                       ),
-                      child: const Icon(
-                        Icons.notifications_outlined,
-                        color: Color(0xFF0F172A),
+                      child: Icon(
+                        _vistaActiva == VistaGerencia.dashboard
+                            ? Icons.dashboard_customize
+                            : _vistaActiva == VistaGerencia.ordenes
+                                ? Icons.receipt_long
+                                : _vistaActiva == VistaGerencia.inventario
+                                    ? Icons.inventory_2
+                                    : Icons.bookmark_added_rounded,
+                        color: Colors.white,
                         size: 20,
                       ),
                     ),
-                    if (cuellosBotella > 0)
-                      Positioned(
-                        top: -4,
-                        right: -4,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 5,
-                            vertical: 2,
-                          ),
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFDC2626),
-                            shape: BoxShape.circle,
-                          ),
-                          constraints: const BoxConstraints(
-                            minWidth: 18,
-                            minHeight: 18,
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            '$cuellosBotella',
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _vistaActiva == VistaGerencia.dashboard
+                                ? 'CRESAL GERENCIA'
+                                : _vistaActiva == VistaGerencia.ordenes
+                                    ? 'HISTORIAL DE ÓRDENES'
+                                    : _vistaActiva == VistaGerencia.inventario
+                                        ? 'MAESTRO DE INVENTARIO Y TASACIÓN'
+                                        : 'VISOR CENTRALIZADO DE RESERVAS Y BACKORDERS',
                             style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
+                              fontSize: 14,
                               fontWeight: FontWeight.w900,
+                              letterSpacing: 0.5,
+                              color: Color(0xFF0F172A),
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
+                          if (!isCompact)
+                            Text(
+                              _vistaActiva == VistaGerencia.dashboard
+                                  ? 'Dashboard Ejecutivo y Pulso Operativo'
+                                  : _vistaActiva == VistaGerencia.ordenes
+                                      ? 'Historial y Auditoría de Órdenes'
+                                      : _vistaActiva == VistaGerencia.inventario
+                                          ? 'Control de stock físico, ubicaciones en rack y fijación de precios comerciales'
+                                          : 'Monitoreo de compras en verde y asignación automática de vehículos donantes',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF64748B),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                        ],
                       ),
+                    ),
                   ],
                 ),
-                itemBuilder: (context) => [
-                  PopupMenuItem<String>(
-                    value: 'tasacion',
-                    child: Row(
+              ),
+              const SizedBox(width: 12),
+
+              // Lado Derecho: Selector de Sucursal, Botón Refrescar y Campana
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Selector Dropdown de Sucursal (Fiel a Foto 4)
+                  _buildSelectorSucursales(isNarrow: isNarrow),
+                  const SizedBox(width: 10),
+
+                  // Botón Refrescar con Spin
+                  if (isNarrow)
+                    IconButton(
+                      onPressed: _cargando
+                          ? null
+                          : () => _cargarDashboard(mostrarToast: true),
+                      tooltip: _cargando ? 'Actualizando...' : 'Actualizar',
+                      icon: RotationTransition(
+                        turns: _spinController,
+                        child: const Icon(
+                          Icons.sync,
+                          size: 18,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        side: const BorderSide(color: AppPalette.borderLight),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    )
+                  else
+                    OutlinedButton.icon(
+                      onPressed: _cargando
+                          ? null
+                          : () => _cargarDashboard(mostrarToast: true),
+                      icon: RotationTransition(
+                        turns: _spinController,
+                        child: const Icon(Icons.sync, size: 16),
+                      ),
+                      label: Text(
+                        _cargando ? 'Actualizando...' : 'Actualizar',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF0F172A),
+                        side: const BorderSide(color: AppPalette.borderLight),
+                        backgroundColor: Colors.white,
+                        padding:
+                            const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(width: 10),
+
+                  // Campana de Notificaciones Ejecutivas con Badge y Hover Rectangular
+                  PopupMenuButton<String>(
+                    tooltip: 'Alertas y Notificaciones Ejecutivas',
+                    offset: const Offset(0, 48),
+                    color: Colors.white,
+                    surfaceTintColor: Colors.white,
+                    elevation: 6,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: const BorderSide(color: AppPalette.borderLight),
+                    ),
+                    child: Stack(
+                      clipBehavior: Clip.none,
                       children: [
                         Container(
-                          padding: const EdgeInsets.all(6),
+                          width: 38,
+                          height: 38,
                           decoration: BoxDecoration(
-                            color: const Color(0xFFFB923C).withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(8),
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: AppPalette.borderLight),
                           ),
                           child: const Icon(
-                            Icons.hourglass_top,
-                            color: Color(0xFFEA580C),
-                            size: 16,
+                            Icons.notifications_outlined,
+                            color: Color(0xFF0F172A),
+                            size: 20,
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                '$cuellosBotella repuestos sin tasar',
+                        if (cuellosBotella > 0)
+                          Positioned(
+                            top: -4,
+                            right: -4,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 5,
+                                vertical: 2,
+                              ),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFDC2626),
+                                shape: BoxShape.circle,
+                              ),
+                              constraints: const BoxConstraints(
+                                minWidth: 18,
+                                minHeight: 18,
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                '$cuellosBotella',
                                 style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w800,
-                                  color: Color(0xFF0F172A),
-                                ),
-                              ),
-                              const Text(
-                                'En espera de fijación de precio en bodega',
-                                style: TextStyle(
+                                  color: Colors.white,
                                   fontSize: 10,
-                                  color: Color(0xFF64748B),
+                                  fontWeight: FontWeight.w900,
                                 ),
                               ),
-                            ],
+                            ),
                           ),
-                        ),
                       ],
                     ),
-                  ),
-                  PopupMenuItem<String>(
-                    value: 'ordenes',
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFBBF24).withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(
-                            Icons.pending_actions,
-                            color: Color(0xFFB45309),
-                            size: 16,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                '$saldoPendiente órdenes con saldo retenido',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w800,
-                                  color: Color(0xFF0F172A),
-                                ),
+                    itemBuilder: (context) => [
+                      PopupMenuItem<String>(
+                        value: 'tasacion',
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFB923C).withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(8),
                               ),
-                              const Text(
-                                'Retiro condicionado a liquidación total',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: Color(0xFF64748B),
-                                ),
+                              child: const Icon(
+                                Icons.hourglass_top,
+                                color: Color(0xFFEA580C),
+                                size: 16,
                               ),
-                            ],
-                          ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    '$cuellosBotella repuestos sin tasar',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w800,
+                                      color: Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                  const Text(
+                                    'En espera de fijación de precio en bodega',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: Color(0xFF64748B),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                      PopupMenuItem<String>(
+                        value: 'ordenes',
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFBBF24).withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(
+                                Icons.pending_actions,
+                                color: Color(0xFFB45309),
+                                size: 16,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    '$saldoPendiente órdenes con saldo retenido',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w800,
+                                      color: Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                  const Text(
+                                    'Retiro condicionado a liquidación total',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: Color(0xFF64748B),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    onSelected: (val) {
+                      if (val == 'tasacion') {
+                        setState(() {
+                          _vistaActiva = VistaGerencia.inventario;
+                          _filtroSinTasar = true;
+                        });
+                      } else if (val == 'ordenes') {
+                        setState(() {
+                          _vistaActiva = VistaGerencia.ordenes;
+                        });
+                      }
+                    },
                   ),
                 ],
-                onSelected: (val) {
-                  if (val == 'tasacion') {
-                    setState(() {
-                      _vistaActiva = VistaGerencia.inventario;
-                      _filtroSinTasar = true;
-                    });
-                  } else if (val == 'ordenes') {
-                    setState(() {
-                      _vistaActiva = VistaGerencia.ordenes;
-                    });
-                  }
-                },
               ),
             ],
-          ),
-        ],
+          );
+        },
       ),
     );
   }
 
-  Widget _buildSelectorSucursales() {
-    final Map<int?, ({String titulo, String subtitulo, IconData icon})> sucursales = {
-      null: (
-        titulo: 'Todas las Sucursales (Consolidado)',
+  Widget _buildSelectorSucursales({bool isNarrow = false}) {
+    final Map<int, ({String titulo, String subtitulo, IconData icon})> sucursales = {
+      -1: (
+        titulo: 'Todas las Sucursales',
         subtitulo: 'Consolidado general',
         icon: Icons.domain_rounded,
       ),
@@ -890,27 +924,31 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
       ),
     };
 
-    final actual = sucursales[_sucursalSeleccionada] ?? sucursales[null]!;
+    final idActivo = _sucursalSeleccionada ?? -1;
+    final actual = sucursales[idActivo] ?? sucursales[-1]!;
 
     return Theme(
       data: Theme.of(context).copyWith(
         splashColor: Colors.transparent,
         highlightColor: Colors.transparent,
       ),
-      child: PopupMenuButton<int?>(
+      child: PopupMenuButton<int>(
         tooltip: 'Seleccionar sucursal de auditoría',
         color: Colors.white,
         surfaceTintColor: Colors.white,
         elevation: 8,
+        constraints: const BoxConstraints(minWidth: 320, maxWidth: 390),
         shadowColor: Colors.black.withValues(alpha: 0.12),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
           side: const BorderSide(color: Color(0xFFE2E8F0)),
         ),
         offset: const Offset(0, 42),
-        initialValue: _sucursalSeleccionada,
+        initialValue: idActivo,
         onSelected: (nuevoId) {
-          setState(() => _sucursalSeleccionada = nuevoId);
+          setState(() {
+            _sucursalSeleccionada = nuevoId == -1 ? null : nuevoId;
+          });
           if (_vistaActiva == VistaGerencia.dashboard) {
             _cargarDashboard();
           }
@@ -919,16 +957,16 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
           return sucursales.entries.map((entry) {
             final id = entry.key;
             final data = entry.value;
-            final isSelected = id == _sucursalSeleccionada;
+            final isSelected = id == idActivo;
 
-            return PopupMenuItem<int?>(
+            return PopupMenuItem<int>(
               value: id,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: EdgeInsets.zero,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 decoration: BoxDecoration(
                   color: isSelected ? const Color(0xFFF0F9FF) : Colors.transparent,
-                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(
                   children: [
@@ -938,30 +976,36 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                       color: isSelected ? const Color(0xFF0284C7) : const Color(0xFF64748B),
                     ),
                     const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          data.titulo,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w700,
-                            color: isSelected ? const Color(0xFF0284C7) : const Color(0xFF0F172A),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            data.titulo,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w700,
+                              color: isSelected ? const Color(0xFF0284C7) : const Color(0xFF0F172A),
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          data.subtitulo,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFF64748B),
+                          const SizedBox(height: 2),
+                          Text(
+                            data.subtitulo,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF64748B),
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                    const SizedBox(width: 20),
+                    const SizedBox(width: 12),
                     if (isSelected)
                       const Icon(
                         Icons.check_rounded,
@@ -992,20 +1036,26 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                 color: AppPalette.primary,
               ),
               const SizedBox(width: 8),
-              const Text(
-                'Sucursal: ',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF64748B),
+              if (!isNarrow) ...[
+                const Text(
+                  'Sucursal: ',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF64748B),
+                  ),
                 ),
-              ),
-              Text(
-                actual.titulo,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF0F172A),
+              ],
+              Flexible(
+                child: Text(
+                  actual.titulo,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0284C7),
+                  ),
                 ),
               ),
               const SizedBox(width: 8),

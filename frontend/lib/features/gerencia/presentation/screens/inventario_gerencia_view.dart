@@ -174,28 +174,31 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Panel Superior de Búsqueda y Filtros
-        _buildPanelFiltros(),
-        const SizedBox(height: 16),
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Panel Superior de Búsqueda y Filtros
+          _buildPanelFiltros(),
+          const SizedBox(height: 16),
 
-        // Área Central con Vistas o Estados de Carga
-        Expanded(
-          child: _isLoading
-              ? const Center(
-                  child: CircularProgressIndicator(color: AppPalette.primary),
-                )
-              : _errorMessage != null
-                  ? _buildErrorState()
-                  : _items.isEmpty
-                      ? _buildEmptyState()
-                      : _modoVista == ModoVistaStock.tarjetas
-                          ? _buildVistaTarjetas()
-                          : _buildVistaTabla(),
-        ),
-      ],
+          // Área Central con Vistas o Estados de Carga
+          Expanded(
+            child: _isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(color: AppPalette.primary),
+                  )
+                : _errorMessage != null
+                    ? _buildErrorState()
+                    : _items.isEmpty
+                        ? _buildEmptyState()
+                        : _modoVista == ModoVistaStock.tarjetas
+                            ? _buildVistaTarjetas()
+                            : _buildVistaTabla(),
+          ),
+        ],
+      ),
     );
   }
 
@@ -384,13 +387,25 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
         onChanged: _onBusquedaChanged,
         textAlignVertical: TextAlignVertical.center,
         style: const TextStyle(fontSize: 12, color: Color(0xFF0F172A)),
-        decoration: const InputDecoration(
+        decoration: InputDecoration(
           isDense: true,
-          contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-          prefixIconConstraints: BoxConstraints(minWidth: 38, minHeight: 38),
-          prefixIcon: Icon(Icons.search, size: 18, color: Color(0xFF94A3B8)),
+          filled: false,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+          prefixIconConstraints: const BoxConstraints(minWidth: 38, minHeight: 38),
+          prefixIcon: const Icon(Icons.search, size: 18, color: Color(0xFF94A3B8)),
+          suffixIcon: _busquedaController.text.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.clear, size: 16, color: Color(0xFF94A3B8)),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 38),
+                  onPressed: () {
+                    _busquedaController.clear();
+                    _onBusquedaChanged('');
+                  },
+                )
+              : null,
           hintText: 'Buscar por SKU, Marca, Pasillo (A, B, C), Pallet o N° Ingreso...',
-          hintStyle: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+          hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
           border: InputBorder.none,
           enabledBorder: InputBorder.none,
           focusedBorder: InputBorder.none,

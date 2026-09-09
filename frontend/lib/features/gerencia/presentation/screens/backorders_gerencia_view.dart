@@ -433,106 +433,28 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Scroll horizontal para proteger de overflow en pantallas medianas
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minWidth: 1050),
-              child: DataTable(
-                columnSpacing: 20,
-                horizontalMargin: 16,
-                headingRowHeight: 44,
-                dataRowMinHeight: 56,
-                dataRowMaxHeight: 64,
-                headingRowColor: WidgetStateProperty.all(
-                  const Color(0xFFF8FAFC),
-                ), // Slate 50
-                dividerThickness: 1,
-                columns: const [
-                  DataColumn(
-                    label: Text(
-                      'FOLIO / FECHA',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF475569),
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ),
-                  DataColumn(
-                    label: Text(
-                      'FICHA TÉCNICA REQUERIDA',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF475569),
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ),
-                  DataColumn(
-                    label: Text(
-                      'CLIENTE (CRM)',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF475569),
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ),
-                  DataColumn(
-                    label: Text(
-                      'VENDEDOR',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF475569),
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ),
-                  DataColumn(
-                    numeric: true,
-                    label: Text(
-                      'PRECIO PACTADO',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF475569),
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ),
-                  DataColumn(
-                    numeric: true,
-                    label: Text(
-                      'ABONO',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF475569),
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ),
-                  DataColumn(
-                    numeric: true,
-                    label: Text(
-                      'SALDO',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF475569),
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ),
-                  DataColumn(
-                    label: Center(
-                      child: Text(
-                        'ESTADO RESERVA',
+          if (_backorders.isEmpty)
+            _buildEmptyState()
+          else
+            // Scroll horizontal para proteger de overflow en pantallas medianas
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 1050),
+                child: DataTable(
+                  columnSpacing: 20,
+                  horizontalMargin: 16,
+                  headingRowHeight: 44,
+                  dataRowMinHeight: 56,
+                  dataRowMaxHeight: 64,
+                  headingRowColor: WidgetStateProperty.all(
+                    const Color(0xFFF8FAFC),
+                  ), // Slate 50
+                  dividerThickness: 1,
+                  columns: const [
+                    DataColumn(
+                      label: Text(
+                        'FOLIO / FECHA',
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
@@ -541,11 +463,9 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
                         ),
                       ),
                     ),
-                  ),
-                  DataColumn(
-                    label: Center(
-                      child: Text(
-                        'MATCH / ASIGNACIÓN',
+                    DataColumn(
+                      label: Text(
+                        'PIEZA SOLICITADA / MOTOR',
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
@@ -554,15 +474,95 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
                         ),
                       ),
                     ),
-                  ),
-                ],
-                rows: _backorders.map((b) => _buildDataRow(b)).toList(),
+                    DataColumn(
+                      label: Text(
+                        'CLIENTE',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF475569),
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: Text(
+                        'VENDEDOR',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF475569),
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      numeric: true,
+                      label: Text(
+                        'PRECIO ACORDADO',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF475569),
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      numeric: true,
+                      label: Text(
+                        'ABONO EN CAJA',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF475569),
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      numeric: true,
+                      label: Text(
+                        'SALDO PENDIENTE',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF475569),
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: Center(
+                        child: Text(
+                          'ESTADO RESERVA',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF475569),
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: Center(
+                        child: Text(
+                          'MATCH / ASIGNACIÓN',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF475569),
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                  rows: _backorders.map((b) => _buildDataRow(b)).toList(),
+                ),
               ),
             ),
-          ),
-
-          // Estado Vacío si no hay resultados
-          if (_backorders.isEmpty) _buildEmptyState(),
 
           // Footer de la tabla
           _buildTablaFooter(),

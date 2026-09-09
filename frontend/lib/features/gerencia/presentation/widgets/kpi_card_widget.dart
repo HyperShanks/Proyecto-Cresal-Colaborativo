@@ -52,7 +52,7 @@ class _KpiCardWidgetState extends State<KpiCardWidget> {
             color: _isHovered
                 ? AppPalette.primary.withValues(alpha: 0.4)
                 : AppPalette.borderLight,
-            width: _isHovered ? 1.5 : 1.0,
+            width: 1.0,
           ),
           boxShadow: [
             BoxShadow(
