@@ -1,6 +1,7 @@
 // frontend/lib/features/gerencia/presentation/screens/inventario_gerencia_view.dart
 
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -372,6 +373,7 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
   Widget _buildBuscadorInput() {
     return Container(
       height: 38,
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(12),
@@ -380,12 +382,12 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
       child: TextField(
         controller: _busquedaController,
         onChanged: _onBusquedaChanged,
+        textAlignVertical: TextAlignVertical.center,
         style: const TextStyle(fontSize: 12, color: Color(0xFF0F172A)),
         decoration: const InputDecoration(
           isDense: true,
-          filled: true,
-          fillColor: Color(0xFFF8FAFC),
-          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+          prefixIconConstraints: BoxConstraints(minWidth: 38, minHeight: 38),
           prefixIcon: Icon(Icons.search, size: 18, color: Color(0xFF94A3B8)),
           hintText: 'Buscar por SKU, Marca, Pasillo (A, B, C), Pallet o N° Ingreso...',
           hintStyle: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
@@ -607,11 +609,11 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
             builder: (context, constraints) {
               final width = constraints.maxWidth;
               int crossAxisCount = 4;
-              if (width < 750) {
+              if (width < 680) {
                 crossAxisCount = 1;
-              } else if (width < 1150) {
+              } else if (width < 1080) {
                 crossAxisCount = 2;
-              } else if (width < 1500) {
+              } else if (width < 1520) {
                 crossAxisCount = 3;
               }
 
@@ -619,9 +621,9 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                 padding: const EdgeInsets.only(bottom: 16),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: crossAxisCount,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
-                  mainAxisExtent: 410, // Altura fija garantizada anti-overflow
+                  crossAxisSpacing: 20,
+                  mainAxisSpacing: 20,
+                  mainAxisExtent: 420, // Altura balanceada anti-overflow
                 ),
                 itemCount: _items.length,
                 itemBuilder: (context, index) {
@@ -643,44 +645,29 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
     final esPaletizado = estadoNombre.toLowerCase() == 'paletizado' || item.idEstado == 7;
     final esBloqueado = (estadoNombre.toLowerCase() == 'reservado' || estadoNombre.toLowerCase() == 'vendido') && tienePrecio;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
+    return Material(
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppPalette.borderLight),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        side: const BorderSide(color: AppPalette.borderLight),
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Cabecera Fotográfica
-            Stack(
-              children: [
-                Container(
-                  height: 160,
-                  width: double.infinity,
-                  color: const Color(0xFFF1F5F9),
-                  child: item.imagenes.isNotEmpty
-                      ? Image.network(
-                          item.imagenes.first,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => _buildFallbackImage(),
-                        )
-                      : _buildFallbackImage(),
-                ),
+      elevation: 0,
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Cabecera Fotográfica con Zoom suave por GPU
+          Stack(
+            children: [
+              _CardImageZoom(
+                imagenes: item.imagenes,
+                fallbackBuilder: _buildFallbackImage,
+              ),
 
-                // Badge Superior Flotante: Estado Físico
-                Positioned(
-                  top: 10,
-                  left: 10,
+              // Badge Superior Flotante: Estado Físico
+              Positioned(
+                top: 10,
+                left: 10,
                   child: _buildBadgeEstado(estadoNombre),
                 ),
 
@@ -927,8 +914,7 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
             ),
           ],
         ),
-      ),
-    );
+      );
   }
 
   Widget _buildSpecChip(String texto) {
@@ -1010,12 +996,13 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
     return Column(
       children: [
         Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppPalette.borderLight),
+          child: Material(
+            color: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: AppPalette.borderLight),
             ),
+            elevation: 0,
             clipBehavior: Clip.antiAlias,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1023,181 +1010,32 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                 Expanded(
                   child: LayoutBuilder(
                     builder: (context, constraints) {
-                      final tableWidth = constraints.maxWidth < 1100 ? 1100.0 : constraints.maxWidth;
+                      final tableWidth = math.max(constraints.maxWidth, 980.0);
                       return SingleChildScrollView(
-                        scrollDirection: Axis.vertical,
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: ConstrainedBox(
-                            constraints: BoxConstraints(minWidth: tableWidth),
-                            child: DataTable(
-                              headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
-                              headingTextStyle: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                                color: Color(0xFF475569),
-                                letterSpacing: 0.5,
-                              ),
-                              dataTextStyle: const TextStyle(fontSize: 12, color: Color(0xFF1E293B)),
-                              dataRowMinHeight: 52,
-                              dataRowMaxHeight: 64,
-                              horizontalMargin: 16,
-                              columnSpacing: 24,
-                              columns: const [
-                                DataColumn(label: Text('SKU / QR FÍSICO')),
-                                DataColumn(label: Text('PIEZA / FICHA TÉCNICA')),
-                                DataColumn(label: Text('UBICACIÓN FÍSICA')),
-                                DataColumn(label: Text('SUCURSAL')),
-                                DataColumn(label: Text('ESTADO FÍSICO')),
-                                DataColumn(numeric: true, label: Text('PRECIO TASACIÓN')),
-                                DataColumn(label: Center(child: Text('ACCIÓN'))),
-                              ],
-                        rows: _items.map((item) {
-                          final tienePrecio = item.precioReferencia != null && item.precioReferencia! > 0;
-                          final estadoNombre = item.estadoActivo ?? 'Disponible';
-                          final esPaletizado = estadoNombre.toLowerCase() == 'paletizado' || item.idEstado == 7;
-                          final esBloqueado = (estadoNombre.toLowerCase() == 'reservado' || estadoNombre.toLowerCase() == 'vendido') && tienePrecio;
-
-                          return DataRow(
-                            cells: [
-                              DataCell(
-                                Text(
-                                  item.skuQrFisico,
-                                  style: const TextStyle(
-                                    fontFamily: 'monospace',
-                                    fontWeight: FontWeight.w900,
-                                    color: AppPalette.tertiary,
+                        scrollDirection: Axis.horizontal,
+                        child: SizedBox(
+                          width: tableWidth,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _buildTableHeader(),
+                              Expanded(
+                                child: ListView.separated(
+                                  itemCount: _items.length,
+                                  separatorBuilder: (context, index) => const Divider(
+                                    height: 1,
+                                    color: Color(0xFFF1F5F9),
                                   ),
-                                ),
-                              ),
-                              DataCell(
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 6),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                                            decoration: BoxDecoration(
-                                              color: item.idCategoria == 1
-                                                  ? const Color(0xFFE0F2FE)
-                                                  : const Color(0xFFFEF3C7),
-                                              borderRadius: BorderRadius.circular(4),
-                                            ),
-                                            child: Text(
-                                              item.nombreCategoria,
-                                              style: TextStyle(
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.w700,
-                                                color: item.idCategoria == 1
-                                                    ? const Color(0xFF075985)
-                                                    : const Color(0xFF78350F),
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 6),
-                                          Text(
-                                            item.tituloRepuesto,
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w700,
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        '${item.combustible ?? ""} • ${item.transmisionTipo ?? ""}${item.cilindrada != null ? " • ${item.cilindrada!}L" : ""}',
-                                        style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              DataCell(
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF1F5F9),
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: AppPalette.borderLight),
-                                  ),
-                                  child: Text(
-                                    'G${item.ubicacionGalpon ?? "1"} • Pasillo ${item.ubicacionPasillo ?? "-"} • Pallet ${item.ubicacionPallet ?? "-"}',
-                                    style: const TextStyle(
-                                      fontFamily: 'monospace',
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
-                                      color: Color(0xFF334155),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              DataCell(Text(item.nombreSucursal)),
-                              DataCell(_buildBadgeEstado(estadoNombre)),
-                              DataCell(
-                                tienePrecio
-                                    ? Text(
-                                        _formatoCLP(item.precioReferencia),
-                                        style: const TextStyle(fontWeight: FontWeight.w900),
-                                      )
-                                    : Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFFFEDD5),
-                                          borderRadius: BorderRadius.circular(4),
-                                          border: Border.all(color: const Color(0xFFFED7AA)),
-                                        ),
-                                        child: const Text(
-                                          'SIN TASAR',
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w900,
-                                            color: Color(0xFF9A3412),
-                                          ),
-                                        ),
-                                      ),
-                              ),
-                              DataCell(
-                                Center(
-                                  child: esBloqueado
-                                      ? const Text(
-                                          'Bloqueado',
-                                          style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8), fontWeight: FontWeight.bold),
-                                        )
-                                      : ElevatedButton.icon(
-                                          onPressed: () => _abrirModalTasacion(item),
-                                          icon: Icon(
-                                            !tienePrecio || esPaletizado ? Icons.sell : Icons.edit,
-                                            size: 13,
-                                          ),
-                                          label: Text(!tienePrecio || esPaletizado ? 'Tasar' : 'Precio'),
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: !tienePrecio || esPaletizado
-                                                ? const Color(0xFFEA580C)
-                                                : AppPalette.tertiary,
-                                            foregroundColor: Colors.white,
-                                            elevation: 0,
-                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                            textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-                                          ),
-                                        ),
+                                  itemBuilder: (context, index) => _buildTableRow(_items[index]),
                                 ),
                               ),
                             ],
-                          );
-                        }).toList(),
-                      ),
-                    ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
-          ),
+                ),
                 // Footer de Resumen de la Tabla
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -1241,6 +1079,263 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
         ),
         _buildPaginador(),
       ],
+    );
+  }
+
+  Widget _buildTableHeader() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF8FAFC),
+        border: Border(
+          bottom: BorderSide(color: AppPalette.borderLight),
+        ),
+      ),
+      child: Row(
+        children: [
+          _buildHeaderCell('SKU / QR FÍSICO', flex: 2),
+          _buildHeaderCell('PIEZA / FICHA TÉCNICA', flex: 4),
+          _buildHeaderCell('UBICACIÓN FÍSICA', flex: 3),
+          _buildHeaderCell('SUCURSAL', flex: 2),
+          _buildHeaderCell('ESTADO FÍSICO', flex: 2, alignment: Alignment.center),
+          _buildHeaderCell('PRECIO TASACIÓN', flex: 2, alignment: Alignment.centerRight),
+          _buildHeaderCell('ACCIÓN', flex: 2, alignment: Alignment.center),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderCell(
+    String label, {
+    required int flex,
+    Alignment alignment = Alignment.centerLeft,
+  }) {
+    return Expanded(
+      flex: flex,
+      child: Container(
+        alignment: alignment,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            color: Color(0xFF475569),
+            letterSpacing: 0.5,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTableRow(CatalogoItem item) {
+    final tienePrecio = item.precioReferencia != null && item.precioReferencia! > 0;
+    final estadoNombre = item.estadoActivo ?? 'Disponible';
+    final esPaletizado = estadoNombre.toLowerCase() == 'paletizado' || item.idEstado == 7;
+    final esBloqueado = (estadoNombre.toLowerCase() == 'reservado' || estadoNombre.toLowerCase() == 'vendido') && tienePrecio;
+
+    return InkWell(
+      hoverColor: const Color(0xFFF8FAFC),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            // 1. SKU / QR Físico
+            Expanded(
+              flex: 2,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text(
+                  item.skuQrFisico,
+                  style: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontWeight: FontWeight.w900,
+                    color: AppPalette.tertiary,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ),
+
+            // 2. Pieza / Ficha Técnica
+            Expanded(
+              flex: 4,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                          decoration: BoxDecoration(
+                            color: item.idCategoria == 1
+                                ? const Color(0xFFE0F2FE)
+                                : const Color(0xFFFEF3C7),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            item.nombreCategoria,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: item.idCategoria == 1
+                                  ? const Color(0xFF075985)
+                                  : const Color(0xFF78350F),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            item.tituloRepuesto,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${item.combustible ?? ""} • ${item.transmisionTipo ?? ""}${item.cilindrada != null ? " • ${item.cilindrada!}L" : ""}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // 3. Ubicación Física
+            Expanded(
+              flex: 3,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: AppPalette.borderLight),
+                    ),
+                    child: Text(
+                      'G${item.ubicacionGalpon ?? "1"} • Pasillo ${item.ubicacionPasillo ?? "-"} • Pallet ${item.ubicacionPallet ?? "-"}',
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF334155),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            // 4. Sucursal
+            Expanded(
+              flex: 2,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text(
+                  item.nombreSucursal,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
+                ),
+              ),
+            ),
+
+            // 5. Estado Físico
+            Expanded(
+              flex: 2,
+              child: Center(
+                child: _buildBadgeEstado(estadoNombre),
+              ),
+            ),
+
+            // 6. Precio Tasación
+            Expanded(
+              flex: 2,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: tienePrecio
+                      ? Text(
+                          _formatoCLP(item.precioReferencia),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 13,
+                            color: Color(0xFF0F172A),
+                          ),
+                        )
+                      : Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFEDD5),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: const Color(0xFFFED7AA)),
+                          ),
+                          child: const Text(
+                            'SIN TASAR',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF9A3412),
+                            ),
+                          ),
+                        ),
+                ),
+              ),
+            ),
+
+            // 7. Acción
+            Expanded(
+              flex: 2,
+              child: Center(
+                child: esBloqueado
+                    ? const Text(
+                        'Bloqueado',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF94A3B8),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      )
+                    : ElevatedButton.icon(
+                        onPressed: () => _abrirModalTasacion(item),
+                        icon: Icon(
+                          !tienePrecio || esPaletizado ? Icons.sell : Icons.edit,
+                          size: 13,
+                        ),
+                        label: Text(!tienePrecio || esPaletizado ? 'Tasar' : 'Precio'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: !tienePrecio || esPaletizado
+                              ? const Color(0xFFEA580C)
+                              : AppPalette.tertiary,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1802,6 +1897,55 @@ class _TasacionDialogState extends State<_TasacionDialog> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Widget optimizado para el encabezado fotográfico con zoom al pasar el mouse.
+/// Utiliza [AnimatedScale] en la capa del compositor de la GPU, garantizando 60/120 fps
+/// sin provocar pasadas de layout (markNeedsLayout = 0) ni reflows en la grilla.
+class _CardImageZoom extends StatefulWidget {
+  final List<String> imagenes;
+  final Widget Function() fallbackBuilder;
+
+  const _CardImageZoom({
+    required this.imagenes,
+    required this.fallbackBuilder,
+  });
+
+  @override
+  State<_CardImageZoom> createState() => _CardImageZoomState();
+}
+
+class _CardImageZoomState extends State<_CardImageZoom> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: Container(
+        height: 160,
+        width: double.infinity,
+        decoration: const BoxDecoration(
+          color: Color(0xFFF1F5F9),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: AnimatedScale(
+          scale: _isHovered ? 1.05 : 1.0,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOutCubic,
+          child: widget.imagenes.isNotEmpty
+              ? Image.network(
+                  widget.imagenes.first,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) =>
+                      widget.fallbackBuilder(),
+                )
+              : widget.fallbackBuilder(),
         ),
       ),
     );

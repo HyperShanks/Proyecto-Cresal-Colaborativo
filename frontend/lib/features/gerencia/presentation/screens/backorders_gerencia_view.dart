@@ -15,10 +15,7 @@ import '../widgets/kpi_card_widget.dart';
 class BackordersGerenciaView extends StatefulWidget {
   final int? idSucursalInicial;
 
-  const BackordersGerenciaView({
-    super.key,
-    this.idSucursalInicial,
-  });
+  const BackordersGerenciaView({super.key, this.idSucursalInicial});
 
   @override
   State<BackordersGerenciaView> createState() => _BackordersGerenciaViewState();
@@ -148,9 +145,9 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
 
   String _formatoCLP(int monto) {
     final str = monto.abs().toString().replaceAllMapped(
-          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-          (Match m) => '${m[1]}.',
-        );
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (Match m) => '${m[1]}.',
+    );
     return monto < 0 ? '-\$ $str' : '\$ $str';
   }
 
@@ -288,7 +285,10 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
             child: TextField(
               controller: _busquedaController,
               onChanged: _onBusquedaChanged,
-              style: const TextStyle(fontSize: 12, color: AppPalette.textPrimaryLight),
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppPalette.textPrimaryLight,
+              ),
               decoration: InputDecoration(
                 hintText: 'Buscar por Marca, Modelo, Cliente o Vendedor...',
                 hintStyle: TextStyle(
@@ -309,7 +309,10 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
                         },
                       )
                     : null,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 filled: true,
                 fillColor: Colors.white,
                 isDense: true,
@@ -323,7 +326,10 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AppPalette.primary, width: 1.5),
+                  borderSide: const BorderSide(
+                    color: AppPalette.primary,
+                    width: 1.5,
+                  ),
                 ),
               ),
             ),
@@ -342,7 +348,11 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
                 value: _filtroEstado,
                 dropdownColor: Colors.white,
                 isDense: true,
-                icon: const Icon(Icons.arrow_drop_down, size: 20, color: Color(0xFF64748B)),
+                icon: const Icon(
+                  Icons.arrow_drop_down,
+                  size: 20,
+                  color: Color(0xFF64748B),
+                ),
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
@@ -392,7 +402,9 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
               foregroundColor: const Color(0xFF64748B),
               side: const BorderSide(color: AppPalette.borderLight),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
           ),
         ],
@@ -432,7 +444,9 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
                 headingRowHeight: 44,
                 dataRowMinHeight: 56,
                 dataRowMaxHeight: 64,
-                headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)), // Slate 50
+                headingRowColor: WidgetStateProperty.all(
+                  const Color(0xFFF8FAFC),
+                ), // Slate 50
                 dividerThickness: 1,
                 columns: const [
                   DataColumn(
@@ -578,10 +592,7 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
               const SizedBox(height: 2),
               Text(
                 b.fechaCreacion,
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: Color(0xFF64748B),
-                ),
+                style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
               ),
             ],
           ),
@@ -598,7 +609,10 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _buildCategoriaBadge(b.idCategoriaRequerida, b.categoriaNombre),
+                    _buildCategoriaBadge(
+                      b.idCategoriaRequerida,
+                      b.categoriaNombre,
+                    ),
                     const SizedBox(width: 6),
                     Flexible(
                       child: Text(
@@ -640,7 +654,8 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
                   color: Color(0xFF0F172A),
                 ),
               ),
-              if (b.clienteTelefono != null && b.clienteTelefono!.isNotEmpty) ...[
+              if (b.clienteTelefono != null &&
+                  b.clienteTelefono!.isNotEmpty) ...[
                 const SizedBox(height: 2),
                 Text(
                   b.clienteTelefono!,
@@ -658,10 +673,7 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
         DataCell(
           Text(
             b.vendedorNombre,
-            style: const TextStyle(
-              fontSize: 12,
-              color: Color(0xFF64748B),
-            ),
+            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
           ),
         ),
 
@@ -702,11 +714,7 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
         ),
 
         // 8. Estado Reserva
-        DataCell(
-          Center(
-            child: _buildEstadoBadge(b.estadoReserva),
-          ),
-        ),
+        DataCell(Center(child: _buildEstadoBadge(b.estadoReserva))),
 
         // 9. Match / Asignación
         DataCell(
@@ -722,7 +730,9 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
   Widget _buildCategoriaBadge(int idCategoria, String nombre) {
     final isMotor = idCategoria == 1;
     final bgColor = isMotor ? const Color(0xFFE0F2FE) : const Color(0xFFFEF3C7);
-    final textColor = isMotor ? const Color(0xFF0369A1) : const Color(0xFFB45309);
+    final textColor = isMotor
+        ? const Color(0xFF0369A1)
+        : const Color(0xFFB45309);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -911,9 +921,7 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
   Widget _buildLoadingIndicator() {
     return const Padding(
       padding: EdgeInsets.all(48.0),
-      child: Center(
-        child: CircularProgressIndicator(strokeWidth: 2.5),
-      ),
+      child: Center(child: CircularProgressIndicator(strokeWidth: 2.5)),
     );
   }
 
@@ -928,7 +936,11 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline_rounded, color: AppPalette.error, size: 20),
+          const Icon(
+            Icons.error_outline_rounded,
+            color: AppPalette.error,
+            size: 20,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -938,7 +950,10 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
           ),
           TextButton(
             onPressed: _cargarDatos,
-            child: const Text('Reintentar', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+            child: const Text(
+              'Reintentar',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
