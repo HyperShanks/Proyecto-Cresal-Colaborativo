@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, time
 from zoneinfo import ZoneInfo
 import pytest
 from models import (
@@ -211,8 +211,8 @@ def db_session(setup_database):
         )
         db.add_all([activo1, activo2])
 
-        # Marcas temporales: hoy en hora local de Chile
-        ahora_chile = datetime.now(tz_chile)
+        # Marcas temporales: hoy al mediodía en hora local de Chile para evitar desfases de medianoche
+        ahora_chile = datetime.combine(datetime.now(tz_chile).date(), time(12, 0), tzinfo=tz_chile)
         hoy_utc = ahora_chile.astimezone(timezone.utc).replace(tzinfo=None)
 
         # ── Órdenes de Venta Sucursal 1 (Viña) ──────────────────────────────────

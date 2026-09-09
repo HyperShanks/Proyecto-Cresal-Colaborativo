@@ -22,6 +22,7 @@ class ActivoPendientePrecioModel {
   final String tituloRepuesto;
   final String estadoActivo;
   final DateTime? fechaCreacion;
+  final List<String> fotografias;
 
   const ActivoPendientePrecioModel({
     required this.idActivo,
@@ -44,6 +45,7 @@ class ActivoPendientePrecioModel {
     required this.tituloRepuesto,
     required this.estadoActivo,
     this.fechaCreacion,
+    this.fotografias = const [],
   });
 
   factory ActivoPendientePrecioModel.fromJson(Map<String, dynamic> json) {
@@ -59,6 +61,16 @@ class ActivoPendientePrecioModel {
         try {
           fecha = DateTime.parse(json['fecha_creacion'].toString()).toLocal();
         } catch (_) {}
+      }
+    }
+
+    final rawFotos = json['fotografias'];
+    final List<String> fotosList = [];
+    if (rawFotos is List) {
+      for (final item in rawFotos) {
+        if (item != null && item.toString().trim().isNotEmpty) {
+          fotosList.add(item.toString().trim());
+        }
       }
     }
 
@@ -83,6 +95,7 @@ class ActivoPendientePrecioModel {
       tituloRepuesto: json['titulo_repuesto']?.toString() ?? 'Repuesto Sin Título',
       estadoActivo: json['estado_activo']?.toString() ?? 'En Desarme',
       fechaCreacion: fecha,
+      fotografias: fotosList,
     );
   }
 

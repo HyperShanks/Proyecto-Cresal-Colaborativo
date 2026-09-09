@@ -36,6 +36,7 @@ class _MyAppState extends State<MyApp> {
 
           // Rutas centralizadas y unificadas bajo Single Source of Truth (SSOT)
           routes: AppRoutes.getRoutes(),
+          onGenerateRoute: AppRoutes.onGenerateRoute,
         );
       },
     );

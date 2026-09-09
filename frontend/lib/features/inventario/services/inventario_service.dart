@@ -64,6 +64,7 @@ class InventarioService {
     String? cilindrada,
     String? combustible,
     String? transmision,
+    String? estado,
     int? limit,
     int? offset,
   }) async {
@@ -80,6 +81,9 @@ class InventarioService {
       if (cilindrada != null) queryParams['cilindrada'] = cilindrada;
       if (combustible != null) queryParams['combustible'] = combustible;
       if (transmision != null) queryParams['transmision'] = transmision;
+      if (estado != null && estado.trim().isNotEmpty && estado.trim() != 'Todos') {
+        queryParams['estado'] = estado.trim();
+      }
       if (limit != null) queryParams['limit'] = limit.toString();
       if (offset != null) queryParams['offset'] = offset.toString();
 

@@ -277,6 +277,42 @@ void main() {
 
       expect(find.text('PRECIO DE REFERENCIA (CLP)'), findsNothing);
     });
+
+    testWidgets('En pantalla móvil estrecha (360x640) botones Cancelar y Confirmar se renderizan completos', (tester) async {
+      tester.view.physicalSize = const Size(360, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final model = ActivoPendientePrecioModel.fromJson(rawPendienteJson);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (ctx) => Center(
+                child: ElevatedButton(
+                  onPressed: () => AsignarPrecioDialog.show(
+                    ctx,
+                    activo: model,
+                    onPrecioAsignado: () {},
+                  ),
+                  child: const Text('Abrir Diálogo'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Abrir Diálogo'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Cancelar'), findsOneWidget);
+      expect(find.text('Confirmar Precio'), findsOneWidget);
+    });
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
