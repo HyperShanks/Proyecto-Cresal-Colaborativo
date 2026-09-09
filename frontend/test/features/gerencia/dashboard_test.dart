@@ -182,8 +182,8 @@ void main() {
       expect(find.text('Medios de Pago'), findsOneWidget);
       expect(find.text(r'$ Monto'), findsOneWidget);
       expect(find.text('# Cant'), findsOneWidget);
-      expect(find.text('Transbank & Webpay'), findsOneWidget);
-      expect(find.text('Conciliado'), findsOneWidget);
+      expect(find.text('Transbank & Webpay'), findsNothing);
+      expect(find.text('Conciliado'), findsNothing);
       expect(find.text('Débito'), findsOneWidget);
       expect(find.text('Efectivo'), findsOneWidget);
       expect(find.text('70%'), findsOneWidget);
@@ -192,7 +192,10 @@ void main() {
       // Probamos alternar al modo cantidad # Cant
       await tester.tap(find.text('# Cant'));
       await tester.pumpAndSettle();
-      expect(find.text('2 pagos'), findsOneWidget);
+      expect(find.text('2 uds'), findsOneWidget);
+      expect(find.text('1 uds'), findsNWidgets(2));
+      expect(find.text('70%'), findsNothing);
+      expect(find.text('30%'), findsNothing);
     });
   });
 

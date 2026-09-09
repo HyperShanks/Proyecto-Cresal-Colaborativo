@@ -10,8 +10,7 @@ enum MetricaMedioPago { monto, cantidad }
 
 /// Gráfico de Dona interactivo de Medios de Pago (HU-5.1) con fl_chart.
 /// Diseñado según el prototipo ejecutivo de Cresal con toggle [$ Monto / # Cant],
-/// centro reactivo de alto rendimiento (60+ FPS sin micro-lag en hover)
-/// y pie conciliado de pasarelas Transbank & Webpay.
+/// centro reactivo de alto rendimiento (60+ FPS sin micro-lag en hover).
 class MetodosPagoChart extends StatefulWidget {
   final ResumenPagosModel resumen;
 
@@ -196,8 +195,8 @@ class _MetodosPagoChartState extends State<MetodosPagoChart> {
                                   },
                                 ),
                                 borderData: FlBorderData(show: false),
-                                sectionsSpace: 2,
-                                centerSpaceRadius: 40,
+                                sectionsSpace: 2.5,
+                                centerSpaceRadius: 36,
                                 sections: List.generate(desglose.length, (i) {
                                   final isTouched = i == _touchedIndex;
                                   final item = desglose[i];
@@ -205,20 +204,13 @@ class _MetodosPagoChartState extends State<MetodosPagoChart> {
                                   final val = esMonto
                                       ? item.montoTotal.toDouble()
                                       : item.cantidad.toDouble();
-                                  final pct = esMonto
-                                      ? item.porcentaje
-                                      : item.porcentajeCantidad;
 
                                   return PieChartSectionData(
                                     color: color,
                                     value: val,
-                                    title: '${pct.toStringAsFixed(0)}%',
-                                    radius: isTouched ? 26.0 : 20.0,
-                                    titleStyle: TextStyle(
-                                      fontSize: isTouched ? 11.0 : 9.5,
-                                      fontWeight: FontWeight.w900,
-                                      color: Colors.white,
-                                    ),
+                                    showTitle: false,
+                                    title: '',
+                                    radius: isTouched ? 36.0 : 30.0,
                                   );
                                 }),
                               ),
@@ -252,10 +244,10 @@ class _MetodosPagoChartState extends State<MetodosPagoChart> {
                                       ? (esMonto
                                           ? CurrencyFormatter.formatCLP(
                                               desglose[_touchedIndex].montoTotal)
-                                          : '${desglose[_touchedIndex].cantidad} pagos')
+                                          : '${desglose[_touchedIndex].cantidad} uds')
                                       : (esMonto
                                           ? CurrencyFormatter.formatCLP(totalMonto)
-                                          : '$totalCant pagos'),
+                                          : '$totalCant uds'),
                                   style: const TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w900,
@@ -341,7 +333,9 @@ class _MetodosPagoChartState extends State<MetodosPagoChart> {
                                       ),
                                     ),
                                     Text(
-                                      '${pct.toStringAsFixed(0)}%',
+                                      esMonto
+                                          ? '${pct.toStringAsFixed(0)}%'
+                                          : '${item.cantidad} uds',
                                       style: const TextStyle(
                                         fontSize: 11,
                                         fontWeight: FontWeight.w900,
@@ -357,41 +351,6 @@ class _MetodosPagoChartState extends State<MetodosPagoChart> {
                       ),
                     ],
                   ),
-          ),
-
-          // Pie del Bento: Transbank & Webpay + Conciliado (idéntico a imágenes del mockup)
-          const Divider(height: 20, thickness: 1, color: Color(0xFFF1F5F9)),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.verified_user_outlined,
-                    size: 14,
-                    color: AppPalette.primary,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Transbank & Webpay',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: AppPalette.primary,
-                    ),
-                  ),
-                ],
-              ),
-              const Text(
-                'Conciliado',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF047857), // emerald-700
-                ),
-              ),
-            ],
           ),
         ],
       ),

@@ -164,7 +164,7 @@ class AuditoriaTablaView extends StatelessWidget {
         children: [
           // ── CABECERA DE LA TABLA (10 COLUMNAS EXACTAS) ──
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
               color: AppPalette.backgroundLight,
               borderRadius: const BorderRadius.only(
@@ -181,11 +181,11 @@ class AuditoriaTablaView extends StatelessWidget {
             child: Row(
               children: [
                 _buildHeaderCell('FOLIO', flex: 12),
-                _buildHeaderCell('FECHA / HORA', flex: 11),
-                _buildHeaderCell('CLIENTE / RUT', flex: 20),
-                _buildHeaderCell('SUCURSAL', flex: 16),
-                _buildHeaderCell('VENDEDOR / CAJERA', flex: 16),
-                _buildHeaderCell('MÉTODO DE PAGO', flex: 18),
+                _buildHeaderCell('FECHA / HORA', flex: 10),
+                _buildHeaderCell('CLIENTE / RUT', flex: 19),
+                _buildHeaderCell('SUCURSAL', flex: 15),
+                _buildHeaderCell('VENDEDOR / CAJERA', flex: 15),
+                _buildHeaderCell('MÉTODO DE PAGO', flex: 20),
                 _buildHeaderCell('TOTAL VENTA', flex: 13),
                 _buildHeaderCell('PENDIENTE', flex: 12),
                 _buildHeaderCell('ESTADO OFICIAL', flex: 13),
@@ -255,7 +255,7 @@ class AuditoriaTablaView extends StatelessWidget {
       onTap: () => onVerDetalle(item),
       hoverColor: AppPalette.primary.withValues(alpha: 0.03),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         child: Row(
           children: [
             // 1. FOLIO
@@ -268,19 +268,19 @@ class AuditoriaTablaView extends StatelessWidget {
                 style: AppTypography.body.copyWith(
                   fontWeight: FontWeight.w800,
                   color: const Color(0xFF0F172A),
-                  fontSize: 13,
+                  fontSize: 14,
                 ),
               ),
             ),
 
             // 2. FECHA / HORA
             Expanded(
-              flex: 11,
+              flex: 10,
               child: Text(
                 _formatearFechaHora(item),
                 style: AppTypography.small.copyWith(
                   color: const Color(0xFF64748B),
-                  fontSize: 12,
+                  fontSize: 13,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -288,7 +288,7 @@ class AuditoriaTablaView extends StatelessWidget {
 
             // 3. CLIENTE / RUT (2 líneas)
             Expanded(
-              flex: 20,
+              flex: 19,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
@@ -300,16 +300,19 @@ class AuditoriaTablaView extends StatelessWidget {
                     style: AppTypography.small.copyWith(
                       fontWeight: FontWeight.w700,
                       color: const Color(0xFF0F172A),
-                      fontSize: 13,
+                      fontSize: 14,
                     ),
                   ),
                   if (item.clienteRut != null && item.clienteRut!.isNotEmpty)
-                    Text(
-                      'RUT: ${item.clienteRut}',
-                      style: AppTypography.small.copyWith(
-                        color: const Color(0xFF94A3B8),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        'RUT: ${item.clienteRut}',
+                        style: AppTypography.small.copyWith(
+                          color: const Color(0xFF94A3B8),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                 ],
@@ -318,7 +321,7 @@ class AuditoriaTablaView extends StatelessWidget {
 
             // 4. SUCURSAL
             Expanded(
-              flex: 16,
+              flex: 15,
               child: Text(
                 item.sucursalNombre.isNotEmpty
                     ? item.sucursalNombre
@@ -328,14 +331,14 @@ class AuditoriaTablaView extends StatelessWidget {
                 style: AppTypography.small.copyWith(
                   color: const Color(0xFF1E293B),
                   fontWeight: FontWeight.w600,
-                  fontSize: 12,
+                  fontSize: 13,
                 ),
               ),
             ),
 
             // 5. VENDEDOR / CAJERA (2 líneas)
             Expanded(
-              flex: 16,
+              flex: 15,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
@@ -347,16 +350,19 @@ class AuditoriaTablaView extends StatelessWidget {
                     style: AppTypography.small.copyWith(
                       color: const Color(0xFF0F172A),
                       fontWeight: FontWeight.w600,
-                      fontSize: 12,
+                      fontSize: 13,
                     ),
                   ),
-                  Text(
-                    'Caja: ${item.cajeraNombre}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.small.copyWith(
-                      color: const Color(0xFF94A3B8),
-                      fontSize: 11,
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      'Caja: ${item.cajeraNombre}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.small.copyWith(
+                        color: const Color(0xFF94A3B8),
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                 ],
@@ -365,7 +371,7 @@ class AuditoriaTablaView extends StatelessWidget {
 
             // 6. MÉTODO DE PAGO (Pill + Monto)
             Expanded(
-              flex: 18,
+              flex: 20,
               child: _buildMetodoPagoCell(item),
             ),
 
@@ -378,7 +384,7 @@ class AuditoriaTablaView extends StatelessWidget {
                 ),
                 style: AppTypography.body.copyWith(
                   fontWeight: FontWeight.w800,
-                  fontSize: 13,
+                  fontSize: 14.5,
                   color: item.esAnulada
                       ? const Color(0xFF94A3B8)
                       : const Color(0xFF0F172A),
@@ -394,7 +400,7 @@ class AuditoriaTablaView extends StatelessWidget {
                       CobroPendienteCard.formatClp(item.montoPendiente),
                       style: AppTypography.body.copyWith(
                         fontWeight: FontWeight.w800,
-                        fontSize: 13,
+                        fontSize: 14.5,
                         color: const Color(0xFFC2410C), // Ámbar / Naranja alerta
                       ),
                     )
@@ -403,7 +409,7 @@ class AuditoriaTablaView extends StatelessWidget {
                       style: AppTypography.body.copyWith(
                         color: const Color(0xFF94A3B8),
                         fontWeight: FontWeight.w600,
-                        fontSize: 14,
+                        fontSize: 16,
                       ),
                     ),
             ),
@@ -415,8 +421,8 @@ class AuditoriaTablaView extends StatelessWidget {
                 alignment: Alignment.centerLeft,
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
+                    horizontal: 11,
+                    vertical: 5,
                   ),
                   decoration: BoxDecoration(
                     color: estadoStyle.bg,
@@ -431,7 +437,7 @@ class AuditoriaTablaView extends StatelessWidget {
                     style: AppTypography.small.copyWith(
                       color: estadoStyle.text,
                       fontWeight: FontWeight.w700,
-                      fontSize: 11,
+                      fontSize: 12,
                     ),
                   ),
                 ),
@@ -446,8 +452,8 @@ class AuditoriaTablaView extends StatelessWidget {
                 child: TextButton.icon(
                   style: TextButton.styleFrom(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
+                      horizontal: 10,
+                      vertical: 6,
                     ),
                     foregroundColor: const Color(0xFF0284C7),
                     minimumSize: Size.zero,
@@ -455,7 +461,7 @@ class AuditoriaTablaView extends StatelessWidget {
                   ),
                   icon: const Icon(
                     Icons.visibility_outlined,
-                    size: 15,
+                    size: 16,
                     color: Color(0xFF0284C7),
                   ),
                   label: Text(
@@ -463,7 +469,7 @@ class AuditoriaTablaView extends StatelessWidget {
                     style: AppTypography.small.copyWith(
                       color: const Color(0xFF0284C7),
                       fontWeight: FontWeight.w700,
-                      fontSize: 12,
+                      fontSize: 13,
                     ),
                   ),
                   onPressed: () => onVerDetalle(item),
@@ -486,39 +492,40 @@ class AuditoriaTablaView extends StatelessWidget {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: estilo.bg,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: estilo.border, width: 0.8),
-            ),
-            child: Text(
-              primerPago.metodoPago,
-              style: AppTypography.small.copyWith(
-                color: estilo.text,
-                fontWeight: FontWeight.w700,
-                fontSize: 10.5,
+          Flexible(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+              decoration: BoxDecoration(
+                color: estilo.bg,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: estilo.border, width: 0.8),
+              ),
+              child: Text(
+                primerPago.metodoPago,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.small.copyWith(
+                  color: estilo.text,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 11,
+                ),
               ),
             ),
           ),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              CobroPendienteCard.formatClp(primerPago.monto),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTypography.small.copyWith(
-                fontWeight: FontWeight.w600,
-                color: const Color(0xFF334155),
-                fontSize: 11.5,
-              ),
+          const SizedBox(width: 5),
+          Text(
+            CobroPendienteCard.formatClp(primerPago.monto),
+            maxLines: 1,
+            style: AppTypography.small.copyWith(
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF334155),
+              fontSize: 12,
             ),
           ),
           if (tieneMultiples) ...[
             const SizedBox(width: 4),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
               decoration: BoxDecoration(
                 color: const Color(0xFFF1F5F9),
                 borderRadius: BorderRadius.circular(4),
@@ -526,7 +533,7 @@ class AuditoriaTablaView extends StatelessWidget {
               child: Text(
                 '+${item.desglosePagos.length - 1}',
                 style: AppTypography.small.copyWith(
-                  fontSize: 9.5,
+                  fontSize: 10,
                   fontWeight: FontWeight.w700,
                   color: const Color(0xFF64748B),
                 ),
@@ -544,7 +551,7 @@ class AuditoriaTablaView extends StatelessWidget {
       overflow: TextOverflow.ellipsis,
       style: AppTypography.small.copyWith(
         color: const Color(0xFF64748B),
-        fontSize: 11.5,
+        fontSize: 12.5,
       ),
     );
   }
@@ -555,7 +562,7 @@ class AuditoriaTablaView extends StatelessWidget {
   /// Derecha: "Total Consolidado en Vista: $X.XXX.XXX"
   Widget _buildFooter() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: AppPalette.backgroundLight,
         borderRadius: const BorderRadius.only(
@@ -578,7 +585,7 @@ class AuditoriaTablaView extends StatelessWidget {
               text: 'Mostrando ',
               style: AppTypography.small.copyWith(
                 color: const Color(0xFF64748B),
-                fontSize: 12,
+                fontSize: 12.5,
               ),
               children: [
                 TextSpan(
@@ -612,7 +619,7 @@ class AuditoriaTablaView extends StatelessWidget {
                   style: AppTypography.small.copyWith(
                     fontWeight: FontWeight.w600,
                     color: const Color(0xFF475569),
-                    fontSize: 12,
+                    fontSize: 12.5,
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -633,7 +640,7 @@ class AuditoriaTablaView extends StatelessWidget {
               text: 'Total Consolidado en Vista: ',
               style: AppTypography.small.copyWith(
                 color: const Color(0xFF64748B),
-                fontSize: 12,
+                fontSize: 12.5,
               ),
               children: [
                 TextSpan(
@@ -641,7 +648,7 @@ class AuditoriaTablaView extends StatelessWidget {
                   style: const TextStyle(
                     fontWeight: FontWeight.w900,
                     color: Color(0xFF004C89), // AppPalette.tertiary
-                    fontSize: 13.5,
+                    fontSize: 14.5,
                   ),
                 ),
               ],
@@ -666,7 +673,7 @@ class AuditoriaTablaView extends StatelessWidget {
           style: AppTypography.small.copyWith(
             fontWeight: FontWeight.w800,
             color: const Color(0xFF64748B),
-            fontSize: 11,
+            fontSize: 11.5,
             letterSpacing: 0.5,
           ),
         ),
