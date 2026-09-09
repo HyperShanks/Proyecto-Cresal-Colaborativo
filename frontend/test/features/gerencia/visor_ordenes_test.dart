@@ -5,6 +5,8 @@ import 'package:frontend/features/caja/models/historial_caja_model.dart';
 import 'package:frontend/features/caja/presentation/widgets/detalle_auditoria_dialog.dart';
 import 'package:frontend/features/caja/presentation/widgets/historial_tabla_view.dart';
 import 'package:frontend/features/gerencia/presentation/screens/ordenes_gerencia_view.dart';
+import 'package:frontend/features/gerencia/presentation/widgets/auditoria_detalle_dialog.dart';
+import 'package:frontend/features/gerencia/presentation/widgets/auditoria_tabla_view.dart';
 import 'package:frontend/features/gerencia/presentation/widgets/panel_filtros_avanzados.dart';
 
 void main() {
@@ -162,9 +164,9 @@ void main() {
     });
   });
 
-  group('2. HistorialTablaView en Modo Auditoría (HU-5.2)', () {
+  group('2. AuditoriaTablaView (10 Columnas del Mockup Oficial HU-5.2)', () {
     testWidgets(
-        'Renderiza tabla con columna SUCURSAL y botones "Auditar" de solo lectura',
+        'Renderiza las 10 columnas exactas del mockup, columna PENDIENTE dedicada e ícono de ojo',
         (tester) async {
       tester.view.physicalSize = const Size(1366, 768);
       tester.view.devicePixelRatio = 1.0;
@@ -178,12 +180,12 @@ void main() {
           home: Scaffold(
             body: SizedBox(
               height: 600,
-              child: HistorialTablaView(
+              child: AuditoriaTablaView(
                 items: [mockItem1, mockItem2],
                 paginaActual: 1,
                 totalPaginas: 1,
-                isReadOnly: true,
-                mostrarSucursal: true,
+                totalRegistros: 2,
+                totalConsolidado: 235000,
                 onCambiarPagina: (_) {},
                 onVerDetalle: (orden) => ordenAuditada = orden,
               ),
@@ -192,36 +194,46 @@ void main() {
         ),
       );
 
-      // Verificamos cabecera completa
+      // 1. Verificamos las 10 cabeceras oficiales del mockup
       expect(find.text('FOLIO'), findsOneWidget);
       expect(find.text('FECHA / HORA'), findsOneWidget);
       expect(find.text('CLIENTE / RUT'), findsOneWidget);
       expect(find.text('SUCURSAL'), findsOneWidget);
-      expect(find.text('TOTAL'), findsOneWidget);
-      expect(find.text('AUDITORÍA'), findsOneWidget);
+      expect(find.text('VENDEDOR / CAJERA'), findsOneWidget);
+      expect(find.text('MÉTODO DE PAGO'), findsOneWidget);
+      expect(find.text('TOTAL VENTA'), findsOneWidget);
+      expect(find.text('PENDIENTE'), findsOneWidget);
+      expect(find.text('ESTADO OFICIAL'), findsOneWidget);
+      expect(find.text('ACCIONES'), findsOneWidget);
 
-      // Verificamos celdas de las órdenes
+      // 2. Verificamos celdas de las órdenes
       expect(find.text('ORD-AUD-001'), findsOneWidget);
       expect(find.text('ORD-AUD-002'), findsOneWidget);
       expect(find.text('Casa Matriz (Viña)'), findsOneWidget);
       expect(find.text('Patio Desarme (Limache)'), findsOneWidget);
 
-      // Verificamos monto pendiente en orden 2
-      expect(find.textContaining('Pend:'), findsOneWidget);
+      // 3. Verificamos columna PENDIENTE: '—' para orden 1 pagada, y '$50.000' para orden 2 abonada
+      expect(find.text('—'), findsOneWidget);
+      expect(find.text('\$50.000'), findsOneWidget);
 
-      // Verificamos botones de acción "Auditar"
+      // 4. Verificamos botones de acción "Auditar" con ícono de ojo
       final botonesAuditar = find.text('Auditar');
       expect(botonesAuditar, findsNWidgets(2));
+      expect(find.byIcon(Icons.visibility_outlined), findsNWidgets(2));
 
-      // Verificamos clic en auditar la primera orden
+      // 5. Verificamos pie de tabla integrado
+      expect(find.textContaining('Mostrando '), findsOneWidget);
+      expect(find.textContaining('Total Consolidado en Vista: '), findsOneWidget);
+
+      // 6. Verificamos clic en auditar la primera orden
       await tester.tap(botonesAuditar.first);
       expect(ordenAuditada, isNotNull);
       expect(ordenAuditada!.folio, 'ORD-AUD-001');
     });
   });
 
-  group('3. DetalleAuditoriaDialog (Modal Forense 360°)', () {
-    testWidgets('Muestra desglose completo de artículos, SKU y pagos exactos',
+  group('3. AuditoriaDetalleDialog (Modal Forense Oficial del Mockup HU-5.2)', () {
+    testWidgets('Muestra cabecera oficial, tarjetas, artículos con badge 1x, pagos y botón Cerrar',
         (tester) async {
       tester.view.physicalSize = const Size(1366, 768);
       tester.view.devicePixelRatio = 1.0;
@@ -233,7 +245,7 @@ void main() {
           home: Scaffold(
             body: Builder(
               builder: (context) => ElevatedButton(
-                onPressed: () => DetalleAuditoriaDialog.show(context, mockItem1),
+                onPressed: () => AuditoriaDetalleDialog.show(context, mockItem1),
                 child: const Text('Abrir Modal'),
               ),
             ),
@@ -244,25 +256,36 @@ void main() {
       await tester.tap(find.text('Abrir Modal'));
       await tester.pumpAndSettle();
 
-      // Verificamos datos del modal
+      // 1. Verificamos cabecera oficial
+      expect(find.text('AUDITORÍA DE VENTA'), findsOneWidget);
       expect(find.text('ORD-AUD-001'), findsOneWidget);
-      expect(find.text('DATOS DEL CLIENTE'), findsOneWidget);
-      expect(find.text('Juan Carlos Pérez Cotapos'), findsOneWidget);
-      expect(find.text('PERSONAL RESPONSABLE'), findsOneWidget);
-      expect(find.textContaining('Vendedor: Pedro Vendedor'), findsOneWidget);
-      expect(find.textContaining('Casa Matriz (Viña)'), findsOneWidget);
 
-      // Verificamos desglose de artículo y SKU
+      // 2. Verificamos tarjeta de Cliente y Responsables
+      expect(find.text('CLIENTE'), findsOneWidget);
+      expect(find.text('Juan Carlos Pérez Cotapos'), findsOneWidget);
+      expect(find.text('RESPONSABLES'), findsOneWidget);
+      expect(find.textContaining('Pedro Vendedor'), findsOneWidget);
+
+      // 3. Verificamos desglose de artículos con badge 1x
+      expect(find.text('ARTÍCULOS Y REPUESTOS'), findsOneWidget);
+      expect(find.text('1x'), findsOneWidget);
       expect(find.text('Amortiguador Delantero'), findsOneWidget);
       expect(find.text('SKU: AMORT-FRON-001'), findsOneWidget);
 
-      // Verificamos botón de cierre
-      expect(find.text('CERRAR'), findsOneWidget);
-      await tester.tap(find.text('CERRAR'));
+      // 4. Verificamos desglose de pagos y total liquidado
+      expect(find.text('DESGLOSE EXACTO DE PAGOS'), findsOneWidget);
+      expect(find.text('TOTAL LIQUIDADO:'), findsOneWidget);
+
+      // 5. Verificamos línea de tiempo
+      expect(find.text('LÍNEA DE TIEMPO / MOVIMIENTOS'), findsOneWidget);
+
+      // 6. Verificamos botón de cierre
+      expect(find.text('Cerrar'), findsOneWidget);
+      await tester.tap(find.text('Cerrar'));
       await tester.pumpAndSettle();
 
       // Verificamos que el modal se cerró
-      expect(find.text('DATOS DEL CLIENTE'), findsNothing);
+      expect(find.text('AUDITORÍA DE VENTA'), findsNothing);
     });
   });
 
@@ -288,9 +311,8 @@ void main() {
         findsOneWidget,
       );
 
-      // Verificamos banner de consolidado
-      expect(find.text('Mostrando '), findsOneWidget);
-      expect(find.text('Total Consolidado en Vista: '), findsOneWidget);
+      // Verificamos que inicialmente muestra el indicador de carga
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
     });
   });
 }

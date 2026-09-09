@@ -37,7 +37,8 @@ class KpiFinancieroDTO(BaseModel):
 class DesglosePagoDTO(BaseModel):
     """
     DTO que representa la recaudación individual por cada método de pago.
-    Lo programé para alimentar la leyenda y segmentos del gráfico de dona.
+    Lo programé para alimentar la leyenda y segmentos del gráfico de dona,
+    permitiendo alternar entre métrica monetaria ($) y volumen de transacciones (#).
     """
     metodo_pago: str = Field(
         description="Método: Efectivo, Débito, Crédito, etc."
@@ -46,7 +47,15 @@ class DesglosePagoDTO(BaseModel):
         description="Monto total recaudado en CLP por este método"
     )
     porcentaje: float = Field(
-        description="Porcentaje respecto al total recaudado hoy"
+        description="Porcentaje respecto al total monetario recaudado hoy"
+    )
+    cantidad: int = Field(
+        default=1,
+        description="Cantidad de pagos procesados por este método"
+    )
+    porcentaje_cantidad: float = Field(
+        default=0.0,
+        description="Porcentaje respecto al total de transacciones de pago de hoy"
     )
 
     model_config = ConfigDict(from_attributes=True)
@@ -55,13 +64,17 @@ class DesglosePagoDTO(BaseModel):
 class ResumenPagosDTO(BaseModel):
     """
     DTO consolidado para el gráfico y desglose de recaudación.
-    Permite contrastar arqueo físico frente a canales electrónicos.
+    Permite contrastar arqueo físico frente a canales electrónicos y total transacciones.
     """
     efectivo_fisico: int = Field(
         description="Total recaudado en efectivo físico en caja"
     )
     canales_electronicos: int = Field(
         description="Total en canales electrónicos (Tarjetas, Transferencias)"
+    )
+    total_transacciones: int = Field(
+        default=0,
+        description="Total de pagos individuales registrados hoy"
     )
     desglose: List[DesglosePagoDTO] = Field(
         default_factory=list,

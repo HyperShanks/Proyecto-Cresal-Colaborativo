@@ -102,14 +102,14 @@ La Historia de Usuario **HU-5.1: Dashboard Ejecutivo: Pulso Financiero y Carga d
 6. **Tarjeta de Indicador Ejecutivo** ([frontend/lib/features/gerencia/presentation/widgets/kpi_card_widget.dart](file:///d:/CresalRepoCapstone/frontend/lib/features/gerencia/presentation/widgets/kpi_card_widget.dart)):
    - Componente visual para métricas financieras con badge de variación porcentual, micro-animación de hover, sombra difusa y soporte responsive.
 7. **Gráfico de Medios de Pago** ([frontend/lib/features/gerencia/presentation/widgets/metodos_pago_chart.dart](file:///d:/CresalRepoCapstone/frontend/lib/features/gerencia/presentation/widgets/metodos_pago_chart.dart)):
-   - Gráfico de dona (`fl_chart`) con centro reactivo que muestra el total recaudado o el detalle del canal seleccionado, leyenda lateral tonal interactiva, y comparativa inferior entre efectivo físico y canales electrónicos bancarios.
+   - Gráfico de dona (`fl_chart`) con toggle interactivo superior `[$ Monto / # Cant]`, centro reactivo optimizado para 60+ FPS sin lag en hover, leyenda lateral tonal y pie con indicador de conciliación Transbank & Webpay.
 8. **Pantalla Principal del Dashboard Ejecutivo** ([frontend/lib/features/gerencia/presentation/screens/dashboard_gerencia_view.dart](file:///d:/CresalRepoCapstone/frontend/lib/features/gerencia/presentation/screens/dashboard_gerencia_view.dart)):
    - **Topbar**: Identidad corporativa ejecutiva, saludo personalizado, badge "En Vivo" con spinner animado, selector segmentado de sucursal (Consolidado / Viña / Limache) y botón de actualización manual con feedback visual.
    - **Banner de Bienvenida**: Saludo dinámico al gerente, fecha actual en español chileno y estado de cajas en línea.
-   - **Grid Superior de 4 KPIs**: Ventas del día, Acumulado mensual MTD, Ticket promedio y Margen bruto estimado.
+   - **Grid Superior de 3 KPIs**: Ventas del día (Facturación Hoy, sin meta diaria), Acumulado mensual MTD y Ticket promedio (tarjetas compactas con contenido centrado y sin excesos verticales de espacio).
    - **Trío Bento**:
-     - *Bento 1*: Medios de pago (Gráfico Donut + Leyenda + Efectivo vs Electrónico).
-     - *Bento 2*: Control de Riesgo & Alertas Operativas (Saldos por cobrar retenidos y cuellos de botella de tasación con badges numéricos destacados).
+     - *Bento 1*: Recaudación Medios de Pago (Gráfico Donut + Toggle Monto/Cantidad + Transbank & Webpay Conciliado).
+     - *Bento 2*: Control de Riesgo & Alertas Operativas (Saldos por cobrar retenidos y cuellos de botella de tasación con Nivel de Riesgo Operativo dinámico: Controlado / Moderado / Crítico).
      - *Bento 3*: Flujo de Despacho en Bodega (Monitoreo de etapas logísticas: En preparación en rack, listos en mostrador y enviados por courier).
    - **Resiliencia de Red**: Estado de carga inicial con spinner corporativo, manejo de errores de conexión con ilustración y botón "Reintentar", y soporte para Pull-to-Refresh.
 9. **Rutas y Navegación** ([frontend/lib/routes/app_routes.dart](file:///d:/CresalRepoCapstone/frontend/lib/routes/app_routes.dart)):

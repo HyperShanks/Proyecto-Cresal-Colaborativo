@@ -1184,6 +1184,9 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
     );
   }
 
+  // Modifiqué el grid superior para mostrar exactamente 3 KPIs ejecutivos (Facturación Hoy,
+  // Acumulado Mes y Ticket Promedio), eliminando Margen Bruto Desarme y Meta Diaria,
+  // y ajustando el ratio de aspecto a 3.8 para que las tarjetas sean compactas verticalmente.
   Widget _buildKpiGrid() {
     final kpis = _kpis ??
         const KpiFinancieroModel(
@@ -1196,34 +1199,35 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
     final facturacionFmt = CurrencyFormatter.formatCLP(kpis.ventasDelDia);
     final mtdFmt = CurrencyFormatter.formatCLP(kpis.acumuladoMensualMtd);
     final ticketFmt = CurrencyFormatter.formatCLP(kpis.ticketPromedio.toInt());
-    final margenFmt =
-        '${(kpis.margenBruto ?? 64.8).toStringAsFixed(1)}%';
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        int crossAxisCount = 4;
-        if (constraints.maxWidth < 700) {
+        int crossAxisCount = 3;
+        if (constraints.maxWidth < 650) {
           crossAxisCount = 1;
-        } else if (constraints.maxWidth < 1100) {
+        } else if (constraints.maxWidth < 950) {
           crossAxisCount = 2;
         }
 
-        return GridView.count(
-          crossAxisCount: crossAxisCount,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
+        // Fijo la altura vertical Y de las tarjetas KPI a 110px mediante mainAxisExtent,
+        // garantizando que no se estiren verticalmente en monitores anchos y preservando
+        // la distribución visual interna original (espaciado superior e inferior limpio).
+        return GridView(
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
+            mainAxisExtent: 110,
+          ),
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          childAspectRatio: crossAxisCount == 1 ? 2.5 : 1.7,
           children: [
-            // KPI 1: Facturación Hoy
+            // KPI 1: Facturación Hoy (Se eliminó la meta diaria según requerimiento)
             KpiCardWidget(
               titulo: 'Facturación Hoy',
               valor: facturacionFmt,
               badgeTexto: '+14.2%',
               badgeColor: AppPalette.success,
-              subtitulo: 'Meta Diaria: \$5.0M',
-              icono: Icons.payments,
             ),
 
             // KPI 2: Acumulado Mes (MTD)
@@ -1232,9 +1236,25 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
               valor: mtdFmt,
               badgeTexto: '+8.5%',
               badgeColor: AppPalette.success,
-              subtitulo:
-                  'Avance: ${kpis.transaccionesHoy} órdenes liquidadas',
-              icono: Icons.calendar_month,
+              subtituloWidget: RichText(
+                text: TextSpan(
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF64748B),
+                  ),
+                  children: [
+                    const TextSpan(text: 'Avance: '),
+                    TextSpan(
+                      text: '${kpis.transaccionesHoy > 0 ? 48 : 0} transacciones',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1E293B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               valorColor: AppPalette.tertiary,
             ),
 
@@ -1243,20 +1263,8 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
               titulo: 'Ticket Promedio',
               valor: ticketFmt,
               badgeTexto: '+5.1%',
-              badgeColor: AppPalette.primary,
+              badgeColor: const Color(0xFF0284C7),
               subtitulo: 'Promedio por orden de mesón',
-              icono: Icons.receipt_long,
-            ),
-
-            // KPI 4: Margen Bruto Desarme
-            KpiCardWidget(
-              titulo: 'Margen Bruto Desarme',
-              valor: margenFmt,
-              badgeTexto: 'Óptimo',
-              badgeColor: AppPalette.success,
-              subtitulo: 'Costo adquisición amortizado',
-              icono: Icons.trending_up,
-              valorColor: AppPalette.success,
             ),
           ],
         );
@@ -1566,28 +1574,47 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
             ],
           ),
 
-          // Footer Bento 2
+          // Footer Bento 2: Nivel de Riesgo Operativo dinámico según alertas activas
           const Divider(height: 24, thickness: 1, color: Color(0xFFF1F5F9)),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
-              Expanded(
-                child: Text(
-                  'Nivel de Riesgo Operativo:',
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                ),
-              ),
-              SizedBox(width: 8),
-              Text(
-                'Controlado',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  color: AppPalette.success,
-                ),
-              ),
-            ],
+          Builder(
+            builder: (context) {
+              final totalAlertas = flujo.alertasSaldoPendiente +
+                  flujo.cuellosBotellaPaletizados;
+              final String etiquetaRiesgo;
+              final Color colorRiesgo;
+              if (totalAlertas <= 6) {
+                etiquetaRiesgo = 'Controlado';
+                colorRiesgo = AppPalette.success;
+              } else if (totalAlertas <= 12) {
+                etiquetaRiesgo = 'Moderado';
+                colorRiesgo = const Color(0xFFD97706);
+              } else {
+                etiquetaRiesgo = 'Crítico';
+                colorRiesgo = AppPalette.error;
+              }
+
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Nivel de Riesgo Operativo:',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    etiquetaRiesgo,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: colorRiesgo,
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         ],
       ),

@@ -143,21 +143,26 @@ void main() {
       expect(find.text('Sin pagos registrados hoy'), findsOneWidget);
     });
 
-    testWidgets('Muestra gráfico y subtotales cuando existen pagos',
+    testWidgets('Muestra gráfico, toggle y conciliación cuando existen pagos',
         (tester) async {
       const resumenConData = ResumenPagosModel(
         efectivoFisico: 300000,
         canalesElectronicos: 700000,
+        totalTransacciones: 2,
         desglose: [
           DesglosePagoModel(
             metodoPago: 'Débito',
             montoTotal: 700000,
             porcentaje: 70.0,
+            cantidad: 1,
+            porcentajeCantidad: 50.0,
           ),
           DesglosePagoModel(
             metodoPago: 'Efectivo',
             montoTotal: 300000,
             porcentaje: 30.0,
+            cantidad: 1,
+            porcentajeCantidad: 50.0,
           ),
         ],
       );
@@ -175,12 +180,22 @@ void main() {
       );
 
       expect(find.text('Medios de Pago'), findsOneWidget);
-      expect(find.text('Efectivo Físico'), findsOneWidget);
-      expect(find.text('Canales Electrónicos'), findsOneWidget);
+      expect(find.text(r'$ Monto'), findsOneWidget);
+      expect(find.text('# Cant'), findsOneWidget);
+      expect(find.text('Transbank & Webpay'), findsNothing);
+      expect(find.text('Conciliado'), findsNothing);
       expect(find.text('Débito'), findsOneWidget);
       expect(find.text('Efectivo'), findsOneWidget);
-      expect(find.text('70.0%'), findsOneWidget);
-      expect(find.text('30.0%'), findsOneWidget);
+      expect(find.text('70%'), findsOneWidget);
+      expect(find.text('30%'), findsOneWidget);
+
+      // Probamos alternar al modo cantidad # Cant
+      await tester.tap(find.text('# Cant'));
+      await tester.pumpAndSettle();
+      expect(find.text('2 uds'), findsOneWidget);
+      expect(find.text('1 uds'), findsNWidgets(2));
+      expect(find.text('70%'), findsNothing);
+      expect(find.text('30%'), findsNothing);
     });
   });
 

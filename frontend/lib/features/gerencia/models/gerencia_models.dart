@@ -43,18 +43,26 @@ class DesglosePagoModel {
   final String metodoPago;
   final int montoTotal;
   final double porcentaje;
+  final int cantidad;
+  final double porcentajeCantidad;
 
   const DesglosePagoModel({
     required this.metodoPago,
     required this.montoTotal,
     required this.porcentaje,
+    this.cantidad = 1,
+    this.porcentajeCantidad = 0.0,
   });
 
   factory DesglosePagoModel.fromJson(Map<String, dynamic> json) {
+    final pctMonto = (json['porcentaje'] as num?)?.toDouble() ?? 0.0;
     return DesglosePagoModel(
       metodoPago: json['metodo_pago']?.toString() ?? 'Desconocido',
       montoTotal: (json['monto_total'] as num?)?.toInt() ?? 0,
-      porcentaje: (json['porcentaje'] as num?)?.toDouble() ?? 0.0,
+      porcentaje: pctMonto,
+      cantidad: (json['cantidad'] as num?)?.toInt() ?? 1,
+      porcentajeCantidad:
+          (json['porcentaje_cantidad'] as num?)?.toDouble() ?? pctMonto,
     );
   }
 
@@ -63,6 +71,8 @@ class DesglosePagoModel {
       'metodo_pago': metodoPago,
       'monto_total': montoTotal,
       'porcentaje': porcentaje,
+      'cantidad': cantidad,
+      'porcentaje_cantidad': porcentajeCantidad,
     };
   }
 }
@@ -70,25 +80,37 @@ class DesglosePagoModel {
 class ResumenPagosModel {
   final int efectivoFisico;
   final int canalesElectronicos;
+  final int totalTransacciones;
   final List<DesglosePagoModel> desglose;
 
   const ResumenPagosModel({
     required this.efectivoFisico,
     required this.canalesElectronicos,
+    this.totalTransacciones = 0,
     required this.desglose,
   });
 
   int get totalRecaudado => efectivoFisico + canalesElectronicos;
 
+  int get transaccionesCalculadas =>
+      totalTransacciones > 0
+          ? totalTransacciones
+          : desglose.fold<int>(0, (acc, item) => acc + item.cantidad);
+
   factory ResumenPagosModel.fromJson(Map<String, dynamic> json) {
     final rawDesglose = json['desglose'] as List<dynamic>? ?? [];
+    final desgloseList = rawDesglose
+        .map((e) => DesglosePagoModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+    final transCount = (json['total_transacciones'] as num?)?.toInt() ??
+        desgloseList.fold<int>(0, (acc, item) => acc + item.cantidad);
+
     return ResumenPagosModel(
       efectivoFisico: (json['efectivo_fisico'] as num?)?.toInt() ?? 0,
       canalesElectronicos:
           (json['canales_electronicos'] as num?)?.toInt() ?? 0,
-      desglose: rawDesglose
-          .map((e) => DesglosePagoModel.fromJson(e as Map<String, dynamic>))
-          .toList(),
+      totalTransacciones: transCount,
+      desglose: desgloseList,
     );
   }
 
@@ -96,6 +118,7 @@ class ResumenPagosModel {
     return {
       'efectivo_fisico': efectivoFisico,
       'canales_electronicos': canalesElectronicos,
+      'total_transacciones': totalTransacciones,
       'desglose': desglose.map((e) => e.toJson()).toList(),
     };
   }

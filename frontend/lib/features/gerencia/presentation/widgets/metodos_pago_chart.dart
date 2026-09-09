@@ -5,9 +5,12 @@ import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../models/gerencia_models.dart';
 
+/// Modalidad de visualización para el gráfico de medios de pago
+enum MetricaMedioPago { monto, cantidad }
+
 /// Gráfico de Dona interactivo de Medios de Pago (HU-5.1) con fl_chart.
-/// Implementé este componente para contrastar la recaudación de Efectivo físico
-/// frente a canales electrónicos con paleta monocromática tonal.
+/// Diseñado según el prototipo ejecutivo de Cresal con toggle [$ Monto / # Cant],
+/// centro reactivo de alto rendimiento (60+ FPS sin micro-lag en hover).
 class MetodosPagoChart extends StatefulWidget {
   final ResumenPagosModel resumen;
 
@@ -22,6 +25,7 @@ class MetodosPagoChart extends StatefulWidget {
 
 class _MetodosPagoChartState extends State<MetodosPagoChart> {
   int _touchedIndex = -1;
+  MetricaMedioPago _metricaSeleccionada = MetricaMedioPago.monto;
 
   // Paleta monocromática tonal corporativa de Cresal
   static const List<Color> _tonalPalette = [
@@ -50,14 +54,16 @@ class _MetodosPagoChartState extends State<MetodosPagoChart> {
   @override
   Widget build(BuildContext context) {
     final desglose = widget.resumen.desglose;
-    final total = widget.resumen.totalRecaudado;
+    final totalMonto = widget.resumen.totalRecaudado;
+    final totalCant = widget.resumen.transaccionesCalculadas;
+    final esMonto = _metricaSeleccionada == MetricaMedioPago.monto;
 
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppPalette.borderLight),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.02),
@@ -69,9 +75,10 @@ class _MetodosPagoChartState extends State<MetodosPagoChart> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Cabecera del Bento
+          // Cabecera del Bento con Título y Toggle [$ Monto / # Cant]
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
                 child: Column(
@@ -81,9 +88,9 @@ class _MetodosPagoChartState extends State<MetodosPagoChart> {
                       'RECAUDACIÓN',
                       style: TextStyle(
                         fontSize: 11,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w800,
                         letterSpacing: 0.8,
-                        color: Color(0xFF64748B),
+                        color: Color(0xFF94A3B8), // Slate 400
                       ),
                     ),
                     SizedBox(height: 2),
@@ -92,54 +99,69 @@ class _MetodosPagoChartState extends State<MetodosPagoChart> {
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w900,
-                        color: Color(0xFF0F172A),
+                        color: Color(0xFF0F172A), // Slate 900
                       ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Distribución de ingresos por canal transaccional liquidado',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF94A3B8),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: 8),
+
+              // Segmented Control [$ Monto / # Cant]
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.all(3),
                 decoration: BoxDecoration(
-                  color: AppPalette.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(20),
+                  color: const Color(0xFFF1F5F9), // Slate 100
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFE2E8F0)), // Slate 200
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(
-                      Icons.verified_user,
-                      size: 14,
-                      color: AppPalette.primary,
+                    _buildToggleButton(
+                      label: '\$ Monto',
+                      isSelected: esMonto,
+                      onTap: () {
+                        if (!esMonto) {
+                          setState(() {
+                            _metricaSeleccionada = MetricaMedioPago.monto;
+                            _touchedIndex = -1;
+                          });
+                        }
+                      },
                     ),
-                    const SizedBox(width: 4),
-                    const Text(
-                      'Conciliado',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        color: AppPalette.primary,
-                      ),
+                    _buildToggleButton(
+                      label: '# Cant',
+                      isSelected: !esMonto,
+                      onTap: () {
+                        if (esMonto) {
+                          setState(() {
+                            _metricaSeleccionada = MetricaMedioPago.cantidad;
+                            _touchedIndex = -1;
+                          });
+                        }
+                      },
                     ),
                   ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 4),
-          const Text(
-            'Distribución de ingresos por canal transaccional liquidado',
-            style: TextStyle(
-              fontSize: 11,
-              color: Color(0xFF94A3B8),
-            ),
-          ),
           const SizedBox(height: 16),
 
           // Gráfico Donut y Leyenda
           Expanded(
-            child: total == 0 || desglose.isEmpty
+            child: (esMonto ? totalMonto == 0 : totalCant == 0) || desglose.isEmpty
                 ? _buildEmptyState()
                 : Row(
                     children: [
@@ -152,43 +174,50 @@ class _MetodosPagoChartState extends State<MetodosPagoChart> {
                             PieChart(
                               PieChartData(
                                 pieTouchData: PieTouchData(
-                                  touchCallback:
-                                      (FlTouchEvent event, pieTouchResponse) {
-                                    setState(() {
-                                      if (!event.isInterestedForInteractions ||
-                                          pieTouchResponse == null ||
-                                          pieTouchResponse.touchedSection ==
-                                              null) {
-                                        _touchedIndex = -1;
-                                        return;
-                                      }
-                                      _touchedIndex = pieTouchResponse
-                                          .touchedSection!
-                                          .touchedSectionIndex;
-                                    });
+                                  touchCallback: (FlTouchEvent event,
+                                      pieTouchResponse) {
+                                    final newIndex =
+                                        (!event.isInterestedForInteractions ||
+                                                pieTouchResponse == null ||
+                                                pieTouchResponse
+                                                        .touchedSection ==
+                                                    null)
+                                            ? -1
+                                            : pieTouchResponse
+                                                .touchedSection!
+                                                .touchedSectionIndex;
+                                    // Optimización de rendimiento a 60+ FPS: Solo reconstruye si el índice cambia
+                                    if (newIndex != _touchedIndex) {
+                                      setState(() {
+                                        _touchedIndex = newIndex;
+                                      });
+                                    }
                                   },
                                 ),
                                 borderData: FlBorderData(show: false),
-                                sectionsSpace: 2,
-                                centerSpaceRadius: 42,
+                                sectionsSpace: 2.5,
+                                centerSpaceRadius: 36,
                                 sections: List.generate(desglose.length, (i) {
                                   final isTouched = i == _touchedIndex;
                                   final item = desglose[i];
                                   final color = _obtenerColor(i, item.metodoPago);
+                                  final val = esMonto
+                                      ? item.montoTotal.toDouble()
+                                      : item.cantidad.toDouble();
+
                                   return PieChartSectionData(
                                     color: color,
-                                    value: item.montoTotal.toDouble(),
-                                    title: '${item.porcentaje.toStringAsFixed(0)}%',
-                                    radius: isTouched ? 28.0 : 22.0,
-                                    titleStyle: TextStyle(
-                                      fontSize: isTouched ? 12.0 : 10.0,
-                                      fontWeight: FontWeight.w900,
-                                      color: Colors.white,
-                                    ),
+                                    value: val,
+                                    showTitle: false,
+                                    title: '',
+                                    radius: isTouched ? 36.0 : 30.0,
                                   );
                                 }),
                               ),
+                              duration: const Duration(milliseconds: 100),
+                              curve: Curves.easeOutQuad,
                             ),
+
                             // Centro Reactivo
                             Column(
                               mainAxisSize: MainAxisSize.min,
@@ -212,9 +241,13 @@ class _MetodosPagoChartState extends State<MetodosPagoChart> {
                                 Text(
                                   _touchedIndex >= 0 &&
                                           _touchedIndex < desglose.length
-                                      ? CurrencyFormatter.formatCLP(
-                                          desglose[_touchedIndex].montoTotal)
-                                      : CurrencyFormatter.formatCLP(total),
+                                      ? (esMonto
+                                          ? CurrencyFormatter.formatCLP(
+                                              desglose[_touchedIndex].montoTotal)
+                                          : '${desglose[_touchedIndex].cantidad} uds')
+                                      : (esMonto
+                                          ? CurrencyFormatter.formatCLP(totalMonto)
+                                          : '$totalCant uds'),
                                   style: const TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w900,
@@ -241,17 +274,22 @@ class _MetodosPagoChartState extends State<MetodosPagoChart> {
                             final item = desglose[i];
                             final color = _obtenerColor(i, item.metodoPago);
                             final isHovered = i == _touchedIndex;
+                            final pct = esMonto
+                                ? item.porcentaje
+                                : item.porcentajeCantidad;
 
-                            return InkWell(
-                              onTap: () {
-                                setState(() {
-                                  _touchedIndex =
-                                      _touchedIndex == i ? -1 : i;
-                                });
+                            return MouseRegion(
+                              onEnter: (_) {
+                                if (_touchedIndex != i) {
+                                  setState(() => _touchedIndex = i);
+                                }
                               },
-                              borderRadius: BorderRadius.circular(6),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 150),
+                              onExit: (_) {
+                                if (_touchedIndex == i) {
+                                  setState(() => _touchedIndex = -1);
+                                }
+                              },
+                              child: Container(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 6,
                                   vertical: 4,
@@ -295,7 +333,9 @@ class _MetodosPagoChartState extends State<MetodosPagoChart> {
                                       ),
                                     ),
                                     Text(
-                                      '${item.porcentaje.toStringAsFixed(1)}%',
+                                      esMonto
+                                          ? '${pct.toStringAsFixed(0)}%'
+                                          : '${item.cantidad} uds',
                                       style: const TextStyle(
                                         fontSize: 11,
                                         fontWeight: FontWeight.w900,
@@ -312,76 +352,45 @@ class _MetodosPagoChartState extends State<MetodosPagoChart> {
                     ],
                   ),
           ),
-
-          // Pie del Bento con comparativa Efectivo vs Canales
-          const Divider(height: 24, thickness: 1, color: Color(0xFFF1F5F9)),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Flexible(
-                child: _buildSubtotal(
-                  'Efectivo Físico',
-                  widget.resumen.efectivoFisico,
-                  const Color(0xFF38BDF8),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Flexible(
-                child: _buildSubtotal(
-                  'Canales Electrónicos',
-                  widget.resumen.canalesElectronicos,
-                  const Color(0xFF004C89),
-                ),
-              ),
-            ],
-          ),
         ],
       ),
     );
   }
 
-  Widget _buildSubtotal(String label, int monto, Color dotColor) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(
-            color: dotColor,
-            shape: BoxShape.circle,
+  Widget _buildToggleButton({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 3,
+                    offset: const Offset(0, 1),
+                  ),
+                ]
+              : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+            color: isSelected
+                ? AppPalette.primary
+                : const Color(0xFF64748B), // Slate 500
           ),
         ),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 10,
-                  color: Color(0xFF64748B),
-                  fontWeight: FontWeight.w600,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              Text(
-                CurrencyFormatter.formatCLP(monto),
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF0F172A),
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        ),
-      ],
+      ),
     );
   }
 

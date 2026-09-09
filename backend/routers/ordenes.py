@@ -3,9 +3,10 @@
 # registrar datos de Micro-CRM, gestionar despacho y asegurar la consistencia ACID del inventario.
 
 import uuid
+from collections import defaultdict
 from datetime import datetime, time as datetime_time, timezone, timedelta
 from zoneinfo import ZoneInfo
-from typing import List, Optional
+from typing import List, Optional, Dict
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy import or_, and_, func, cast, String
@@ -527,6 +528,52 @@ def listar_ordenes_auditoria(
         .all()
     )
 
+    # Optimización de Rendimiento (Resolución de problema N+1):
+    # Pre-cargamos en lote los pagos y artículos de todas las órdenes de la página
+    # mediante 2 consultas IN(orden_ids), evitando 40 viajes individuales de red a Supabase.
+    orden_ids = [orden.id_orden for orden, *_ in resultados_paginados]
+    pagos_por_orden: Dict[int, List[Transaccion_Pago]] = defaultdict(list)
+    articulos_por_orden: Dict[int, List[HistorialArticuloDTO]] = defaultdict(list)
+
+    if orden_ids:
+        todos_pagos = (
+            db.query(Transaccion_Pago)
+            .filter(Transaccion_Pago.id_orden.in_(orden_ids))
+            .order_by(Transaccion_Pago.fecha_pago.asc())
+            .all()
+        )
+        for p in todos_pagos:
+            pagos_por_orden[p.id_orden].append(p)
+
+        todos_detalles = (
+            db.query(Detalle_Orden, Activo_Inventariado, Vehiculo_Origen, Categoria_Activo)
+            .outerjoin(Activo_Inventariado, Detalle_Orden.id_activo == Activo_Inventariado.id_activo)
+            .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
+            .outerjoin(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
+            .filter(Detalle_Orden.id_orden.in_(orden_ids))
+            .all()
+        )
+        for det, act, veh, cat in todos_detalles:
+            sku_val = act.sku_qr_fisico if act else None
+            if det.descripcion_manual:
+                desc = det.descripcion_manual
+            elif act:
+                cat_str = cat.nombre_categoria if cat else "Repuesto"
+                veh_str = f"{veh.marca} {veh.modelo}" if veh else ""
+                desc = f"{cat_str} {veh_str}".strip() or "Repuesto Inventariado"
+            else:
+                desc = "Repuesto"
+            articulos_por_orden[det.id_orden].append(
+                HistorialArticuloDTO(
+                    cantidad=det.cantidad or 1,
+                    tipo="INVENTARIADO" if act else "DESARME",
+                    descripcion=desc,
+                    sku=sku_val,
+                    precio=det.precio_unitario or 0,
+                    subtotal=det.precio_final or ((det.precio_unitario or 0) * (det.cantidad or 1)),
+                )
+            )
+
     items: List[HistorialOrdenItemResponse] = []
     for orden, cliente, vendedor, cajera, sucursal in resultados_paginados:
         # Fechas en formato chileno
@@ -540,13 +587,8 @@ def listar_ordenes_auditoria(
         hora = dt_chile.strftime("%H:%M")
         fecha_hora_formateada = dt_chile.strftime("%H:%M - %d/%m/%Y")
 
-        # Pagos asociados
-        pagos_db = (
-            db.query(Transaccion_Pago)
-            .filter(Transaccion_Pago.id_orden == orden.id_orden)
-            .order_by(Transaccion_Pago.fecha_pago.asc())
-            .all()
-        )
+        # Pagos asociados recuperados desde memoria (O(1))
+        pagos_db = pagos_por_orden.get(orden.id_orden, [])
         desglose_pagos = [
             HistorialPagoDetalleDTO(
                 id_transaccion=p.id_pago,
@@ -565,36 +607,8 @@ def listar_ordenes_auditoria(
         else:
             metodos_resumen = "Sin pagos"
 
-        # Artículos detallados
-        detalles_raw = (
-            db.query(Detalle_Orden, Activo_Inventariado, Vehiculo_Origen, Categoria_Activo)
-            .outerjoin(Activo_Inventariado, Detalle_Orden.id_activo == Activo_Inventariado.id_activo)
-            .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
-            .outerjoin(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
-            .filter(Detalle_Orden.id_orden == orden.id_orden)
-            .all()
-        )
-        articulos_dto = []
-        for det, act, veh, cat in detalles_raw:
-            sku_val = act.sku_qr_fisico if act else None
-            if det.descripcion_manual:
-                desc = det.descripcion_manual
-            elif act:
-                cat_str = cat.nombre_categoria if cat else "Repuesto"
-                veh_str = f"{veh.marca} {veh.modelo}" if veh else ""
-                desc = f"{cat_str} {veh_str}".strip() or "Repuesto Inventariado"
-            else:
-                desc = "Repuesto"
-            articulos_dto.append(
-                HistorialArticuloDTO(
-                    cantidad=det.cantidad or 1,
-                    tipo="INVENTARIADO" if act else "DESARME",
-                    descripcion=desc,
-                    sku=sku_val,
-                    precio=det.precio_unitario or 0,
-                    subtotal=det.precio_final or ((det.precio_unitario or 0) * (det.cantidad or 1)),
-                )
-            )
+        # Artículos recuperados desde memoria (O(1))
+        articulos_dto = articulos_por_orden.get(orden.id_orden, [])
 
         # Timeline de movimientos
         vendedor_nom = f"{vendedor.nombres} {vendedor.apellidos or ''}".strip()
