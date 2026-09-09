@@ -164,6 +164,9 @@ class HistorialOrdenItemModel {
   final int totalVenta;
   final int abonoPrevio;
   final int totalLiquidado;
+  final int montoPendiente;
+  final int? idSucursal;
+  final String sucursalNombre;
   final List<HistorialPagoDetalleModel> desglosePagos;
   final List<HistorialArticuloModel> articulos;
   final List<HistorialMovimientoModel> historialMovimientos;
@@ -186,6 +189,9 @@ class HistorialOrdenItemModel {
     required this.totalVenta,
     required this.abonoPrevio,
     required this.totalLiquidado,
+    this.montoPendiente = 0,
+    this.idSucursal,
+    this.sucursalNombre = '',
     required this.desglosePagos,
     required this.articulos,
     required this.historialMovimientos,
@@ -215,6 +221,9 @@ class HistorialOrdenItemModel {
         totalVenta: json['total_venta'] as int? ?? 0,
         abonoPrevio: json['abono_previo'] as int? ?? 0,
         totalLiquidado: json['total_liquidado'] as int? ?? 0,
+        montoPendiente: json['monto_pendiente'] as int? ?? 0,
+        idSucursal: json['id_sucursal'] as int?,
+        sucursalNombre: json['sucursal_nombre'] as String? ?? '',
         desglosePagos: (json['desglose_pagos'] as List<dynamic>?)
                 ?.map((e) =>
                     HistorialPagoDetalleModel.fromJson(e as Map<String, dynamic>))
@@ -250,6 +259,9 @@ class HistorialOrdenItemModel {
         'total_venta': totalVenta,
         'abono_previo': abonoPrevio,
         'total_liquidado': totalLiquidado,
+        'monto_pendiente': montoPendiente,
+        'id_sucursal': idSucursal,
+        'sucursal_nombre': sucursalNombre,
         'desglose_pagos': desglosePagos.map((e) => e.toJson()).toList(),
         'articulos': articulos.map((e) => e.toJson()).toList(),
         'historial_movimientos':
@@ -262,6 +274,7 @@ class HistorialCajaResponseModel {
   final int paginaActual;
   final int limitePorPagina;
   final int totalPaginas;
+  final int totalMontoConsolidado;
   final ResumenCuadreCajaModel resumenCuadre;
   final List<HistorialOrdenItemModel> items;
 
@@ -270,6 +283,7 @@ class HistorialCajaResponseModel {
     required this.paginaActual,
     required this.limitePorPagina,
     required this.totalPaginas,
+    this.totalMontoConsolidado = 0,
     required this.resumenCuadre,
     required this.items,
   });
@@ -279,6 +293,7 @@ class HistorialCajaResponseModel {
         paginaActual: 1,
         limitePorPagina: 20,
         totalPaginas: 1,
+        totalMontoConsolidado: 0,
         resumenCuadre: ResumenCuadreCajaModel.empty(),
         items: [],
       );
@@ -289,6 +304,7 @@ class HistorialCajaResponseModel {
         paginaActual: json['pagina_actual'] as int? ?? 1,
         limitePorPagina: json['limite_por_pagina'] as int? ?? 20,
         totalPaginas: json['total_paginas'] as int? ?? 1,
+        totalMontoConsolidado: json['total_monto_consolidado'] as int? ?? 0,
         resumenCuadre: json['resumen_cuadre'] != null
             ? ResumenCuadreCajaModel.fromJson(
                 json['resumen_cuadre'] as Map<String, dynamic>)
@@ -305,6 +321,7 @@ class HistorialCajaResponseModel {
         'pagina_actual': paginaActual,
         'limite_por_pagina': limitePorPagina,
         'total_paginas': totalPaginas,
+        'total_monto_consolidado': totalMontoConsolidado,
         'resumen_cuadre': resumenCuadre.toJson(),
         'items': items.map((e) => e.toJson()).toList(),
       };

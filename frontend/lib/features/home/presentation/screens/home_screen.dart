@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../routes/app_routes.dart';
 import '../../../auth/services/auth_service.dart';
 import '../../../alertas/services/bodega_polling_service.dart';
 import '../../../alertas/presentation/widgets/panel_tareas_desplegable.dart';
@@ -64,15 +65,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       return;
     }
 
-    final esCaja = await AuthService.esCaja();
-    if (mounted && esCaja) {
-      Navigator.of(context).pushReplacementNamed('/caja');
-      return;
-    }
+    final idRol = await AuthService.getIdRol();
+    if (!mounted) return;
 
-    final esVentas = await AuthService.esModuloVentas();
-    if (mounted && esVentas) {
-      Navigator.of(context).pushReplacementNamed('/ventas_main');
+    final targetRoute = AppRoutes.getHomeRouteForRole(idRol);
+    if (targetRoute != AppRoutes.home) {
+      Navigator.of(context).pushReplacementNamed(targetRoute);
       return;
     }
 
@@ -295,7 +293,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             children: [
               Text('Hola, $saludoNombre 👋', style: AppTypography.headline.copyWith(fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
               const SizedBox(height: 4),
-              Text('Operador de Bodega', style: AppTypography.small.copyWith(color: AppPalette.textSecondary, fontWeight: FontWeight.w500, fontSize: 13)),
+              Text(
+                (_userRol != null && _userRol!.trim().isNotEmpty && _userRol != 'Bodeguero')
+                    ? _userRol!.trim()
+                    : 'Operador de Bodega',
+                style: AppTypography.small.copyWith(color: AppPalette.textSecondary, fontWeight: FontWeight.w500, fontSize: 13),
+              ),
             ],
           ),
         ),

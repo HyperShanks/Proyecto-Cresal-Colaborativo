@@ -3,11 +3,13 @@
 # registrar datos de Micro-CRM, gestionar despacho y asegurar la consistencia ACID del inventario.
 
 import uuid
+from collections import defaultdict
 from datetime import datetime, time as datetime_time, timezone, timedelta
 from zoneinfo import ZoneInfo
-from typing import List, Optional
+from typing import List, Optional, Dict
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
+from sqlalchemy import or_, and_, func, cast, String
 
 from database import get_db
 from models import (
@@ -25,9 +27,12 @@ from schemas import (
     OrdenPagoResponse, EntregaEnvioItemResponse,
     EntregaConfirmacionResponse, DespachoEnvioResponse,
     VendedorResumenResponse, CheckoutWizardRequest,
-    CheckoutWizardResponse, ReservaBackorderDTO, DespachoDTO
+    CheckoutWizardResponse, ReservaBackorderDTO, DespachoDTO,
+    HistorialCajaResponse, HistorialOrdenItemResponse,
+    HistorialPagoDetalleDTO, HistorialArticuloDTO, HistorialMovimientoDTO,
 )
-from core.security import get_current_user
+from core.security import get_current_user, require_auditoria_or_caja_role
+
 
 router = APIRouter(
     prefix="/api/v1/ordenes",
@@ -350,6 +355,327 @@ def crear_orden(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error en la transacción de creación de la orden: {str(e)}"
         )
+
+
+tz_chile_ordenes = ZoneInfo("America/Santiago")
+
+
+def parse_periodo_ordenes_chile(
+    periodo: Optional[str] = "TODOS",
+    fecha_desde: Optional[str] = None,
+    fecha_hasta: Optional[str] = None,
+) -> tuple[Optional[datetime], Optional[datetime]]:
+    """
+    Calculo los rangos de fecha en horario chileno y los convierto a UTC
+    para filtrar órdenes de manera consistente en base de datos.
+    """
+    p = (periodo or "TODOS").strip().upper()
+    ahora_chile = datetime.now(tz_chile_ordenes)
+
+    if p == "HOY":
+        start_local = datetime.combine(ahora_chile.date(), datetime_time.min, tzinfo=tz_chile_ordenes)
+        end_local = datetime.combine(ahora_chile.date(), datetime_time.max, tzinfo=tz_chile_ordenes)
+    elif p in ["7D", "ESTA_SEMANA"]:
+        lunes = ahora_chile.date() - timedelta(days=ahora_chile.weekday())
+        start_local = datetime.combine(lunes, datetime_time.min, tzinfo=tz_chile_ordenes)
+        end_local = datetime.combine(ahora_chile.date(), datetime_time.max, tzinfo=tz_chile_ordenes)
+    elif p in ["30D", "ESTE_MES"]:
+        primer_dia = ahora_chile.date().replace(day=1)
+        start_local = datetime.combine(primer_dia, datetime_time.min, tzinfo=tz_chile_ordenes)
+        end_local = datetime.combine(ahora_chile.date(), datetime_time.max, tzinfo=tz_chile_ordenes)
+    elif p == "RANGO" or (fecha_desde and fecha_hasta):
+        if not fecha_desde or not fecha_hasta:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="fecha_desde y fecha_hasta son obligatorias para el período RANGO.",
+            )
+        try:
+            d_desde = datetime.strptime(str(fecha_desde).strip(), "%Y-%m-%d").date()
+            d_hasta = datetime.strptime(str(fecha_hasta).strip(), "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Formato de fecha inválido. Debe ser YYYY-MM-DD.",
+            )
+        if d_desde > d_hasta:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="fecha_desde no puede ser posterior a fecha_hasta.",
+            )
+        start_local = datetime.combine(d_desde, datetime_time.min, tzinfo=tz_chile_ordenes)
+        end_local = datetime.combine(d_hasta, datetime_time.max, tzinfo=tz_chile_ordenes)
+    elif p == "TODOS":
+        return None, None
+    else:
+        return None, None
+
+    start_utc = start_local.astimezone(timezone.utc).replace(tzinfo=None)
+    end_utc = end_local.astimezone(timezone.utc).replace(tzinfo=None)
+    return start_utc, end_utc
+
+
+@router.get(
+    "",
+    response_model=HistorialCajaResponse,
+    summary="Visor Histórico Centralizado de Órdenes y Auditoría (HU-5.2)",
+    description="Consulta el historial multidimensional de órdenes de venta para auditoría gerencial y de caja. "
+                "Permite filtrar por sucursal, estado, rango temporal, método de pago y búsqueda predictiva tolerante."
+)
+@router.get(
+    "/",
+    response_model=HistorialCajaResponse,
+    include_in_schema=False
+)
+def listar_ordenes_auditoria(
+    id_sucursal: Optional[int] = Query(None, description="ID de la sucursal (None para consolidado)"),
+    sucursal_id: Optional[int] = Query(None, description="Alias para id_sucursal"),
+    estado: Optional[str] = Query(None, description="Filtro por estado de orden"),
+    estado_orden: Optional[str] = Query(None, description="Alias para estado"),
+    periodo: Optional[str] = Query("TODOS", description="Atajo de período: HOY, 7D, ESTA_SEMANA, 30D, ESTE_MES, RANGO, TODOS"),
+    fecha_inicio: Optional[str] = Query(None, description="Fecha inicio YYYY-MM-DD"),
+    fecha_fin: Optional[str] = Query(None, description="Fecha término YYYY-MM-DD"),
+    fecha_desde: Optional[str] = Query(None, description="Alias para fecha_inicio"),
+    fecha_hasta: Optional[str] = Query(None, description="Alias para fecha_fin"),
+    metodo_pago: Optional[str] = Query(None, description="Filtro por método de pago"),
+    search: Optional[str] = Query(None, description="Búsqueda predictiva (Folio, RUT, Cliente, Vendedor)"),
+    busqueda: Optional[str] = Query(None, description="Alias para search"),
+    pagina: int = Query(1, ge=1, description="Número de página"),
+    limite: int = Query(20, ge=1, le=100, description="Registros por página"),
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_auditoria_or_caja_role),
+):
+    """
+    Endpoint centralizado para auditoría de órdenes de venta (HU-5.2).
+    Permito a Gerentes (4), Administradores (5) y Cajeros (3) auditar órdenes
+    aplicando filtros combinados con optimización de consultas.
+    """
+    UsuarioVendedor = aliased(Usuario, name="vendedor_auditoria")
+    UsuarioCajera = aliased(Usuario, name="cajera_auditoria")
+
+    query = (
+        db.query(Orden_Venta, Cliente, UsuarioVendedor, UsuarioCajera, Sucursal)
+        .join(Cliente, Orden_Venta.id_cliente == Cliente.id_cliente)
+        .join(UsuarioVendedor, Orden_Venta.id_vendedor == UsuarioVendedor.id_usuario)
+        .outerjoin(UsuarioCajera, Orden_Venta.id_cajera == UsuarioCajera.id_usuario)
+        .outerjoin(Sucursal, Orden_Venta.id_sucursal == Sucursal.id_sucursal)
+    )
+
+    # 1. Filtro por Sucursal (None = consolidado global)
+    target_sucursal = id_sucursal or sucursal_id
+    if target_sucursal is not None:
+        query = query.filter(Orden_Venta.id_sucursal == target_sucursal)
+
+    # 2. Filtro por Estado Oficial
+    est_target = estado or estado_orden
+    if est_target and est_target.strip().lower() not in ["todos", ""]:
+        query = query.filter(Orden_Venta.estado_orden.ilike(est_target.strip()))
+
+    # 3. Filtro Temporal (Zona Horaria Chile -> UTC)
+    f_ini = fecha_inicio or fecha_desde
+    f_fin = fecha_fin or fecha_hasta
+    start_utc, end_utc = parse_periodo_ordenes_chile(periodo, f_ini, f_fin)
+    if start_utc is not None and end_utc is not None:
+        query = query.filter(Orden_Venta.fecha_creacion.between(start_utc, end_utc))
+
+    # 4. Filtro por Método de Pago
+    if metodo_pago and metodo_pago.strip().lower() not in ["todos", ""]:
+        metodo_clean = metodo_pago.strip()
+        subq_pagos = (
+            db.query(Transaccion_Pago.id_orden)
+            .filter(
+                Transaccion_Pago.metodo_pago.ilike(f"%{metodo_clean}%"),
+                Transaccion_Pago.estado_pago == "Procesado"
+            )
+        )
+        query = query.filter(Orden_Venta.id_orden.in_(subq_pagos))
+
+    # 5. Búsqueda Predictiva y Tolerante
+    term = (search or busqueda or "").strip()
+    if term:
+        term_clean_rut = term.replace(".", "").replace("-", "").strip()
+        rut_db_limpio = func.replace(
+            func.replace(Cliente.rut_cliente, ".", ""), "-", ""
+        )
+        query = query.filter(
+            or_(
+                Orden_Venta.qr_transaccional_salida.ilike(f"%{term}%"),
+                cast(Orden_Venta.id_orden, String).ilike(f"%{term}%"),
+                Cliente.nombres.ilike(f"%{term}%"),
+                Cliente.apellidos.ilike(f"%{term}%"),
+                Cliente.rut_cliente.ilike(f"%{term}%"),
+                rut_db_limpio.ilike(f"%{term_clean_rut}%"),
+                UsuarioVendedor.nombres.ilike(f"%{term}%"),
+                UsuarioVendedor.apellidos.ilike(f"%{term}%"),
+            )
+        )
+
+    total_registros = query.count()
+    total_paginas = max(1, (total_registros + limite - 1) // limite)
+
+    # Cálculo consolidado del monto total vendido en la consulta (sin ORDER BY para evitar GroupingError en PostgreSQL)
+    total_monto_consolidado = (
+        query.order_by(None)
+        .with_entities(func.coalesce(func.sum(Orden_Venta.total_venta), 0))
+        .scalar()
+        or 0
+    )
+
+    # Paginación con orden cronológico descendente
+    resultados_paginados = (
+        query.order_by(Orden_Venta.fecha_creacion.desc())
+        .offset((pagina - 1) * limite)
+        .limit(limite)
+        .all()
+    )
+
+    # Optimización de Rendimiento (Resolución de problema N+1):
+    # Pre-cargamos en lote los pagos y artículos de todas las órdenes de la página
+    # mediante 2 consultas IN(orden_ids), evitando 40 viajes individuales de red a Supabase.
+    orden_ids = [orden.id_orden for orden, *_ in resultados_paginados]
+    pagos_por_orden: Dict[int, List[Transaccion_Pago]] = defaultdict(list)
+    articulos_por_orden: Dict[int, List[HistorialArticuloDTO]] = defaultdict(list)
+
+    if orden_ids:
+        todos_pagos = (
+            db.query(Transaccion_Pago)
+            .filter(Transaccion_Pago.id_orden.in_(orden_ids))
+            .order_by(Transaccion_Pago.fecha_pago.asc())
+            .all()
+        )
+        for p in todos_pagos:
+            pagos_por_orden[p.id_orden].append(p)
+
+        todos_detalles = (
+            db.query(Detalle_Orden, Activo_Inventariado, Vehiculo_Origen, Categoria_Activo)
+            .outerjoin(Activo_Inventariado, Detalle_Orden.id_activo == Activo_Inventariado.id_activo)
+            .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
+            .outerjoin(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
+            .filter(Detalle_Orden.id_orden.in_(orden_ids))
+            .all()
+        )
+        for det, act, veh, cat in todos_detalles:
+            sku_val = act.sku_qr_fisico if act else None
+            if det.descripcion_manual:
+                desc = det.descripcion_manual
+            elif act:
+                cat_str = cat.nombre_categoria if cat else "Repuesto"
+                veh_str = f"{veh.marca} {veh.modelo}" if veh else ""
+                desc = f"{cat_str} {veh_str}".strip() or "Repuesto Inventariado"
+            else:
+                desc = "Repuesto"
+            articulos_por_orden[det.id_orden].append(
+                HistorialArticuloDTO(
+                    cantidad=det.cantidad or 1,
+                    tipo="INVENTARIADO" if act else "DESARME",
+                    descripcion=desc,
+                    sku=sku_val,
+                    precio=det.precio_unitario or 0,
+                    subtotal=det.precio_final or ((det.precio_unitario or 0) * (det.cantidad or 1)),
+                )
+            )
+
+    items: List[HistorialOrdenItemResponse] = []
+    for orden, cliente, vendedor, cajera, sucursal in resultados_paginados:
+        # Fechas en formato chileno
+        if orden.fecha_creacion:
+            dt_utc = orden.fecha_creacion.replace(tzinfo=timezone.utc)
+            dt_chile = dt_utc.astimezone(tz_chile_ordenes)
+        else:
+            dt_chile = datetime.now(tz_chile_ordenes)
+
+        fecha_iso = dt_chile.strftime("%Y-%m-%d")
+        hora = dt_chile.strftime("%H:%M")
+        fecha_hora_formateada = dt_chile.strftime("%H:%M - %d/%m/%Y")
+
+        # Pagos asociados recuperados desde memoria (O(1))
+        pagos_db = pagos_por_orden.get(orden.id_orden, [])
+        desglose_pagos = [
+            HistorialPagoDetalleDTO(
+                id_transaccion=p.id_pago,
+                metodo_pago=p.metodo_pago,
+                monto=p.monto,
+                fecha_pago=p.fecha_pago,
+            )
+            for p in pagos_db
+        ]
+
+        if desglose_pagos:
+            metodos_resumen = " + ".join(
+                f"{p.metodo_pago}: ${p.monto:,.0f}".replace(",", ".")
+                for p in desglose_pagos
+            )
+        else:
+            metodos_resumen = "Sin pagos"
+
+        # Artículos recuperados desde memoria (O(1))
+        articulos_dto = articulos_por_orden.get(orden.id_orden, [])
+
+        # Timeline de movimientos
+        vendedor_nom = f"{vendedor.nombres} {vendedor.apellidos or ''}".strip()
+        cajera_nom = f"{cajera.nombres} {cajera.apellidos or ''}".strip() if cajera else "Lorena Valenzuela"
+
+        movimientos = [
+            HistorialMovimientoDTO(
+                hora=hora,
+                evento=f"Orden emitida en Mesón por {vendedor_nom}",
+            )
+        ]
+        for p in pagos_db:
+            if p.fecha_pago:
+                p_dt = p.fecha_pago if p.fecha_pago.tzinfo else p.fecha_pago.replace(tzinfo=timezone.utc)
+                p_hora = p_dt.astimezone(tz_chile_ordenes).strftime("%H:%M")
+            else:
+                p_hora = hora
+            movimientos.append(
+                HistorialMovimientoDTO(
+                    hora=p_hora,
+                    evento=f"Pago liquidado en ventanilla ({p.metodo_pago}: ${p.monto:,.0f})".replace(",", "."),
+                )
+            )
+        if orden.qr_transaccional_salida:
+            movimientos.append(
+                HistorialMovimientoDTO(
+                    hora=hora,
+                    evento="QR Transaccional generado para barrera de salida",
+                )
+            )
+
+        items.append(
+            HistorialOrdenItemResponse(
+                id_orden=orden.id_orden,
+                folio=orden.folio,
+                tipo_operacion="VENTA",
+                emite_qr=bool(orden.qr_transaccional_salida) or (orden.monto_pendiente <= 0),
+                fecha_iso=fecha_iso,
+                hora=hora,
+                fecha_hora_formateada=fecha_hora_formateada,
+                cliente_nombre=f"{cliente.nombres} {cliente.apellidos or ''}".strip(),
+                cliente_rut=cliente.rut_cliente,
+                vendedor_nombre=vendedor_nom,
+                cajera_nombre=cajera_nom,
+                sucursal_nombre=sucursal.nombre_sucursal if sucursal else f"Sucursal {orden.id_sucursal}",
+                id_sucursal=orden.id_sucursal,
+                estado_orden=orden.estado_orden,
+                modalidad_pago="split" if len(pagos_db) > 1 else "unico",
+                metodos_resumen=metodos_resumen,
+                total_venta=orden.total_venta,
+                abono_previo=0,
+                monto_pendiente=orden.monto_pendiente or 0,
+                total_liquidado=sum(p.monto for p in pagos_db),
+                desglose_pagos=desglose_pagos,
+                articulos=articulos_dto,
+                historial_movimientos=movimientos,
+            )
+        )
+
+    return HistorialCajaResponse(
+        total_registros=total_registros,
+        pagina_actual=pagina,
+        limite_por_pagina=limite,
+        total_paginas=total_paginas,
+        total_monto_consolidado=total_monto_consolidado,
+        items=items,
+    )
 
 
 @router.get(
@@ -1370,28 +1696,111 @@ def actualizar_instrucciones_bodega(
 @router.get(
     "/{id_orden}",
     summary="Obtener Detalle de Orden de Venta",
-    description="Consulta la información de una orden específica por su UUID."
+    description=(
+        "Consulta la información completa de una orden específica por su "
+        "UUID incluyendo pagos y detalle de piezas."
+    )
 )
 def obtener_orden(
     id_orden: uuid.UUID,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    orden = db.query(Orden_Venta).filter(Orden_Venta.id_orden == id_orden).first()
+    orden = db.query(Orden_Venta).filter(
+        Orden_Venta.id_orden == id_orden
+    ).first()
     if not orden:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
 
-    cliente = db.query(Cliente).filter(Cliente.id_cliente == orden.id_cliente).first()
-    detalles = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == id_orden).all()
-    despacho = db.query(Despacho).filter(Despacho.id_orden == id_orden).first()
+    cliente = db.query(Cliente).filter(
+        Cliente.id_cliente == orden.id_cliente
+    ).first()
+    detalles = db.query(Detalle_Orden).filter(
+        Detalle_Orden.id_orden == id_orden
+    ).all()
+    despacho = db.query(Despacho).filter(
+        Despacho.id_orden == id_orden
+    ).first()
+    pagos = (
+        db.query(Transaccion_Pago)
+        .filter(Transaccion_Pago.id_orden == id_orden)
+        .order_by(Transaccion_Pago.fecha_pago.asc())
+        .all()
+    )
+    vendedor = db.query(Usuario).filter(
+        Usuario.id_usuario == orden.id_vendedor
+    ).first()
+    cajera = (
+        db.query(Usuario).filter(Usuario.id_usuario == orden.id_cajera).first()
+        if orden.id_cajera else None
+    )
+    sucursal = (
+        db.query(Sucursal)
+        .filter(Sucursal.id_sucursal == orden.id_sucursal)
+        .first()
+        if orden.id_sucursal else None
+    )
+
+    detalles_res = []
+    for d in detalles:
+        sku_val = None
+        if d.id_activo:
+            act = db.query(Activo_Inventariado).filter(
+                Activo_Inventariado.id_activo == d.id_activo
+            ).first()
+            if act:
+                sku_val = act.sku_qr_fisico
+        detalles_res.append({
+            "id_detalle": d.id_detalle,
+            "id_activo": d.id_activo,
+            "sku": sku_val,
+            "descripcion_manual": d.descripcion_manual,
+            "notas_preparacion": d.notas_preparacion,
+            "cantidad": d.cantidad,
+            "precio_unitario": d.precio_unitario,
+            "precio_final": d.precio_final,
+            "preparacion_lista": d.preparacion_lista,
+            "estado_preparacion": d.estado_preparacion or "Pendiente",
+        })
+
+    pagos_res = [
+        {
+            "id_pago": p.id_pago,
+            "metodo_pago": p.metodo_pago,
+            "monto": p.monto,
+            "estado_pago": p.estado_pago or "Procesado",
+            "fecha_pago": p.fecha_pago.isoformat() if p.fecha_pago else None,
+        }
+        for p in pagos
+    ]
+
+    nom_vend = (
+        f"{vendedor.nombres} {vendedor.apellidos or ''}".strip()
+        if vendedor else "Vendedor General"
+    )
+    nom_caja = (
+        f"{cajera.nombres} {cajera.apellidos or ''}".strip()
+        if cajera else "Lorena Valenzuela"
+    )
+    nom_suc = (
+        sucursal.nombre_sucursal
+        if sucursal else f"Sucursal {orden.id_sucursal}"
+    )
 
     return {
         "id_orden": orden.id_orden,
+        "folio": orden.folio,
         "estado_orden": orden.estado_orden,
         "total_venta": orden.total_venta,
         "monto_pendiente": orden.monto_pendiente,
         "qr_transaccional_salida": orden.qr_transaccional_salida,
-        "fecha_creacion": orden.fecha_creacion.isoformat() if orden.fecha_creacion else None,
+        "fecha_creacion": (
+            orden.fecha_creacion.isoformat()
+            if orden.fecha_creacion else None
+        ),
+        "vendedor_nombre": nom_vend,
+        "cajera_nombre": nom_caja,
+        "sucursal_nombre": nom_suc,
         "cliente": {
             "rut": cliente.rut_cliente if cliente else None,
             "nombres": cliente.nombres if cliente else None,
@@ -1407,20 +1816,9 @@ def obtener_orden(
             "empresa_transporte": despacho.empresa_transporte,
             "costo_envio": despacho.costo_envio,
         } if despacho else None,
-        "detalles": [
-            {
-                "id_detalle": d.id_detalle,
-                "id_activo": d.id_activo,
-                "descripcion_manual": d.descripcion_manual,
-                "notas_preparacion": d.notas_preparacion,
-                "cantidad": d.cantidad,
-                "precio_unitario": d.precio_unitario,
-                "precio_final": d.precio_final,
-                "preparacion_lista": d.preparacion_lista,
-                "estado_preparacion": d.estado_preparacion,
-            }
-            for d in detalles
-        ],
+        "detalles": detalles_res,
+        "pagos": pagos_res,
+        "pagos_aplicados": pagos_res,
     }
 
 
@@ -1744,4 +2142,3 @@ def checkout_wizard(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error transaccional al procesar Checkout Wizard: {str(e)}"
         )
-

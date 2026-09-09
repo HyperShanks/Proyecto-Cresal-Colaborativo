@@ -11,6 +11,8 @@ class HistorialTablaView extends StatelessWidget {
   final int totalPaginas;
   final ValueChanged<int> onCambiarPagina;
   final ValueChanged<HistorialOrdenItemModel> onVerDetalle;
+  final bool isReadOnly;
+  final bool mostrarSucursal;
 
   const HistorialTablaView({
     super.key,
@@ -19,6 +21,8 @@ class HistorialTablaView extends StatelessWidget {
     required this.totalPaginas,
     required this.onCambiarPagina,
     required this.onVerDetalle,
+    this.isReadOnly = false,
+    this.mostrarSucursal = false,
   });
 
   Color _getEstadoColor(String estado) {
@@ -71,6 +75,8 @@ class HistorialTablaView extends StatelessWidget {
                 _buildHeaderCell('FOLIO', flex: 2),
                 _buildHeaderCell('FECHA / HORA', flex: 2),
                 _buildHeaderCell('CLIENTE / RUT', flex: 3),
+                if (mostrarSucursal)
+                  _buildHeaderCell('SUCURSAL', flex: 2),
                 _buildHeaderCell('VENDEDOR / CAJERA', flex: 3),
                 _buildHeaderCell('ESTADO', flex: 2),
                 _buildHeaderCell('MÉTODOS DE PAGO', flex: 3),
@@ -102,17 +108,22 @@ class HistorialTablaView extends StatelessWidget {
                     ),
                     child: Row(
                       children: [
-                        // Folio + QR indicator
+                        // Folio + QR indicator (uso Flexible para tolerar anchos estrechos)
                         Expanded(
                           flex: 2,
                           child: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text(
-                                item.folio,
-                                style: AppTypography.body.copyWith(
-                                  fontWeight: FontWeight.w800,
-                                  color: AppPalette.textPrimaryLight,
-                                  fontSize: 14,
+                              Flexible(
+                                child: Text(
+                                  item.folio,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTypography.body.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                    color: AppPalette.textPrimaryLight,
+                                    fontSize: 14,
+                                  ),
                                 ),
                               ),
                               if (item.emiteQr) ...[
@@ -167,6 +178,24 @@ class HistorialTablaView extends StatelessWidget {
                             ],
                           ),
                         ),
+
+                        // Sucursal (si aplica vista consolidada)
+                        if (mostrarSucursal)
+                          Expanded(
+                            flex: 2,
+                            child: Text(
+                              item.sucursalNombre.isNotEmpty
+                                  ? item.sucursalNombre
+                                  : 'Casa Matriz',
+                              style: AppTypography.small.copyWith(
+                                color: AppPalette.textPrimaryLight,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
 
                         // Vendedor / Cajera
                         Expanded(
@@ -245,20 +274,39 @@ class HistorialTablaView extends StatelessWidget {
                           flex: 2,
                           child: Align(
                             alignment: Alignment.centerRight,
-                            child: Text(
-                              CobroPendienteCard.formatClp(item.totalLiquidado),
-                              style: AppTypography.body.copyWith(
-                                fontWeight: FontWeight.w800,
-                                fontSize: 14,
-                                color: item.esAnulada
-                                    ? AppPalette.textSecondaryLight
-                                    : AppPalette.textPrimaryLight,
-                              ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  CobroPendienteCard.formatClp(
+                                    item.totalVenta > 0
+                                        ? item.totalVenta
+                                        : item.totalLiquidado,
+                                  ),
+                                  style: AppTypography.body.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 14,
+                                    color: item.esAnulada
+                                        ? AppPalette.textSecondaryLight
+                                        : AppPalette.textPrimaryLight,
+                                  ),
+                                ),
+                                if (item.montoPendiente > 0)
+                                  Text(
+                                    'Pend: ${CobroPendienteCard.formatClp(item.montoPendiente)}',
+                                    style: AppTypography.small.copyWith(
+                                      color: AppPalette.secondary,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
                         ),
 
-                        // Acciones: Botón "Ver Detalle"
+                        // Acciones: Botón "Auditar" o "Ver Detalle"
                         Expanded(
                           flex: 2,
                           child: Align(
@@ -270,21 +318,29 @@ class HistorialTablaView extends StatelessWidget {
                                   vertical: 5,
                                 ),
                                 side: BorderSide(
-                                  color: AppPalette.primary.withValues(alpha: 0.5),
+                                  color: isReadOnly
+                                      ? AppPalette.tertiary.withValues(alpha: 0.5)
+                                      : AppPalette.primary.withValues(alpha: 0.5),
                                 ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                               ),
-                              icon: const Icon(
-                                Icons.visibility_rounded,
+                              icon: Icon(
+                                isReadOnly
+                                    ? Icons.manage_search_rounded
+                                    : Icons.visibility_rounded,
                                 size: 14,
-                                color: AppPalette.primary,
+                                color: isReadOnly
+                                    ? AppPalette.tertiary
+                                    : AppPalette.primary,
                               ),
                               label: Text(
-                                'Ver Detalle',
+                                isReadOnly ? 'Auditar' : 'Ver Detalle',
                                 style: AppTypography.button.copyWith(
-                                  color: AppPalette.primary,
+                                  color: isReadOnly
+                                      ? AppPalette.tertiary
+                                      : AppPalette.primary,
                                   fontWeight: FontWeight.w700,
                                   fontSize: 12,
                                 ),

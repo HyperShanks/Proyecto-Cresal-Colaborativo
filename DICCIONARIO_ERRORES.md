@@ -105,6 +105,20 @@ Este documento constituye la **Matriz Exhaustiva de Errores, Sanitización y Men
 
 ---
 
+### 📊 Módulo 7: Gerencia y Control Ejecutivo (`/gerencia`, `SPEC-HU-5.1` y `SPEC-HU-5.2`)
+
+| Módulo | Código de Error (`error_code`) | Disparador (Cuándo se activa) | Mensaje al Usuario (`message_user`) | HTTP Status | Acción Sugerida en UI |
+| :--- | :--- | :--- | :--- | :---: | :--- |
+| **Gerencia** | `GERENCIA_ACCESS_DENIED` | Intentos de acceso a endpoints de gerencia por roles no autorizados (distintos de Administrador [5] o Gerente General [4]) (`/api/v1/gerencia/*`). | *"Acceso restringido: Se requieren permisos de Gerencia o Administración para acceder a este panel."* | `403 Forbidden` | Bloquea la navegación, redirige al home del rol o muestra pantalla de acceso no autorizado. |
+| **Gerencia** | `GERENCIA_NETWORK_ERROR` | Falla de conexión, timeout o socket al consultar los endpoints de analítica ejecutiva (`/kpis`, `/pagos`, `/operativa`). | *"No fue posible cargar las métricas gerenciales. Reintentando..."* | N/A (Socket / Timeout) | Despliega `CustomErrorSnackbar` con botón de **"Reintentar"** y muestra botón de reintento en el estado de error de la pantalla sin bloquear la UI. |
+| **Gerencia** | `GERENCIA_DATA_ERROR` | Error de deserialización de datos analíticos o respuesta no exitosa desde el backend de gerencia. | *"No fue posible procesar la información analítica de la sucursal seleccionada."* | `500 Internal` / `422 Unprocessable` | Muestra estado de error con ilustración y botón interactivo de **"Reintentar"**. |
+| **Auditoría** | `ORDEN_AUDITORIA_ACCESS_DENIED` | Intento de consultar órdenes o detalle forense sin contar con roles autorizados (requiere Caja [3], Gerente General [4] o Administrador [5]). | *"Acceso restringido: No posee permisos de auditoría o caja para consultar este registro."* | `403 Forbidden` | Bloquea la apertura del diálogo de auditoría y notifica vía snackbar de seguridad. |
+| **Auditoría** | `ORDEN_AUDITORIA_NOT_FOUND` | Búsqueda o apertura de detalle de una orden inexistente o eliminada en la base de datos (`/api/v1/ordenes/{id_orden}`). | *"La orden de venta seleccionada no fue encontrada o no existe en el sistema."* | `404 Not Found` | Cierra el modal de carga y refresca la lista de órdenes activas. |
+| **Auditoría** | `ORDEN_AUDITORIA_NETWORK_ERROR` | Imposibilidad de conectar con el servidor al filtrar u obtener el historial multidimensional de órdenes. | *"Error de comunicación al recuperar el historial de ventas. Verifique su conexión."* | N/A (Socket / Timeout) | Muestra estado de error en la tabla con botón de reintento manual. |
+| **Auditoría** | `ORDEN_AUDITORIA_DATA_ERROR` | Error de deserialización o estructura inconsistente de los datos forenses de la orden (artículos, pagos o movimientos). | *"Ocurrió un problema al procesar el detalle de auditoría de la orden."* | `500 Internal` / `422 Unprocessable` | Muestra mensaje amigable sin exponer trazas internas ni interrumpir la sesión. |
+
+---
+
 ## 3. Guía de Uso del Componente `CustomErrorSnackbar`
 
 Para desplegar un error estandarizado con opción de reintento en cualquier vista de Flutter:

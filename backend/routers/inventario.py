@@ -20,6 +20,7 @@ from models import (
 from core.security import (
     get_current_user,
     verificar_rol_jefe_ventas,
+    verificar_rol_tasacion,
     require_bodeguero_or_admin,
 )
 from schemas import (
@@ -533,48 +534,270 @@ def obtener_pendientes_precio(
     return respuesta
 
 
+@router.get(
+    "/maestro",
+    response_model=PaginatedCatalogoResponse,
+    summary="Maestro de Inventario Global y Tasación (HU-5.3)",
+    description="Visor maestro de inventario multi-sucursal para auditoría global y tasación "
+                "de piezas paletizadas. Soporta filtros por sucursal, categoría, estado, "
+                "combustible, transmisión, ubicación y búsqueda libre.",
+)
+def obtener_maestro_inventario(
+    q: Optional[str] = Query(None, description="Búsqueda libre por SKU, marca, modelo, pasillo, pallet, N° ingreso"),
+    id_sucursal: Optional[int] = Query(None, description="Filtro por sucursal. Si es null, consolida toda la cadena"),
+    id_categoria: Optional[int] = Query(None, description="Filtro por categoría"),
+    id_estado: Optional[int] = Query(None, description="Filtro por ID de estado"),
+    estado: Optional[str] = Query(None, description="Filtro por nombre de estado"),
+    combustible: Optional[str] = Query(None, description="Filtro por combustible"),
+    transmision: Optional[str] = Query(None, description="Filtro por transmisión"),
+    ubicacion: Optional[str] = Query(None, description="Filtro rápido por pasillo, pallet o galpón"),
+    solo_sin_tasar: bool = Query(False, description="Filtrar únicamente ítems pendientes de tasación"),
+    limit: int = Query(15, ge=1, le=100, description="Límite por página"),
+    offset: int = Query(0, ge=0, description="Desplazamiento para paginación"),
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(verificar_rol_tasacion),
+):
+    limpiar_reservas_expiradas(db)
+    query = (
+        db.query(
+            Activo_Inventariado,
+            Vehiculo_Origen,
+            Categoria_Activo,
+            Estado_Activo,
+            Sucursal,
+            Detalle_Motor,
+            Detalle_Caja_Cambio,
+        )
+        .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
+        .join(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
+        .join(Estado_Activo, Activo_Inventariado.id_estado == Estado_Activo.id_estado)
+        .join(Sucursal, Activo_Inventariado.id_sucursal_actual == Sucursal.id_sucursal)
+        .outerjoin(Detalle_Motor, Activo_Inventariado.id_activo == Detalle_Motor.id_activo)
+        .outerjoin(Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo)
+        .filter(Activo_Inventariado.estado == "Activo")
+    )
+
+    if id_sucursal is not None:
+        query = query.filter(Activo_Inventariado.id_sucursal_actual == id_sucursal)
+
+    if id_categoria is not None:
+        query = query.filter(Activo_Inventariado.id_categoria == id_categoria)
+
+    if id_estado is not None:
+        query = query.filter(Activo_Inventariado.id_estado == id_estado)
+    elif estado and estado.strip().lower() not in ["todos", "todas"]:
+        query = query.filter(func.lower(Estado_Activo.nombre_estado) == estado.strip().lower())
+
+    if combustible and combustible.strip().lower() not in ["todos", "todas"]:
+        query = query.filter(func.upper(Detalle_Motor.combustible) == combustible.strip().upper())
+
+    if transmision and transmision.strip().lower() not in ["todos", "todas"]:
+        trans_clean = transmision.strip().upper()
+        if "MEC" in trans_clean or "MAN" in trans_clean:
+            query = query.filter(
+                or_(
+                    func.upper(Detalle_Motor.transmision_tipo).like("%MAN%"),
+                    func.upper(Detalle_Motor.transmision_tipo).like("%MEC%"),
+                    func.upper(Detalle_Caja_Cambio.transmision_tipo).like("%MAN%"),
+                    func.upper(Detalle_Caja_Cambio.transmision_tipo).like("%MEC%"),
+                )
+            )
+        elif "AUT" in trans_clean:
+            query = query.filter(
+                or_(
+                    func.upper(Detalle_Motor.transmision_tipo).like("%AUT%"),
+                    func.upper(Detalle_Caja_Cambio.transmision_tipo).like("%AUT%"),
+                )
+            )
+        else:
+            trans_term = f"%{trans_clean}%"
+            query = query.filter(
+                or_(
+                    func.upper(Detalle_Motor.transmision_tipo).like(trans_term),
+                    func.upper(Detalle_Caja_Cambio.transmision_tipo).like(trans_term),
+                )
+            )
+
+    if ubicacion and ubicacion.strip().lower() not in ["todas", "todos"]:
+        u_clean = ubicacion.strip().lower()
+        if u_clean.startswith("pasillo-"):
+            letra = u_clean.replace("pasillo-", "").upper()
+            query = query.filter(func.upper(Activo_Inventariado.ubicacion_pasillo) == letra)
+        elif u_clean.startswith("pallet-"):
+            num = u_clean.replace("pallet-", "").upper()
+            query = query.filter(func.upper(Activo_Inventariado.ubicacion_pallet) == num)
+        elif u_clean.startswith("galpon-"):
+            num = u_clean.replace("galpon-", "").upper()
+            query = query.filter(func.upper(Activo_Inventariado.ubicacion_galpon) == num)
+
+    if solo_sin_tasar:
+        query = query.filter(
+            or_(
+                Activo_Inventariado.precio_referencia.is_(None),
+                Activo_Inventariado.precio_referencia == 0,
+                Activo_Inventariado.id_estado == 7,
+                Estado_Activo.nombre_estado == "Paletizado",
+            )
+        )
+
+    if q and q.strip():
+        q_term = f"%{q.strip().upper()}%"
+        query = query.filter(
+            or_(
+                func.upper(Activo_Inventariado.sku_qr_fisico).like(q_term),
+                func.upper(Categoria_Activo.nombre_categoria).like(q_term),
+                func.upper(Vehiculo_Origen.marca).like(q_term),
+                func.upper(Vehiculo_Origen.modelo).like(q_term),
+                func.upper(Vehiculo_Origen.numero_ingreso).like(q_term),
+                func.upper(Activo_Inventariado.ubicacion_pasillo).like(q_term),
+                func.upper(Activo_Inventariado.ubicacion_pallet).like(q_term),
+            )
+        )
+
+    total_count = query.count()
+
+    # Cálculo exacto de pendientes de tasación (cuellos de botella) para el alcance actual
+    query_cuellos = (
+        db.query(Activo_Inventariado)
+        .join(Estado_Activo, Activo_Inventariado.id_estado == Estado_Activo.id_estado)
+        .filter(
+            Activo_Inventariado.estado == "Activo",
+            or_(
+                Activo_Inventariado.precio_referencia.is_(None),
+                Activo_Inventariado.precio_referencia == 0,
+            ),
+            Estado_Activo.nombre_estado == "Paletizado",
+        )
+    )
+    if id_sucursal is not None:
+        query_cuellos = query_cuellos.filter(Activo_Inventariado.id_sucursal_actual == id_sucursal)
+    pendientes_tasacion_count = query_cuellos.count()
+
+    query = query.order_by(Activo_Inventariado.fecha_creacion.desc())
+    resultados = query.offset(offset).limit(limit).all()
+
+    activo_ids = [activo.id_activo for activo, *_ in resultados]
+    fotos_db = (
+        db.query(Multimedia_Activo.id_activo, Multimedia_Activo.url_storage)
+        .filter(Multimedia_Activo.id_activo.in_(activo_ids))
+        .all()
+    ) if activo_ids else []
+    fotos_map: Dict[UUID, List[str]] = {}
+    for act_id, url in fotos_db:
+        fotos_map.setdefault(act_id, []).append(url)
+
+    items: List[CatalogoItemResponse] = []
+    for activo, vehiculo, cat, est, suc, motor, caja in resultados:
+        cilindrada_val = None
+        combustible_val = None
+        transmision_val = None
+
+        if cat.id_categoria == 1 and motor:
+            cilindrada_val = motor.cilindrada
+            combustible_val = motor.combustible
+            transmision_val = motor.transmision_tipo
+        elif cat.id_categoria == 2 and caja:
+            transmision_val = caja.transmision_tipo
+        else:
+            if motor:
+                cilindrada_val = motor.cilindrada
+                combustible_val = motor.combustible
+                transmision_val = motor.transmision_tipo
+            elif caja:
+                transmision_val = caja.transmision_tipo
+
+        item = CatalogoItemResponse(
+            id_activo=activo.id_activo,
+            sku_qr_fisico=activo.sku_qr_fisico,
+            precio_referencia=activo.precio_referencia,
+            id_categoria=cat.id_categoria,
+            nombre_categoria=cat.nombre_categoria,
+            id_sucursal_actual=suc.id_sucursal,
+            nombre_sucursal=suc.nombre_sucursal,
+            id_vehiculo=vehiculo.id_vehiculo if vehiculo else None,
+            marca=vehiculo.marca if vehiculo else None,
+            modelo=vehiculo.modelo if vehiculo else None,
+            anio=vehiculo.anio if vehiculo else None,
+            traccion=vehiculo.traccion if vehiculo else None,
+            cilindrada=cilindrada_val,
+            combustible=combustible_val,
+            transmision_tipo=transmision_val,
+            ubicacion_pasillo=activo.ubicacion_pasillo,
+            ubicacion_galpon=activo.ubicacion_galpon,
+            ubicacion_pallet=activo.ubicacion_pallet,
+            observacion_estado=activo.observacion_estado,
+            numero_motor=motor.numero_motor if motor else None,
+            id_estado=activo.id_estado,
+            estado_activo=est.nombre_estado,
+            version_lock=activo.version_lock or 1,
+            reservado_por=activo.reservado_por,
+            qr_impreso=activo.qr_impreso if activo.qr_impreso is not None else False,
+            imagenes=fotos_map.get(activo.id_activo, []),
+        )
+        items.append(item)
+
+    return PaginatedCatalogoResponse(
+        items=items,
+        total_count=total_count,
+        limit=limit,
+        offset=offset,
+        pendientes_tasacion_count=pendientes_tasacion_count,
+    )
+
+
 @router.patch(
     "/{id_activo}/precio",
     response_model=AsignarPrecioResponse,
-    summary="Asignar Precio de Referencia a Repuesto (HU-3.8)",
+    summary="Asignar Precio de Referencia a Repuesto (HU-3.8 / HU-5.3)",
     description="Fija el precio_referencia de un repuesto y actualiza su estado automáticamente "
-                "a 'Disponible' para habilitar su venta en el catálogo. Requiere rol Jefe de Ventas.",
+                "a 'Disponible' para habilitar su venta en el catálogo. Requiere rol de Gerencia, "
+                "Administrador o Jefe de Ventas.",
 )
 def asignar_precio_repuesto(
     id_activo: UUID,
     payload: AsignarPrecioRequest,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(verificar_rol_jefe_ventas),
+    current_user: Usuario = Depends(verificar_rol_tasacion),
 ):
-    activo = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == id_activo).first()
-    if not activo:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Repuesto inventariado con ID '{id_activo}' no encontrado.",
+    try:
+        activo = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == id_activo).first()
+        if not activo:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Repuesto inventariado con ID '{id_activo}' no encontrado.",
+            )
+
+        activo.precio_referencia = payload.precio_referencia
+        activo.fecha_actualizacion = datetime.now(timezone.utc).replace(tzinfo=None)
+
+        estado_disponible = db.query(Estado_Activo).filter(Estado_Activo.nombre_estado == "Disponible").first()
+        if not estado_disponible:
+            estado_disponible = Estado_Activo(id_estado=1, nombre_estado="Disponible")
+            db.add(estado_disponible)
+            db.flush()
+
+        activo.id_estado = estado_disponible.id_estado
+        activo.version_lock = (activo.version_lock or 1) + 1
+
+        db.commit()
+        db.refresh(activo)
+
+        return AsignarPrecioResponse(
+            id_activo=activo.id_activo,
+            sku_qr_fisico=activo.sku_qr_fisico,
+            precio_referencia=activo.precio_referencia,
+            estado_activo="Disponible",
+            mensaje="Precio asignado exitosamente. El repuesto ahora está disponible en el catálogo de ventas.",
         )
-
-    activo.precio_referencia = payload.precio_referencia
-    activo.fecha_actualizacion = datetime.now()
-
-    estado_disponible = db.query(Estado_Activo).filter(Estado_Activo.nombre_estado == "Disponible").first()
-    if not estado_disponible:
-        estado_disponible = Estado_Activo(id_estado=1, nombre_estado="Disponible")
-        db.add(estado_disponible)
-        db.flush()
-
-    activo.id_estado = estado_disponible.id_estado
-    activo.version_lock = (activo.version_lock or 1) + 1
-
-    db.commit()
-    db.refresh(activo)
-
-    return AsignarPrecioResponse(
-        id_activo=activo.id_activo,
-        sku_qr_fisico=activo.sku_qr_fisico,
-        precio_referencia=activo.precio_referencia,
-        estado_activo="Disponible",
-        mensaje="Precio asignado exitosamente. El repuesto ahora está disponible en el catálogo de ventas.",
-    )
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error transaccional al asignar precio: {str(e)}",
+        )
 
 
 @router.get(

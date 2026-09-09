@@ -17,7 +17,9 @@ class CatalogoItem {
   final String? combustible;
   final String? transmisionTipo;
   final String? ubicacionPasillo;
+  final String? ubicacionGalpon;
   final String? ubicacionPallet;
+  final String? observacionEstado;
   final String? estadoActivo;
   final List<String> imagenes;
   final int versionLock;
@@ -41,7 +43,9 @@ class CatalogoItem {
     this.combustible,
     this.transmisionTipo,
     this.ubicacionPasillo,
+    this.ubicacionGalpon,
     this.ubicacionPallet,
+    this.observacionEstado,
     this.estadoActivo,
     this.imagenes = const [],
     this.versionLock = 1,
@@ -119,7 +123,9 @@ class CatalogoItem {
       combustible: json['combustible']?.toString(),
       transmisionTipo: json['transmision_tipo']?.toString(),
       ubicacionPasillo: json['ubicacion_pasillo']?.toString(),
+      ubicacionGalpon: json['ubicacion_galpon']?.toString(),
       ubicacionPallet: json['ubicacion_pallet']?.toString(),
+      observacionEstado: json['observacion_estado']?.toString(),
       estadoActivo: json['estado_activo']?.toString(),
       imagenes: (json['imagenes'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? const [],
       versionLock: json['version_lock'] as int? ?? 1,
@@ -146,7 +152,9 @@ class CatalogoItem {
       'combustible': combustible,
       'transmision_tipo': transmisionTipo,
       'ubicacion_pasillo': ubicacionPasillo,
+      'ubicacion_galpon': ubicacionGalpon,
       'ubicacion_pallet': ubicacionPallet,
+      'observacion_estado': observacionEstado,
       'estado_activo': estadoActivo,
       'imagenes': imagenes,
       'version_lock': versionLock,
@@ -191,12 +199,14 @@ class PaginatedCatalogoResponse {
   final int totalCount;
   final int limit;
   final int offset;
+  final int pendientesTasacionCount;
 
   const PaginatedCatalogoResponse({
     required this.items,
     required this.totalCount,
     required this.limit,
     required this.offset,
+    this.pendientesTasacionCount = 0,
   });
 
   factory PaginatedCatalogoResponse.fromJson(Map<String, dynamic> json) {
@@ -210,6 +220,7 @@ class PaginatedCatalogoResponse {
       totalCount: json['total_count'] as int? ?? 0,
       limit: json['limit'] as int? ?? 15,
       offset: json['offset'] as int? ?? 0,
+      pendientesTasacionCount: json['pendientes_tasacion_count'] as int? ?? 0,
     );
   }
 }

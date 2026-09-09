@@ -1,9 +1,13 @@
+import os
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional, List
 from uuid import UUID
 from datetime import datetime
 from enum import Enum
 import re
+
+# Configuro __path__ dinámico para permitir importar submódulos desde el directorio schemas/
+__path__ = [os.path.join(os.path.dirname(__file__), "schemas")]
 
 from core.utils.validators import validar_rut_modulo11
 
@@ -468,6 +472,7 @@ class PaginatedCatalogoResponse(BaseModel):
     total_count: int
     limit: int
     offset: int
+    pendientes_tasacion_count: Optional[int] = 0
 
 
 # ==========================================
@@ -1001,7 +1006,7 @@ class CompletarPreentregaResponse(BaseModel):
 class HistorialPagoDetalleDTO(BaseModel):
     id_transaccion: Optional[UUID] = None
     metodo_pago: str = Field(description="Efectivo, Débito, Crédito, Transferencia o Cheque")
-    monto: int = Field(ge=0, description="Monto cubierto por este método específico")
+    monto: int = Field(description="Monto cubierto o ajustado por este método específico")
     fecha_pago: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -1052,6 +1057,8 @@ class HistorialOrdenItemResponse(BaseModel):
     cliente_rut: Optional[str] = None
     vendedor_nombre: str
     cajera_nombre: str
+    sucursal_nombre: Optional[str] = Field(default=None, description="Nombre de la sucursal de emisión")
+    id_sucursal: Optional[int] = Field(default=None, description="ID de la sucursal")
 
     # Estados y Pagos
     estado_orden: str = Field(description="'Pagada', 'Despachada', 'Reservada', 'Anulada'")
@@ -1059,6 +1066,7 @@ class HistorialOrdenItemResponse(BaseModel):
     metodos_resumen: str = Field(description="Ej: Débito: $420.000 + Transferencia: $180.000")
     total_venta: int
     abono_previo: int = 0
+    monto_pendiente: Optional[int] = Field(default=0, description="Saldo pendiente de pago")
     total_liquidado: int = Field(description="Monto total pagado en ventanilla")
 
     # Desgloses Detallados para Auditoría
@@ -1074,10 +1082,15 @@ class HistorialCajaResponse(BaseModel):
     pagina_actual: int
     limite_por_pagina: int
     total_paginas: int
-    resumen_cuadre: ResumenCuadreCajaDTO
+    resumen_cuadre: Optional[ResumenCuadreCajaDTO] = None
+    total_monto_consolidado: Optional[int] = Field(default=0, description="Suma total de ventas")
     items: List[HistorialOrdenItemResponse]
 
     model_config = ConfigDict(from_attributes=True)
+
+
+HistorialOrdenesAuditoriaResponse = HistorialCajaResponse
+
 
 
 # ==========================================
@@ -1171,3 +1184,18 @@ class ResumenAlertasDTO(BaseModel):
     desglose_reingresos: int
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ==========================================
+# ESQUEMAS PARA GERENCIA Y DASHBOARD EJECUTIVO (HU-5.1)
+# ==========================================
+
+from schemas.gerencia_schemas import (  # noqa: E402, F401
+    KpiFinancieroDTO,
+    DesglosePagoDTO,
+    ResumenPagosDTO,
+    FlujoOperativoDTO,
+    BackorderGerenciaItemDTO,
+    BackorderGerenciaListResponse,
+    BackorderGerenciaKpisDTO,
+)

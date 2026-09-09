@@ -7,6 +7,7 @@ import '../../../core/theme/tokens/app_palette.dart';
 import '../../../core/services/api_service.dart';
 import '../../alertas/services/bodega_polling_service.dart';
 import '../../ventas/controllers/cart_controller.dart';
+import '../../../core/theme/theme_controller.dart';
 import '../models/auth_user_model.dart';
 
 // Claves de almacenamiento seguro para sesión
@@ -315,6 +316,15 @@ class AuthService {
     return rLower == 'administrador' || rLower == 'admin';
   }
 
+  /// Verifica si el usuario actual posee rol Gerente (id_rol == 4).
+  static Future<bool> esGerente() async {
+    final idRol = await getIdRol();
+    if (idRol != null) return idRol == 4;
+    final rol = await getRol();
+    final rLower = rol?.toLowerCase() ?? '';
+    return rLower == 'gerente';
+  }
+
   /// Verifica si el usuario actual pertenece al módulo de ventas (Vendedor [2], Jefe de Ventas [6], Vendedor Online [7]).
   static Future<bool> esModuloVentas() async {
     final idRol = await getIdRol();
@@ -395,6 +405,7 @@ class AuthService {
   /// preservando la vinculación/enrolamiento del terminal al operario.
   static Future<void> clearToken() async {
     CartController.instance.vaciarCarrito();
+    ThemeController.reset();
     await _storage.delete(key: _tokenKey);
     await _storage.delete(key: _rolKey);
     await _storage.delete(key: _idRolKey);
