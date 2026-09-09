@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/tokens/app_palette.dart';
+import '../../../../core/theme/tokens/app_typography.dart';
 import '../../models/backorder_gerencia_models.dart';
 import '../../services/gerencia_service.dart';
 import '../widgets/kpi_card_widget.dart';
@@ -197,7 +198,7 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
           SizedBox(
             width: cardWidth,
             child: KpiCardWidget(
-              titulo: 'TOTAL BACKORDERS ACTIVOS',
+              titulo: 'TOTAL VENTAS EN VERDE ACTIVAS',
               valor: _kpis.totalActivos.toString(),
               subtitulo: 'Encargos vigentes en espera de pieza',
               badgeTexto: 'Activas',
@@ -285,24 +286,26 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
             child: TextField(
               controller: _busquedaController,
               onChanged: _onBusquedaChanged,
-              style: const TextStyle(
-                fontSize: 12,
+              style: AppTypography.small.copyWith(
+                fontSize: 13,
                 color: AppPalette.textPrimaryLight,
               ),
               decoration: InputDecoration(
+                isDense: true,
                 hintText: 'Buscar por Marca, Modelo, Cliente o Vendedor...',
-                hintStyle: TextStyle(
+                hintStyle: AppTypography.small.copyWith(
+                  color: AppPalette.textSecondaryLight.withValues(alpha: 0.7),
                   fontSize: 12,
-                  color: AppPalette.textSecondaryLight.withValues(alpha: 0.8),
                 ),
                 prefixIcon: const Icon(
                   Icons.search_rounded,
                   size: 18,
-                  color: Color(0xFF64748B),
+                  color: AppPalette.textSecondaryLight,
                 ),
                 suffixIcon: _busquedaController.text.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.close_rounded, size: 16),
+                        icon: const Icon(Icons.clear, size: 16),
+                        color: AppPalette.textSecondaryLight,
                         onPressed: () {
                           _busquedaController.clear();
                           _cargarBackorders();
@@ -314,20 +317,23 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
                   vertical: 10,
                 ),
                 filled: true,
-                fillColor: Colors.white,
-                isDense: true,
+                fillColor: AppPalette.backgroundLight,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AppPalette.borderLight),
+                  borderSide: BorderSide(
+                    color: AppPalette.neutral.withValues(alpha: 0.25),
+                  ),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AppPalette.borderLight),
+                  borderSide: BorderSide(
+                    color: AppPalette.neutral.withValues(alpha: 0.25),
+                  ),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                   borderSide: const BorderSide(
-                    color: AppPalette.primary,
+                    color: AppPalette.tertiary,
                     width: 1.5,
                   ),
                 ),

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../core/theme/tokens/app_palette.dart';
+import '../../../../core/theme/tokens/app_typography.dart';
 import '../../../ventas/models/catalogo_model.dart';
 import '../../services/gerencia_service.dart';
 
@@ -374,41 +375,59 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
   }
 
   Widget _buildBuscadorInput() {
-    return Container(
-      height: 38,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppPalette.borderLight),
+    return TextField(
+      controller: _busquedaController,
+      onChanged: _onBusquedaChanged,
+      style: AppTypography.small.copyWith(
+        fontSize: 13,
+        color: AppPalette.textPrimaryLight,
       ),
-      child: TextField(
-        controller: _busquedaController,
-        onChanged: _onBusquedaChanged,
-        textAlignVertical: TextAlignVertical.center,
-        style: const TextStyle(fontSize: 12, color: Color(0xFF0F172A)),
-        decoration: InputDecoration(
-          isDense: true,
-          filled: false,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-          prefixIconConstraints: const BoxConstraints(minWidth: 38, minHeight: 38),
-          prefixIcon: const Icon(Icons.search, size: 18, color: Color(0xFF94A3B8)),
-          suffixIcon: _busquedaController.text.isNotEmpty
-              ? IconButton(
-                  icon: const Icon(Icons.clear, size: 16, color: Color(0xFF94A3B8)),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 38),
-                  onPressed: () {
-                    _busquedaController.clear();
-                    _onBusquedaChanged('');
-                  },
-                )
-              : null,
-          hintText: 'Buscar por SKU, Marca, Pasillo (A, B, C), Pallet o N° Ingreso...',
-          hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
-          border: InputBorder.none,
-          enabledBorder: InputBorder.none,
-          focusedBorder: InputBorder.none,
+      decoration: InputDecoration(
+        isDense: true,
+        hintText: 'Buscar por SKU, Marca, Pasillo (A, B, C), Pallet o N° Ingreso...',
+        hintStyle: AppTypography.small.copyWith(
+          color: AppPalette.textSecondaryLight.withValues(alpha: 0.7),
+          fontSize: 12,
+        ),
+        prefixIcon: const Icon(
+          Icons.search_rounded,
+          size: 18,
+          color: AppPalette.textSecondaryLight,
+        ),
+        suffixIcon: _busquedaController.text.isNotEmpty
+            ? IconButton(
+                icon: const Icon(Icons.clear, size: 16),
+                color: AppPalette.textSecondaryLight,
+                onPressed: () {
+                  _busquedaController.clear();
+                  _onBusquedaChanged('');
+                },
+              )
+            : null,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 10,
+        ),
+        filled: true,
+        fillColor: AppPalette.backgroundLight,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(
+            color: AppPalette.neutral.withValues(alpha: 0.25),
+          ),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(
+            color: AppPalette.neutral.withValues(alpha: 0.25),
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(
+            color: AppPalette.tertiary,
+            width: 1.5,
+          ),
         ),
       ),
     );
@@ -660,13 +679,15 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
     final esPaletizado = estadoNombre.toLowerCase() == 'paletizado' || item.idEstado == 7;
     final esBloqueado = (estadoNombre.toLowerCase() == 'reservado' || estadoNombre.toLowerCase() == 'vendido') && tienePrecio;
 
-    return Material(
-      color: Colors.white,
-      shape: RoundedRectangleBorder(
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: AppPalette.borderLight),
       ),
-      elevation: 0,
+      foregroundDecoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppPalette.borderLight, width: 1.0),
+      ),
       clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1452,6 +1473,7 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
   // 5. MODAL DE TASACIÓN GERENCIAL (FIJAR PRECIO COMERCIAL)
   // =========================================================================
   void _abrirModalTasacion(CatalogoItem item) {
+    final bool esEdicionPrevia = item.precioReferencia != null && item.precioReferencia! > 0;
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -1463,7 +1485,9 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                '¡Precio de ${item.skuQrFisico} fijado a ${_formatoCLP(nuevoPrecio)}! Repuesto disponible en catálogo.',
+                esEdicionPrevia
+                    ? '¡Precio de ${item.skuQrFisico} actualizado a ${_formatoCLP(nuevoPrecio)}!'
+                    : '¡Precio de ${item.skuQrFisico} fijado a ${_formatoCLP(nuevoPrecio)}! Repuesto disponible en catálogo.',
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
               backgroundColor: AppPalette.success,
@@ -1559,16 +1583,22 @@ class _TasacionDialog extends StatefulWidget {
 class _TasacionDialogState extends State<_TasacionDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _precioController;
+  late final int _precioOriginal;
+  late final bool _esEdicion;
   bool _enviando = false;
   String? _errorMsg;
 
   @override
   void initState() {
     super.initState();
-    final valorInicial = (widget.item.precioReferencia != null && widget.item.precioReferencia! > 0)
-        ? widget.item.precioReferencia.toString()
-        : '';
+    final bool tienePrecio = widget.item.precioReferencia != null && widget.item.precioReferencia! > 0;
+    _esEdicion = tienePrecio;
+    _precioOriginal = tienePrecio ? widget.item.precioReferencia! : 0;
+    final valorInicial = tienePrecio ? _precioOriginal.toString() : '';
     _precioController = TextEditingController(text: valorInicial);
+    _precioController.addListener(() {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
@@ -1586,6 +1616,10 @@ class _TasacionDialogState extends State<_TasacionDialog> {
     final monto = _extraerMontoLimpio(_precioController.text);
     if (monto <= 0) {
       setState(() => _errorMsg = 'El precio debe ser un monto entero positivo mayor a \$0.');
+      return;
+    }
+    if (_esEdicion && monto == _precioOriginal) {
+      setState(() => _errorMsg = 'No se han detectado cambios en el precio.');
       return;
     }
 
@@ -1614,6 +1648,11 @@ class _TasacionDialogState extends State<_TasacionDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final montoActual = _extraerMontoLimpio(_precioController.text);
+    final bool puedeGuardar = _esEdicion
+        ? (montoActual > 0 && montoActual != _precioOriginal)
+        : (montoActual > 0);
+
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
@@ -1630,6 +1669,10 @@ class _TasacionDialogState extends State<_TasacionDialog> {
                 offset: const Offset(0, 10),
               ),
             ],
+          ),
+          foregroundDecoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppPalette.borderLight.withValues(alpha: 0.6), width: 1.0),
           ),
           clipBehavior: Clip.antiAlias,
           child: Column(
@@ -1648,25 +1691,27 @@ class _TasacionDialogState extends State<_TasacionDialog> {
                         color: Colors.white.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Icon(Icons.sell, color: Colors.white, size: 20),
+                      child: Icon(_esEdicion ? Icons.edit_note_rounded : Icons.sell, color: Colors.white, size: 20),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
+                        children: [
                           Text(
-                            'Fijar Precio de Tasación',
-                            style: TextStyle(
+                            _esEdicion ? 'Actualizar Precio Comercial' : 'Fijar Precio de Tasación',
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 15,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          SizedBox(height: 2),
+                          const SizedBox(height: 2),
                           Text(
-                            'Autorización comercial Jefe de Ventas / Gerencia',
-                            style: TextStyle(
+                            _esEdicion
+                                ? 'Modificación de precio autorizado para catálogo'
+                                : 'Autorización comercial Jefe de Ventas / Gerencia',
+                            style: const TextStyle(
                               color: Color(0xFFBAE6FD),
                               fontSize: 11,
                             ),
@@ -1841,13 +1886,19 @@ class _TasacionDialogState extends State<_TasacionDialog> {
                       ),
                       const SizedBox(height: 6),
                       Row(
-                        children: const [
-                          Icon(Icons.verified, size: 14, color: Color(0xFF059669)),
-                          SizedBox(width: 4),
+                        children: [
+                          Icon(
+                            _esEdicion ? Icons.info_outline_rounded : Icons.verified,
+                            size: 14,
+                            color: _esEdicion ? AppPalette.tertiary : const Color(0xFF059669),
+                          ),
+                          const SizedBox(width: 4),
                           Expanded(
                             child: Text(
-                              'Al confirmar, el estado pasará a "Disponible" y se habilitará en el catálogo.',
-                              style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                              _esEdicion
+                                  ? 'El nuevo precio se actualizará inmediatamente en el catálogo de ventas.'
+                                  : 'Al confirmar, el estado pasará a "Disponible" y se habilitará en el catálogo.',
+                              style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
                             ),
                           ),
                         ],
@@ -1889,18 +1940,26 @@ class _TasacionDialogState extends State<_TasacionDialog> {
                     ),
                     const SizedBox(width: 10),
                     ElevatedButton.icon(
-                      onPressed: _enviando ? null : _guardarTasacion,
+                      onPressed: (_enviando || !puedeGuardar) ? null : _guardarTasacion,
                       icon: _enviando
                           ? const SizedBox(
                               width: 14,
                               height: 14,
                               child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                             )
-                          : const Icon(Icons.check_circle, size: 16),
-                      label: Text(_enviando ? 'Guardando...' : 'Aprobar y Habilitar Venta'),
+                          : Icon(_esEdicion ? Icons.check_circle_outline : Icons.check_circle, size: 16),
+                      label: Text(
+                        _enviando
+                            ? 'Guardando...'
+                            : _esEdicion
+                                ? 'Confirmar'
+                                : 'Aprobar y Habilitar Venta',
+                      ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF059669),
                         foregroundColor: Colors.white,
+                        disabledBackgroundColor: const Color(0xFFE2E8F0),
+                        disabledForegroundColor: const Color(0xFF94A3B8),
                         elevation: 0,
                         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -1917,6 +1976,7 @@ class _TasacionDialogState extends State<_TasacionDialog> {
     );
   }
 }
+
 
 /// Widget optimizado para el encabezado fotográfico con zoom al pasar el mouse.
 /// Utiliza [AnimatedScale] en la capa del compositor de la GPU, garantizando 60/120 fps
@@ -1947,6 +2007,7 @@ class _CardImageZoomState extends State<_CardImageZoom> {
         width: double.infinity,
         decoration: const BoxDecoration(
           color: Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
         ),
         clipBehavior: Clip.antiAlias,
         child: AnimatedScale(

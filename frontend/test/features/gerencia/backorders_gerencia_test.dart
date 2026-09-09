@@ -138,7 +138,7 @@ void main() {
 
       // Verificamos presencia de las 3 tarjetas KPI
       expect(find.byType(KpiCardWidget), findsNWidgets(3));
-      expect(find.text('TOTAL BACKORDERS ACTIVOS'), findsOneWidget);
+      expect(find.text('TOTAL VENTAS EN VERDE ACTIVAS'), findsOneWidget);
       expect(find.text('CAPITAL RETENIDO EN ABONOS'), findsOneWidget);
       expect(find.text('LISTOS PARA LIQUIDAR'), findsOneWidget);
 

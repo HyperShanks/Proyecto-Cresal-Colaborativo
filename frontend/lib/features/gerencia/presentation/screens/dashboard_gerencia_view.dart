@@ -46,6 +46,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
   VistaGerencia _vistaActiva = VistaGerencia.dashboard;
   bool _sidebarOpen = true;
   bool _filtroSinTasar = false;
+  bool _bellHovered = false;
 
   late AnimationController _spinController;
 
@@ -405,10 +406,10 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
 
                 const SizedBox(height: 6),
 
-                // 4. Visor Centralizado de Backorders
+                // 4. Visor Centralizado de Backorders (Ventas en Verde)
                 _buildSidebarNavItem(
                   icon: Icons.bookmark_added_rounded,
-                  label: 'Visor de Backorders',
+                  label: 'Ventas en Verde',
                   isSelected: _vistaActiva == VistaGerencia.backorders,
                   badgeText: null,
                   onTap: () {
@@ -642,7 +643,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                                     ? 'HISTORIAL DE ÓRDENES'
                                     : _vistaActiva == VistaGerencia.inventario
                                         ? 'MAESTRO DE INVENTARIO Y TASACIÓN'
-                                        : 'VISOR CENTRALIZADO DE RESERVAS Y BACKORDERS',
+                                        : 'VENTAS EN VERDE',
                             style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w900,
@@ -748,52 +749,62 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                       borderRadius: BorderRadius.circular(12),
                       side: const BorderSide(color: AppPalette.borderLight),
                     ),
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Container(
-                          width: 38,
-                          height: 38,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: AppPalette.borderLight),
-                          ),
-                          child: const Icon(
-                            Icons.notifications_outlined,
-                            color: Color(0xFF0F172A),
-                            size: 20,
-                          ),
-                        ),
-                        if (cuellosBotella > 0)
-                          Positioned(
-                            top: -4,
-                            right: -4,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 5,
-                                vertical: 2,
-                              ),
-                              decoration: const BoxDecoration(
-                                color: Color(0xFFDC2626),
-                                shape: BoxShape.circle,
-                              ),
-                              constraints: const BoxConstraints(
-                                minWidth: 18,
-                                minHeight: 18,
-                              ),
-                              alignment: Alignment.center,
-                              child: Text(
-                                '$cuellosBotella',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w900,
+                    child: StatefulBuilder(
+                      builder: (context, setBellHover) {
+                        return MouseRegion(
+                          onEnter: (_) => setBellHover(() => _bellHovered = true),
+                          onExit: (_) => setBellHover(() => _bellHovered = false),
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              Container(
+                                width: 38,
+                                height: 38,
+                                decoration: BoxDecoration(
+                                  color: _bellHovered
+                                      ? const Color(0xFFF1F5F9)
+                                      : Colors.white,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: AppPalette.borderLight),
+                                ),
+                                child: const Icon(
+                                  Icons.notifications_outlined,
+                                  color: Color(0xFF0F172A),
+                                  size: 20,
                                 ),
                               ),
-                            ),
+                              if (cuellosBotella > 0)
+                                Positioned(
+                                  top: -4,
+                                  right: -4,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 5,
+                                      vertical: 2,
+                                    ),
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFFDC2626),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    constraints: const BoxConstraints(
+                                      minWidth: 18,
+                                      minHeight: 18,
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      '$cuellosBotella',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
-                      ],
+                        );
+                      },
                     ),
                     itemBuilder: (context) => [
                       PopupMenuItem<String>(
