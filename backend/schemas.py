@@ -840,6 +840,7 @@ class ActivoPendientePrecioResponse(BaseModel):
     titulo_repuesto: str
     estado_activo: str
     fecha_creacion: Optional[str] = None
+    fotografias: List[str] = Field(default_factory=list, description="URLs de fotografías registradas del activo")
 
 
 class AsignarPrecioRequest(BaseModel):

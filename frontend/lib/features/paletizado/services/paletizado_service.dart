@@ -7,7 +7,74 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/constants/api_constants.dart';
 import '../../auth/services/auth_service.dart';
+class ConsultaIngresoResult {
+  final bool exitoso;
+  final int? statusCode;
+  final String? mensajeError;
+  final Map<String, dynamic>? datos;
+
+  ConsultaIngresoResult.success(this.datos)
+      : exitoso = true,
+        statusCode = 200,
+        mensajeError = null;
+
+  ConsultaIngresoResult.error(this.statusCode, this.mensajeError)
+      : exitoso = false,
+        datos = null;
+}
+
 class PaletizadoService {
+
+  /// SPEC-HU-TAREA-14: Consulta directa por N° de ingreso contra GET /api/v1/inventario/ingreso/{numero_ingreso}
+  Future<ConsultaIngresoResult> consultarIngresoParaPaletizado(
+    String numeroIngreso, {
+    http.Client? client,
+  }) async {
+    final httpClient = client ?? http.Client();
+    try {
+      final folio = numeroIngreso.trim();
+      if (folio.isEmpty) {
+        return ConsultaIngresoResult.error(400, 'El número de ingreso no puede estar vacío.');
+      }
+      final url = Uri.parse('${ApiConstants.inventarioEndpoint}/ingreso/$folio');
+      final token = await AuthService.getToken();
+      final headers = {
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      };
+      final response = await httpClient.get(url, headers: headers);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        return ConsultaIngresoResult.success(data);
+      } else if (response.statusCode == 404) {
+        return ConsultaIngresoResult.error(
+          404,
+          'Número de ingreso no encontrado en la base de datos.',
+        );
+      } else if (response.statusCode == 400) {
+        return ConsultaIngresoResult.error(
+          400,
+          'El activo asociado a este número ya fue paletizado previamente o no requiere este flujo.',
+        );
+      } else {
+        return ConsultaIngresoResult.error(
+          response.statusCode,
+          'Error del servidor al consultar ingreso (${response.statusCode}).',
+        );
+      }
+    } catch (e) {
+      debugPrint("📌 [PALETIZADO_SERVICE] ❌ Error de conexión al consultar ingreso: $e");
+      return ConsultaIngresoResult.error(
+        -1,
+        'Error de conexión. Reintentando la búsqueda...',
+      );
+    } finally {
+      if (client == null) {
+        httpClient.close();
+      }
+    }
+  }
 
   Future<Map<String, dynamic>?> buscarVehiculoPorIngreso(
     String numeroIngreso,
