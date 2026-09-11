@@ -9,19 +9,36 @@ Este documento detalla los usuarios activos cargados y sincronizados en la base 
 > [!TIP]
 > **Contraseña universal para todos los usuarios**: `Password123!`
 
-| Rol ID | Rol / Perfil | Nombre Completo | RUT | Correo Electrónico | Contraseña | PIN | Sucursal |
-|:---:|:---|:---|:---:|:---|:---:|:---:|:---|
-| **1** | **Bodeguero** | Juan Pablo Bodega Pérez | `16.234.567-8` | `bodega@cresal.cl` | `Password123!` | `1001` | Viña del Mar (1) |
-| **2** | **Vendedor (Mesón)** | Carlos Mendoza Silva | `19.876.543-2` | `carlos.mendoza@cresal.cl` | `Password123!` | `2002` | Viña del Mar (1) |
-| **3** | **Caja** | Lorena Valenzuela Castro | `15.789.123-4` | `lorena.valenzuela@cresal.cl` | `Password123!` | `3003` | Viña del Mar (1) |
-| **4** | **Gerente** | Roberto Gerente Silva | `14.567.890-1` | `gerente@cresal.cl` | `Password123!` | `4004` | Viña del Mar (1) |
-| **5** | **Administrador** | Admin Sistema Cresal | `11.111.111-1` | `admin@cresal.cl` | `Password123!` | `5005` | Viña del Mar (1) |
-| **6** | **Jefe de Ventas** | Gastón Marcelo Zamora Herrera | `21.337.385-4` | `gastonzamoracc@gmail.com` | `Password123!` | `6006` | Viña del Mar (1) |
-| **7** | **Vendedor Online** | Marcela Online Soto | `12.345.678-9` | `marcela.online@cresal.cl` | `Password123!` | `7007` | Viña del Mar (1) |
+| Rol ID | Rol / Perfil | Nombre Completo | RUT | Correo Electrónico | Contraseña | PIN | Sucursal | Dispositivo / Entorno | Tema Visual (SSOT) |
+|:---:|:---|:---|:---:|:---|:---:|:---:|:---:|:---|:---:|
+| **1** | **Bodeguero** | Juan Pablo Bodega Pérez | `16.234.567-8` | `bodega@cresal.cl` | `Password123!` | `1001` | Viña del Mar (1) | PDA Industrial (Sunmi/Zebra) | **Dark Mode** (`ThemeMode.dark`) |
+| **2** | **Vendedor (Mesón)** | Carlos Mendoza Silva | `19.876.543-2` | `carlos.mendoza@cresal.cl` | `Password123!` | `2002` | Viña del Mar (1) | Touch POS / All-in-One | **Light Mode** (`ThemeMode.light`) |
+| **3** | **Caja** | Lorena Valenzuela Castro | `15.789.123-4` | `lorena.valenzuela@cresal.cl` | `Password123!` | `3003` | Viña del Mar (1) | Desktop POS (Teclado numérico) | **Light Mode** (`ThemeMode.light`) |
+| **4** | **Gerente** | Roberto Gerente Silva | `14.567.890-1` | `gerente@cresal.cl` | `Password123!` | `4004` | Viña del Mar (1) | Monitor Ejecutivo (Full HD/2K) | **Light Mode** (`ThemeMode.light`) |
+| **5** | **Administrador** | Admin Sistema Cresal | `11.111.111-1` | `admin@cresal.cl` | `Password123!` | `5005` | Viña del Mar (1) | Desktop / Laptop Técnica | **Light Mode** (`ThemeMode.light`) |
+| **6** | **Jefe de Ventas** | Gastón Marcelo Zamora Herrera | `21.337.385-4` | `gastonzamoracc@gmail.com` | `Password123!` | `6006` | Viña del Mar (1) | Laptop / Monitor de Ventas | **Light Mode** (`ThemeMode.light`) |
+| **7** | **Vendedor Online** | Marcela Online Soto | `12.345.678-9` | `marcela.online@cresal.cl` | `Password123!` | `7007` | Viña del Mar (1) | Desktop Omnicanal | **Light Mode** (`ThemeMode.light`) |
 
 ---
 
-## 2. Detalle y Permisos por Rol
+## 2. Política de Tematización y Ergonomía por Perfil
+
+En la industria de software logístico y retail automotriz, la asignación de tema visual responde a **criterios ergonómicos y de hardware**, nunca al tamaño físico de la ventana:
+
+1. **Bodega y Patio (Rol 1 - Dark Mode Obligatorio)**:
+   - Los operarios usan terminales móviles PDA rugerizados (Sunmi L3, Zebra TC series) con pantallas OLED.
+   - Operan en ambientes mixtos (patios exteriores de desarme y pasillos de galpón con iluminación tenue).
+   - El **Modo Oscuro** reduce el deslumbramiento, incrementa drásticamente la legibilidad de códigos QR/barras bajo contraste y extiende la autonomía de la batería durante turnos de 8 a 10 horas.
+2. **Mesón, Caja y Oficinas (Roles 2, 3, 4, 5, 6, 7 - Light Mode Obligatorio)**:
+   - Se ejecutan en mostradores de venta, cajas y escritorios gerenciales con iluminación ambiental estándar o fluorescente.
+   - El **Modo Claro** optimiza la velocidad de lectura de tablas de órdenes densas, SKUs, facturación y estados financieros sin fatiga visual.
+3. **Módulos Compartidos Multi-Rol (Ej: Tickets de Soporte `/tickets`)**:
+   - Todo módulo accesible por múltiples roles hereda **el tema del rol autenticado** mediante `ThemeController`.
+   - La pantalla **jamás debe forzar un tema por el ancho del monitor**; debe adaptar su layout (compacto vs. expandido) manteniendo la paleta cromática del usuario.
+
+---
+
+## 3. Detalle y Permisos por Rol
 
 ### 1. Bodeguero (`id_rol = 1`)
 - **Usuario**: `bodega@cresal.cl`
@@ -114,7 +131,7 @@ Este documento detalla los usuarios activos cargados y sincronizados en la base 
 
 ---
 
-## 3. Flujo de Inicio de Sesión
+## 4. Flujo de Inicio de Sesión
 
 1. **Primer Ingreso (Enrolamiento de Terminal)**:
    - Ingresar con **Correo Electrónico** y **Contraseña** (`Password123!`).

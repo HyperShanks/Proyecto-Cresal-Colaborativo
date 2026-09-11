@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/tokens/app_palette.dart';
+import '../../../../core/theme/tokens/app_typography.dart';
 import '../../models/backorder_gerencia_models.dart';
 import '../../services/gerencia_service.dart';
 import '../widgets/kpi_card_widget.dart';
@@ -15,10 +16,7 @@ import '../widgets/kpi_card_widget.dart';
 class BackordersGerenciaView extends StatefulWidget {
   final int? idSucursalInicial;
 
-  const BackordersGerenciaView({
-    super.key,
-    this.idSucursalInicial,
-  });
+  const BackordersGerenciaView({super.key, this.idSucursalInicial});
 
   @override
   State<BackordersGerenciaView> createState() => _BackordersGerenciaViewState();
@@ -148,9 +146,9 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
 
   String _formatoCLP(int monto) {
     final str = monto.abs().toString().replaceAllMapped(
-          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-          (Match m) => '${m[1]}.',
-        );
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (Match m) => '${m[1]}.',
+    );
     return monto < 0 ? '-\$ $str' : '\$ $str';
   }
 
@@ -200,7 +198,7 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
           SizedBox(
             width: cardWidth,
             child: KpiCardWidget(
-              titulo: 'TOTAL BACKORDERS ACTIVOS',
+              titulo: 'TOTAL VENTAS EN VERDE ACTIVAS',
               valor: _kpis.totalActivos.toString(),
               subtitulo: 'Encargos vigentes en espera de pieza',
               badgeTexto: 'Activas',
@@ -288,42 +286,56 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
             child: TextField(
               controller: _busquedaController,
               onChanged: _onBusquedaChanged,
-              style: const TextStyle(fontSize: 12, color: AppPalette.textPrimaryLight),
+              style: AppTypography.small.copyWith(
+                fontSize: 13,
+                color: AppPalette.textPrimaryLight,
+              ),
               decoration: InputDecoration(
+                isDense: true,
                 hintText: 'Buscar por Marca, Modelo, Cliente o Vendedor...',
-                hintStyle: TextStyle(
+                hintStyle: AppTypography.small.copyWith(
+                  color: AppPalette.textSecondaryLight.withValues(alpha: 0.7),
                   fontSize: 12,
-                  color: AppPalette.textSecondaryLight.withValues(alpha: 0.8),
                 ),
                 prefixIcon: const Icon(
                   Icons.search_rounded,
                   size: 18,
-                  color: Color(0xFF64748B),
+                  color: AppPalette.textSecondaryLight,
                 ),
                 suffixIcon: _busquedaController.text.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.close_rounded, size: 16),
+                        icon: const Icon(Icons.clear, size: 16),
+                        color: AppPalette.textSecondaryLight,
                         onPressed: () {
                           _busquedaController.clear();
                           _cargarBackorders();
                         },
                       )
                     : null,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 filled: true,
-                fillColor: Colors.white,
-                isDense: true,
+                fillColor: AppPalette.backgroundLight,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AppPalette.borderLight),
+                  borderSide: BorderSide(
+                    color: AppPalette.neutral.withValues(alpha: 0.25),
+                  ),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AppPalette.borderLight),
+                  borderSide: BorderSide(
+                    color: AppPalette.neutral.withValues(alpha: 0.25),
+                  ),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AppPalette.primary, width: 1.5),
+                  borderSide: const BorderSide(
+                    color: AppPalette.tertiary,
+                    width: 1.5,
+                  ),
                 ),
               ),
             ),
@@ -342,7 +354,11 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
                 value: _filtroEstado,
                 dropdownColor: Colors.white,
                 isDense: true,
-                icon: const Icon(Icons.arrow_drop_down, size: 20, color: Color(0xFF64748B)),
+                icon: const Icon(
+                  Icons.arrow_drop_down,
+                  size: 20,
+                  color: Color(0xFF64748B),
+                ),
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
@@ -392,7 +408,9 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
               foregroundColor: const Color(0xFF64748B),
               side: const BorderSide(color: AppPalette.borderLight),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
           ),
         ],
@@ -421,104 +439,28 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Scroll horizontal para proteger de overflow en pantallas medianas
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minWidth: 1050),
-              child: DataTable(
-                columnSpacing: 20,
-                horizontalMargin: 16,
-                headingRowHeight: 44,
-                dataRowMinHeight: 56,
-                dataRowMaxHeight: 64,
-                headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)), // Slate 50
-                dividerThickness: 1,
-                columns: const [
-                  DataColumn(
-                    label: Text(
-                      'FOLIO / FECHA',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF475569),
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ),
-                  DataColumn(
-                    label: Text(
-                      'FICHA TÉCNICA REQUERIDA',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF475569),
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ),
-                  DataColumn(
-                    label: Text(
-                      'CLIENTE (CRM)',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF475569),
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ),
-                  DataColumn(
-                    label: Text(
-                      'VENDEDOR',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF475569),
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ),
-                  DataColumn(
-                    numeric: true,
-                    label: Text(
-                      'PRECIO PACTADO',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF475569),
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ),
-                  DataColumn(
-                    numeric: true,
-                    label: Text(
-                      'ABONO',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF475569),
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ),
-                  DataColumn(
-                    numeric: true,
-                    label: Text(
-                      'SALDO',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF475569),
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ),
-                  DataColumn(
-                    label: Center(
-                      child: Text(
-                        'ESTADO RESERVA',
+          if (_backorders.isEmpty)
+            _buildEmptyState()
+          else
+            // Scroll horizontal para proteger de overflow en pantallas medianas
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 1050),
+                child: DataTable(
+                  columnSpacing: 20,
+                  horizontalMargin: 16,
+                  headingRowHeight: 44,
+                  dataRowMinHeight: 56,
+                  dataRowMaxHeight: 64,
+                  headingRowColor: WidgetStateProperty.all(
+                    const Color(0xFFF8FAFC),
+                  ), // Slate 50
+                  dividerThickness: 1,
+                  columns: const [
+                    DataColumn(
+                      label: Text(
+                        'FOLIO / FECHA',
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
@@ -527,11 +469,9 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
                         ),
                       ),
                     ),
-                  ),
-                  DataColumn(
-                    label: Center(
-                      child: Text(
-                        'MATCH / ASIGNACIÓN',
+                    DataColumn(
+                      label: Text(
+                        'PIEZA SOLICITADA / MOTOR',
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
@@ -540,15 +480,95 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
                         ),
                       ),
                     ),
-                  ),
-                ],
-                rows: _backorders.map((b) => _buildDataRow(b)).toList(),
+                    DataColumn(
+                      label: Text(
+                        'CLIENTE',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF475569),
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: Text(
+                        'VENDEDOR',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF475569),
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      numeric: true,
+                      label: Text(
+                        'PRECIO ACORDADO',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF475569),
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      numeric: true,
+                      label: Text(
+                        'ABONO EN CAJA',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF475569),
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      numeric: true,
+                      label: Text(
+                        'SALDO PENDIENTE',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF475569),
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: Center(
+                        child: Text(
+                          'ESTADO RESERVA',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF475569),
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                    DataColumn(
+                      label: Center(
+                        child: Text(
+                          'MATCH / ASIGNACIÓN',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF475569),
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                  rows: _backorders.map((b) => _buildDataRow(b)).toList(),
+                ),
               ),
             ),
-          ),
-
-          // Estado Vacío si no hay resultados
-          if (_backorders.isEmpty) _buildEmptyState(),
 
           // Footer de la tabla
           _buildTablaFooter(),
@@ -578,10 +598,7 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
               const SizedBox(height: 2),
               Text(
                 b.fechaCreacion,
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: Color(0xFF64748B),
-                ),
+                style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
               ),
             ],
           ),
@@ -598,7 +615,10 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _buildCategoriaBadge(b.idCategoriaRequerida, b.categoriaNombre),
+                    _buildCategoriaBadge(
+                      b.idCategoriaRequerida,
+                      b.categoriaNombre,
+                    ),
                     const SizedBox(width: 6),
                     Flexible(
                       child: Text(
@@ -640,7 +660,8 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
                   color: Color(0xFF0F172A),
                 ),
               ),
-              if (b.clienteTelefono != null && b.clienteTelefono!.isNotEmpty) ...[
+              if (b.clienteTelefono != null &&
+                  b.clienteTelefono!.isNotEmpty) ...[
                 const SizedBox(height: 2),
                 Text(
                   b.clienteTelefono!,
@@ -658,10 +679,7 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
         DataCell(
           Text(
             b.vendedorNombre,
-            style: const TextStyle(
-              fontSize: 12,
-              color: Color(0xFF64748B),
-            ),
+            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
           ),
         ),
 
@@ -702,11 +720,7 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
         ),
 
         // 8. Estado Reserva
-        DataCell(
-          Center(
-            child: _buildEstadoBadge(b.estadoReserva),
-          ),
-        ),
+        DataCell(Center(child: _buildEstadoBadge(b.estadoReserva))),
 
         // 9. Match / Asignación
         DataCell(
@@ -722,7 +736,9 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
   Widget _buildCategoriaBadge(int idCategoria, String nombre) {
     final isMotor = idCategoria == 1;
     final bgColor = isMotor ? const Color(0xFFE0F2FE) : const Color(0xFFFEF3C7);
-    final textColor = isMotor ? const Color(0xFF0369A1) : const Color(0xFFB45309);
+    final textColor = isMotor
+        ? const Color(0xFF0369A1)
+        : const Color(0xFFB45309);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -911,9 +927,7 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
   Widget _buildLoadingIndicator() {
     return const Padding(
       padding: EdgeInsets.all(48.0),
-      child: Center(
-        child: CircularProgressIndicator(strokeWidth: 2.5),
-      ),
+      child: Center(child: CircularProgressIndicator(strokeWidth: 2.5)),
     );
   }
 
@@ -928,7 +942,11 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline_rounded, color: AppPalette.error, size: 20),
+          const Icon(
+            Icons.error_outline_rounded,
+            color: AppPalette.error,
+            size: 20,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -938,7 +956,10 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
           ),
           TextButton(
             onPressed: _cargarDatos,
-            child: const Text('Reintentar', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+            child: const Text(
+              'Reintentar',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),

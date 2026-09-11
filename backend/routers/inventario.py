@@ -708,8 +708,6 @@ def obtener_maestro_inventario(
     if solo_sin_tasar:
         query = query.filter(
             or_(
-                Activo_Inventariado.precio_referencia.is_(None),
-                Activo_Inventariado.precio_referencia == 0,
                 Activo_Inventariado.id_estado == 7,
                 Estado_Activo.nombre_estado == "Paletizado",
             )
@@ -738,10 +736,9 @@ def obtener_maestro_inventario(
         .filter(
             Activo_Inventariado.estado == "Activo",
             or_(
-                Activo_Inventariado.precio_referencia.is_(None),
-                Activo_Inventariado.precio_referencia == 0,
+                Activo_Inventariado.id_estado == 7,
+                Estado_Activo.nombre_estado == "Paletizado",
             ),
-            Estado_Activo.nombre_estado == "Paletizado",
         )
     )
     if id_sucursal is not None:

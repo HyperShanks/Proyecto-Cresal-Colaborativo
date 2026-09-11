@@ -348,5 +348,81 @@ void main() {
       expect(navigatedToLogin, isTrue);
       expect(find.text('LOGIN_PIN_SCREEN'), findsOneWidget);
     });
+
+    testWidgets('TicketsScreen es Theme-Aware: Renderiza correctamente en Desktop con Dark Theme y en Móvil con Light Theme', (tester) async {
+      // Caso 1: Desktop con Dark Mode (ej. Jefe de Bodega en pantalla ancha)
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData.dark(),
+          home: const TicketsScreen(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('MÓDULO DE INCIDENCIAS'), findsOneWidget);
+      expect(find.text('Soporte Técnico'), findsOneWidget);
+      expect(find.byType(SoporteDesktopView), findsOneWidget);
+
+      // Caso 2: Móvil con Light Mode (ej. Cajero en pantalla estrecha)
+      tester.view.physicalSize = const Size(400, 750);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData.light(),
+          home: const TicketsScreen(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Soporte Técnico e Incidencias'), findsOneWidget);
+      expect(find.text('CREAR TICKET'), findsOneWidget);
+      expect(find.text('MIS TICKETS'), findsOneWidget);
+    });
+
+    testWidgets('TicketDetailDialog es Theme-Aware: Renderiza sin desbordes ni errores en Dark Mode y Light Mode', (tester) async {
+      const mockTicket = TicketModel(
+        idTicket: 'TCK-2026-0099',
+        tipoTicket: 'Técnico',
+        prioridad: 'Alta',
+        asunto: 'Error en sincronización RFID',
+        descripcion: 'La pistola Zebra no actualiza el tag RFID en el sector B4.',
+        idUsuarioCreador: 'user-bodega-1',
+        estadoTicket: 'Abierto',
+        fechaCreacion: '2026-09-08T10:00:00Z',
+      );
+
+      // Render en Dark Mode
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData.dark(),
+          home: const Scaffold(
+            body: TicketDetailDialog(ticket: mockTicket),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('TÉCNICO'), findsOneWidget);
+      expect(find.text('TCK-2026-0099 — Error en sincronización RFID'), findsOneWidget);
+      expect(find.text('DESCRIPCIÓN DEL REPORTE'), findsOneWidget);
+
+      // Render en Light Mode
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData.light(),
+          home: const Scaffold(
+            body: TicketDetailDialog(ticket: mockTicket),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('TÉCNICO'), findsOneWidget);
+      expect(find.text('TCK-2026-0099 — Error en sincronización RFID'), findsOneWidget);
+      expect(find.text('DESCRIPCIÓN DEL REPORTE'), findsOneWidget);
+    });
   });
 }
+

@@ -161,9 +161,13 @@ class _SoporteDesktopViewState extends State<SoporteDesktopView> {
   }
 
   @override
+  @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgScreen = isDark ? AppPalette.background : AppPalette.backgroundLight;
+
     return Container(
-      color: AppPalette.backgroundLight,
+      color: bgScreen,
       child: Column(
         children: [
           // ── 1. CABECERA CON SELECTOR SEGMENTADO (Líneas 987–1011) ──
@@ -177,7 +181,7 @@ class _SoporteDesktopViewState extends State<SoporteDesktopView> {
                 children: [
                   // Toast de Éxito al enviar
                   if (_ticketToast != null) ...[
-                    _buildToastExito(),
+                    _buildToastExito(isDark: isDark),
                     const SizedBox(height: 16),
                   ],
 
@@ -196,11 +200,18 @@ class _SoporteDesktopViewState extends State<SoporteDesktopView> {
 
   // ── CABECERA Y SELECTOR SEGMENTADO ──────────────────────────────────────────
   Widget _buildCabecera() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor = isDark ? AppPalette.surface : AppPalette.surfaceLight;
+    final borderColor = isDark ? AppPalette.neutral.withValues(alpha: 0.25) : AppPalette.borderLight;
+    final textPrimary = isDark ? AppPalette.textPrimary : AppPalette.textPrimaryLight;
+    final textSecondary = isDark ? AppPalette.textSecondary : AppPalette.textSecondaryLight;
+    final selectorBg = isDark ? AppPalette.background : const Color(0xFFF1F5F9);
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      decoration: const BoxDecoration(
-        color: AppPalette.surfaceLight,
-        border: Border(bottom: BorderSide(color: AppPalette.borderLight)),
+      decoration: BoxDecoration(
+        color: surfaceColor,
+        border: Border(bottom: BorderSide(color: borderColor)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -215,7 +226,7 @@ class _SoporteDesktopViewState extends State<SoporteDesktopView> {
                   fontSize: 11,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 1.1,
-                  color: AppPalette.textSecondaryLight,
+                  color: textSecondary,
                 ),
               ),
               const SizedBox(height: 2),
@@ -224,7 +235,7 @@ class _SoporteDesktopViewState extends State<SoporteDesktopView> {
                 style: AppTypography.title.copyWith(
                   fontSize: 20,
                   fontWeight: FontWeight.w900,
-                  color: AppPalette.textPrimaryLight,
+                  color: textPrimary,
                 ),
               ),
             ],
@@ -234,7 +245,7 @@ class _SoporteDesktopViewState extends State<SoporteDesktopView> {
           Container(
             padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
-              color: const Color(0xFFF1F5F9), // slate-100
+              color: selectorBg,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
@@ -246,6 +257,7 @@ class _SoporteDesktopViewState extends State<SoporteDesktopView> {
                   label: 'Crear Ticket',
                   isSelected: _activeTabIndex == 0,
                   onTap: () => setState(() => _activeTabIndex = 0),
+                  isDark: isDark,
                 ),
 
                 const SizedBox(width: 4),
@@ -260,6 +272,7 @@ class _SoporteDesktopViewState extends State<SoporteDesktopView> {
                     setState(() => _activeTabIndex = 1);
                     _cargarTickets();
                   },
+                  isDark: isDark,
                 ),
               ],
             ),
@@ -275,7 +288,13 @@ class _SoporteDesktopViewState extends State<SoporteDesktopView> {
     required bool isSelected,
     required VoidCallback onTap,
     int? badgeCount,
+    required bool isDark,
   }) {
+    final activeBg = isDark ? AppPalette.surface : Colors.white;
+    final textSecondary = isDark ? AppPalette.textSecondary : AppPalette.textSecondaryLight;
+    final badgeInactiveBg = isDark ? AppPalette.surface : const Color(0xFFE2E8F0);
+    final badgeInactiveText = isDark ? AppPalette.textPrimary : AppPalette.textPrimaryLight;
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(9),
@@ -283,12 +302,12 @@ class _SoporteDesktopViewState extends State<SoporteDesktopView> {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.white : Colors.transparent,
+          color: isSelected ? activeBg : Colors.transparent,
           borderRadius: BorderRadius.circular(9),
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.06),
+                    color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.06),
                     blurRadius: 4,
                     offset: const Offset(0, 2),
                   ),
@@ -301,7 +320,7 @@ class _SoporteDesktopViewState extends State<SoporteDesktopView> {
             Icon(
               icon,
               size: 16,
-              color: isSelected ? AppPalette.primary : AppPalette.textSecondaryLight,
+              color: isSelected ? AppPalette.primary : textSecondary,
             ),
             const SizedBox(width: 6),
             Text(
@@ -309,7 +328,7 @@ class _SoporteDesktopViewState extends State<SoporteDesktopView> {
               style: AppTypography.small.copyWith(
                 fontSize: 13,
                 fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                color: isSelected ? AppPalette.primary : AppPalette.textSecondaryLight,
+                color: isSelected ? AppPalette.primary : textSecondary,
               ),
             ),
             if (badgeCount != null) ...[
@@ -319,7 +338,7 @@ class _SoporteDesktopViewState extends State<SoporteDesktopView> {
                 decoration: BoxDecoration(
                   color: isSelected
                       ? AppPalette.primary.withValues(alpha: 0.12)
-                      : const Color(0xFFE2E8F0),
+                      : badgeInactiveBg,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -327,7 +346,7 @@ class _SoporteDesktopViewState extends State<SoporteDesktopView> {
                   style: AppTypography.small.copyWith(
                     fontSize: 11,
                     fontWeight: FontWeight.w800,
-                    color: isSelected ? AppPalette.primary : AppPalette.textPrimaryLight,
+                    color: isSelected ? AppPalette.primary : badgeInactiveText,
                   ),
                 ),
               ),
@@ -339,14 +358,16 @@ class _SoporteDesktopViewState extends State<SoporteDesktopView> {
   }
 
   // ── TOAST DE ÉXITO ────────────────────────────────────────────────────────
-  Widget _buildToastExito() {
+  Widget _buildToastExito({bool isDark = false}) {
     return Container(
       constraints: const BoxConstraints(maxWidth: 672),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: AppPalette.successBg,
+        color: isDark ? AppPalette.success.withValues(alpha: 0.12) : AppPalette.successBg,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppPalette.successBorder),
+        border: Border.all(
+          color: isDark ? AppPalette.success.withValues(alpha: 0.3) : AppPalette.successBorder,
+        ),
       ),
       child: Row(
         children: [
@@ -375,17 +396,23 @@ class _SoporteDesktopViewState extends State<SoporteDesktopView> {
 
   // ── SUB-PESTAÑA 1: FORMULARIO CENTRADO (Líneas 1026–1104) ───────────────────
   Widget _buildFormularioCrear() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor = isDark ? AppPalette.surface : AppPalette.surfaceLight;
+    final borderColor = isDark ? AppPalette.neutral.withValues(alpha: 0.25) : AppPalette.borderLight;
+    final textPrimary = isDark ? AppPalette.textPrimary : AppPalette.textPrimaryLight;
+    final textSecondary = isDark ? AppPalette.textSecondary : AppPalette.textSecondaryLight;
+
     return Center(
       child: Container(
         constraints: const BoxConstraints(maxWidth: 672),
         padding: const EdgeInsets.all(32),
         decoration: BoxDecoration(
-          color: AppPalette.surfaceLight,
+          color: surfaceColor,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppPalette.borderLight),
+          border: Border.all(color: borderColor),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
+              color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.03),
               blurRadius: 10,
               offset: const Offset(0, 2),
             ),
@@ -402,31 +429,31 @@ class _SoporteDesktopViewState extends State<SoporteDesktopView> {
                 style: AppTypography.title.copyWith(
                   fontSize: 20,
                   fontWeight: FontWeight.w900,
-                  color: AppPalette.textPrimaryLight,
+                  color: textPrimary,
                 ),
               ),
               const SizedBox(height: 4),
               Text(
                 'Complete los datos del incidente o consulta técnica para el equipo de TI.',
                 style: AppTypography.small.copyWith(
-                  color: AppPalette.textSecondaryLight,
+                  color: textSecondary,
                   fontSize: 13,
                 ),
               ),
               const SizedBox(height: 24),
 
               // ── Campo 1: Tipo de Ticket ──
-              _buildFieldLabel('TIPO DE TICKET (CATEGORÍA)'),
+              _buildFieldLabel('TIPO DE TICKET (CATEGORÍA)', textSecondary),
               const SizedBox(height: 6),
               DropdownButtonFormField<String>(
                 initialValue: _tipoSeleccionado,
-                decoration: _inputDecoration(),
+                decoration: _inputDecoration(isDark: isDark, borderColor: borderColor),
                 style: AppTypography.body.copyWith(
-                  color: AppPalette.textPrimaryLight,
+                  color: textPrimary,
                   fontWeight: FontWeight.w600,
                   fontSize: 14,
                 ),
-                dropdownColor: AppPalette.surfaceLight,
+                dropdownColor: surfaceColor,
                 items: _tiposTicket.map((tipo) {
                   return DropdownMenuItem(
                     value: tipo,
@@ -440,24 +467,26 @@ class _SoporteDesktopViewState extends State<SoporteDesktopView> {
               const SizedBox(height: 20),
 
               // ── Campo 2: Prioridad (Grid de 4 botones) ──
-              _buildFieldLabel('PRIORIDAD'),
+              _buildFieldLabel('PRIORIDAD', textSecondary),
               const SizedBox(height: 6),
-              _buildGridPrioridad(),
+              _buildGridPrioridad(isDark: isDark, borderColor: borderColor, textSecondary: textSecondary),
               const SizedBox(height: 20),
 
               // ── Campo 3: Asunto ──
-              _buildFieldLabel('ASUNTO DEL REPORTE (MÁX 150 CARACTERES)'),
+              _buildFieldLabel('ASUNTO DEL REPORTE (MÁX 150 CARACTERES)', textSecondary),
               const SizedBox(height: 6),
               TextFormField(
                 controller: _asuntoCtrl,
                 maxLength: 150,
                 style: AppTypography.body.copyWith(
-                  color: AppPalette.textPrimaryLight,
+                  color: textPrimary,
                   fontWeight: FontWeight.w600,
                   fontSize: 14,
                 ),
                 decoration: _inputDecoration(
                   hintText: 'Ej: Error al conectar con lector POS en cobro...',
+                  isDark: isDark,
+                  borderColor: borderColor,
                 ),
                 validator: (val) {
                   if (val == null || val.trim().isEmpty) {
@@ -472,19 +501,21 @@ class _SoporteDesktopViewState extends State<SoporteDesktopView> {
               const SizedBox(height: 16),
 
               // ── Campo 4: Descripción Detallada ──
-              _buildFieldLabel('DESCRIPCIÓN DETALLADA (MÁX 1000 CARACTERES)'),
+              _buildFieldLabel('DESCRIPCIÓN DETALLADA (MÁX 1000 CARACTERES)', textSecondary),
               const SizedBox(height: 6),
               TextFormField(
                 controller: _descCtrl,
                 maxLength: 1000,
                 maxLines: 4,
                 style: AppTypography.body.copyWith(
-                  color: AppPalette.textPrimaryLight,
+                  color: textPrimary,
                   fontSize: 14,
                 ),
                 decoration: _inputDecoration(
                   hintText:
                       'Describa con precisión lo ocurrido, número de orden involucrada o comportamiento inesperado...',
+                  isDark: isDark,
+                  borderColor: borderColor,
                 ),
                 validator: (val) {
                   if (val == null || val.trim().isEmpty) {
@@ -539,35 +570,41 @@ class _SoporteDesktopViewState extends State<SoporteDesktopView> {
     );
   }
 
-  Widget _buildFieldLabel(String label) {
+  Widget _buildFieldLabel(String label, [Color? textColor]) {
     return Text(
       label,
       style: AppTypography.small.copyWith(
         fontSize: 11,
         fontWeight: FontWeight.w800,
         letterSpacing: 0.8,
-        color: AppPalette.textSecondaryLight,
+        color: textColor ?? AppPalette.textSecondaryLight,
       ),
     );
   }
 
-  InputDecoration _inputDecoration({String? hintText}) {
+  InputDecoration _inputDecoration({String? hintText, bool isDark = false, Color? borderColor}) {
+    final borderCol = borderColor ?? (isDark ? AppPalette.neutral.withValues(alpha: 0.25) : AppPalette.borderLight);
+    final fillCol = isDark ? AppPalette.background : Colors.white;
+    final hintCol = isDark
+        ? AppPalette.textSecondary.withValues(alpha: 0.6)
+        : AppPalette.textSecondaryLight.withValues(alpha: 0.6);
+
     return InputDecoration(
       hintText: hintText,
       hintStyle: AppTypography.body.copyWith(
-        color: AppPalette.textSecondaryLight.withValues(alpha: 0.6),
+        color: hintCol,
         fontSize: 13,
       ),
       filled: true,
-      fillColor: Colors.white,
+      fillColor: fillCol,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppPalette.borderLight),
+        borderSide: BorderSide(color: borderCol),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppPalette.borderLight),
+        borderSide: BorderSide(color: borderCol),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
@@ -580,7 +617,11 @@ class _SoporteDesktopViewState extends State<SoporteDesktopView> {
     );
   }
 
-  Widget _buildGridPrioridad() {
+  Widget _buildGridPrioridad({bool isDark = false, Color? borderColor, Color? textSecondary}) {
+    final borderCol = borderColor ?? (isDark ? AppPalette.neutral.withValues(alpha: 0.25) : AppPalette.borderLight);
+    final unselectedBg = isDark ? AppPalette.background : Colors.white;
+    final unselectedText = textSecondary ?? (isDark ? AppPalette.textSecondary : AppPalette.textSecondaryLight);
+
     return Row(
       children: _prioridades.map((p) {
         final isSelected = p == _prioridadSeleccionada;
@@ -594,10 +635,10 @@ class _SoporteDesktopViewState extends State<SoporteDesktopView> {
               margin: const EdgeInsets.symmetric(horizontal: 3),
               height: 46,
               decoration: BoxDecoration(
-                color: isSelected ? color.withValues(alpha: 0.15) : Colors.white,
+                color: isSelected ? color.withValues(alpha: 0.15) : unselectedBg,
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: isSelected ? color : AppPalette.borderLight,
+                  color: isSelected ? color : borderCol,
                   width: isSelected ? 2 : 1,
                 ),
               ),
@@ -611,7 +652,7 @@ class _SoporteDesktopViewState extends State<SoporteDesktopView> {
                       style: AppTypography.small.copyWith(
                         fontSize: 13,
                         fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600,
-                        color: isSelected ? color : AppPalette.textSecondaryLight,
+                        color: isSelected ? color : unselectedText,
                       ),
                     ),
                   ),
@@ -627,6 +668,12 @@ class _SoporteDesktopViewState extends State<SoporteDesktopView> {
   // ── SUB-PESTAÑA 2: TABLA DE MIS TICKETS (Líneas 1106–1190) ───────────────────
   Widget _buildTablaMisTickets() {
     final tickets = _ticketsFiltrados;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor = isDark ? AppPalette.surface : AppPalette.surfaceLight;
+    final borderColor = isDark ? AppPalette.neutral.withValues(alpha: 0.25) : AppPalette.borderLight;
+    final headerBg = isDark ? AppPalette.background : const Color(0xFFF8FAFC);
+    final textSecondary = isDark ? AppPalette.textSecondary : AppPalette.textSecondaryLight;
+    final dividerColor = isDark ? AppPalette.neutral.withValues(alpha: 0.15) : const Color(0xFFF1F5F9);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -634,13 +681,13 @@ class _SoporteDesktopViewState extends State<SoporteDesktopView> {
         // ── Filtros Rápidos de Estado ──
         Row(
           children: [
-            _buildFiltroPill('TODOS', 'Todos'),
+            _buildFiltroPill('TODOS', 'Todos', isDark),
             const SizedBox(width: 8),
-            _buildFiltroPill('Abierto', 'Abiertos'),
+            _buildFiltroPill('Abierto', 'Abiertos', isDark),
             const SizedBox(width: 8),
-            _buildFiltroPill('En Proceso', 'En Proceso'),
+            _buildFiltroPill('En Proceso', 'En Proceso', isDark),
             const SizedBox(width: 8),
-            _buildFiltroPill('Resuelto', 'Resueltos'),
+            _buildFiltroPill('Resuelto', 'Resueltos', isDark),
           ],
         ),
         const SizedBox(height: 16),
@@ -648,12 +695,12 @@ class _SoporteDesktopViewState extends State<SoporteDesktopView> {
         // ── Tabla de Tickets ──
         Container(
           decoration: BoxDecoration(
-            color: AppPalette.surfaceLight,
+            color: surfaceColor,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppPalette.borderLight),
+            border: Border.all(color: borderColor),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.03),
+                color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.03),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -664,42 +711,42 @@ class _SoporteDesktopViewState extends State<SoporteDesktopView> {
             children: [
               // Encabezado de la Tabla
               Container(
-                color: const Color(0xFFF8FAFC),
+                color: headerBg,
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                 child: Row(
                   children: [
-                    _th('FOLIO / FECHA', flex: 2),
-                    _th('TIPO', flex: 2),
-                    _th('ASUNTO', flex: 4),
-                    _th('PRIORIDAD', flex: 2),
-                    _th('ESTADO', flex: 2),
-                    _th('ACCIÓN', flex: 2, alignment: TextAlign.center),
+                    _th('FOLIO / FECHA', flex: 2, textColor: textSecondary),
+                    _th('TIPO', flex: 2, textColor: textSecondary),
+                    _th('ASUNTO', flex: 4, textColor: textSecondary),
+                    _th('PRIORIDAD', flex: 2, textColor: textSecondary),
+                    _th('ESTADO', flex: 2, textColor: textSecondary),
+                    _th('ACCIÓN', flex: 2, alignment: TextAlign.center, textColor: textSecondary),
                   ],
                 ),
               ),
-              const Divider(color: AppPalette.borderLight, height: 1),
+              Divider(color: borderColor, height: 1),
 
               // Cuerpo de la Tabla / Shimmer / Empty State
               if (_isLoadingTickets)
-                _buildShimmerTable()
+                _buildShimmerTable(isDark: isDark)
               else if (_errorTickets != null)
                 _buildErrorState()
               else if (tickets.isEmpty)
-                _buildEmptyState()
+                _buildEmptyState(textSecondary: textSecondary)
               else
                 ListView.separated(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: tickets.length,
                   separatorBuilder: (context, index) =>
-                      const Divider(color: Color(0xFFF1F5F9), height: 1),
+                      Divider(color: dividerColor, height: 1),
                   itemBuilder: (context, index) {
                     final t = tickets[index];
                     return _TicketTableRow(
                       ticket: t,
                       formatFecha: _formatFecha,
                       colorForPrioridad: _colorForPrioridad,
-                      badgeEstado: _buildBadgeEstado,
+                      badgeEstado: (estado) => _buildBadgeEstado(estado, isDark, borderColor, textSecondary),
                       onTap: () => TicketDetailDialog.mostrar(context, t),
                     );
                   },
@@ -711,15 +758,16 @@ class _SoporteDesktopViewState extends State<SoporteDesktopView> {
     );
   }
 
-  Widget _buildFiltroPill(String valor, String label) {
+  Widget _buildFiltroPill(String valor, String label, bool isDark) {
     return _FiltroPillButton(
       label: label,
       isSelected: _filtroEstado == valor,
+      isDark: isDark,
       onTap: () => setState(() => _filtroEstado = valor),
     );
   }
 
-  Widget _th(String label, {required int flex, TextAlign alignment = TextAlign.left}) {
+  Widget _th(String label, {required int flex, TextAlign alignment = TextAlign.left, Color? textColor}) {
     return Expanded(
       flex: flex,
       child: Text(
@@ -729,13 +777,13 @@ class _SoporteDesktopViewState extends State<SoporteDesktopView> {
           fontSize: 11,
           fontWeight: FontWeight.w800,
           letterSpacing: 0.8,
-          color: AppPalette.textSecondaryLight,
+          color: textColor ?? AppPalette.textSecondaryLight,
         ),
       ),
     );
   }
 
-  Widget _buildBadgeEstado(String estado) {
+  Widget _buildBadgeEstado(String estado, [bool isDark = false, Color? fallbackBorder, Color? fallbackText]) {
     Color bg;
     Color border;
     Color text;
@@ -754,15 +802,15 @@ class _SoporteDesktopViewState extends State<SoporteDesktopView> {
         text = AppPalette.primary;
         break;
       case 'resuelto':
-        bg = AppPalette.successBg;
-        border = AppPalette.successBorder;
+        bg = isDark ? AppPalette.success.withValues(alpha: 0.12) : AppPalette.successBg;
+        border = isDark ? AppPalette.success.withValues(alpha: 0.3) : AppPalette.successBorder;
         text = AppPalette.success;
         break;
       case 'cerrado':
       default:
-        bg = const Color(0xFFF1F5F9);
-        border = AppPalette.borderLight;
-        text = AppPalette.textSecondaryLight;
+        bg = isDark ? AppPalette.background : const Color(0xFFF1F5F9);
+        border = fallbackBorder ?? (isDark ? AppPalette.neutral.withValues(alpha: 0.25) : AppPalette.borderLight);
+        text = fallbackText ?? (isDark ? AppPalette.textSecondary : AppPalette.textSecondaryLight);
         break;
     }
 
@@ -783,22 +831,23 @@ class _SoporteDesktopViewState extends State<SoporteDesktopView> {
       ),
     );
   }
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState({Color? textSecondary}) {
+    final col = textSecondary ?? AppPalette.textSecondaryLight;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 48),
       child: Column(
         children: [
-          const Icon(
+          Icon(
             Icons.inbox_rounded,
             size: 40,
-            color: AppPalette.textSecondaryLight,
+            color: col,
           ),
           const SizedBox(height: 8),
           Text(
             'No hay tickets en este estado',
             style: AppTypography.body.copyWith(
               fontWeight: FontWeight.w600,
-              color: AppPalette.textSecondaryLight,
+              color: col,
             ),
           ),
         ],
@@ -834,7 +883,7 @@ class _SoporteDesktopViewState extends State<SoporteDesktopView> {
     );
   }
 
-  Widget _buildShimmerTable() {
+  Widget _buildShimmerTable({bool isDark = false}) {
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -844,17 +893,17 @@ class _SoporteDesktopViewState extends State<SoporteDesktopView> {
             padding: const EdgeInsets.symmetric(vertical: 10),
             child: Row(
               children: [
-                Expanded(flex: 2, child: _shimmerBox(height: 16)),
+                Expanded(flex: 2, child: _shimmerBox(height: 16, isDark: isDark)),
                 const SizedBox(width: 12),
-                Expanded(flex: 2, child: _shimmerBox(height: 16)),
+                Expanded(flex: 2, child: _shimmerBox(height: 16, isDark: isDark)),
                 const SizedBox(width: 12),
-                Expanded(flex: 4, child: _shimmerBox(height: 16)),
+                Expanded(flex: 4, child: _shimmerBox(height: 16, isDark: isDark)),
                 const SizedBox(width: 12),
-                Expanded(flex: 2, child: _shimmerBox(height: 16)),
+                Expanded(flex: 2, child: _shimmerBox(height: 16, isDark: isDark)),
                 const SizedBox(width: 12),
-                Expanded(flex: 2, child: _shimmerBox(height: 16)),
+                Expanded(flex: 2, child: _shimmerBox(height: 16, isDark: isDark)),
                 const SizedBox(width: 12),
-                Expanded(flex: 2, child: _shimmerBox(height: 24, radius: 8)),
+                Expanded(flex: 2, child: _shimmerBox(height: 24, radius: 8, isDark: isDark)),
               ],
             ),
           ),
@@ -863,11 +912,11 @@ class _SoporteDesktopViewState extends State<SoporteDesktopView> {
     );
   }
 
-  Widget _shimmerBox({required double height, double radius = 4}) {
+  Widget _shimmerBox({required double height, double radius = 4, bool isDark = false}) {
     return Container(
       height: height,
       decoration: BoxDecoration(
-        color: const Color(0xFFF1F5F9),
+        color: isDark ? AppPalette.neutral.withValues(alpha: 0.15) : const Color(0xFFF1F5F9),
         borderRadius: BorderRadius.circular(radius),
       ),
     );
@@ -880,11 +929,13 @@ class _SoporteDesktopViewState extends State<SoporteDesktopView> {
 class _FiltroPillButton extends StatefulWidget {
   final String label;
   final bool isSelected;
+  final bool isDark;
   final VoidCallback onTap;
 
   const _FiltroPillButton({
     required this.label,
     required this.isSelected,
+    this.isDark = false,
     required this.onTap,
   });
 
@@ -898,6 +949,7 @@ class _FiltroPillButtonState extends State<_FiltroPillButton> {
   @override
   Widget build(BuildContext context) {
     final isSelected = widget.isSelected;
+    final isDark = widget.isDark;
 
     Color bg;
     Color border;
@@ -912,9 +964,9 @@ class _FiltroPillButtonState extends State<_FiltroPillButton> {
       border = AppPalette.primary.withValues(alpha: 0.45);
       text = AppPalette.primary;
     } else {
-      bg = Colors.white;
-      border = AppPalette.borderLight;
-      text = AppPalette.textSecondaryLight;
+      bg = isDark ? AppPalette.surface : Colors.white;
+      border = isDark ? AppPalette.neutral.withValues(alpha: 0.25) : AppPalette.borderLight;
+      text = isDark ? AppPalette.textSecondary : AppPalette.textSecondaryLight;
     }
 
     return MouseRegion(
@@ -991,6 +1043,10 @@ class _TicketTableRowState extends State<_TicketTableRow> {
   Widget build(BuildContext context) {
     final t = widget.ticket;
     final prioridadColor = widget.colorForPrioridad(t.prioridad);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textPrimary = isDark ? AppPalette.textPrimary : AppPalette.textPrimaryLight;
+    final textSecondary = isDark ? AppPalette.textSecondary : AppPalette.textSecondaryLight;
+    final tagBg = isDark ? AppPalette.background : const Color(0xFFF1F5F9);
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isRowHovered = true),
@@ -1025,7 +1081,7 @@ class _TicketTableRowState extends State<_TicketTableRow> {
                       widget.formatFecha(t.fechaCreacion),
                       style: AppTypography.small.copyWith(
                         fontSize: 11,
-                        color: AppPalette.textSecondaryLight,
+                        color: textSecondary,
                       ),
                     ),
                   ],
@@ -1040,7 +1096,7 @@ class _TicketTableRowState extends State<_TicketTableRow> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF1F5F9),
+                      color: tagBg,
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
@@ -1048,7 +1104,7 @@ class _TicketTableRowState extends State<_TicketTableRow> {
                       style: AppTypography.small.copyWith(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: AppPalette.textPrimaryLight,
+                        color: textPrimary,
                       ),
                     ),
                   ),
@@ -1065,7 +1121,7 @@ class _TicketTableRowState extends State<_TicketTableRow> {
                   style: AppTypography.small.copyWith(
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
-                    color: AppPalette.textPrimaryLight,
+                    color: textPrimary,
                   ),
                 ),
               ),

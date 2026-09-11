@@ -56,13 +56,20 @@ class TicketDetailDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final prioridadColor = _colorForPrioridad(ticket.prioridad);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor = isDark ? AppPalette.surface : AppPalette.surfaceLight;
+    final borderColor = isDark ? AppPalette.neutral.withValues(alpha: 0.25) : AppPalette.borderLight;
+    final textPrimary = isDark ? AppPalette.textPrimary : AppPalette.textPrimaryLight;
+    final textSecondary = isDark ? AppPalette.textSecondary : AppPalette.textSecondaryLight;
+    final descBg = isDark ? AppPalette.background : const Color(0xFFF8FAFC);
+    final closeHover = isDark ? AppPalette.surfaceLight.withValues(alpha: 0.1) : const Color(0xFFF1F5F9);
 
     return Dialog(
-      backgroundColor: AppPalette.surfaceLight,
+      backgroundColor: surfaceColor,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: AppPalette.borderLight),
+        side: BorderSide(color: borderColor),
       ),
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       child: ConstrainedBox(
@@ -87,7 +94,7 @@ class TicketDetailDialog extends StatelessWidget {
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 0.8,
-                            color: AppPalette.textSecondaryLight,
+                            color: textSecondary,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -96,7 +103,7 @@ class TicketDetailDialog extends StatelessWidget {
                           style: AppTypography.title.copyWith(
                             fontSize: 17,
                             fontWeight: FontWeight.w900,
-                            color: AppPalette.textPrimaryLight,
+                            color: textPrimary,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -104,7 +111,7 @@ class TicketDetailDialog extends StatelessWidget {
                           'Reportado el ${_formatFecha(ticket.fechaCreacion)}',
                           style: AppTypography.small.copyWith(
                             fontSize: 12,
-                            color: AppPalette.textSecondaryLight,
+                            color: textSecondary,
                           ),
                         ),
                       ],
@@ -113,14 +120,14 @@ class TicketDetailDialog extends StatelessWidget {
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
                     icon: const Icon(Icons.close_rounded, size: 20),
-                    color: AppPalette.textSecondaryLight,
-                    hoverColor: const Color(0xFFF1F5F9),
+                    color: textSecondary,
+                    hoverColor: closeHover,
                     splashRadius: 18,
                     tooltip: 'Cerrar',
                   ),
                 ],
               ),
-              const Divider(color: AppPalette.borderLight, height: 24),
+              Divider(color: borderColor, height: 24),
 
               // ── Fila de Estados y Prioridad ──
               Row(
@@ -129,17 +136,17 @@ class TicketDetailDialog extends StatelessWidget {
                     'Estado:',
                     style: AppTypography.small.copyWith(
                       fontWeight: FontWeight.w600,
-                      color: AppPalette.textSecondaryLight,
+                      color: textSecondary,
                     ),
                   ),
                   const SizedBox(width: 6),
-                  _buildEstadoBadge(ticket.estadoTicket),
+                  _buildEstadoBadge(ticket.estadoTicket, isDark, borderColor, textSecondary),
                   const SizedBox(width: 16),
                   Text(
                     'Prioridad:',
                     style: AppTypography.small.copyWith(
                       fontWeight: FontWeight.w600,
-                      color: AppPalette.textSecondaryLight,
+                      color: textSecondary,
                     ),
                   ),
                   const SizedBox(width: 6),
@@ -155,7 +162,7 @@ class TicketDetailDialog extends StatelessWidget {
                   fontSize: 11,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 0.8,
-                  color: AppPalette.textSecondaryLight,
+                  color: textSecondary,
                 ),
               ),
               const SizedBox(height: 6),
@@ -163,15 +170,15 @@ class TicketDetailDialog extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
+                  color: descBg,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppPalette.borderLight),
+                  border: Border.all(color: borderColor),
                 ),
                 child: Text(
                   ticket.descripcion,
                   style: AppTypography.body.copyWith(
                     fontSize: 14,
-                    color: AppPalette.textPrimaryLight,
+                    color: textPrimary,
                     height: 1.45,
                   ),
                 ),
@@ -205,9 +212,11 @@ class TicketDetailDialog extends StatelessWidget {
                   width: double.infinity,
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: AppPalette.successBg,
+                    color: isDark ? AppPalette.success.withValues(alpha: 0.12) : AppPalette.successBg,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppPalette.successBorder),
+                    border: Border.all(
+                      color: isDark ? AppPalette.success.withValues(alpha: 0.3) : AppPalette.successBorder,
+                    ),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -216,7 +225,7 @@ class TicketDetailDialog extends StatelessWidget {
                         ticket.observacionCierre!,
                         style: AppTypography.body.copyWith(
                           fontSize: 14,
-                          color: AppPalette.textPrimaryLight,
+                          color: textPrimary,
                           height: 1.45,
                           fontWeight: FontWeight.w500,
                         ),
@@ -270,7 +279,7 @@ class TicketDetailDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildEstadoBadge(String estado) {
+  Widget _buildEstadoBadge(String estado, bool isDark, Color fallbackBorder, Color fallbackText) {
     Color bg;
     Color border;
     Color text;
@@ -289,15 +298,15 @@ class TicketDetailDialog extends StatelessWidget {
         text = AppPalette.primary;
         break;
       case 'resuelto':
-        bg = AppPalette.successBg;
-        border = AppPalette.successBorder;
+        bg = isDark ? AppPalette.success.withValues(alpha: 0.12) : AppPalette.successBg;
+        border = isDark ? AppPalette.success.withValues(alpha: 0.3) : AppPalette.successBorder;
         text = AppPalette.success;
         break;
       case 'cerrado':
       default:
-        bg = const Color(0xFFF1F5F9);
-        border = AppPalette.borderLight;
-        text = AppPalette.textSecondaryLight;
+        bg = isDark ? AppPalette.background : const Color(0xFFF1F5F9);
+        border = fallbackBorder;
+        text = fallbackText;
         break;
     }
 
