@@ -81,7 +81,7 @@ class InventarioService {
       if (cilindrada != null) queryParams['cilindrada'] = cilindrada;
       if (combustible != null) queryParams['combustible'] = combustible;
       if (transmision != null) queryParams['transmision'] = transmision;
-      if (estado != null && estado.trim().isNotEmpty && estado.trim() != 'Todos') {
+      if (estado != null && estado.trim().isNotEmpty) {
         queryParams['estado'] = estado.trim();
       }
       if (limit != null) queryParams['limit'] = limit.toString();

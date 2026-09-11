@@ -231,3 +231,27 @@ def test_inventario_activo_sin_ubicacion(client, setup_filtros_inventario_test):
     assert item["galpon"] == ""
     assert item["pasillo"] == ""
     assert item["pallet"] == ""
+
+
+def test_inventario_busqueda_default_sin_parametro_estado_incluye_paletizados(client, setup_filtros_inventario_test):
+    """Verifica que la consulta sin parámetro 'estado' (default) incluya activos en estado Paletizado."""
+    headers = setup_filtros_inventario_test["headers"]
+    response = client.get("/api/v1/inventario/buscar?q=SKU-FILT", headers=headers)
+
+    assert response.status_code == 200
+    data = response.json()
+    skus_encontrados = {item["sku"] for item in data}
+    assert "SKU-FILT-PAL-04" in skus_encontrados
+    assert "SKU-FILT-DISP-01" in skus_encontrados
+
+
+def test_opciones_filtros_incluye_paletizados(client, setup_filtros_inventario_test):
+    """Verifica que /opciones-filtros incluya pasillos y pallets de activos paletizados."""
+    headers = setup_filtros_inventario_test["headers"]
+    response = client.get("/api/v1/inventario/opciones-filtros", headers=headers)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "P-04" in data["pasillos"]
+    assert "PL-04" in data["pallets"]
+

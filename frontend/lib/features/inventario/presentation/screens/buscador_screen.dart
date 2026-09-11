@@ -159,7 +159,7 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
         cilindrada: _cilindrada,
         combustible: _combustible,
         transmision: _transmision,
-        estado: _estadoFiltro != 'Todos' ? _estadoFiltro : null,
+        estado: _estadoFiltro,
         limit: _limit,
         offset: reset ? 0 : _offset,
       );
@@ -221,7 +221,7 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
         cilindrada: _cilindrada,
         combustible: _combustible,
         transmision: _transmision,
-        estado: nuevoEstado != 'Todos' ? nuevoEstado : null,
+        estado: nuevoEstado,
         limit: _limit,
         offset: 0,
       );

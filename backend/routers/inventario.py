@@ -56,11 +56,15 @@ def obtener_opciones_filtros(
         .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
         .outerjoin(Detalle_Motor, Activo_Inventariado.id_activo == Detalle_Motor.id_activo)
         .outerjoin(Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo)
+        .join(Estado_Activo, Activo_Inventariado.id_estado == Estado_Activo.id_estado)
     )
 
-    # ⚠️ REGLA DE NEGOCIO: Filtrar únicamente repuestos físicamente en bodega (1: Disponible, 2: Reservado)
+    # ⚠️ REGLA DE NEGOCIO: Filtrar repuestos físicamente en bodega (Disponibles, Reservados, Vendidos y Paletizados)
     query = query.filter(
-        Activo_Inventariado.id_estado.in_([1, 2]),
+        or_(
+            Activo_Inventariado.id_estado.in_([1, 2, 3]),
+            func.lower(Estado_Activo.nombre_estado) == "paletizado",
+        ),
         Activo_Inventariado.estado == "Activo",
     )
 
@@ -191,9 +195,12 @@ def buscar_inventario(
                 )
             )
     else:
-        # Default retrocompatible: repuestos operativos en bodega (1: Disponible, 2: Reservado)
+        # Default operativo en bodega: incluye Disponibles, Reservados, Vendidos y Paletizados
         query = query.filter(
-            Activo_Inventariado.id_estado.in_([1, 2]),
+            or_(
+                Activo_Inventariado.id_estado.in_([1, 2, 3]),
+                func.lower(Estado_Activo.nombre_estado) == "paletizado",
+            )
         )
 
     query = query.filter(Activo_Inventariado.estado == "Activo")
