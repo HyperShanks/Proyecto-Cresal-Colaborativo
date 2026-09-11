@@ -312,7 +312,8 @@ def test_alertas_impresion_excluye_en_desarme_y_cuenta_paletizados(client, db_se
     """
     Verifica que:
     1. Un activo en estado 'En Desarme' (5) con qr_impreso=False NO genere alerta de impresión.
-    2. Un activo en estado 'Paletizado' (7) con qr_impreso=False SÍ genere alerta de impresión y se refleje en el resumen.
+    2. Un activo en estado 'Paletizado' (7) con qr_impreso=False SÍ genere alerta de impresión.
+    3. Un activo en estado 'Reservado' (2) con qr_impreso=False (ej. orden creada antes de imprimir) SÍ genere alerta de impresión.
     """
     headers = {"Authorization": f"Bearer {auth_token_bodeguero}"}
 
@@ -360,13 +361,29 @@ def test_alertas_impresion_excluye_en_desarme_y_cuenta_paletizados(client, db_se
         estado="Activo",
     )
 
-    db_session.add_all([act_desarme, act_paletizado])
+    # Activo 3: Reservado (2) con qr_impreso=False (ej. motor reservado antes de imprimir etiqueta) -> SÍ DEBE CONTARSE
+    act_reservado = Activo_Inventariado(
+        id_activo=uuid.uuid4(),
+        id_vehiculo=veh.id_vehiculo,
+        id_categoria=1,
+        id_estado=2,  # Reservado
+        id_sucursal_actual=1,
+        sku_qr_fisico=f"SKU-RESERVADO-{uuid.uuid4().hex[:4]}",
+        precio_referencia=300000,
+        ubicacion_pasillo="a",
+        ubicacion_pallet="1",
+        ubicacion_galpon="a",
+        qr_impreso=False,
+        estado="Activo",
+    )
+
+    db_session.add_all([act_desarme, act_paletizado, act_reservado])
     db_session.commit()
 
-    # 1. Verificar en /resumen-alertas
+    # 1. Verificar en /resumen-alertas (+2: paletizado y reservado; desarme no cuenta)
     res_nuevo = client.get("/api/v1/bodega/resumen-alertas?sucursal_id=1", headers=headers).json()
-    assert res_nuevo["desglose_entregas"] == impresiones_previas + 1, (
-        "Solo el activo Paletizado debe sumar a impresiones; el activo en Desarme debe ser excluido."
+    assert res_nuevo["desglose_entregas"] == impresiones_previas + 2, (
+        "Activos Paletizado y Reservado sin QR impreso deben sumar; el activo en Desarme debe ser excluido."
     )
 
     # 2. Verificar en /tareas-pendientes
@@ -374,6 +391,8 @@ def test_alertas_impresion_excluye_en_desarme_y_cuenta_paletizados(client, db_se
     ids_impresion = [t["id_activo"] for t in res_tareas if t["tipo_alerta"] == "IMPRESION"]
 
     assert str(act_paletizado.id_activo) in ids_impresion, "El activo Paletizado DEBE aparecer en impresión"
+    assert str(act_reservado.id_activo) in ids_impresion, "El activo Reservado con qr_impreso=False DEBE aparecer en impresión"
     assert str(act_desarme.id_activo) not in ids_impresion, "El activo En Desarme NO DEBE aparecer en impresión"
+
 
 

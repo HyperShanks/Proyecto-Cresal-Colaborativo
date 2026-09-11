@@ -75,7 +75,7 @@ def obtener_resumen_alertas(
         .count()
     )
 
-    # 2. Entregas / Impresiones pendientes (Solo activos en estado Paletizado)
+    # 2. Entregas / Impresiones pendientes (Activos en bodega sin QR impreso: Paletizado, Reservado, Vendido o Disponible)
     conteo_impresiones = (
         db.query(Activo_Inventariado)
         .join(Estado_Activo, Activo_Inventariado.id_estado == Estado_Activo.id_estado)
@@ -86,7 +86,12 @@ def obtener_resumen_alertas(
             ),
             Activo_Inventariado.estado == "Activo",
             Activo_Inventariado.id_sucursal_actual == target_sucursal,
-            func.lower(Estado_Activo.nombre_estado) == "paletizado",
+            or_(
+                Activo_Inventariado.id_estado.in_([1, 2, 3, 7]),
+                func.lower(Estado_Activo.nombre_estado).in_(["disponible", "reservado", "vendido", "paletizado"]),
+            ),
+            Activo_Inventariado.id_estado != 5,
+            ~func.lower(Estado_Activo.nombre_estado).ilike("%desarme%"),
         )
         .count()
     )
@@ -267,7 +272,7 @@ def obtener_tareas_pendientes(
 
     # ---------------------------------------------------------
     # PRIORIDAD 3: Pendiente de Impresión (FILTRADO POR SUCURSAL)
-    # Solo activos en estado Paletizado que aún no tienen QR impreso
+    # Activos en bodega sin QR impreso: Paletizado, Reservado, Vendido o Disponible
     # ---------------------------------------------------------
     activos_sin_qr = (
         db.query(Activo_Inventariado, Vehiculo_Origen, Detalle_Motor, Detalle_Caja_Cambio)
@@ -282,7 +287,12 @@ def obtener_tareas_pendientes(
             ),
             Activo_Inventariado.estado == "Activo",
             Activo_Inventariado.id_sucursal_actual == sucursal_id,
-            func.lower(Estado_Activo.nombre_estado) == "paletizado",
+            or_(
+                Activo_Inventariado.id_estado.in_([1, 2, 3, 7]),
+                func.lower(Estado_Activo.nombre_estado).in_(["disponible", "reservado", "vendido", "paletizado"]),
+            ),
+            Activo_Inventariado.id_estado != 5,
+            ~func.lower(Estado_Activo.nombre_estado).ilike("%desarme%"),
         )
         .all()
     )
