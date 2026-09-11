@@ -48,10 +48,11 @@ Este documento detalla la arquitectura de hardware, topología de red, direccion
                              └───────────────────┘
 ```
 
-### Comportamiento Híbrido de la PDA Sunmi L3 (Dual-Homing)
-1. **Tráfico WAN (Internet)**: La PDA consulta y actualiza el inventario en Supabase mediante su conexión de **datos móviles 4G**.
-2. **Tráfico LAN (Impresión Local)**: Al momento de imprimir, la aplicación abre un socket TCP contra `192.168.8.50:9100`. Android detecta que dicha IP pertenece al rango de su tarjeta Wi-Fi (`wlan0`) y conmuta el tráfico localmente a través del router Huawei hacia la impresora.
+### Comportamiento Híbrido de la PDA Sunmi L3 (Dual-Homing y Multi-Network Routing)
+1. **Tráfico WAN (Internet)**: La PDA consulta y actualiza el inventario en Supabase y el backend en Render mediante su conexión de **datos móviles 4G/5G**.
+2. **Tráfico LAN (Impresión Local por Socket Binding)**: Al momento de imprimir, la aplicación utiliza un canal nativo en Android (`cl.cresal/printer_channel`) que enlaza forzadamente el socket TCP a la interfaz Wi-Fi (`wlan0`) mediante `network.bindSocket()`. De este modo, los paquetes se transmiten a través del router Huawei hacia la Honeywell en `192.168.8.50:9100` **sin perder el acceso a internet celular ni conmutar de red**.
 3. **Regla de Android para Wi-Fi sin Internet**: Cuando la PDA se conecta al Wi-Fi del router (que no dispone de chip SIM), Android preguntará: *"Esta red Wi-Fi no tiene acceso a internet. ¿Desea mantener la conexión?"*. Se debe marcar **"Sí / Mantener conexión permanentemente"** y verificar en opciones de desarrollo que la opción **"Datos móviles siempre activos"** (*Mobile data always active*) esté habilitada.
+*(Para una explicación técnica profunda a nivel de kernel y sockets, ver [ARQUITECTURA_MULTI_RED_WIFI_DATOS.md](file:///c:/proyectos/CresalRepoCapstone/ARQUITECTURA_MULTI_RED_WIFI_DATOS.md)).*
 
 ---
 
@@ -131,14 +132,16 @@ La Honeywell PC42E-T responde al comando `~HS` con una trama estructurada de 3 l
 1. **`frontend/lib/features/paletizado/domain/exceptions/printer_exceptions.dart`**:  
    Jerarquía de excepciones de dominio ricas en metadatos para UI (`titulo`, `instruccionOperativa`, `icono`).
 2. **`frontend/lib/features/paletizado/services/print_service.dart`**:  
-   Servicio de infraestructura de sockets TCP en el puerto 9100. Contiene el timeout estricto de 2.5s, la emisión de `~HS`, el parser de tramas ZPL y el envío de bytes UTF-8 (`^CI28`).
-3. **`frontend/lib/features/paletizado/presentation/widgets/dialogo_falla_impresora.dart`**:  
+   Servicio de infraestructura de impresión. En Android conmuta automáticamente al canal nativo `cl.cresal/printer_channel` para enlace de socket sobre Wi-Fi, manteniendo compatibilidad con sockets TCP estándar `dart:io` para otras plataformas. Contiene el decodificador ZPL II defensivo (`~HS`).
+3. **`frontend/android/app/src/main/kotlin/com/example/frontend/MainActivity.kt`**:  
+   Capa nativa Android con `ConnectivityManager`. Registra la interfaz Wi-Fi sin exigir internet y ejecuta `network.bindSocket()` para forzar el tráfico hacia la Honeywell en `192.168.8.50:9100` sin interrumpir la conexión de datos móviles a Render.
+4. **`frontend/lib/features/paletizado/presentation/widgets/dialogo_falla_impresora.dart`**:  
    Widget modal de alerta interactivo adaptado al Modo Oscuro de la terminal PDA. Muestra la instrucción correctiva y ofrece los botones **"REINTENTAR"** y **"CANCELAR"**.
-4. **`frontend/lib/features/paletizado/presentation/screens/etiqueta_preview_screen.dart`**:  
+5. **`frontend/lib/features/paletizado/presentation/screens/etiqueta_preview_screen.dart`**:  
    Pantalla de previsualización e impresión de tarjeta. Elimina el mock de simulación, ejecuta la llamada real a `PrintService` y gestiona el bucle interactivo de reintentos.
-5. **`frontend/lib/features/paletizado/presentation/screens/paletizado_screen.dart`**:  
+6. **`frontend/lib/features/paletizado/presentation/screens/paletizado_screen.dart`**:  
    Modal de confirmación post-paletizado. Integra el botón **"Imprimir Ahora"** con el mismo diálogo guiado de diagnóstico físico.
-6. **`frontend/lib/features/paletizado/services/zpl_builder.dart`**:  
+7. **`frontend/lib/features/paletizado/services/zpl_builder.dart`**:  
    Generador de plantillas ZPL para etiquetas térmicas de 4x2 pulgadas (812x406 dots @ 203 DPI) calibradas para repuestos automotrices (Motores vs. Cajas de Cambio).
 
 ---
