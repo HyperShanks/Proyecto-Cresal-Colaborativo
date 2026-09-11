@@ -657,7 +657,7 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                   crossAxisCount: crossAxisCount,
                   crossAxisSpacing: 20,
                   mainAxisSpacing: 20,
-                  mainAxisExtent: 420, // Altura balanceada anti-overflow
+                  mainAxisExtent: 385, // Proporción balanceada anti-overflow y sin vacío blanco
                 ),
                 itemCount: _items.length,
                 itemBuilder: (context, index) {
@@ -744,156 +744,151 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                 padding: const EdgeInsets.all(14),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    // Chip Categoría + Sucursal
+                    Row(
                       children: [
-                        // Chip Categoría + Sucursal
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: item.idCategoria == 1
-                                    ? const Color(0xFFE0F2FE)
-                                    : const Color(0xFFFEF3C7),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                item.nombreCategoria,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  color: item.idCategoria == 1
-                                      ? const Color(0xFF075985)
-                                      : const Color(0xFF78350F),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                item.nombreSucursal,
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                  color: Color(0xFF64748B),
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-
-                        // Título Técnico del Repuesto
-                        Text(
-                          item.tituloRepuesto,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF1E293B),
-                            height: 1.25,
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: item.idCategoria == 1
+                                ? const Color(0xFFE0F2FE)
+                                : const Color(0xFFFEF3C7),
+                            borderRadius: BorderRadius.circular(4),
                           ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                          child: Text(
+                            item.nombreCategoria,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: item.idCategoria == 1
+                                  ? const Color(0xFF075985)
+                                  : const Color(0xFF78350F),
+                            ),
+                          ),
                         ),
-                        const SizedBox(height: 8),
-
-                        // Chips Técnicos de Especificaciones
-                        Wrap(
-                          spacing: 6,
-                          runSpacing: 4,
-                          children: [
-                            if (item.combustible != null)
-                              _buildSpecChip(item.combustible!),
-                            if (item.transmisionTipo != null)
-                              _buildSpecChip(item.transmisionTipo!),
-                            if (item.cilindrada != null)
-                              _buildSpecChip('${item.cilindrada}L'),
-                          ],
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            item.nombreSucursal,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF64748B),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       ],
                     ),
+                    const SizedBox(height: 8),
 
-                    Column(
+                    // Título Técnico del Repuesto
+                    Text(
+                      item.tituloRepuesto,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1E293B),
+                        height: 1.25,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Chips Técnicos de Especificaciones
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
                       children: [
-                        // Ubicación Física en Bodega
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF8FAFC),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: AppPalette.borderLight),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Row(
-                                children: const [
-                                  Icon(Icons.warehouse_outlined, size: 14, color: Color(0xFF94A3B8)),
-                                  SizedBox(width: 4),
-                                  Text(
-                                    'Ubicación:',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w500,
-                                      color: Color(0xFF64748B),
-                                    ),
-                                  ),
-                                ],
-                              ),
+                        if (item.combustible != null)
+                          _buildSpecChip(item.combustible!),
+                        if (item.transmisionTipo != null)
+                          _buildSpecChip(item.transmisionTipo!),
+                        if (item.cilindrada != null)
+                          _buildSpecChip('${item.cilindrada}L'),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Ubicación Física en Bodega (agrupada inmediatamente bajo los datos técnicos)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppPalette.borderLight),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: const [
+                              Icon(Icons.warehouse_outlined, size: 15, color: Color(0xFF94A3B8)),
+                              SizedBox(width: 4),
                               Text(
-                                'G${item.ubicacionGalpon ?? "1"} • Pasillo ${item.ubicacionPasillo ?? "-"} • Pallet ${item.ubicacionPallet ?? "-"}',
-                                style: const TextStyle(
-                                  fontFamily: 'monospace',
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF1E293B),
+                                'Ubicación:',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF64748B),
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                        const SizedBox(height: 10),
-
-                        // Fila de Precio y Acción
-                        Container(
-                          padding: const EdgeInsets.only(top: 8),
-                          decoration: const BoxDecoration(
-                            border: Border(
-                              top: BorderSide(color: Color(0xFFF1F5F9)),
+                          Text(
+                            'G${item.ubicacionGalpon ?? "1"} • Pasillo ${item.ubicacionPasillo ?? "-"} • Pallet ${item.ubicacionPallet ?? "-"}',
+                            style: const TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1E293B),
                             ),
                           ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            crossAxisAlignment: CrossAxisAlignment.center,
+                        ],
+                      ),
+                    ),
+
+                    // Spacer elástico para absorber diferencias de 1 vs 2 líneas en el título
+                    const Spacer(),
+
+                    // Fila de Precio y Acción
+                    Container(
+                      padding: const EdgeInsets.only(top: 8),
+                      decoration: const BoxDecoration(
+                        border: Border(
+                          top: BorderSide(color: Color(0xFFF1F5F9)),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'PRECIO COMERCIAL',
-                                    style: TextStyle(
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: 0.5,
-                                      color: Color(0xFF94A3B8),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    tienePrecio ? _formatoCLP(item.precioReferencia) : '⚠️ Sin Tasar',
-                                    style: TextStyle(
-                                      fontSize: tienePrecio ? 15 : 12,
-                                      fontWeight: FontWeight.w900,
-                                      color: tienePrecio ? const Color(0xFF0F172A) : const Color(0xFFEA580C),
-                                    ),
-                                  ),
-                                ],
+                              const Text(
+                                'PRECIO COMERCIAL',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.5,
+                                  color: Color(0xFF94A3B8),
+                                ),
                               ),
+                              const SizedBox(height: 2),
+                              Text(
+                                tienePrecio ? _formatoCLP(item.precioReferencia) : '⚠️ Sin Tasar',
+                                style: TextStyle(
+                                  fontSize: tienePrecio ? 16 : 12,
+                                  fontWeight: FontWeight.w900,
+                                  color: tienePrecio ? const Color(0xFF0F172A) : const Color(0xFFEA580C),
+                                ),
+                              ),
+                            ],
+                          ),
 
                               // Botón de Acción
                               if (esBloqueado)
@@ -944,13 +939,11 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                         ),
                       ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
-          ],
-        ),
-      );
+          );
   }
 
   Widget _buildSpecChip(String texto) {
@@ -1844,43 +1837,55 @@ class _TasacionDialogState extends State<_TasacionDialog> {
                         ),
                       ),
                       const SizedBox(height: 6),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFF7ED).withValues(alpha: 0.4),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: const Color(0xFFFB923C),
-                            width: 1.5,
-                          ),
+                      TextField(
+                        controller: _precioController,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF0F172A),
                         ),
-                        child: TextField(
-                          controller: _precioController,
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                          ],
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFF0F172A),
-                          ),
-                          decoration: const InputDecoration(
-                            isDense: true,
-                            contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                            prefixIcon: Padding(
-                              padding: EdgeInsets.only(left: 12, right: 6),
-                              child: Text(
-                                '\$',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w900,
-                                  color: Color(0xFF64748B),
-                                ),
+                        decoration: InputDecoration(
+                          isDense: true,
+                          filled: true,
+                          fillColor: const Color(0xFFFFFBF5),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          prefixIcon: const Padding(
+                            padding: EdgeInsets.only(left: 14, right: 8),
+                            child: Text(
+                              '\$',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF64748B),
                               ),
                             ),
-                            prefixIconConstraints: BoxConstraints(minWidth: 0, minHeight: 0),
-                            hintText: 'Ej: 1200000',
-                            border: InputBorder.none,
+                          ),
+                          prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+                          hintText: 'Ej: 1200000',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFFB923C),
+                              width: 1.5,
+                            ),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFFB923C),
+                              width: 1.5,
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFEA580C),
+                              width: 2.0,
+                            ),
                           ),
                         ),
                       ),
@@ -2003,7 +2008,7 @@ class _CardImageZoomState extends State<_CardImageZoom> {
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       child: Container(
-        height: 160,
+        height: 155,
         width: double.infinity,
         decoration: const BoxDecoration(
           color: Color(0xFFF1F5F9),

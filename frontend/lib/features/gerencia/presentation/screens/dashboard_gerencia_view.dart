@@ -147,12 +147,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
     }
   }
 
-  String _obtenerNombreSucursal(int? id) {
-    if (id == null || id == -1) return 'Todas las Sucursales';
-    if (id == 1 || id == 101) return 'Casa Matriz (Viña)';
-    if (id == 2 || id == 102) return 'Patio Desarme (Limache)';
-    return 'Sucursal $id';
-  }
+
 
   String _formatearFechaHoy() {
     final ahora = DateTime.now();
@@ -660,8 +655,8 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                                   : _vistaActiva == VistaGerencia.ordenes
                                       ? 'Historial y Auditoría de Órdenes'
                                       : _vistaActiva == VistaGerencia.inventario
-                                          ? 'Control de stock físico, ubicaciones en rack y fijación de precios comerciales'
-                                          : 'Monitoreo de compras en verde y asignación automática de vehículos donantes',
+                                           ? 'Control de stock físico, ubicaciones en rack y fijación de precios comerciales'
+                                           : 'Monitoreo de compras en verde',
                               style: const TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w500,
@@ -1098,99 +1093,40 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
           ),
         ],
       ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final isCompact = constraints.maxWidth < 650;
-          return Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Buenos días, $_nombreUsuario',
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -0.5,
+              color: Color(0xFF0F172A),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Row(
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Buenos días, $_nombreUsuario',
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -0.5,
-                        color: Color(0xFF0F172A),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        const Text(
-                          'Resumen operativo de hoy • ',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFF64748B),
-                          ),
-                        ),
-                        Text(
-                          _formatearFechaHoy(),
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF334155),
-                          ),
-                        ),
-                        const Text(
-                          ' • Filtro: ',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFF64748B),
-                          ),
-                        ),
-                        Text(
-                          _obtenerNombreSucursal(_sucursalSeleccionada),
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                            color: AppPalette.primary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+              const Text(
+                'Resumen operativo de hoy • ',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF64748B),
                 ),
               ),
-              if (!isCompact) ...[
-                const SizedBox(width: 12),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppPalette.success.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: AppPalette.success.withValues(alpha: 0.25),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: const [
-                      Icon(Icons.check_circle,
-                          size: 14, color: AppPalette.success),
-                      SizedBox(width: 6),
-                      Text(
-                        'Cajas en Línea',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          color: AppPalette.success,
-                        ),
-                      ),
-                    ],
-                  ),
+              Text(
+                _formatearFechaHoy(),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF334155),
                 ),
-              ],
+              ),
             ],
-          );
-        },
+          ),
+        ],
       ),
     );
   }
