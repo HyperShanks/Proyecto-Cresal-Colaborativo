@@ -17,11 +17,11 @@ import 'zpl_builder.dart';
 
 /// Servicio de infraestructura para comunicación directa TCP con impresora térmica industrial.
 class PrintService {
-  // Configuración de red por defecto (IP Estática y Puerto Raw JetDirect)
-  static const String defaultPrinterIp = '192.168.1.50';
+  // Configuración de red por defecto (IP Estática en Router Huawei y Puerto Raw JetDirect)
+  static const String defaultPrinterIp = '192.168.8.50';
   static const int defaultPrinterPort = 9100;
-  static const Duration timeoutConexion = Duration(seconds: 3);
-  static const Duration timeoutDiagnostico = Duration(seconds: 2);
+  static const Duration timeoutConexion = Duration(milliseconds: 2500);
+  static const Duration timeoutDiagnostico = Duration(milliseconds: 2000);
 
   /// Valida de forma nativa si el dispositivo tiene interfaces de red activas.
   static Future<void> _verificarConexionRed() async {
@@ -169,9 +169,7 @@ class PrintService {
           final paperOutFlag = camposLinea1[1].trim();
           if (paperOutFlag == '1') {
             debugPrint('📌 [PRINT_SERVICE] ❌ Alerta física detectada: Paper Out (b=1).');
-            throw const PrinterPaperOutException(
-              'La impresora no tiene papel térmico. Por favor, cargue un nuevo rollo.',
-            );
+            throw const PrinterPaperOutException();
           }
         }
         // Bandera 'c' (Posición 2): Pause (0=Normal, 1=Pausada)
@@ -179,9 +177,15 @@ class PrintService {
           final pauseFlag = camposLinea1[2].trim();
           if (pauseFlag == '1') {
             debugPrint('📌 [PRINT_SERVICE] ⚠️ Alerta física detectada: Impresora Pausada (c=1).');
-            throw const PrinterCommunicationException(
-              'La impresora se encuentra pausada. Presione el botón de reanudar en el equipo.',
-            );
+            throw const PrinterPausedException();
+          }
+        }
+        // Bandera 'l' (Posición 11): Over Temperature (0=OK, 1=Sobrecalentamiento)
+        if (camposLinea1.length > 11) {
+          final overheatFlag = camposLinea1[11].trim();
+          if (overheatFlag == '1') {
+            debugPrint('📌 [PRINT_SERVICE] 🛑 Alerta física detectada: Head Overheat (l=1).');
+            throw const PrinterOverheatException();
           }
         }
       }
@@ -194,24 +198,20 @@ class PrintService {
           final headOpenFlag = camposLinea2[2].trim();
           if (headOpenFlag == '1') {
             debugPrint('📌 [PRINT_SERVICE] ❌ Alerta física detectada: Head Open / Tapa abierta (o=1).');
-            throw const PrinterPaperOutException(
-              'La tapa o cabezal de la impresora se encuentra abierta. Ciérrela para continuar.',
-            );
+            throw const PrinterHeadOpenException();
           }
         }
-        // Bandera 'p' (Posición 3): Ribbon Out (0=OK, 1=Sin Cinta)
+        // Bandera 'p' (Posición 3): Ribbon Out (0=OK, 1=Sin Cinta / Resina)
         if (camposLinea2.length > 3) {
           final ribbonOutFlag = camposLinea2[3].trim();
           if (ribbonOutFlag == '1') {
             debugPrint('📌 [PRINT_SERVICE] ❌ Alerta física detectada: Ribbon Out (p=1).');
-            throw const PrinterPaperOutException(
-              'Falta de cinta térmica (Ribbon Out) detectada en la impresora.',
-            );
+            throw const PrinterRibbonOutException();
           }
         }
       }
 
-      debugPrint('📌 [PRINT_SERVICE] 🟢 [FASE 2] Diagnóstico físico OK: Papel cargado y cabezal cerrado.');
+      debugPrint('📌 [PRINT_SERVICE] 🟢 [FASE 2] Diagnóstico físico OK: Papel, resina y cabezal en estado correcto.');
     } finally {
       await subscription?.cancel();
     }
