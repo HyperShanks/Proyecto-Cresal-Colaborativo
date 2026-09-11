@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
@@ -75,9 +75,10 @@ def obtener_resumen_alertas(
         .count()
     )
 
-    # 2. Entregas / Impresiones pendientes
+    # 2. Entregas / Impresiones pendientes (Solo activos en estado Paletizado)
     conteo_impresiones = (
         db.query(Activo_Inventariado)
+        .join(Estado_Activo, Activo_Inventariado.id_estado == Estado_Activo.id_estado)
         .filter(
             or_(
                 Activo_Inventariado.qr_impreso == False,
@@ -85,6 +86,7 @@ def obtener_resumen_alertas(
             ),
             Activo_Inventariado.estado == "Activo",
             Activo_Inventariado.id_sucursal_actual == target_sucursal,
+            func.lower(Estado_Activo.nombre_estado) == "paletizado",
         )
         .count()
     )
@@ -265,12 +267,14 @@ def obtener_tareas_pendientes(
 
     # ---------------------------------------------------------
     # PRIORIDAD 3: Pendiente de Impresión (FILTRADO POR SUCURSAL)
+    # Solo activos en estado Paletizado que aún no tienen QR impreso
     # ---------------------------------------------------------
     activos_sin_qr = (
         db.query(Activo_Inventariado, Vehiculo_Origen, Detalle_Motor, Detalle_Caja_Cambio)
         .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
         .outerjoin(Detalle_Motor, Activo_Inventariado.id_activo == Detalle_Motor.id_activo)
         .outerjoin(Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo)
+        .join(Estado_Activo, Activo_Inventariado.id_estado == Estado_Activo.id_estado)
         .filter(
             or_(
                 Activo_Inventariado.qr_impreso == False,
@@ -278,6 +282,7 @@ def obtener_tareas_pendientes(
             ),
             Activo_Inventariado.estado == "Activo",
             Activo_Inventariado.id_sucursal_actual == sucursal_id,
+            func.lower(Estado_Activo.nombre_estado) == "paletizado",
         )
         .all()
     )

@@ -101,5 +101,24 @@ void main() {
       expect(await AuthService.getEnrolledUserEmail(), isNull);
       expect(await AuthService.isTerminalEnrolled(), isFalse);
     });
+
+    test('AuthResult clasifica correctamente errores de credenciales y de red para enrolamiento', () {
+      const credFail = AuthResult.fail(
+        'Credenciales inválidas, verifica tu correo o contraseña.',
+        errorType: AuthErrorType.credentials,
+      );
+      expect(credFail.isCredentialsError, isTrue);
+      expect(credFail.isNetworkError, isFalse);
+      expect(credFail.errorMessage, 'Credenciales inválidas, verifica tu correo o contraseña.');
+
+      const netFail = AuthResult.fail(
+        'No se pudo conectar con el servidor. Verifique su conexión Wi-Fi o de red corporativa.',
+        errorType: AuthErrorType.network,
+      );
+      expect(netFail.isNetworkError, isTrue);
+      expect(netFail.isCredentialsError, isFalse);
+      expect(netFail.errorMessage, isNot(contains('/api')));
+      expect(netFail.errorMessage, isNot(contains('10.81')));
+    });
   });
 }

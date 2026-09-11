@@ -150,6 +150,16 @@ def db_session(setup_database):
             est_vend = Estado_Activo(id_estado=3, nombre_estado="Vendido")
             db.add(est_vend)
 
+        est_desarme = db.query(Estado_Activo).filter_by(id_estado=5).first()
+        if not est_desarme:
+            est_desarme = Estado_Activo(id_estado=5, nombre_estado="En Desarme")
+            db.add(est_desarme)
+
+        est_pal = db.query(Estado_Activo).filter_by(id_estado=7).first()
+        if not est_pal:
+            est_pal = Estado_Activo(id_estado=7, nombre_estado="Paletizado")
+            db.add(est_pal)
+
         db.commit()
         yield db
     finally:
@@ -566,7 +576,8 @@ def test_traslado_validaciones_sucursales_invalidas(client, db_session, auth_hea
 def test_alertas_impresion_qr_todos_activos_sin_qr(client, db_session, auth_headers_bodega_vina):
     """
     Verifica que la bandeja de impresión / re-impresión QR en bodega:
-    - Incluya TODOS los activos con qr_impreso = False (independientemente del id_estado o si ya tienen pasillo/pallet asignado).
+    - Incluya activos paletizados con qr_impreso = False (independientemente de si tienen pasillo/pallet asignado).
+    - Excluya activos en estado En Desarme (5) o no paletizados.
     - Excluya activos con qr_impreso = True o pertenecientes a otra sucursal.
     """
     # 1. Crear vehículo
@@ -581,12 +592,12 @@ def test_alertas_impresion_qr_todos_activos_sin_qr(client, db_session, auth_head
     db_session.add(veh)
     db_session.flush()
 
-    # Activo A: Disponible (1) y Paletizado con qr_impreso = False -> DEBE APARECER
+    # Activo A: Paletizado (7) con qr_impreso = False -> DEBE APARECER
     act_a = Activo_Inventariado(
         id_activo=uuid.uuid4(),
         sku_qr_fisico=f"SKU-QRA-{uuid.uuid4().hex[:4].upper()}",
         id_categoria=1,
-        id_estado=1,
+        id_estado=7,  # Paletizado
         id_sucursal_actual=1,
         id_vehiculo=veh.id_vehiculo,
         ubicacion_pasillo="P-03",
@@ -596,7 +607,7 @@ def test_alertas_impresion_qr_todos_activos_sin_qr(client, db_session, auth_head
         estado="Activo",
     )
 
-    # Activo B: En Desarme (5) con qr_impreso = False -> DEBE APARECER
+    # Activo B: En Desarme (5) con qr_impreso = False -> NO DEBE APARECER (aún no paletizado)
     act_b = Activo_Inventariado(
         id_activo=uuid.uuid4(),
         sku_qr_fisico=f"SKU-QRB-{uuid.uuid4().hex[:4].upper()}",
@@ -611,12 +622,12 @@ def test_alertas_impresion_qr_todos_activos_sin_qr(client, db_session, auth_head
         estado="Activo",
     )
 
-    # Activo C: Disponible (1) pero sin pasillo/pallet ("S/P") con qr_impreso = False -> DEBE APARECER
+    # Activo C: Paletizado (7) pero sin pasillo/pallet ("S/P") con qr_impreso = False -> DEBE APARECER
     act_c = Activo_Inventariado(
         id_activo=uuid.uuid4(),
         sku_qr_fisico=f"SKU-QRC-{uuid.uuid4().hex[:4].upper()}",
         id_categoria=1,
-        id_estado=1,
+        id_estado=7,  # Paletizado
         id_sucursal_actual=1,
         id_vehiculo=veh.id_vehiculo,
         ubicacion_pasillo="S/P",
@@ -626,12 +637,12 @@ def test_alertas_impresion_qr_todos_activos_sin_qr(client, db_session, auth_head
         estado="Activo",
     )
 
-    # Activo D: Con qr_impreso = True -> NO DEBE APARECER
+    # Activo D: Paletizado con qr_impreso = True -> NO DEBE APARECER
     act_d = Activo_Inventariado(
         id_activo=uuid.uuid4(),
         sku_qr_fisico=f"SKU-QRD-{uuid.uuid4().hex[:4].upper()}",
         id_categoria=1,
-        id_estado=1,
+        id_estado=7,  # Paletizado
         id_sucursal_actual=1,
         id_vehiculo=veh.id_vehiculo,
         ubicacion_pasillo="P-01",
@@ -641,12 +652,12 @@ def test_alertas_impresion_qr_todos_activos_sin_qr(client, db_session, auth_head
         estado="Activo",
     )
 
-    # Activo E: Otra sucursal (2) con qr_impreso = False -> NO DEBE APARECER en sucursal 1
+    # Activo E: Paletizado en otra sucursal (2) con qr_impreso = False -> NO DEBE APARECER en sucursal 1
     act_e = Activo_Inventariado(
         id_activo=uuid.uuid4(),
         sku_qr_fisico=f"SKU-QRE-{uuid.uuid4().hex[:4].upper()}",
         id_categoria=1,
-        id_estado=1,
+        id_estado=7,  # Paletizado
         id_sucursal_actual=2,
         id_vehiculo=veh.id_vehiculo,
         ubicacion_pasillo="P-02",
@@ -666,9 +677,9 @@ def test_alertas_impresion_qr_todos_activos_sin_qr(client, db_session, auth_head
 
     ids_impresion = [t["id_activo"] for t in tareas if t["tipo_alerta"] == "IMPRESION"]
 
-    assert str(act_a.id_activo) in ids_impresion, "El activo A (Disponible y Paletizado) DEBE aparecer en impresión"
-    assert str(act_b.id_activo) in ids_impresion, "El activo B (En Desarme / estado 5) DEBE aparecer en impresión"
-    assert str(act_c.id_activo) in ids_impresion, "El activo C (Sin ubicación física) DEBE aparecer en impresión"
+    assert str(act_a.id_activo) in ids_impresion, "El activo A (Paletizado) DEBE aparecer en impresión"
+    assert str(act_b.id_activo) not in ids_impresion, "El activo B (En Desarme / estado 5) NO DEBE aparecer en impresión"
+    assert str(act_c.id_activo) in ids_impresion, "El activo C (Paletizado sin ubicación física) DEBE aparecer en impresión"
     assert str(act_d.id_activo) not in ids_impresion, "El activo D (con qr_impreso = True) NO debe aparecer en impresión"
     assert str(act_e.id_activo) not in ids_impresion, "El activo E (otra sucursal) NO debe aparecer en impresión de sucursal 1"
 

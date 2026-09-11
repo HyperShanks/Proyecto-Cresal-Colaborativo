@@ -307,3 +307,73 @@ def test_obtener_tareas_pendientes_incluye_reingresos(client, auth_token_bodegue
     assert tarea_reingreso["sku_qr_fisico"] is not None
     assert "ORDEN" in tarea_reingreso["orden_ref"]
 
+
+def test_alertas_impresion_excluye_en_desarme_y_cuenta_paletizados(client, db_session, auth_token_bodeguero):
+    """
+    Verifica que:
+    1. Un activo en estado 'En Desarme' (5) con qr_impreso=False NO genere alerta de impresión.
+    2. Un activo en estado 'Paletizado' (7) con qr_impreso=False SÍ genere alerta de impresión y se refleje en el resumen.
+    """
+    headers = {"Authorization": f"Bearer {auth_token_bodeguero}"}
+
+    # Obtener conteo inicial de impresiones
+    res_ini = client.get("/api/v1/bodega/resumen-alertas?sucursal_id=1", headers=headers).json()
+    impresiones_previas = res_ini["desglose_entregas"]
+
+    # Crear vehículo
+    veh = Vehiculo_Origen(
+        id_vehiculo=uuid.uuid4(),
+        numero_ingreso=f"ING-PRN-{uuid.uuid4().hex[:4].upper()}",
+        patente=f"PR{uuid.uuid4().hex[:4].upper()}",
+        marca="Toyota",
+        modelo="Yaris",
+        anio=2019,
+    )
+    db_session.add(veh)
+    db_session.flush()
+
+    # Activo 1: En Desarme (5) con qr_impreso=False -> NO DEBE CONTARSE
+    act_desarme = Activo_Inventariado(
+        id_activo=uuid.uuid4(),
+        id_vehiculo=veh.id_vehiculo,
+        id_categoria=1,
+        id_estado=5,  # Pendiente de Paletizado / En Desarme
+        id_sucursal_actual=1,
+        sku_qr_fisico=f"SKU-DESARME-{uuid.uuid4().hex[:4]}",
+        precio_referencia=200000,
+        qr_impreso=False,
+        estado="Activo",
+    )
+
+    # Activo 2: Paletizado (7) con qr_impreso=False -> SÍ DEBE CONTARSE
+    act_paletizado = Activo_Inventariado(
+        id_activo=uuid.uuid4(),
+        id_vehiculo=veh.id_vehiculo,
+        id_categoria=1,
+        id_estado=7,  # Paletizado
+        id_sucursal_actual=1,
+        sku_qr_fisico=f"SKU-PALETIZADO-{uuid.uuid4().hex[:4]}",
+        precio_referencia=200000,
+        ubicacion_pasillo="P4",
+        ubicacion_pallet="R10",
+        qr_impreso=False,
+        estado="Activo",
+    )
+
+    db_session.add_all([act_desarme, act_paletizado])
+    db_session.commit()
+
+    # 1. Verificar en /resumen-alertas
+    res_nuevo = client.get("/api/v1/bodega/resumen-alertas?sucursal_id=1", headers=headers).json()
+    assert res_nuevo["desglose_entregas"] == impresiones_previas + 1, (
+        "Solo el activo Paletizado debe sumar a impresiones; el activo en Desarme debe ser excluido."
+    )
+
+    # 2. Verificar en /tareas-pendientes
+    res_tareas = client.get("/api/v1/bodega/tareas-pendientes?sucursal_id=1", headers=headers).json()
+    ids_impresion = [t["id_activo"] for t in res_tareas if t["tipo_alerta"] == "IMPRESION"]
+
+    assert str(act_paletizado.id_activo) in ids_impresion, "El activo Paletizado DEBE aparecer en impresión"
+    assert str(act_desarme.id_activo) not in ids_impresion, "El activo En Desarme NO DEBE aparecer en impresión"
+
+

@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -27,13 +29,32 @@ const String _enrolledUserNameKey = 'enrolled_user_name';
 // ─────────────────────────────────────────────────────────────────────────────
 // MODELOS DE RESULTADO (evita mezclar lógica HTTP en la UI)
 // ─────────────────────────────────────────────────────────────────────────────
+enum AuthErrorType {
+  none,
+  network,      // Wi-Fi / Conexión / Servidor inalcanzable
+  credentials,  // Email o contraseña incorrectos, o PIN incorrecto
+  server,       // Falla 500, base de datos u otro error del backend
+}
+
 class AuthResult {
   final bool success;
   final String? errorMessage;
+  final AuthErrorType errorType;
   final AuthUserModel? user;
 
-  const AuthResult.ok([this.user]) : success = true, errorMessage = null;
-  const AuthResult.fail(this.errorMessage) : success = false, user = null;
+  const AuthResult.ok([this.user])
+      : success = true,
+        errorMessage = null,
+        errorType = AuthErrorType.none;
+
+  const AuthResult.fail(
+    this.errorMessage, {
+    this.errorType = AuthErrorType.server,
+  })  : success = false,
+        user = null;
+
+  bool get isNetworkError => errorType == AuthErrorType.network;
+  bool get isCredentialsError => errorType == AuthErrorType.credentials;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -41,6 +62,32 @@ class AuthResult {
 // ─────────────────────────────────────────────────────────────────────────────
 class AuthService {
   static const _storage = FlutterSecureStorage();
+
+  /// Captura excepciones de red y genera una respuesta limpia sin filtrar IPs ni trazas técnicas.
+  static AuthResult _manejarExcepcionAuth(Object e) {
+    final str = e.toString().toLowerCase();
+    if (e is SocketException ||
+        e is TimeoutException ||
+        e is http.ClientException ||
+        str.contains('socketexception') ||
+        str.contains('clientexception') ||
+        str.contains('connection refused') ||
+        str.contains('failed host lookup') ||
+        str.contains('no address associated') ||
+        str.contains('connection reset') ||
+        str.contains('network') ||
+        str.contains('tiempo de espera') ||
+        str.contains('timeout')) {
+      return const AuthResult.fail(
+        'No se pudo conectar con el servidor. Verifique su conexión Wi-Fi o de red corporativa.',
+        errorType: AuthErrorType.network,
+      );
+    }
+    return const AuthResult.fail(
+      'Ocurrió un problema de comunicación con el servidor. Intente nuevamente.',
+      errorType: AuthErrorType.server,
+    );
+  }
 
   /// Enrola el terminal vinculándolo al usuario corporativo vía email y contraseña.
   /// Guarda el JWT de sesión y fija el `enrolled_user_id`, `enrolled_user_email` y `enrolled_user_name`.
@@ -136,16 +183,16 @@ class AuthService {
       }
 
       if (response.statusCode == 401) {
-        return const AuthResult.fail('Credenciales inválidas, verifica tu correo o contraseña.');
+        return const AuthResult.fail(
+          'Credenciales inválidas, verifica tu correo o contraseña.',
+          errorType: AuthErrorType.credentials,
+        );
       }
 
-      final detail = body['message_user'] ?? body['detail'] ?? 'Error desconocido del servidor';
-      return AuthResult.fail(detail.toString());
-    } on Exception catch (e) {
-      if (e.toString().contains('Tiempo de espera') || e.toString().contains('TimeoutException')) {
-        return const AuthResult.fail('Problemas de conexión con el servidor. Reintentando...');
-      }
-      return AuthResult.fail(e.toString().replaceFirst('Exception: ', ''));
+      final detail = body['message_user'] ?? body['detail'] ?? 'Error del servidor al enrolar terminal.';
+      return AuthResult.fail(detail.toString(), errorType: AuthErrorType.server);
+    } on Object catch (e) {
+      return _manejarExcepcionAuth(e);
     }
   }
 
@@ -249,17 +296,17 @@ class AuthService {
       }
 
       if (response.statusCode == 401) {
-        return const AuthResult.fail('PIN incorrecto para este terminal.');
+        return const AuthResult.fail(
+          'PIN incorrecto para este terminal.',
+          errorType: AuthErrorType.credentials,
+        );
       }
 
       // Camino triste: el backend retornó un error (422, 500, etc.)
       final detail = body['message_user'] ?? body['detail'] ?? 'Error desconocido del servidor';
-      return AuthResult.fail(detail.toString());
-    } on Exception catch (e) {
-      if (e.toString().contains('Tiempo de espera') || e.toString().contains('TimeoutException')) {
-        return const AuthResult.fail('Problemas de conexión con el servidor. Reintentando...');
-      }
-      return AuthResult.fail(e.toString().replaceFirst('Exception: ', ''));
+      return AuthResult.fail(detail.toString(), errorType: AuthErrorType.server);
+    } on Object catch (e) {
+      return _manejarExcepcionAuth(e);
     }
   }
 

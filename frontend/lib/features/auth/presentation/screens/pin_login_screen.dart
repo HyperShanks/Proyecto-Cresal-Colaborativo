@@ -25,6 +25,7 @@ class _PinLoginScreenState extends State<PinLoginScreen>
   String _pin = '';
   bool _isLoading = false;
   String? _errorMessage;
+  AuthErrorType? _lastErrorType;
   int _failedAttempts = 0;
   final FocusNode _keyboardFocusNode = FocusNode();
 
@@ -83,6 +84,7 @@ class _PinLoginScreenState extends State<PinLoginScreen>
     setState(() {
       _pin += digit;
       _errorMessage = null;
+      _lastErrorType = null;
     });
     if (_pin.length == _pinLength) {
       _submitPin();
@@ -99,6 +101,7 @@ class _PinLoginScreenState extends State<PinLoginScreen>
     setState(() {
       _pin = '';
       _errorMessage = null;
+      _lastErrorType = null;
     });
   }
 
@@ -137,6 +140,7 @@ class _PinLoginScreenState extends State<PinLoginScreen>
     setState(() {
       _isLoading = true;
       _errorMessage = null;
+      _lastErrorType = null;
     });
 
     final result = await AuthService.loginConPin(_pin, _enrolledUserId);
@@ -145,29 +149,52 @@ class _PinLoginScreenState extends State<PinLoginScreen>
 
     if (result.success) {
       _failedAttempts = 0;
+      _lastErrorType = null;
       await LoginController.handlePostLoginNavigation(
         context,
         idRol: result.user?.idRol,
         rol: result.user?.nombreRol,
       );
     } else {
-      _failedAttempts++;
-      _shakeController.forward(from: 0);
-
-      if (_failedAttempts >= 10) {
-        await AuthService.clearToken();
-        if (!mounted) return;
+      if (result.isNetworkError) {
+        // Falla de conexión / Wi-Fi: NO se incrementa el contador de intentos ni se sacude
         setState(() {
           _isLoading = false;
           _pin = '';
-          _errorMessage = 'Acceso bloqueado por seguridad tras 10 intentos fallidos.';
+          _lastErrorType = AuthErrorType.network;
+          _errorMessage = result.errorMessage ??
+              'No se pudo conectar con el servidor. Verifique su conexión Wi-Fi o de red corporativa.';
         });
-        _showFatalErrorDialog();
+      } else if (result.isCredentialsError) {
+        // PIN incorrecto: SÍ incrementa intentos fallidos y sacude
+        _failedAttempts++;
+        _shakeController.forward(from: 0);
+
+        if (_failedAttempts >= 10) {
+          await AuthService.clearToken();
+          if (!mounted) return;
+          setState(() {
+            _isLoading = false;
+            _pin = '';
+            _lastErrorType = AuthErrorType.credentials;
+            _errorMessage = 'Acceso bloqueado por seguridad tras 10 intentos fallidos.';
+          });
+          _showFatalErrorDialog();
+        } else {
+          setState(() {
+            _isLoading = false;
+            _pin = '';
+            _lastErrorType = AuthErrorType.credentials;
+            _errorMessage = '${result.errorMessage} (Intento $_failedAttempts de 10)';
+          });
+        }
       } else {
+        // Error de servidor u otro
         setState(() {
           _isLoading = false;
           _pin = '';
-          _errorMessage = '${result.errorMessage} (Intento $_failedAttempts de 10)';
+          _lastErrorType = result.errorType;
+          _errorMessage = result.errorMessage ?? 'Ocurrió un error inesperado al validar el PIN.';
         });
       }
     }
@@ -392,7 +419,7 @@ class _PinLoginScreenState extends State<PinLoginScreen>
         mainAxisAlignment: MainAxisAlignment.center,
         children: List.generate(_pinLength, (index) {
           final isFilled = index < _pin.length;
-          final hasError = _errorMessage != null;
+          final hasError = _errorMessage != null && _lastErrorType == AuthErrorType.credentials;
           return AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOut,
@@ -434,25 +461,32 @@ class _PinLoginScreenState extends State<PinLoginScreen>
   // ── Mensaje de error ──────────────────────────────────────────────────────
 
   Widget _buildErrorMessage() {
+    final isNetwork = _lastErrorType == AuthErrorType.network;
+    final isCreds = _lastErrorType == AuthErrorType.credentials;
+    final bannerColor = isNetwork ? AppPalette.secondary : AppPalette.error;
+    final bannerIcon = isNetwork
+        ? Icons.wifi_off_rounded
+        : (isCreds ? Icons.lock_outline_rounded : Icons.warning_amber_rounded);
+
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 250),
       child: _errorMessage != null
           ? Container(
-              key: ValueKey(_errorMessage),
+              key: ValueKey('error_${_lastErrorType?.name}_$_errorMessage'),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
-                color: AppPalette.error.withValues(alpha: 0.15),
+                color: bannerColor.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: AppPalette.error.withValues(alpha: 0.4),
+                  color: bannerColor.withValues(alpha: 0.4),
                 ),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(
-                    Icons.warning_amber_rounded,
-                    color: AppPalette.error,
+                  Icon(
+                    bannerIcon,
+                    color: bannerColor,
                     size: 18,
                   ),
                   const SizedBox(width: 8),
@@ -460,7 +494,8 @@ class _PinLoginScreenState extends State<PinLoginScreen>
                     child: Text(
                       _errorMessage!,
                       style: AppTypography.small.copyWith(
-                        color: AppPalette.error,
+                        color: bannerColor,
+                        fontWeight: FontWeight.w500,
                       ),
                       textAlign: TextAlign.center,
                     ),

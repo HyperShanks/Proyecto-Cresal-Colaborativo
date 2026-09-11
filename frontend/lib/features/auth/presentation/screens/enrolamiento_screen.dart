@@ -23,6 +23,7 @@ class _EnrolamientoScreenState extends State<EnrolamientoScreen> {
   bool _obscurePassword = true;
   bool _isLoading = false;
   String? _errorMessage;
+  AuthErrorType? _lastErrorType;
 
   @override
   void dispose() {
@@ -39,6 +40,7 @@ class _EnrolamientoScreenState extends State<EnrolamientoScreen> {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
+      _lastErrorType = null;
     });
 
     final email = _emailController.text.trim();
@@ -57,6 +59,7 @@ class _EnrolamientoScreenState extends State<EnrolamientoScreen> {
     } else {
       setState(() {
         _isLoading = false;
+        _lastErrorType = result.errorType;
         _errorMessage = result.errorMessage ?? 'Error al enrolar terminal.';
       });
     }
@@ -145,21 +148,31 @@ class _EnrolamientoScreenState extends State<EnrolamientoScreen> {
   }
 
   Widget _buildErrorBanner() {
+    final isNetwork = _lastErrorType == AuthErrorType.network;
+    final isCreds = _lastErrorType == AuthErrorType.credentials;
+    final bannerColor = isNetwork ? AppPalette.secondary : AppPalette.error;
+    final bannerIcon = isNetwork
+        ? Icons.wifi_off_rounded
+        : (isCreds ? Icons.lock_outline_rounded : Icons.error_outline);
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: AppPalette.error.withValues(alpha: 0.15),
+        color: bannerColor.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppPalette.error.withValues(alpha: 0.5)),
+        border: Border.all(color: bannerColor.withValues(alpha: 0.5)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline, color: AppPalette.error, size: 20),
+          Icon(bannerIcon, color: bannerColor, size: 20),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               _errorMessage!,
-              style: AppTypography.small.copyWith(color: AppPalette.error),
+              style: AppTypography.small.copyWith(
+                color: bannerColor,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         ],

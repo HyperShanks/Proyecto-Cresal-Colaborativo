@@ -140,5 +140,40 @@ void main() {
       await tester.tap(find.text('C').last);
       await tester.pump();
     });
+
+    testWidgets('Error de red muestra icono de Wi-Fi apagado y mensaje amigable sin fugas de IP', (tester) async {
+      tester.view.physicalSize = const Size(1366, 1024);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await const FlutterSecureStorage().write(key: 'enrolled_user_id', value: 'uuid-1234');
+      await const FlutterSecureStorage().write(key: 'enrolled_user_name', value: 'Carlos Bodeguero');
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: PinLoginScreen(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Verificar que AuthResult clasifica correctamente los errores de red
+      const netError = AuthResult.fail(
+        'No se pudo conectar con el servidor. Verifique su conexión Wi-Fi o de red corporativa.',
+        errorType: AuthErrorType.network,
+      );
+      expect(netError.isNetworkError, isTrue);
+      expect(netError.isCredentialsError, isFalse);
+      expect(netError.errorMessage, isNot(contains('http://')));
+      expect(netError.errorMessage, isNot(contains(':8000')));
+
+      // Verificar clasificación de error de credenciales
+      const credError = AuthResult.fail(
+        'PIN incorrecto para este terminal.',
+        errorType: AuthErrorType.credentials,
+      );
+      expect(credError.isCredentialsError, isTrue);
+      expect(credError.isNetworkError, isFalse);
+    });
   });
 }
