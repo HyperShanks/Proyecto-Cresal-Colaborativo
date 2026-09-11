@@ -13,10 +13,10 @@ class EtiquetaTermicaWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final isMotor = data.skuQrFisico.toUpperCase().startsWith('MOT');
 
-    // Mantenemos la proporción 600x400 (Formato horizontal estándar)
+    // Proporción exacta 100x70 mm (10:7 -> 600x420 px)
     return Container(
       width: 600,
-      height: 400,
+      height: 420,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -57,7 +57,7 @@ class EtiquetaTermicaWidget extends StatelessWidget {
                         child: QrImageView(
                           data: data.skuQrFisico,
                           version: QrVersions.auto,
-                          size: 110, // <- Reducido para evitar overflow
+                          size: 140, // <- QR Factor 8 proporcional y centrado
                           backgroundColor: Colors.white,
                           errorCorrectionLevel: QrErrorCorrectLevel.M,
                         ),
@@ -116,9 +116,7 @@ class EtiquetaTermicaWidget extends StatelessWidget {
                   flex: 6,
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: isMotor
-                        ? _buildCamposMotor()
-                        : _buildCamposCaja(),
+                    children: _buildCamposTecnicos(),
                   ),
                 ),
               ],
@@ -217,7 +215,7 @@ class EtiquetaTermicaWidget extends StatelessWidget {
     );
   }
 
-  List<Widget> _buildCamposMotor() {
+  List<Widget> _buildCamposTecnicos() {
     return [
       _buildFilaDato(
         Icons.directions_car,
@@ -240,17 +238,10 @@ class EtiquetaTermicaWidget extends StatelessWidget {
         'TRANSMISIÓN',
         data.transmision ?? 'N/A',
       ),
-    ];
-  }
-
-  List<Widget> _buildCamposCaja() {
-    return [
-      _buildFilaDato(Icons.directions_car, 'MARCA', data.marca),
-      _buildFilaDato(Icons.directions_car_filled, 'MODELO', data.modelo),
       _buildFilaDato(
-        Icons.account_tree,
-        'TIPO DE CAJA',
-        data.transmision ?? 'N/A',
+        Icons.all_inclusive,
+        'TRACCIÓN',
+        data.traccion ?? 'N/A',
       ),
     ];
   }

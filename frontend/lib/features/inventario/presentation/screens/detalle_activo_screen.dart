@@ -147,20 +147,7 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
         ? rawImages.map((e) => e.toString()).toList()
         : ['NO_IMAGE'];
 
-    final etiqueta = EtiquetaData(
-      idActivo: _activo['id_activo']?.toString() ?? '',
-      numeroIngreso: numeroIngreso,
-      marca: marca,
-      modelo: modelo,
-      anio: (_activo['anio'] as num?)?.toInt() ?? 0,
-      cilindrada: cilindrada == 'N/A' ? null : cilindrada,
-      combustible: combustible == 'N/A' ? null : combustible,
-      transmision: transmision == 'N/A' ? null : transmision,
-      galpon: _activo['galpon']?.toString() ?? '',
-      pasillo: _activo['pasillo']?.toString() ?? '',
-      pallet: _activo['pallet']?.toString() ?? '',
-      skuQrFisico: sku,
-    );
+    final etiqueta = EtiquetaData.fromMap(_activo);
 
     return Scaffold(
       backgroundColor: AppPalette.background,
