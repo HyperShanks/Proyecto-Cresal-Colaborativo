@@ -4,8 +4,8 @@
 //
 // Formato físico: 100 mm de ancho x 70 mm de alto (800 x 560 dots @ 8 dpmm).
 // Soporte UTF-8 (^CI28), QR con factor de magnificación 8 perfectamente centrado
-// matemática y visualmente (86 dots a cada margen), protección anti-desbordamiento (^FB)
-// y conjunto unificado de 6 características técnicas para Motores y Cajas de Cambio.
+// matemática y visualmente (86 dots a cada margen), rotulación "NRO INGRESO" alineada a
+// la izquierda y conjunto unificado de 6 características técnicas para Motores y Cajas.
 
 import '../domain/models/etiqueta_data.dart';
 
@@ -52,21 +52,19 @@ class ZplBuilder {
     sb.writeln('^FO500,25^GB260,55,55^FS');
     sb.writeln('^FO500,40^A0N,28,28^FR^FB260,1,0,C^FD$badgeTexto^FS');
 
-    // ── 4. Bloque Izquierdo: Código QR Factor 8 Centrado Matemáticamente ──
+    // ── 4. Bloque Izquierdo: Código QR Factor 8 ──
     final skuLimpio = _sanitize(data.skuQrFisico);
-    // Margen izquierdo exacto = 86 dots | Margen derecho exacto = 86 dots
-    // Margen superior exacto = 41 dots | Margen inferior a SKU = 38 dots
-    sb.writeln('^FO74,104^BQN,2,8^FDQA,$skuLimpio^FS');
+    sb.writeln('^FO104,104^BQN,2,8^FDQA,$skuLimpio^FS');
 
     // Texto SKU debajo del QR (centrado)
-    sb.writeln('^FO35,342^A0N,28,28^FB310,1,0,C^FD$skuLimpio^FS');
+    sb.writeln('^FO35,342^A0N,26,26^FB310,1,0,C^FD$skuLimpio^FS');
 
     // Pastilla negra de Ubicación (centrada)
     sb.writeln('^FO35,384^GB310,50,50^FS');
     final ubicacion = 'UBICACION: G${data.galpon} - P${data.pasillo} - Pa${data.pallet}';
     sb.writeln('^FO35,398^A0N,22,22^FR^FB310,1,0,C^FD$ubicacion^FS');
 
-    // ── 5. Bloque Derecho: 6 Características Técnicas Compartidas con Protección Anti-Desbordamiento (^FB) ──
+    // ── 5. Bloque Derecho: 7 Características Técnicas Compartidas ──
     final marca = _sanitize(data.marca);
     final modelo = _sanitize(data.modelo);
     final anio = data.anio > 0 ? data.anio.toString() : 'N/A';
@@ -75,23 +73,25 @@ class ZplBuilder {
     final transmision = _sanitize(data.transmision);
     final traccion = _sanitize(data.traccion);
 
-    // Ambas tarjetas manejan exactamente las mismas 6 filas técnicas
-    sb.writeln('^FO385,115^A0N,24,24^FB375,1,0,L^FDMARCA/MOD: $marca $modelo^FS');
-    sb.writeln('^FO385,168^A0N,24,24^FB375,1,0,L^FDANIO: $anio^FS');
-    sb.writeln('^FO385,221^A0N,24,24^FB375,1,0,L^FDCILINDRADA: $cilindrada^FS');
-    sb.writeln('^FO385,274^A0N,24,24^FB375,1,0,L^FDCOMBUSTIBLE: $combustible^FS');
-    sb.writeln('^FO385,327^A0N,24,24^FB375,1,0,L^FDTRANSMISION: $transmision^FS');
-    sb.writeln('^FO385,380^A0N,24,24^FB375,1,0,L^FDTRACCION: $traccion^FS');
+    // Ambas tarjetas manejan exactamente las mismas 7 filas técnicas uniformes.
+    // Todas las características usan tamaño tipográfico homogéneo ^A0N,25,25.
+    sb.writeln('^FO385,118^A0N,25,25^FDMARCA: $marca^FS');
+    sb.writeln('^FO385,164^A0N,25,25^FDMODELO: $modelo^FS');
+    sb.writeln('^FO385,210^A0N,25,25^FDANIO: $anio^FS');
+    sb.writeln('^FO385,256^A0N,25,25^FDCILINDRADA: $cilindrada^FS');
+    sb.writeln('^FO385,302^A0N,25,25^FDCOMBUSTIBLE: $combustible^FS');
+    sb.writeln('^FO385,348^A0N,25,25^FDTRANSMISION: $transmision^FS');
+    sb.writeln('^FO385,394^A0N,25,25^FDTRACCION: $traccion^FS');
 
-    // ── 6. Footer: Diferenciación de Motor (Nro Motor + Folio) vs Caja (Folio Ingreso) ──
-    final folio = _sanitize(data.numeroIngreso);
+    // ── 6. Footer: NRO MOTOR y NRO INGRESO iniciando a la izquierda (Left) ──
+    final nroIngreso = _sanitize(data.numeroIngreso);
 
     if (isMotor) {
       final nroMotor = _sanitize(data.numeroMotor);
-      sb.writeln('^FO35,485^A0N,26,26^FB400,1,0,L^FDNRO MOTOR: $nroMotor^FS');
-      sb.writeln('^FO450,485^A0N,28,28^FB320,1,0,R^FDFOLIO: $folio^FS');
+      sb.writeln('^FO35,485^A0N,24,24^FDNRO MOTOR: $nroMotor^FS');
+      sb.writeln('^FO430,485^A0N,24,24^FDNRO INGRESO: $nroIngreso^FS');
     } else {
-      sb.writeln('^FO40,485^A0N,32,32^FB730,1,0,L^FDFOLIO INGRESO: $folio^FS');
+      sb.writeln('^FO40,485^A0N,28,28^FDNRO INGRESO: $nroIngreso^FS');
     }
 
     // ── 7. Cierre e Impresión ──

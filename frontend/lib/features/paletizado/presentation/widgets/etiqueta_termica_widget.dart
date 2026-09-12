@@ -133,7 +133,7 @@ class EtiquetaTermicaWidget extends StatelessWidget {
                   child: isMotor
                       ? _buildFooterBox(
                           Icons.settings_input_component,
-                          'NÚMERO DE MOTOR',
+                          'NRO MOTOR',
                           data.numeroMotor ?? 'N/A',
                         )
                       : const SizedBox.shrink(),
@@ -142,7 +142,7 @@ class EtiquetaTermicaWidget extends StatelessWidget {
                 Expanded(
                   child: _buildFooterBox(
                     Icons.assignment,
-                    'NÚMERO DE INGRESO',
+                    'NRO INGRESO',
                     data.numeroIngreso,
                     isGiant: true,
                   ),
@@ -217,11 +217,8 @@ class EtiquetaTermicaWidget extends StatelessWidget {
 
   List<Widget> _buildCamposTecnicos() {
     return [
-      _buildFilaDato(
-        Icons.directions_car,
-        'MARCA / MODELO',
-        '${data.marca} ${data.modelo}',
-      ),
+      _buildFilaDato(Icons.directions_car, 'MARCA', data.marca),
+      _buildFilaDato(Icons.directions_car_filled, 'MODELO', data.modelo),
       _buildFilaDato(
         Icons.calendar_month,
         'AÑO',
