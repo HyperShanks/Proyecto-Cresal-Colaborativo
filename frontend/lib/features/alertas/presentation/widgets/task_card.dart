@@ -96,7 +96,7 @@ class _TaskCardState extends State<TaskCard> {
     }
   }
 
-  Future<void> _abrirDialogoConfirmarReingreso(BuildContext context) async {
+  Future<void> _abrirDialogoConfirmarReingreso() async {
     final tarea = widget.tarea;
     final idOrden = tarea.idOrden ?? (tarea.ordenRef?.replaceAll('ORDEN #', '').replaceAll('ORDEN ANULADA #', '').trim() ?? '');
     final skuInicial = tarea.skuQrFisico ?? '';
@@ -361,9 +361,22 @@ class _TaskCardState extends State<TaskCard> {
     }
   }
 
+  Future<void> _abrirBarreraSalida() async {
+    final resultado = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (context) => const AuditoriaSalidaScreen()),
+    );
+    if (resultado == true && mounted) {
+      BodegaPollingService.instance.decrementarPendiente(
+        tipoAlerta: widget.tarea.tipoAlerta,
+      );
+      widget.onActualizar?.call();
+      await BodegaPollingService.instance.procesarCiclo();
+    }
+  }
+
   // Método para desplegar el Modal de Acción
   Future<void> _mostrarDetalleModal(
-    BuildContext context,
     Color accentColor,
     Color buttonColor,
   ) async {
@@ -690,12 +703,9 @@ class _TaskCardState extends State<TaskCard> {
     if (accion == 'listo') {
       _marcarListo();
     } else if (accion == 'reingreso') {
-      _abrirDialogoConfirmarReingreso(context);
+      _abrirDialogoConfirmarReingreso();
     } else if (accion == 'barrera') {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => const AuditoriaSalidaScreen()),
-      );
+      await _abrirBarreraSalida();
     } else if (accion == 'imprimir' && tarea.etiquetaData != null) {
       final resultado = await Navigator.pushNamed(
         context,
@@ -745,7 +755,7 @@ class _TaskCardState extends State<TaskCard> {
     final esReingreso = tarea.tipoAlerta == 'REINGRESO';
 
     return GestureDetector(
-      onTap: () => _mostrarDetalleModal(context, accentColor, buttonColor),
+      onTap: () => _mostrarDetalleModal(accentColor, buttonColor),
       child: Container(
         margin: const EdgeInsets.only(bottom: 16.0),
         padding: const EdgeInsets.all(16.0),
@@ -1035,7 +1045,7 @@ class _TaskCardState extends State<TaskCard> {
         height: 46,
         child: ElevatedButton.icon(
           key: Key('btn_reingresar_${tarea.idTarea}'),
-          onPressed: () => _abrirDialogoConfirmarReingreso(context),
+          onPressed: () => _abrirDialogoConfirmarReingreso(),
           icon: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 20),
           label: Text(
             'REINGRESAR / PALETIZAR',
@@ -1057,14 +1067,7 @@ class _TaskCardState extends State<TaskCard> {
         height: 45,
         child: ElevatedButton.icon(
           key: Key('btn_barrera_${tarea.idTarea}'),
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const AuditoriaSalidaScreen(),
-              ),
-            );
-          },
+          onPressed: () => _abrirBarreraSalida(),
           icon: const Icon(Icons.qr_code_scanner, color: Colors.white, size: 20),
           label: Text(
             'BARRERA',
@@ -1150,7 +1153,7 @@ class _TaskCardState extends State<TaskCard> {
             child: OutlinedButton.icon(
               key: Key('btn_detalles_${tarea.idTarea}'),
               onPressed: () {
-                _mostrarDetalleModal(context, accentColor, AppPalette.surface);
+                _mostrarDetalleModal(accentColor, AppPalette.surface);
               },
               icon: const Icon(Icons.visibility_outlined, color: AppPalette.textPrimary, size: 18),
               label: Text(

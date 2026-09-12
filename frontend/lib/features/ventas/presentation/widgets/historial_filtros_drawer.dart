@@ -190,6 +190,14 @@ class HistorialFiltrosDrawer extends StatelessWidget {
                         },
                       ),
                       _buildChoiceChip(
+                        label: 'Completadas',
+                        isSelected: filtroEstado == 'Completada',
+                        activeColor: AppPalette.primary,
+                        onSelected: (selected) {
+                          onEstadoChanged(selected ? 'Completada' : null);
+                        },
+                      ),
+                      _buildChoiceChip(
                         label: 'Anuladas',
                         isSelected: filtroEstado == 'Anulada',
                         activeColor: AppPalette.error,

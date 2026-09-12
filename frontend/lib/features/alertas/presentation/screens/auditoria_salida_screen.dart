@@ -59,7 +59,7 @@ class _AuditoriaSalidaScreenState extends State<AuditoriaSalidaScreen>
     if (code.toUpperCase().startsWith('TX-QR-')) {
       setState(() {
         _qrTransaccionalSalida = code;
-        print(
+        debugPrint(
           '📱 [AUDITORIA] QR Digital Vendedor capturado: $_qrTransaccionalSalida',
         );
       });
@@ -75,7 +75,7 @@ class _AuditoriaSalidaScreenState extends State<AuditoriaSalidaScreen>
       }
       setState(() {
         _skusEscaneados.add(sku);
-        print(
+        debugPrint(
           '📦 [AUDITORIA] SKU Físico de pieza capturado: $sku (Total: ${_skusEscaneados.length})',
         );
       });
@@ -94,13 +94,14 @@ class _AuditoriaSalidaScreenState extends State<AuditoriaSalidaScreen>
   Future<void> _ejecutarDualScanMatch() async {
     if (_isProcessing ||
         _qrTransaccionalSalida == null ||
-        _skusEscaneados.isEmpty)
+        _skusEscaneados.isEmpty) {
       return;
+    }
 
     setState(() => _isProcessing = true);
 
     try {
-      print(
+      debugPrint(
         '🚀 [AUDITORIA] Auto-Trigger Cero-Clics activado. Validando Dual-Scan en backend...',
       );
 
@@ -143,7 +144,7 @@ class _AuditoriaSalidaScreenState extends State<AuditoriaSalidaScreen>
         codigoError = 'ORDEN_MISMATCH';
       }
 
-      print('❌ [AUDITORIA] Error en barrera: $mensajeSanitizado');
+      debugPrint('❌ [AUDITORIA] Error en barrera: $mensajeSanitizado');
 
       setState(() => _isProcessing = false);
 

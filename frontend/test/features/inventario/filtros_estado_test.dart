@@ -10,7 +10,6 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 import 'package:frontend/features/inventario/presentation/screens/inventario_screen.dart';
-import 'package:frontend/features/inventario/presentation/screens/buscador_screen.dart';
 import 'package:frontend/features/inventario/presentation/widgets/resultado_card.dart';
 import 'package:frontend/features/alertas/models/tarea_alerta.dart';
 import 'package:frontend/features/alertas/presentation/widgets/task_card.dart';

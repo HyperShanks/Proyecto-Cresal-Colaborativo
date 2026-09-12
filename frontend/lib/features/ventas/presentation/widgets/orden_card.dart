@@ -35,6 +35,12 @@ class OrdenCard extends StatelessWidget {
       textColor = AppPalette.success;
       icon = Icons.check_circle_outline;
       label = 'Pagada';
+    } else if (orden.esCompletada) {
+      bgColor = AppPalette.primary.withValues(alpha: 0.15);
+      borderColor = AppPalette.primary.withValues(alpha: 0.5);
+      textColor = AppPalette.primary;
+      icon = Icons.verified_outlined;
+      label = 'Completada';
     } else if (orden.esAnulada) {
       bgColor = AppPalette.error.withValues(alpha: 0.15);
       borderColor = AppPalette.error.withValues(alpha: 0.5);

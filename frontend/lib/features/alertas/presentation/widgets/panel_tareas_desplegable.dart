@@ -258,7 +258,7 @@ class _PanelTareasDesplegableState extends State<PanelTareasDesplegable> {
                 return ListView.separated(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   itemCount: filtradas.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
                   itemBuilder: (ctx, index) {
                     final t = filtradas[index];
                     return _buildTaskTile(t);

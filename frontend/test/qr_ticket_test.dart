@@ -96,6 +96,13 @@ void main() {
       expect(ordenPagadaTokenVacio.tieneQrDisponible, isFalse);
     });
 
+    test('OrdenHistorialModel con estado Completada evalúa esCompletada=true, esPagada=false y tieneQrDisponible=false', () {
+      final ordenCompletada = ordenPagadaMock.copyWith(estadoOrden: 'Completada');
+      expect(ordenCompletada.esCompletada, isTrue);
+      expect(ordenCompletada.esPagada, isFalse);
+      expect(ordenCompletada.tieneQrDisponible, isFalse);
+    });
+
     test('OrdenResponseModel.tieneQrDisponible evalúa correctamente', () {
       const respPagada = OrdenResponseModel(
         idOrden: 'ord-01',
@@ -322,6 +329,30 @@ void main() {
       // No debe mostrar botón de QR aún
       expect(find.text('MOSTRAR QR DE ENTREGA (BODEGA)'), findsNothing);
     });
+
+    testWidgets('Muestra badge Completada y confirmación de entrega en barrera de bodega', (tester) async {
+      final ordenCompletada = ordenPagadaMock.copyWith(estadoOrden: 'Completada');
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: OrdenDetailSheet(orden: ordenCompletada),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Completada'), findsOneWidget);
+      expect(find.text('Orden Completada'), findsOneWidget);
+      expect(
+        find.text('Los repuestos fueron validados y entregados exitosamente en barrera de bodega.'),
+        findsOneWidget,
+      );
+      // No debe mostrar botón de QR ni de pago
+      expect(find.text('MOSTRAR QR DE ENTREGA (BODEGA)'), findsNothing);
+      expect(find.text('💳 Simular Pago en Caja (Demo)'), findsNothing);
+    });
   });
 
   // ===========================================================================
@@ -353,6 +384,23 @@ void main() {
 
       expect(find.byType(QrTicketDialog), findsOneWidget);
       expect(find.text('PAGO CONFIRMADO EN CAJA'), findsOneWidget);
+    });
+
+    testWidgets('Orden con estado Completada muestra badge Completada y oculta botón Ver QR', (tester) async {
+      final ordenCompletada = ordenPagadaMock.copyWith(estadoOrden: 'Completada');
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: OrdenCard(orden: ordenCompletada),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Completada'), findsOneWidget);
+      expect(find.text('Ver QR'), findsNothing);
     });
   });
 }
