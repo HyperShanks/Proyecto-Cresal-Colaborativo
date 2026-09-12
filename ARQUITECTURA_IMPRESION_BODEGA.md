@@ -219,7 +219,7 @@ La Honeywell PC42E-T responde a `~HS` con una trama estructurada de 3 líneas de
 7. **`frontend/lib/features/paletizado/presentation/screens/paletizado_screen.dart`**:  
    Modal de confirmación post-paletizado con botón **"Imprimir Ahora"** y soporte del diálogo de diagnósticos físicos.
 8. **`frontend/lib/features/paletizado/services/zpl_builder.dart`**:  
-   Generador de plantillas ZPL II para etiquetas térmicas de 4x2 pulgadas (812x406 dots @ 203 DPI) optimizadas para repuestos automotrices (Motores vs. Cajas de Cambio).
+   Generador de plantillas ZPL II para etiquetas térmicas de 100x70 mm (800x560 dots @ 203 DPI / 8 dpmm) con soporte UTF-8 (`^CI28`), código QR factor 8 y 7 características técnicas unificadas (incluyendo Tracción).
 
 ---
 
@@ -249,7 +249,7 @@ Esta configuración debe realizarse una sola vez por terminal:
 La Honeywell PC42E-T opera directamente por sockets RAW en el puerto 9100 y no requiere interfaz web. La calibración de sensores ópticos de etiquetas y cinta se efectúa mediante su botón físico frontal:
 
 1. Apague la impresora desde el interruptor trasero.
-2. Compruebe que el rollo de etiquetas de 4x2'' y la cinta de resina estén instalados y el cabezal trabado en ambos lados.
+2. Compruebe que el rollo de etiquetas de 100x70 mm y la cinta de resina estén instalados y el cabezal trabado en ambos lados.
 3. **Mantenga presionado el botón superior Feed** y encienda el equipo con el interruptor trasero sin soltar el botón.
 4. Cuando el LED frontal comience a parpadear (aproximadamente 5 segundos), **suelte el botón Feed**.
 5. La impresora avanzará de 2 a 3 etiquetas para calibrar el sensor óptico de separación (Gap) y quedará con luz **verde fija**, lista para operar.
@@ -264,5 +264,5 @@ La Honeywell PC42E-T opera directamente por sockets RAW en el puerto 9100 y no r
 | **Wi-Fi Apagado en PDA** | 4G/5G Activo | Desconectado | Modal interactivo inmediato: *"Active el Wi-Fi en la PDA y conéctese a la red de bodega"*. Botón Reintentar. |
 | **Impresora Apagada** | 4G/5G Activo | Conectado a Huawei | Tras 2.5s de timeout, modal interactivo: *"Impresora apagada o cable desconectado"*. Permite encenderla y reintentar. |
 | **Cabezal / Tapa Abierta** | 4G/5G Activo | Conectado a Huawei | Comando `~HS` detecta `o=1`. Modal guiado: *"Cierre el cabezal de la impresora"*. |
-| **Rollo de Etiquetas Agotado** | 4G/5G Activo | Conectado a Huawei | Comando `~HS` detecta `b=1`. Modal guiado: *"Cargue rollo de etiquetas de 4x2 pulgadas"*. |
+| **Rollo de Etiquetas Agotado** | 4G/5G Activo | Conectado a Huawei | Comando `~HS` detecta `b=1`. Modal guiado: *"Cargue rollo de etiquetas de 100x70 mm"*. |
 | **Falta de Cinta / Resina** | 4G/5G Activo | Conectado a Huawei | Comando `~HS` detecta `p=1`. Modal guiado: *"Cargue la cinta ribbon de resina"*. |
