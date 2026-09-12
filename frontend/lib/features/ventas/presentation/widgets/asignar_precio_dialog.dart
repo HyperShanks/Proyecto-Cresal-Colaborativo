@@ -7,6 +7,7 @@ import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../models/pendiente_precio_model.dart';
 import '../../services/inventario_service.dart';
+import '../screens/catalogo_screen.dart';
 import 'galeria_activo_widget.dart';
 
 /// Diálogo modal interactivo para fijar el precio de referencia de un repuesto (HU-3.8).
@@ -81,6 +82,7 @@ class _AsignarPrecioDialogState extends State<AsignarPrecioDialog> {
       if (!mounted) return;
 
       Navigator.of(context).pop(); // Cierra el diálogo
+      CatalogoScreen.refreshNotifier.value++;
       widget.onPrecioAsignado();
 
       ScaffoldMessenger.of(context).showSnackBar(

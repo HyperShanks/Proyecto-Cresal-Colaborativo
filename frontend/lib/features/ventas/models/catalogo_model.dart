@@ -21,6 +21,7 @@ class CatalogoItem {
   final String? ubicacionPallet;
   final String? observacionEstado;
   final String? estadoActivo;
+  final String? numeroMotor;
   final List<String> imagenes;
   final int versionLock;
   final int? idEstado;
@@ -47,6 +48,7 @@ class CatalogoItem {
     this.ubicacionPallet,
     this.observacionEstado,
     this.estadoActivo,
+    this.numeroMotor,
     this.imagenes = const [],
     this.versionLock = 1,
     this.idEstado,
@@ -74,6 +76,7 @@ class CatalogoItem {
     String? ubicacionPasillo,
     String? ubicacionPallet,
     String? estadoActivo,
+    String? numeroMotor,
     List<String>? imagenes,
     int? versionLock,
     int? idEstado,
@@ -98,6 +101,7 @@ class CatalogoItem {
       ubicacionPasillo: ubicacionPasillo ?? this.ubicacionPasillo,
       ubicacionPallet: ubicacionPallet ?? this.ubicacionPallet,
       estadoActivo: estadoActivo ?? this.estadoActivo,
+      numeroMotor: numeroMotor ?? this.numeroMotor,
       imagenes: imagenes ?? this.imagenes,
       versionLock: versionLock ?? this.versionLock,
       idEstado: idEstado ?? this.idEstado,
@@ -127,6 +131,7 @@ class CatalogoItem {
       ubicacionPallet: json['ubicacion_pallet']?.toString(),
       observacionEstado: json['observacion_estado']?.toString(),
       estadoActivo: json['estado_activo']?.toString(),
+      numeroMotor: json['numero_motor']?.toString() ?? json['numeroMotor']?.toString(),
       imagenes: (json['imagenes'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? const [],
       versionLock: json['version_lock'] as int? ?? 1,
       idEstado: json['id_estado'] as int?,
@@ -156,6 +161,7 @@ class CatalogoItem {
       'ubicacion_pallet': ubicacionPallet,
       'observacion_estado': observacionEstado,
       'estado_activo': estadoActivo,
+      'numero_motor': numeroMotor,
       'imagenes': imagenes,
       'version_lock': versionLock,
       'id_estado': idEstado,

@@ -179,6 +179,7 @@ class AuthService {
           await _storage.write(key: _enrolledUserNameKey, value: nombreCompleto);
         }
 
+        unawaited(CartController.instance.cargarDesdeAlmacenamiento());
         return AuthResult.ok(userModel);
       }
 
@@ -292,6 +293,7 @@ class AuthService {
           await _storage.write(key: _enrolledUserNameKey, value: nombreCompleto);
         }
 
+        unawaited(CartController.instance.cargarDesdeAlmacenamiento());
         return AuthResult.ok(userModel);
       }
 
@@ -449,9 +451,13 @@ class AuthService {
   }
 
   /// Elimina el token, rol y datos de sesión activa (para logout o sesiones expiradas),
-  /// preservando la vinculación/enrolamiento del terminal al operario.
+  /// liberando las reservas del carrito en backend y preservando la vinculación/enrolamiento del terminal.
   static Future<void> clearToken() async {
-    CartController.instance.vaciarCarrito();
+    try {
+      await CartController.instance.liberarYVaciarEnBackend();
+    } catch (_) {
+      CartController.instance.vaciarCarrito();
+    }
     ThemeController.reset();
     await _storage.delete(key: _tokenKey);
     await _storage.delete(key: _rolKey);

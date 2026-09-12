@@ -986,12 +986,15 @@ class _CarritoScreenState extends State<CarritoScreen> {
               child: OutlinedButton.icon(
                 onPressed: () => VentaLibreDialog.show(context),
                 icon: const Icon(Icons.add, color: AppPalette.secondary, size: 20),
-                label: Text(
-                  '+ Añadir Ítem No Inventariado / Misceláneo',
-                  style: AppTypography.button.copyWith(
-                    color: AppPalette.secondary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
+                label: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    '+ Añadir Ítem No Inventariado / Misceláneo',
+                    style: AppTypography.button.copyWith(
+                      color: AppPalette.secondary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
                 style: OutlinedButton.styleFrom(
@@ -1024,24 +1027,30 @@ class _CarritoScreenState extends State<CarritoScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.no_accounts_outlined,
-                            size: 20,
-                            color: _esClienteAnonimo ? AppPalette.secondary : AppPalette.textSecondary,
-                          ),
-                          const SizedBox(width: 10),
-                          Text(
-                            'Consumidor Final (Sin RUT)',
-                            style: AppTypography.body.copyWith(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: _esClienteAnonimo ? AppPalette.secondary : AppPalette.textPrimary,
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.no_accounts_outlined,
+                              size: 20,
+                              color: _esClienteAnonimo ? AppPalette.secondary : AppPalette.textSecondary,
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 10),
+                            Flexible(
+                              child: Text(
+                                'Consumidor Final (Sin RUT)',
+                                style: AppTypography.body.copyWith(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: _esClienteAnonimo ? AppPalette.secondary : AppPalette.textPrimary,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
+                      const SizedBox(width: 8),
                       Switch(
                         key: const Key('switch_cliente_anonimo'),
                         value: _esClienteAnonimo,
@@ -1504,8 +1513,8 @@ class _CarritoScreenState extends State<CarritoScreen> {
           },
           borderRadius: BorderRadius.circular(10),
           child: Container(
-            height: 72,
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+            constraints: const BoxConstraints(minHeight: 68),
+            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
@@ -1515,13 +1524,14 @@ class _CarritoScreenState extends State<CarritoScreen> {
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
                   icon,
                   size: 20,
                   color: isSelected ? AppPalette.primary : AppPalette.textSecondary,
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 FittedBox(
                   fit: BoxFit.scaleDown,
                   child: Text(
@@ -1639,10 +1649,12 @@ class _CarritoScreenState extends State<CarritoScreen> {
         ),
         const SizedBox(height: 4),
         DropdownButtonFormField<String>(
+          isExpanded: true,
           initialValue: items.contains(value) ? value : (hint != null ? null : items.first),
           hint: hint != null
               ? Text(
                   hint,
+                  overflow: TextOverflow.ellipsis,
                   style: AppTypography.small.copyWith(
                     color: AppPalette.neutral,
                     fontSize: 12,
@@ -1654,7 +1666,7 @@ class _CarritoScreenState extends State<CarritoScreen> {
           decoration: InputDecoration(
             filled: true,
             fillColor: AppPalette.background,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8.0),
               borderSide: BorderSide(
@@ -1671,7 +1683,11 @@ class _CarritoScreenState extends State<CarritoScreen> {
           items: items.map((comuna) {
             return DropdownMenuItem(
               value: comuna,
-              child: Text(comuna, style: AppTypography.body.copyWith(fontSize: 13)),
+              child: Text(
+                comuna,
+                style: AppTypography.body.copyWith(fontSize: 13),
+                overflow: TextOverflow.ellipsis,
+              ),
             );
           }).toList(),
           onChanged: onChanged,
@@ -1713,58 +1729,67 @@ class _CarritoScreenState extends State<CarritoScreen> {
                     ),
                   ),
                   const SizedBox(height: 2),
-                  Text(
-                    cart.totalMontoFormateado,
-                    style: AppTypography.headline.copyWith(
-                      color: AppPalette.secondary,
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      cart.totalMontoFormateado,
+                      style: AppTypography.headline.copyWith(
+                        color: AppPalette.secondary,
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 8),
 
             // Botón Derivar a Caja (>= 48px, Verde corporativo)
-            SizedBox(
-              height: 48,
-              child: ElevatedButton.icon(
-                onPressed: (!_isSubmitting && cart.totalMonto > 0)
-                    ? () => _onDerivarACaja(context)
-                    : null,
-                icon: _isSubmitting
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
+            Flexible(
+              child: SizedBox(
+                height: 48,
+                child: ElevatedButton.icon(
+                  onPressed: (!_isSubmitting && cart.totalMonto > 0)
+                      ? () => _onDerivarACaja(context)
+                      : null,
+                  icon: _isSubmitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppPalette.textPrimary,
+                          ),
+                        )
+                      : const Icon(
+                          Icons.send,
+                          size: 18,
                           color: AppPalette.textPrimary,
                         ),
-                      )
-                    : const Icon(
-                        Icons.send,
-                        size: 18,
+                  label: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      _isSubmitting ? 'Procesando...' : 'Derivar a Caja',
+                      style: AppTypography.button.copyWith(
                         color: AppPalette.textPrimary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
                       ),
-                label: Text(
-                  _isSubmitting ? 'Procesando...' : 'Derivar a Caja',
-                  style: AppTypography.button.copyWith(
-                    color: AppPalette.textPrimary,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
+                    ),
                   ),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppPalette.success,
-                  foregroundColor: AppPalette.textPrimary,
-                  disabledBackgroundColor: AppPalette.surface,
-                  disabledForegroundColor: AppPalette.neutral,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8.0),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppPalette.success,
+                    foregroundColor: AppPalette.textPrimary,
+                    disabledBackgroundColor: AppPalette.surface,
+                    disabledForegroundColor: AppPalette.neutral,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8.0),
+                    ),
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 12.0),
                   ),
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(horizontal: 18.0),
                 ),
               ),
             ),

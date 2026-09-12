@@ -264,16 +264,46 @@ def buscar_inventario(
     for act_id, url in fotos_db:
         fotos_map.setdefault(act_id, []).append(url)
 
+    # Herencia de datos técnicos de motor para Cajas de Cambio en lote (SPEC-HU-TAREA-17)
+    cajas_vehiculo_ids = [
+        activo.id_vehiculo
+        for activo, vehiculo, motor, caja, cat, est in resultados_db
+        if cat.id_categoria == 2 and activo.id_vehiculo is not None
+    ]
+    motores_donantes_buscar: Dict[UUID, Detalle_Motor] = {}
+    if cajas_vehiculo_ids:
+        motores_db = (
+            db.query(Activo_Inventariado.id_vehiculo, Detalle_Motor)
+            .join(Detalle_Motor, Activo_Inventariado.id_activo == Detalle_Motor.id_activo)
+            .filter(
+                Activo_Inventariado.id_vehiculo.in_(cajas_vehiculo_ids),
+                Activo_Inventariado.id_categoria == 1,
+            )
+            .all()
+        )
+        for v_id, dm in motores_db:
+            motores_donantes_buscar[v_id] = dm
+
     respuesta = []
     for activo, vehiculo, motor, caja, cat, est in resultados_db:
         lista_fotos = fotos_map.get(activo.id_activo, [])
+        motor_donante = motores_donantes_buscar.get(activo.id_vehiculo) if (cat.id_categoria == 2 and activo.id_vehiculo) else None
 
-        if cat.id_categoria == 2 and caja:
-            transmision_val = caja.transmision_tipo
+        if cat.id_categoria == 2:
+            transmision_val = caja.transmision_tipo if caja else "N/A"
+            cilindrada_val = (motor_donante.cilindrada if motor_donante else None) or "N/A"
+            combustible_val = (motor_donante.combustible if motor_donante else None) or "N/A"
+            numero_motor_val = None
         elif motor:
-            transmision_val = motor.transmision_tipo
+            transmision_val = motor.transmision_tipo or "N/A"
+            cilindrada_val = motor.cilindrada or "N/A"
+            combustible_val = motor.combustible or "N/A"
+            numero_motor_val = motor.numero_motor if cat.id_categoria == 1 else None
         else:
             transmision_val = "N/A"
+            cilindrada_val = "N/A"
+            combustible_val = "N/A"
+            numero_motor_val = None
 
         respuesta.append(
             {
@@ -284,6 +314,7 @@ def buscar_inventario(
                 "marca": vehiculo.marca if vehiculo else "Desconocida",
                 "modelo": vehiculo.modelo if vehiculo else "Desconocido",
                 "anio": vehiculo.anio if vehiculo else 0,
+                "traccion": vehiculo.traccion if (vehiculo and vehiculo.traccion) else "N/A",
                 "ubicacion": f"{activo.ubicacion_pasillo or 'S/P'} - {activo.ubicacion_pallet or 'S/P'}",
                 "pasillo": activo.ubicacion_pasillo or "",
                 "pallet": activo.ubicacion_pallet or "",
@@ -293,10 +324,10 @@ def buscar_inventario(
                 "ubicacion_galpon": getattr(activo, "ubicacion_galpon", "") or "",
                 "estado": est.nombre_estado,
                 "categoria": cat.nombre_categoria,
-                "cilindrada": motor.cilindrada if motor else "N/A",
-                "combustible": motor.combustible if motor else "N/A",
-                "transmision": transmision_val or "N/A",
-                "numero_motor": motor.numero_motor if motor else None,
+                "cilindrada": cilindrada_val,
+                "combustible": combustible_val,
+                "transmision": transmision_val,
+                "numero_motor": numero_motor_val,
                 "observacion": getattr(activo, "observacion_estado", "Sin observaciones registradas."),
                 "version_lock": activo.version_lock or 1,
                 "imagenes": lista_fotos,
@@ -425,23 +456,52 @@ def obtener_catalogo(
     for act_id, url in fotos_db:
         fotos_map.setdefault(act_id, []).append(url)
 
+    cajas_vehiculo_ids = [
+        activo.id_vehiculo
+        for activo, vehiculo, cat, est, suc, motor, caja in resultados
+        if cat.id_categoria == 2 and activo.id_vehiculo is not None
+    ]
+    motores_donantes_catalogo: Dict[UUID, Detalle_Motor] = {}
+    if cajas_vehiculo_ids:
+        motores_cat = (
+            db.query(Activo_Inventariado.id_vehiculo, Detalle_Motor)
+            .join(Detalle_Motor, Activo_Inventariado.id_activo == Detalle_Motor.id_activo)
+            .filter(
+                Activo_Inventariado.id_vehiculo.in_(cajas_vehiculo_ids),
+                Activo_Inventariado.id_categoria == 1,
+            )
+            .all()
+        )
+        for v_id, dm in motores_cat:
+            motores_donantes_catalogo[v_id] = dm
+
     items: List[CatalogoItemResponse] = []
     for activo, vehiculo, cat, est, suc, motor, caja in resultados:
         cilindrada_val = None
         combustible_val = None
         transmision_val = None
+        numero_motor_val = None
+
+        motor_donante = motores_donantes_catalogo.get(activo.id_vehiculo) if (cat.id_categoria == 2 and activo.id_vehiculo) else None
 
         if cat.id_categoria == 1 and motor:
             cilindrada_val = motor.cilindrada
             combustible_val = motor.combustible
             transmision_val = motor.transmision_tipo
-        elif cat.id_categoria == 2 and caja:
-            transmision_val = caja.transmision_tipo
+            numero_motor_val = motor.numero_motor
+        elif cat.id_categoria == 2:
+            transmision_val = caja.transmision_tipo if caja else None
+            if motor_donante:
+                cilindrada_val = motor_donante.cilindrada
+                combustible_val = motor_donante.combustible
+            numero_motor_val = None
         else:
             if motor:
                 cilindrada_val = motor.cilindrada
                 combustible_val = motor.combustible
                 transmision_val = motor.transmision_tipo
+                if cat.id_categoria == 1:
+                    numero_motor_val = motor.numero_motor
             elif caja:
                 transmision_val = caja.transmision_tipo
 
@@ -765,23 +825,52 @@ def obtener_maestro_inventario(
     for act_id, url in fotos_db:
         fotos_map.setdefault(act_id, []).append(url)
 
+    cajas_vehiculo_ids = [
+        activo.id_vehiculo
+        for activo, vehiculo, cat, est, suc, motor, caja in resultados
+        if cat.id_categoria == 2 and activo.id_vehiculo is not None
+    ]
+    motores_donantes_maestro: Dict[UUID, Detalle_Motor] = {}
+    if cajas_vehiculo_ids:
+        motores_m = (
+            db.query(Activo_Inventariado.id_vehiculo, Detalle_Motor)
+            .join(Detalle_Motor, Activo_Inventariado.id_activo == Detalle_Motor.id_activo)
+            .filter(
+                Activo_Inventariado.id_vehiculo.in_(cajas_vehiculo_ids),
+                Activo_Inventariado.id_categoria == 1,
+            )
+            .all()
+        )
+        for v_id, dm in motores_m:
+            motores_donantes_maestro[v_id] = dm
+
     items: List[CatalogoItemResponse] = []
     for activo, vehiculo, cat, est, suc, motor, caja in resultados:
         cilindrada_val = None
         combustible_val = None
         transmision_val = None
+        numero_motor_val = None
+
+        motor_donante = motores_donantes_maestro.get(activo.id_vehiculo) if (cat.id_categoria == 2 and activo.id_vehiculo) else None
 
         if cat.id_categoria == 1 and motor:
             cilindrada_val = motor.cilindrada
             combustible_val = motor.combustible
             transmision_val = motor.transmision_tipo
-        elif cat.id_categoria == 2 and caja:
-            transmision_val = caja.transmision_tipo
+            numero_motor_val = motor.numero_motor
+        elif cat.id_categoria == 2:
+            transmision_val = caja.transmision_tipo if caja else None
+            if motor_donante:
+                cilindrada_val = motor_donante.cilindrada
+                combustible_val = motor_donante.combustible
+            numero_motor_val = None
         else:
             if motor:
                 cilindrada_val = motor.cilindrada
                 combustible_val = motor.combustible
                 transmision_val = motor.transmision_tipo
+                if cat.id_categoria == 1:
+                    numero_motor_val = motor.numero_motor
             elif caja:
                 transmision_val = caja.transmision_tipo
 
@@ -805,7 +894,7 @@ def obtener_maestro_inventario(
             ubicacion_galpon=activo.ubicacion_galpon,
             ubicacion_pallet=activo.ubicacion_pallet,
             observacion_estado=activo.observacion_estado,
-            numero_motor=motor.numero_motor if motor else None,
+            numero_motor=numero_motor_val,
             id_estado=activo.id_estado,
             estado_activo=est.nombre_estado,
             version_lock=activo.version_lock or 1,
@@ -920,18 +1009,37 @@ def obtener_detalle_activo(
     cilindrada_val = None
     combustible_val = None
     transmision_val = None
+    numero_motor_val = None
 
     if cat.id_categoria == 1 and motor:
         cilindrada_val = motor.cilindrada
         combustible_val = motor.combustible
         transmision_val = motor.transmision_tipo
-    elif cat.id_categoria == 2 and caja:
-        transmision_val = caja.transmision_tipo
+        numero_motor_val = motor.numero_motor
+    elif cat.id_categoria == 2:
+        transmision_val = caja.transmision_tipo if caja else None
+        # Herencia para Caja de Cambios desde Detalle_Motor del mismo id_vehiculo (SPEC-HU-TAREA-17)
+        if activo.id_vehiculo:
+            motor_donante = (
+                db.query(Detalle_Motor)
+                .join(Activo_Inventariado, Activo_Inventariado.id_activo == Detalle_Motor.id_activo)
+                .filter(
+                    Activo_Inventariado.id_vehiculo == activo.id_vehiculo,
+                    Activo_Inventariado.id_categoria == 1,
+                )
+                .first()
+            )
+            if motor_donante:
+                cilindrada_val = motor_donante.cilindrada
+                combustible_val = motor_donante.combustible
+        numero_motor_val = None
     else:
         if motor:
             cilindrada_val = motor.cilindrada
             combustible_val = motor.combustible
             transmision_val = motor.transmision_tipo
+            if cat.id_categoria == 1:
+                numero_motor_val = motor.numero_motor
         elif caja:
             transmision_val = caja.transmision_tipo
 
@@ -962,7 +1070,7 @@ def obtener_detalle_activo(
         ubicacion_galpon=activo.ubicacion_galpon,
         ubicacion_pallet=activo.ubicacion_pallet,
         observacion_estado=activo.observacion_estado,
-        numero_motor=motor.numero_motor if motor else None,
+        numero_motor=numero_motor_val,
         id_estado=est.id_estado,
         estado_activo=est.nombre_estado,
         version_lock=activo.version_lock or 1,

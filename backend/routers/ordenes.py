@@ -329,6 +329,8 @@ def crear_orden(
             # Paso C: Bloquear y actualizar estado de repuesto inventariado
             if item.id_activo and activo:
                 activo.id_estado = estado_reservado.id_estado
+                activo.reserva_expira_en = None
+                activo.reservado_por = None
                 activo.version_lock = (activo.version_lock or 1) + 1
 
         # ── 3. Commit Transaccional Atómico ─────────────────────────────────
@@ -1978,14 +1980,22 @@ def checkout_wizard(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"El activo con ID '{act_id}' no fue encontrado en inventario."
                 )
-            if activo.id_estado not in [1, 7]:  # 1: Disponible, 7: Paletizado
+            # Permitir si está Disponible (1), Paletizado (7) o Reservado por el mismo vendedor en su carrito (2)
+            es_su_reserva = (
+                activo.id_estado == 2
+                and activo.reservado_por is not None
+                and activo.reservado_por == current_user.id_usuario
+            )
+            if activo.id_estado not in [1, 7] and not es_su_reserva:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"El repuesto SKU '{activo.sku_qr_fisico}' no está disponible para venta (Estado actual ID {activo.id_estado})."
                 )
 
-            # Transición a Reservado (id_estado = 2) y control de concurrencia optimista
+            # Transición a Reservado formal de orden (id_estado = 2, sin TTL de carrito)
             activo.id_estado = 2
+            activo.reserva_expira_en = None  # Elimina el TTL para que no caduque a los 15 min si el cliente demora en ir a Caja
+            activo.reservado_por = None      # Ya no pertenece a un carrito volátil, ahora pertenece a la orden oficial
             activo.version_lock = (activo.version_lock or 1) + 1
             activo.fecha_actualizacion = datetime.now(timezone.utc)
             activos_reservados += 1

@@ -7,15 +7,18 @@ import '../../models/pendiente_precio_model.dart';
 import '../../services/inventario_service.dart';
 import '../widgets/pendiente_precio_card.dart';
 import '../widgets/asignar_precio_dialog.dart';
+import 'catalogo_screen.dart';
 
 /// Pantalla exclusiva para el Jefe de Ventas (id_rol == 6) (HU-3.8).
 /// Muestra la bandeja de entrada de activos ingresados por bodega que no tienen precio_referencia asignado.
 class BandejaPreciosScreen extends StatefulWidget {
   final VoidCallback? onOpenMenuDrawer;
+  final VoidCallback? onRefreshCatalogo;
 
   const BandejaPreciosScreen({
     super.key,
     this.onOpenMenuDrawer,
+    this.onRefreshCatalogo,
   });
 
   @override
@@ -62,6 +65,8 @@ class _BandejaPreciosScreenState extends State<BandejaPreciosScreen> {
       activo: activo,
       onPrecioAsignado: () {
         _cargarPendientes();
+        CatalogoScreen.refreshNotifier.value++;
+        widget.onRefreshCatalogo?.call();
       },
     );
   }

@@ -4,6 +4,7 @@ import '../../../core/constants/api_constants.dart';
 import '../../auth/services/auth_service.dart';
 import '../models/checkout_wizard_models.dart';
 import 'ordenes_service.dart';
+import 'ordenes_sync_notifier.dart';
 
 /// Servicio de alto nivel para el módulo de Ventas, Mesón y Checkout
 class VentasService {
@@ -45,6 +46,7 @@ class VentasService {
       }
 
       if (response.statusCode == 200 || response.statusCode == 201) {
+        OrdenesSyncNotifier.instance.notificarCambio();
         if (decodedBody is Map<String, dynamic>) {
           return CheckoutWizardResponseModel.fromJson(decodedBody);
         }

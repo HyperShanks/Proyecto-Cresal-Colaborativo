@@ -332,6 +332,7 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
       tabs.add(
         BandejaPreciosScreen(
           onOpenMenuDrawer: () => _scaffoldKey.currentState?.openDrawer(),
+          onRefreshCatalogo: () => _catalogoKey.currentState?.refrescarCatalogo(),
         ),
       );
     }

@@ -9,6 +9,7 @@ import '../../models/cart_item_model.dart';
 import '../../models/checkout_wizard_models.dart';
 import '../../controllers/checkout_wizard_controller.dart';
 import '../../services/ordenes_service.dart';
+import '../../services/ordenes_sync_notifier.dart';
 import '../widgets/modal_backorder_form.dart';
 
 /// Pantalla Principal del Checkout Wizard por 5 Pasos Secuenciales (SPEC-HU-05)
@@ -354,6 +355,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     if (!mounted) return;
 
     if (res != null) {
+      OrdenesSyncNotifier.instance.notificarCambio();
       CartController.instance.vaciarCarrito();
       _controller.clearAll();
 
@@ -591,7 +593,12 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
                 icon: const Icon(Icons.bookmark_add, size: 20),
-                label: const Text('Reserva Backorder', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                label: const Text(
+                  'Reserva Backorder',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 onPressed: () async {
                   final reserva = await ModalBackorderForm.mostrar(context);
                   if (reserva != null) {
@@ -620,7 +627,12 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
                 icon: const Icon(Icons.edit_note, size: 20),
-                label: const Text('+ Ítem Manual', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                label: const Text(
+                  '+ Ítem Manual',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 onPressed: _abrirDialogoItemManual,
               ),
             ),
@@ -937,11 +949,15 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: DropdownButtonFormField<String>(
+                        isExpanded: true,
                         initialValue: _comunaCliente,
                         dropdownColor: AppPalette.surface,
                         style: AppTypography.body,
                         decoration: _inputDeco('Comuna', Icons.location_city),
-                        items: _comunasDisponibles.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                        items: _comunasDisponibles.map((c) => DropdownMenuItem(
+                          value: c,
+                          child: Text(c, overflow: TextOverflow.ellipsis),
+                        )).toList(),
                         onChanged: (val) {
                           if (val != null) {
                             setState(() => _comunaCliente = val);
@@ -1041,11 +1057,15 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                     ),
                     const SizedBox(height: 10),
                     DropdownButtonFormField<String>(
+                      isExpanded: true,
                       initialValue: _comunaDespacho,
                       dropdownColor: AppPalette.surface,
                       style: AppTypography.body,
                       decoration: _inputDeco('Comuna Destino *', Icons.map),
-                      items: _comunasDisponibles.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                      items: _comunasDisponibles.map((c) => DropdownMenuItem(
+                        value: c,
+                        child: Text(c, overflow: TextOverflow.ellipsis),
+                      )).toList(),
                       onChanged: (val) => setState(() => _comunaDespacho = val ?? 'Viña del Mar'),
                     ),
                     const SizedBox(height: 10),
@@ -1100,13 +1120,14 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                 Text('Configuración de Traslado Inter-Sucursal:', style: AppTypography.body.copyWith(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<int>(
+                  isExpanded: true,
                   initialValue: _idSucursalDestino,
                   dropdownColor: AppPalette.surface,
                   style: AppTypography.body,
                   decoration: _inputDeco('Sucursal de Destino *', Icons.swap_horiz),
                   items: const [
-                    DropdownMenuItem(value: 1, child: Text('Sucursal Viña del Mar')),
-                    DropdownMenuItem(value: 2, child: Text('Sucursal Limache')),
+                    DropdownMenuItem(value: 1, child: Text('Sucursal Viña del Mar', overflow: TextOverflow.ellipsis)),
+                    DropdownMenuItem(value: 2, child: Text('Sucursal Limache', overflow: TextOverflow.ellipsis)),
                   ],
                   onChanged: (val) => setState(() => _idSucursalDestino = val ?? 1),
                 ),
@@ -1362,30 +1383,35 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           if (_controller.currentStep > 0)
-            OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                  foregroundColor: AppPalette.textSecondary,
-                  side: const BorderSide(color: Colors.white24)),
-              icon: const Icon(Icons.arrow_back, size: 16),
-              label: const Text('Anterior'),
-              onPressed: _controller.isLoading ? null : _controller.previousStep,
+            Expanded(
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                    foregroundColor: AppPalette.textSecondary,
+                    side: const BorderSide(color: Colors.white24)),
+                icon: const Icon(Icons.arrow_back, size: 16),
+                label: const Text('Anterior', overflow: TextOverflow.ellipsis),
+                onPressed: _controller.isLoading ? null : _controller.previousStep,
+              ),
             )
           else
-            const SizedBox(width: 100),
+            const Spacer(),
+
+          const SizedBox(width: 12),
 
           if (_controller.currentStep < 4)
-            ElevatedButton.icon(
-              key: const Key('btn_siguiente_wizard'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppPalette.primary,
-                foregroundColor: AppPalette.textPrimary,
-                disabledBackgroundColor: AppPalette.surface,
-                disabledForegroundColor: AppPalette.textSecondary,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              ),
-              icon: const Icon(Icons.arrow_forward, size: 16),
-              label: const Text('Siguiente'),
+            Expanded(
+              child: ElevatedButton.icon(
+                key: const Key('btn_siguiente_wizard'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppPalette.primary,
+                  foregroundColor: AppPalette.textPrimary,
+                  disabledBackgroundColor: AppPalette.surface,
+                  disabledForegroundColor: AppPalette.textSecondary,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
+                icon: const Icon(Icons.arrow_forward, size: 16),
+                label: const Text('Siguiente', overflow: TextOverflow.ellipsis),
               onPressed: puedeAvanzar
                   ? () {
                       if (_controller.currentStep == 1) {
@@ -1408,6 +1434,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                       _controller.nextStep();
                     }
                   : null,
+              ),
             ),
         ],
       ),

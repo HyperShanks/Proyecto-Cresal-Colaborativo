@@ -40,12 +40,12 @@ A continuación se detalla la expectativa técnica para la solución de cada bug
    - *Solución*: Este error ocurre porque algún widget, diálogo o listener en la pantalla de alertas está modificando el estado del árbol de widgets mientras este se está dibujando o desmontando. Se debe auditar el `dispose()` de `alertas_screen.dart` y asegurar que no haya *timers* o *listeners* huérfanos disparando actualizaciones. Si es necesario mutar un estado durante el inicio/cierre, envolverlo en `WidgetsBinding.instance.addPostFrameCallback((_) { ... });`.
 
 ## 4. Checklist de Tareas de Implementación (TDD)
-- [ ] **Tarea 1 (Refresh Tasación)**: Conectar la promesa asíncrona de Tasación con la función de recarga del Catálogo General.
-- [ ] **Tarea 2 (UI Carrito - RenderFlex)**: Depurar la UI de `carrito_screen.dart`, reemplazando tamaños fijos por layouts flexibles (`Expanded`, `Wrap`, listviews dinámicos).
-- [ ] **Tarea 3 (Refresh Mis Órdenes)**: Añadir recarga automática del historial de órdenes al finalizar el Wizard de Checkout.
-- [ ] **Tarea 4 (UX Agregar al Carrito)**: Implementar `Navigator.pop(context)` tras un `await agregarAlCarrito()` exitoso en el detalle del activo.
-- [ ] **Tarea 5 (Crash Bodega - Lifecycle)**: Solucionar el problema de renderizado asíncrono en `alertas_screen.dart` utilizando `addPostFrameCallback` o corrigiendo fugas de memoria en el método `dispose()`.
-- [ ] **Tarea 6 (Pruebas Manuales e Integración)**: Simular todos los escenarios reportados en un emulador con pantalla pequeña para garantizar la desaparición del RenderFlex Overflow y la fluidez de las navegaciones.
+- [x] **Tarea 1 (Refresh Tasación)**: Conectar la promesa asíncrona de Tasación con la función de recarga del Catálogo General.
+- [x] **Tarea 2 (UI Carrito - RenderFlex)**: Depurar la UI de `carrito_screen.dart`, reemplazando tamaños fijos por layouts flexibles (`Expanded`, `Wrap`, listviews dinámicos).
+- [x] **Tarea 3 (Refresh Mis Órdenes)**: Añadir recarga automática del historial de órdenes al finalizar el Wizard de Checkout.
+- [x] **Tarea 4 (UX Agregar al Carrito)**: Implementar `Navigator.pop(context)` tras un `await agregarAlCarrito()` exitoso en el detalle del activo.
+- [x] **Tarea 5 (Crash Bodega - Lifecycle)**: Solucionar el problema de renderizado asíncrono en `alertas_screen.dart` utilizando `addPostFrameCallback` o corrigiendo fugas de memoria en el método `dispose()`.
+- [x] **Tarea 6 (Pruebas Manuales e Integración)**: Simular todos los escenarios reportados en un emulador con pantalla pequeña para garantizar la desaparición del RenderFlex Overflow y la fluidez de las navegaciones.
 
 ## 5. Criterios de Validación Automatizada
 - Frontend Linter: Ejecutar `flutter analyze` para asegurar que no existan variables asíncronas mutando estados sin la protección de `mounted`.

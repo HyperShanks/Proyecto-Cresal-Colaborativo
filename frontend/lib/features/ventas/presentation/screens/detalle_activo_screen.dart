@@ -66,6 +66,10 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
         ),
       ),
     );
+
+    if (agregado && mounted) {
+      Navigator.of(context).pop();
+    }
   }
 
   @override
@@ -431,6 +435,8 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
           _buildSpecRow('Marca', widget.item.marca ?? 'N/A'),
           _buildSpecRow('Modelo', widget.item.modelo ?? 'N/A'),
           _buildSpecRow('Año', widget.item.anio?.toString() ?? 'N/A'),
+          if (widget.item.idCategoria == 1 && widget.item.numeroMotor != null && widget.item.numeroMotor!.isNotEmpty)
+            _buildSpecRow('Número de Motor', widget.item.numeroMotor!),
           if (widget.item.cilindrada != null && widget.item.cilindrada!.isNotEmpty)
             _buildSpecRow('Cilindrada', widget.item.cilindrada!),
           if (widget.item.transmisionTipo != null && widget.item.transmisionTipo!.isNotEmpty)

@@ -26,12 +26,12 @@
   - La propiedad `numero_motor` **SÓLO** debe mostrarse en la Interfaz de Usuario si la pieza es un Motor (`id_categoria == 1`). Para la Caja de Cambios, debe ocultarse u omitirse en la pantalla (aunque el DTO lo envíe nulo).
 
 ## 4. Checklist de Tareas de Implementación (TDD)
-- [ ] **Tarea 1 (Backend - Lógica de Herencia en Detalle)**: Modificar `obtener_detalle_activo` en `routers/inventario.py`. Si el activo consultado es Caja (`id_categoria == 2`), realizar un query adicional (o JOIN) para buscar el `Detalle_Motor` del mismo `id_vehiculo` y poblar `cilindrada` y `combustible`.
-- [ ] **Tarea 2 (Backend - Lógica de Herencia en Búsqueda)**: Replicar esta lógica de cruce en el endpoint `GET /api/v1/inventario/buscar` para asegurar que el catálogo principal muestre las cajas con la cilindrada correcta.
-- [ ] **Tarea 3 (Backend - Pruebas Pytest)**: Escribir un test unitario creando un vehículo con motor y caja, consultando el endpoint de la caja y verificando que el JSON de respuesta incluya la `cilindrada` heredada del motor.
-- [ ] **Tarea 4 (Frontend - UI Detalle Compartido)**: Refactorizar `detalle_activo_screen.dart` para que la sección de especificaciones itere y renderice dinámicamente `traccion`, `transmision_tipo`, `cilindrada` y `combustible` independientemente de si es Caja o Motor.
-- [ ] **Tarea 5 (Frontend - UI Exclusividad de Motor)**: Envolver el renderizado visual de la etiqueta `Número de Motor` con un guardián tipo `if (activo.idCategoria == 1 && activo.numeroMotor != null)`.
-- [ ] **Tarea 6 (Frontend - Pruebas Widget)**: Testear que al renderizar el widget con un mock de Caja de Cambios, el componente del "Número de Motor" no exista en el árbol de widgets.
+- [x] **Tarea 1 (Backend - Lógica de Herencia en Detalle)**: Modificar `obtener_detalle_activo` en `routers/inventario.py`. Si el activo consultado es Caja (`id_categoria == 2`), realizar un query adicional (o JOIN) para buscar el `Detalle_Motor` del mismo `id_vehiculo` y poblar `cilindrada` y `combustible`.
+- [x] **Tarea 2 (Backend - Lógica de Herencia en Búsqueda)**: Replicar esta lógica de cruce en el endpoint `GET /api/v1/inventario/buscar` para asegurar que el catálogo principal muestre las cajas con la cilindrada correcta.
+- [x] **Tarea 3 (Backend - Pruebas Pytest)**: Escribir un test unitario creando un vehículo con motor y caja, consultando el endpoint de la caja y verificando que el JSON de respuesta incluya la `cilindrada` heredada del motor.
+- [x] **Tarea 4 (Frontend - UI Detalle Compartido)**: Refactorizar `detalle_activo_screen.dart` para que la sección de especificaciones itere y renderice dinámicamente `traccion`, `transmision_tipo`, `cilindrada` y `combustible` independientemente de si es Caja o Motor.
+- [x] **Tarea 5 (Frontend - UI Exclusividad de Motor)**: Envolver el renderizado visual de la etiqueta `Número de Motor` con un guardián tipo `if (activo.idCategoria == 1 && activo.numeroMotor != null)`.
+- [x] **Tarea 6 (Frontend - Pruebas Widget)**: Testear que al renderizar el widget con un mock de Caja de Cambios, el componente del "Número de Motor" no exista en el árbol de widgets.
 
 ## 5. Criterios de Validación Automatizada
 - Backend Tests: Ejecutar `pytest tests/test_inventario_herencia_caja.py -v`.

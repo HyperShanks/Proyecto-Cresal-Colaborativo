@@ -124,6 +124,8 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
     final bool esMotor =
         categoria.toUpperCase() == 'MOTOR' ||
         categoria.toUpperCase() == 'MOTORES';
+    final int idCategoria = (_activo['id_categoria'] ?? _activo['idCategoria']) as int? ??
+        (esMotor ? 1 : (categoria.toUpperCase().contains('CAJA') ? 2 : 0));
 
     final String marca = _activo['marca']?.toString() ?? 'Desconocida';
     final String modelo = _activo['modelo']?.toString() ?? 'Desconocido';
@@ -133,11 +135,14 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
     final String numeroIngreso =
         _activo['numero_ingreso']?.toString() ?? 'N/A';
 
+    final String? numeroMotor =
+        (_activo['numero_motor'] ?? _activo['numeroMotor'])?.toString();
+    final String? traccion = _activo['traccion']?.toString();
     final String cilindrada = _activo['cilindrada']?.toString() ?? 'N/A';
     final String combustible =
         _activo['combustible']?.toString() ?? 'N/A';
     final String transmision =
-        _activo['transmision']?.toString() ?? 'N/A';
+        (_activo['transmision'] ?? _activo['transmision_tipo'] ?? _activo['transmisionTipo'])?.toString() ?? 'N/A';
     final String observacion =
         _activo['observacion']?.toString() ??
         'Sin observaciones registradas.';
@@ -378,12 +383,20 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
 
                   _buildSpecCard('Nº DE INGRESO VEHÍCULO', numeroIngreso),
 
-                  if (esMotor) ...[
-                    _buildSpecCard('CILINDRADA', cilindrada),
-                    _buildSpecCard('COMBUSTIBLE', combustible),
-                  ],
+                  if (idCategoria == 1 && numeroMotor != null && numeroMotor.isNotEmpty && numeroMotor != 'N/A')
+                    _buildSpecCard('Número de Motor', numeroMotor),
 
-                  _buildSpecCard('TRANSMISIÓN', transmision),
+                  // Renderizado dinámico de especificaciones técnicas compartidas (SPEC-HU-TAREA-17)
+                  ...[
+                    if (cilindrada.isNotEmpty && (cilindrada != 'N/A' || esMotor || idCategoria == 2))
+                      {'titulo': 'CILINDRADA', 'valor': cilindrada},
+                    if (combustible.isNotEmpty && (combustible != 'N/A' || esMotor || idCategoria == 2))
+                      {'titulo': 'COMBUSTIBLE', 'valor': combustible},
+                    if (transmision.isNotEmpty && transmision != 'N/A')
+                      {'titulo': 'TRANSMISIÓN', 'valor': transmision},
+                    if (traccion != null && traccion.isNotEmpty && traccion != 'N/A')
+                      {'titulo': 'TRACCIÓN', 'valor': traccion},
+                  ].map((spec) => _buildSpecCard(spec['titulo']!, spec['valor']!)),
 
                   Container(
                     margin: const EdgeInsets.only(bottom: 28),

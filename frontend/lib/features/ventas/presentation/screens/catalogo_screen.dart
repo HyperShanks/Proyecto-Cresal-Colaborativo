@@ -22,6 +22,10 @@ import 'detalle_activo_screen.dart';
 class CatalogoScreen extends StatefulWidget {
   final VoidCallback? onOpenMenuDrawer;
 
+  /// Notificador estático global para recargar el catálogo automáticamente
+  /// tras tasación de precios u otros eventos externos.
+  static final ValueNotifier<int> refreshNotifier = ValueNotifier<int>(0);
+
   const CatalogoScreen({
     super.key,
     this.onOpenMenuDrawer,
@@ -41,6 +45,12 @@ class CatalogoScreenState extends State<CatalogoScreen> {
   /// (usado tras derivar órdenes a caja para sincronizar stock en tiempo real).
   Future<void> refrescarCatalogo() async {
     await _fetchCatalogo(resetPagination: true);
+  }
+
+  void _onExternalRefresh() {
+    if (mounted) {
+      refrescarCatalogo();
+    }
   }
 
   // Estado del catálogo
@@ -75,12 +85,14 @@ class CatalogoScreenState extends State<CatalogoScreen> {
   @override
   void initState() {
     super.initState();
+    CatalogoScreen.refreshNotifier.addListener(_onExternalRefresh);
     _scrollController.addListener(_onScroll);
     _cargarSucursalYCatalogo();
   }
 
   @override
   void dispose() {
+    CatalogoScreen.refreshNotifier.removeListener(_onExternalRefresh);
     _debounceTimer?.cancel();
     _searchController.dispose();
     _scrollController.dispose();
@@ -415,6 +427,12 @@ class CatalogoScreenState extends State<CatalogoScreen> {
         ),
         actions: [
           IconButton(
+            key: const Key('btn_refrescar_catalogo_appbar'),
+            icon: const Icon(Icons.refresh, color: AppPalette.primary),
+            tooltip: 'Actualizar catálogo',
+            onPressed: () => _fetchCatalogo(resetPagination: true),
+          ),
+          IconButton(
             icon: const Icon(Icons.bookmark_add_outlined, color: AppPalette.secondary),
             tooltip: 'Crear Reserva por Encargo (Compra en Verde)',
             onPressed: () async {
@@ -675,110 +693,130 @@ class CatalogoScreenState extends State<CatalogoScreen> {
     }
 
     if (_errorMessage != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline, size: 48, color: AppPalette.error),
-              const SizedBox(height: 12),
-              Text(
-                _errorMessage!,
-                textAlign: TextAlign.center,
-                style: AppTypography.body.copyWith(color: AppPalette.textSecondary),
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                onPressed: () => _fetchCatalogo(resetPagination: true),
-                icon: const Icon(Icons.refresh),
-                label: const Text('Reintentar'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppPalette.primary,
-                  foregroundColor: AppPalette.textPrimary,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8.0),
-                  ),
-                  elevation: 0,
+      return RefreshIndicator(
+        color: AppPalette.primary,
+        backgroundColor: AppPalette.surface,
+        onRefresh: () => _fetchCatalogo(resetPagination: true),
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Container(
+            constraints: BoxConstraints(
+              minHeight: MediaQuery.of(context).size.height * 0.6,
+            ),
+            padding: const EdgeInsets.all(24.0),
+            alignment: Alignment.center,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.error_outline, size: 48, color: AppPalette.error),
+                const SizedBox(height: 12),
+                Text(
+                  _errorMessage!,
+                  textAlign: TextAlign.center,
+                  style: AppTypography.body.copyWith(color: AppPalette.textSecondary),
                 ),
-              ),
-            ],
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  onPressed: () => _fetchCatalogo(resetPagination: true),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Reintentar'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppPalette.primary,
+                    foregroundColor: AppPalette.textPrimary,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8.0),
+                    ),
+                    elevation: 0,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       );
     }
 
     if (_items.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.inventory_2_outlined,
-                size: 56,
-                color: AppPalette.neutral,
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'No se encontraron repuestos',
-                style: AppTypography.title,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                _tieneFiltrosActivos || _searchController.text.isNotEmpty
-                    ? 'Intenta ajustar los filtros o el término de búsqueda.'
-                    : 'No hay repuestos disponibles en el inventario.',
-                textAlign: TextAlign.center,
-                style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppPalette.secondary,
-                  foregroundColor: AppPalette.background,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      return RefreshIndicator(
+        color: AppPalette.primary,
+        backgroundColor: AppPalette.surface,
+        onRefresh: () => _fetchCatalogo(resetPagination: true),
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Container(
+            constraints: BoxConstraints(
+              minHeight: MediaQuery.of(context).size.height * 0.6,
+            ),
+            padding: const EdgeInsets.all(24.0),
+            alignment: Alignment.center,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.inventory_2_outlined,
+                  size: 56,
+                  color: AppPalette.neutral,
                 ),
-                icon: const Icon(Icons.bookmark_add, size: 18),
-                label: const Text('¿NO ESTÁ? ENCARGAR POR BACKORDER', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                onPressed: () async {
-                  final messenger = ScaffoldMessenger.of(context);
-                  final reserva = await ModalBackorderForm.mostrar(context);
-                  if (!mounted || reserva == null) return;
-                  CartController.instance.agregarReservaBackorder(
-                    idCategoria: reserva.idCategoriaRequerida,
-                    categoriaNombre: reserva.categoriaNombre,
-                    marca: reserva.marcaRequerida,
-                    modelo: reserva.modeloRequerido,
-                    anio: reserva.anioRequerido,
-                    precioAcordado: reserva.precioAcordado,
-                    montoAbonado: reserva.montoAbonado,
-                    notas: reserva.notasPreparacion,
-                  );
-                  messenger.showSnackBar(
-                    SnackBar(
-                      content: Text('Reserva por encargo (${reserva.marcaRequerida} ${reserva.modeloRequerido}) añadida al Checkout Wizard.'),
-                      backgroundColor: AppPalette.secondary,
-                    ),
-                  );
-                },
-              ),
-              if (_tieneFiltrosActivos || _searchController.text.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                TextButton(
-                  onPressed: () {
-                    _searchController.clear();
-                    _limpiarFiltros();
-                  },
-                  child: Text(
-                    'Limpiar todos los filtros',
-                    style: AppTypography.button.copyWith(color: AppPalette.primary),
+                const SizedBox(height: 12),
+                const Text(
+                  'No se encontraron repuestos',
+                  style: AppTypography.title,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _tieneFiltrosActivos || _searchController.text.isNotEmpty
+                      ? 'Intenta ajustar los filtros o el término de búsqueda.'
+                      : 'No hay repuestos disponibles en el inventario.',
+                  textAlign: TextAlign.center,
+                  style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppPalette.secondary,
+                    foregroundColor: AppPalette.background,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
+                  icon: const Icon(Icons.bookmark_add, size: 18),
+                  label: const Text('¿NO ESTÁ? ENCARGAR POR BACKORDER', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                  onPressed: () async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    final reserva = await ModalBackorderForm.mostrar(context);
+                    if (!mounted || reserva == null) return;
+                    CartController.instance.agregarReservaBackorder(
+                      idCategoria: reserva.idCategoriaRequerida,
+                      categoriaNombre: reserva.categoriaNombre,
+                      marca: reserva.marcaRequerida,
+                      modelo: reserva.modeloRequerido,
+                      anio: reserva.anioRequerido,
+                      precioAcordado: reserva.precioAcordado,
+                      montoAbonado: reserva.montoAbonado,
+                      notas: reserva.notasPreparacion,
+                    );
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text('Reserva por encargo (${reserva.marcaRequerida} ${reserva.modeloRequerido}) añadida al Checkout Wizard.'),
+                        backgroundColor: AppPalette.secondary,
+                      ),
+                    );
+                  },
                 ),
+                if (_tieneFiltrosActivos || _searchController.text.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  TextButton(
+                    onPressed: () {
+                      _searchController.clear();
+                      _limpiarFiltros();
+                    },
+                    child: Text(
+                      'Limpiar todos los filtros',
+                      style: AppTypography.button.copyWith(color: AppPalette.primary),
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       );
@@ -790,6 +828,7 @@ class CatalogoScreenState extends State<CatalogoScreen> {
       onRefresh: () => _fetchCatalogo(resetPagination: true),
       child: ListView.builder(
         controller: _scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16.0, 4.0, 16.0, 80.0), // Margen inferior para el FAB
         itemCount: _items.length + (_isLoadingMore ? 1 : 0),
         itemBuilder: (context, index) {

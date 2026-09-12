@@ -27,14 +27,28 @@ class AlertasScreen extends StatefulWidget {
 
 class _AlertasScreenState extends State<AlertasScreen> {
   late Future<List<TareaAlerta>> futureAlertas;
+  bool _isDisposed = false;
 
   @override
   void initState() {
     super.initState();
     futureAlertas = widget.futureAlertas ?? LogisticaService.obtenerAlertas();
+    futureAlertas.then((tareas) {
+      if (mounted && !_isDisposed) {
+        _sincronizarNotifiers(tareas);
+      }
+    }).catchError((_) {});
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
   }
 
   void _sincronizarNotifiers(List<TareaAlerta> tareas) {
+    if (!mounted || _isDisposed) return;
+
     final preentrega = tareas
         .where((t) =>
             t.tipoAlerta == 'PREPARACION' ||
@@ -56,11 +70,17 @@ class _AlertasScreenState extends State<AlertasScreen> {
   }
 
   Future<void> _refreshAlertas() async {
-    setState(() {
-      futureAlertas = widget.futureAlertas ?? LogisticaService.obtenerAlertas();
-    });
+    final fut = widget.futureAlertas ?? LogisticaService.obtenerAlertas();
+    if (mounted && !_isDisposed) {
+      setState(() {
+        futureAlertas = fut;
+      });
+    }
     try {
-      await futureAlertas;
+      final tareas = await fut;
+      if (mounted && !_isDisposed) {
+        _sincronizarNotifiers(tareas);
+      }
     } catch (_) {}
   }
 
@@ -206,9 +226,6 @@ class _AlertasScreenState extends State<AlertasScreen> {
             }
 
             final tareas = snapshot.data ?? [];
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) _sincronizarNotifiers(tareas);
-            });
 
             final preentrega = tareas
                 .where((t) =>

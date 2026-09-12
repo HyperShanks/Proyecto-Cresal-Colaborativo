@@ -1,20 +1,36 @@
 // lib/features/ventas/controllers/cart_controller.dart
 
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/cart_item_model.dart';
 import '../models/catalogo_model.dart';
 import '../services/carrito_service.dart';
 
 /// Controlador Reactivo de Estado Global para el Carrito Híbrido (HU-3.3).
 /// Implementado como Singleton con ChangeNotifier (100% Flutter nativo).
-/// Persiste en memoria durante toda la sesión y notifica a los widgets suscritos.
+/// Persiste en memoria y en almacenamiento seguro (FlutterSecureStorage),
+/// sobreviviendo a cierres de aplicación y reconciliando reservas con el backend.
 class CartController extends ChangeNotifier {
-  static final CartController _instance = CartController._internal();
+  static const String _storageCartKey = 'cresal_cart_items_v1';
+  static CartController _instance = CartController._internal();
   factory CartController() => _instance;
   static CartController get instance => _instance;
 
-  CartController._internal();
+  FlutterSecureStorage _storage;
+  bool _estaCargandoPersistencia = false;
+
+  CartController._internal({FlutterSecureStorage? storage})
+      : _storage = storage ?? const FlutterSecureStorage() {
+    unawaited(cargarDesdeAlmacenamiento());
+  }
+
+  /// Método para reiniciar la instancia en entornos de pruebas unitarias
+  @visibleForTesting
+  static void resetForTesting({FlutterSecureStorage? mockStorage}) {
+    _instance = CartController._internal(storage: mockStorage);
+  }
 
   final List<CartItem> _items = [];
 
@@ -44,6 +60,93 @@ class CartController extends ChangeNotifier {
     return _items.any((item) => item.esInventariado && item.id == idActivo);
   }
 
+  /// Persiste el estado actual de los ítems del carrito en el almacenamiento seguro
+  Future<void> guardarEnAlmacenamiento() async {
+    try {
+      if (_items.isEmpty) {
+        await _storage.delete(key: _storageCartKey);
+      } else {
+        final rawList = _items.map((i) => i.toJson()).toList();
+        await _storage.write(key: _storageCartKey, value: jsonEncode(rawList));
+      }
+    } catch (e) {
+      debugPrint('Error al guardar carrito en almacenamiento seguro: $e');
+    }
+  }
+
+  /// Carga los ítems persistidos desde el almacenamiento seguro y opcionalmente
+  /// reconcilia la vigencia de las reservas con el backend
+  Future<void> cargarDesdeAlmacenamiento({bool reconciliarBackend = true}) async {
+    if (_estaCargandoPersistencia) return;
+    _estaCargandoPersistencia = true;
+
+    try {
+      final jsonStr = await _storage.read(key: _storageCartKey);
+      if (jsonStr != null && jsonStr.trim().isNotEmpty) {
+        final trimmed = jsonStr.trim();
+        if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+          final dynamic decoded = jsonDecode(trimmed);
+          if (decoded is List) {
+            _items.clear();
+            for (final itemMap in decoded) {
+              if (itemMap is Map) {
+                final cartItem = CartItem.fromJson(Map<String, dynamic>.from(itemMap));
+                if (cartItem != null) {
+                  _items.add(cartItem);
+                }
+              }
+            }
+            notifyListeners();
+          }
+        }
+      }
+
+      if (reconciliarBackend && _items.any((i) => i.esInventariado)) {
+        unawaited(reconciliarConBackend());
+      }
+    } catch (e) {
+      debugPrint('Error al cargar carrito desde almacenamiento seguro: $e');
+    } finally {
+      _estaCargandoPersistencia = false;
+    }
+  }
+
+  /// Reconcilia los activos inventariados reservados con el estado en el backend.
+  /// Si una reserva expiró mientras la app estuvo cerrada, se remueve del carrito.
+  Future<void> reconciliarConBackend() async {
+    try {
+      final misReservas = await CarritoService.obtenerMisReservas();
+      if (misReservas == null) {
+        // En caso de problema de conexión o sesión no autenticada, no alteramos el estado local
+        return;
+      }
+
+      final idsActivosVigentes = misReservas
+          .map((r) => r['id_activo']?.toString())
+          .where((id) => id != null)
+          .toSet();
+
+      bool huboCambios = false;
+      _items.removeWhere((item) {
+        if (item.esInventariado) {
+          final sigueVigente = idsActivosVigentes.contains(item.id);
+          if (!sigueVigente) {
+            huboCambios = true;
+            return true;
+          }
+        }
+        return false;
+      });
+
+      if (huboCambios) {
+        notifyListeners();
+        await guardarEnAlmacenamiento();
+      }
+    } catch (e) {
+      debugPrint('Error al reconciliar carrito con backend: $e');
+    }
+  }
+
   /// Agrega un Activo Inventariado al carrito.
   /// Retorna `true` si se agregó exitosamente, o `false` si ya existía en el carrito.
   bool agregarInventariado(
@@ -63,6 +166,7 @@ class CartController extends ChangeNotifier {
 
     _items.add(cartItem);
     notifyListeners();
+    unawaited(guardarEnAlmacenamiento());
     return true;
   }
 
@@ -83,6 +187,7 @@ class CartController extends ChangeNotifier {
 
     _items.add(cartItem);
     notifyListeners();
+    unawaited(guardarEnAlmacenamiento());
   }
 
   /// Agrega una Reserva por Encargo (Compra en Verde / Backorder) al carrito
@@ -110,6 +215,7 @@ class CartController extends ChangeNotifier {
 
     _items.add(cartItem);
     notifyListeners();
+    unawaited(guardarEnAlmacenamiento());
   }
 
   /// Actualiza el precio acordado de un ítem (inventariado, venta libre o backorder)
@@ -124,6 +230,7 @@ class CartController extends ChangeNotifier {
       item.monto = nuevoPrecio;
     }
     notifyListeners();
+    unawaited(guardarEnAlmacenamiento());
   }
 
   /// Actualiza la cantidad de un ítem de venta libre (si es 0 se elimina)
@@ -140,6 +247,7 @@ class CartController extends ChangeNotifier {
     if (item is VentaLibreCartItem) {
       item.cantidad = nuevaCantidad;
       notifyListeners();
+      unawaited(guardarEnAlmacenamiento());
     }
   }
 
@@ -155,6 +263,7 @@ class CartController extends ChangeNotifier {
       item.observacion = notas;
     }
     notifyListeners();
+    unawaited(guardarEnAlmacenamiento());
   }
 
   /// Elimina un ítem específico del carrito por su ID y libera su reserva si es inventariado
@@ -169,6 +278,20 @@ class CartController extends ChangeNotifier {
 
     _items.removeAt(index);
     notifyListeners();
+    unawaited(guardarEnAlmacenamiento());
+  }
+
+  /// Libera todas las reservas inventariadas en el backend y limpia el almacenamiento
+  Future<void> liberarYVaciarEnBackend() async {
+    final inventariados = _items.where((item) => item.esInventariado).toList();
+    if (inventariados.isNotEmpty) {
+      await Future.wait(
+        inventariados.map((item) => CarritoService.liberarActivo(item.id)),
+      );
+    }
+    _items.clear();
+    notifyListeners();
+    await guardarEnAlmacenamiento();
   }
 
   /// Vacía por completo el carrito
@@ -182,5 +305,6 @@ class CartController extends ChangeNotifier {
     }
     _items.clear();
     notifyListeners();
+    unawaited(guardarEnAlmacenamiento());
   }
 }

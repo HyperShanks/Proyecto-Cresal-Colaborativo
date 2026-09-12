@@ -168,20 +168,22 @@ class CarritoService {
   }
 
   /// Consulta la lista de reservas activas del usuario logueado.
-  static Future<List<Map<String, dynamic>>> obtenerMisReservas({
+  /// Retorna `null` si hay error de red o no hay sesión activa.
+  static Future<List<Map<String, dynamic>>?> obtenerMisReservas({
     http.Client? client,
   }) async {
     final httpClient = client ?? http.Client();
     try {
       final uri = Uri.parse('${ApiConstants.carritoEndpoint}/mis-reservas');
       final token = await AuthService.getToken();
+      if (token == null || token.isEmpty) return null;
 
       final response = await httpClient
           .get(
             uri,
             headers: {
               'Content-Type': 'application/json',
-              if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+              'Authorization': 'Bearer $token',
             },
           )
           .timeout(const Duration(seconds: 8));
@@ -190,9 +192,9 @@ class CarritoService {
         final List<dynamic> decoded = jsonDecode(response.body);
         return decoded.cast<Map<String, dynamic>>();
       }
-      return [];
+      return null;
     } catch (_) {
-      return [];
+      return null;
     } finally {
       if (client == null) {
         httpClient.close();
