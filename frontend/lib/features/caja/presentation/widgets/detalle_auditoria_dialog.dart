@@ -396,6 +396,8 @@ class DetalleAuditoriaDialog extends StatelessWidget {
             ),
             itemBuilder: (context, index) {
               final art = orden.articulos[index];
+              final tieneSku = art.sku != null && art.sku!.isNotEmpty;
+
               return Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 14,
@@ -429,19 +431,41 @@ class DetalleAuditoriaDialog extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            art.descripcion,
+                            art.nombreDisplay,
                             style: AppTypography.body.copyWith(
                               fontWeight: FontWeight.w600,
                               fontSize: 13,
                               color: AppPalette.textPrimaryLight,
                             ),
                           ),
-                          if (art.sku != null)
+                          const SizedBox(height: 2),
+                          if (tieneSku)
                             Text(
                               'SKU: ${art.sku}',
                               style: AppTypography.small.copyWith(
                                 color: AppPalette.textSecondaryLight,
+                                fontWeight: FontWeight.w600,
                                 fontSize: 11,
+                              ),
+                            )
+                          else
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                              decoration: BoxDecoration(
+                                color: art.tipo == 'RESERVA'
+                                    ? AppPalette.warning.withValues(alpha: 0.12)
+                                    : AppPalette.neutral.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                art.tipo == 'RESERVA' ? 'Venta en Verde' : 'Misceláneo',
+                                style: AppTypography.small.copyWith(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: art.tipo == 'RESERVA'
+                                      ? AppPalette.warningText
+                                      : AppPalette.textSecondaryLight,
+                                ),
                               ),
                             ),
                         ],

@@ -51,7 +51,7 @@ class CobroPendienteCard extends StatelessWidget {
     final badgeColor = isVenta
         ? const Color(0xFFB78103)
         : const Color(0xFF4F46E5);
-    final badgeText = isVenta ? 'Venta en Tienda' : 'Reserva Backorder';
+    final badgeText = isVenta ? 'Venta en Tienda' : 'Ventas en Verde';
     final badgeIcon = isVenta
         ? Icons.storefront_rounded
         : Icons.directions_boat_filled_outlined;

@@ -382,7 +382,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               Text('Monto Pendiente en Caja: \$${res.montoPendiente}', style: AppTypography.body.copyWith(color: AppPalette.secondary)),
               if (res.reservasGeneradas > 0) ...[
                 const SizedBox(height: 6),
-                Text('• ${res.reservasGeneradas} reserva(s) por encargo generadas en backorder.', style: AppTypography.small.copyWith(color: AppPalette.success)),
+                Text('• ${res.reservasGeneradas} venta(s) en verde generadas por encargo.', style: AppTypography.small.copyWith(color: AppPalette.success)),
               ],
               if (res.despachoGenerado) ...[
                 const SizedBox(height: 4),
@@ -428,7 +428,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Checkout Transaccional', style: AppTypography.title.copyWith(fontSize: 18)),
-            Text('Flujo Secuencial de 5 Pasos • Ventas y Backorders', style: AppTypography.small.copyWith(color: AppPalette.secondary, fontSize: 12)),
+            Text('Flujo Secuencial de 5 Pasos • Ventas y Ventas en Verde', style: AppTypography.small.copyWith(color: AppPalette.secondary, fontSize: 12)),
           ],
         ),
         actions: [
@@ -594,7 +594,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                 ),
                 icon: const Icon(Icons.bookmark_add, size: 20),
                 label: const Text(
-                  'Reserva Backorder',
+                  'Venta en Verde',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -695,7 +695,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
           ],
 
           if (_controller.reservas.isNotEmpty) ...[
-            Text('RESERVAS POR ENCARGO / BACKORDER (${_controller.reservas.length})', style: AppTypography.small.copyWith(color: AppPalette.secondary, fontWeight: FontWeight.bold)),
+            Text('VENTAS EN VERDE (${_controller.reservas.length})', style: AppTypography.small.copyWith(color: AppPalette.secondary, fontWeight: FontWeight.bold)),
             const SizedBox(height: 6),
             ..._controller.reservas.asMap().entries.map((entry) {
               final idx = entry.key;
@@ -1227,7 +1227,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
             children: [
               _buildResumenRow('Subtotal Repuestos Inventario:', '\$${_controller.subtotalInventario}'),
               _buildResumenRow('Subtotal Ítems Manuales:', '\$${_controller.subtotalManuales}'),
-              _buildResumenRow('Subtotal Reservas Backorder:', '\$${_controller.subtotalReservas}'),
+              _buildResumenRow('Subtotal Ventas en Verde:', '\$${_controller.subtotalReservas}'),
               const Divider(color: Colors.white24, height: 20),
               _buildResumenRow('TOTAL DE LA VENTA:', '\$${_controller.totalVenta}', isBold: true, color: AppPalette.primary),
               const SizedBox(height: 8),

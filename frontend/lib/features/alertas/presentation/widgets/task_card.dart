@@ -1050,8 +1050,69 @@ class _TaskCardState extends State<TaskCard> {
       );
     }
 
-    // 2. Estado Pagada / Salida (LIBERADA): Exclusivamente botón BARRERA (oculta LISTO)
+    // 2. Estado Pagada / Salida (LIBERADA): No ocultar botón LISTO (SPEC-HU-TAREA-19)
     if (tarea.tipoAlerta == 'LIBERADA') {
+      if (tarea.idDetalle != null) {
+        return Row(
+          children: [
+            Expanded(
+              flex: 3,
+              child: SizedBox(
+                height: 45,
+                child: ElevatedButton.icon(
+                  key: Key('btn_listo_${tarea.idTarea}'),
+                  onPressed: _isProcessingListo ? null : _marcarListo,
+                  icon: _isProcessingListo
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
+                  label: Text(
+                    'LISTO',
+                    style: AppTypography.button.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppPalette.primary,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              flex: 3,
+              child: SizedBox(
+                height: 45,
+                child: ElevatedButton.icon(
+                  key: Key('btn_barrera_${tarea.idTarea}'),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const AuditoriaSalidaScreen(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.qr_code_scanner, color: Colors.white, size: 20),
+                  label: Text(
+                    'BARRERA',
+                    style: AppTypography.button.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppPalette.success,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      }
+
       return SizedBox(
         width: double.infinity,
         height: 45,

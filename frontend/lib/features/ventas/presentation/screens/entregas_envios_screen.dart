@@ -317,113 +317,7 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen>
     QrTicketDialog.mostrar(context, orden.toHistorialModel());
   }
 
-  Future<void> _confirmarEntrega(EntregaEnvioModel orden) async {
-    final confirmar = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppPalette.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: Row(
-          children: [
-            const Icon(Icons.check_circle_outline, color: AppPalette.success, size: 28),
-            const SizedBox(width: 10),
-            Text('Confirmar Entrega', style: AppTypography.title),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '¿Confirmas la entrega física del pedido ${orden.folioDisplay} al cliente?',
-              style: AppTypography.body,
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppPalette.background,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.white10),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Cliente: ${orden.cliente?.nombres ?? "Consumidor"} ${orden.cliente?.apellidos ?? "Final"}',
-                    style: AppTypography.small.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    'RUT: ${orden.cliente?.rutCliente ?? "S/R"}',
-                    style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
-                  ),
-                  Text(
-                    'Vendedor Creador: ${orden.vendedorNombre ?? "Vendedor Central"}',
-                    style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
-                  ),
-                  Text(
-                    'Responsable Entrega: ${orden.vendedorAsignadoNombre ?? "Mesón General"}',
-                    style: AppTypography.small.copyWith(color: AppPalette.primary),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('CANCELAR', style: TextStyle(color: AppPalette.textSecondary)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppPalette.success,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('CONFIRMAR ENTREGA'),
-          ),
-        ],
-      ),
-    );
 
-    if (confirmar == true) {
-      try {
-        await OrdenesService.confirmarEntregaTienda(orden.idOrden);
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: AppPalette.surface,
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle, color: AppPalette.success),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    '¡Pedido ${orden.folioDisplay} entregado exitosamente!',
-                    style: const TextStyle(color: AppPalette.textPrimary),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-        _cargarDatos();
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: AppPalette.surface,
-            content: Text(
-              'Error al confirmar entrega: ${e.toString().replaceAll("Exception: ", "")}',
-              style: const TextStyle(color: AppPalette.error),
-            ),
-          ),
-        );
-      }
-    }
-  }
 
   Future<void> _marcarDespachoEnviado(EntregaEnvioModel orden) async {
     final idDespacho = orden.despacho?.idDespacho;
@@ -873,40 +767,8 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen>
                           ),
                         ),
                       ),
-                      const SizedBox(width: 10),
-                      if (orden.tipoEntrega.toLowerCase() == 'retiro')
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: saldoPendiente ? Colors.grey.shade800 : AppPalette.success,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            ),
-                            onPressed: saldoPendiente
-                                ? () {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        backgroundColor: AppPalette.surface,
-                                        content: Text(
-                                          'La orden tiene un saldo pendiente de ${orden.montoPendienteFormateado}. Debe liquidarse en caja antes de entregar.',
-                                          style: const TextStyle(color: AppPalette.warning),
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                : () {
-                                    Navigator.of(ctx).pop();
-                                    _confirmarEntrega(orden);
-                                  },
-                            icon: Icon(saldoPendiente ? Icons.lock_outline : Icons.check_circle_outline, size: 18),
-                            label: Text(
-                              saldoPendiente ? 'PAGO EN CAJA' : 'ENTREGAR',
-                              style: const TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        )
-                      else
+                      if (orden.tipoEntrega.toLowerCase() != 'retiro') ...[
+                        const SizedBox(width: 10),
                         Expanded(
                           child: ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
@@ -923,6 +785,7 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen>
                             label: const Text('MARCAR ENVIADO', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
                           ),
                         ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -1455,49 +1318,31 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen>
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Flexible(
-                    child: SizedBox(
-                      height: 46,
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: saldoPendiente ? AppPalette.surface : AppPalette.success,
-                          foregroundColor: saldoPendiente ? Colors.white70 : Colors.white,
-                          side: saldoPendiente
-                              ? BorderSide(color: Colors.white.withValues(alpha: 0.2), width: 1.2)
-                              : BorderSide.none,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                          elevation: 0,
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppPalette.surface,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.white12),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.qr_code_scanner,
+                          size: 15,
+                          color: AppPalette.textSecondary,
                         ),
-                        onPressed: saldoPendiente
-                            ? () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    backgroundColor: AppPalette.surface,
-                                    content: Text(
-                                      'La orden tiene un saldo pendiente de ${orden.montoPendienteFormateado}. Debe ser pagada en caja antes de entregar.',
-                                      style: const TextStyle(color: AppPalette.warning),
-                                    ),
-                                  ),
-                                );
-                              }
-                            : () => _confirmarEntrega(orden),
-                        icon: Icon(
-                          saldoPendiente ? Icons.lock_outline : Icons.check_circle_outline,
-                          size: 20,
-                          color: saldoPendiente ? Colors.white70 : Colors.white,
-                        ),
-                        label: Text(
-                          saldoPendiente ? 'Pago en Caja' : 'Confirmar Entrega',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                            color: saldoPendiente ? Colors.white70 : Colors.white,
+                        const SizedBox(width: 6),
+                        Text(
+                          'Salida en Barrera Bodega',
+                          style: AppTypography.small.copyWith(
+                            color: AppPalette.textSecondary,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
+                      ],
                     ),
                   ),
                 ],

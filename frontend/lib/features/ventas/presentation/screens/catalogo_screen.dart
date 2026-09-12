@@ -434,7 +434,7 @@ class CatalogoScreenState extends State<CatalogoScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.bookmark_add_outlined, color: AppPalette.secondary),
-            tooltip: 'Crear Reserva por Encargo (Compra en Verde)',
+            tooltip: 'Crear Venta en Verde',
             onPressed: () async {
               final messenger = ScaffoldMessenger.of(context);
               final reserva = await ModalBackorderForm.mostrar(context);
@@ -451,7 +451,7 @@ class CatalogoScreenState extends State<CatalogoScreen> {
               );
               messenger.showSnackBar(
                 SnackBar(
-                  content: Text('Reserva por encargo (${reserva.marcaRequerida} ${reserva.modeloRequerido}) añadida al Checkout Wizard.'),
+                  content: Text('Venta en verde (${reserva.marcaRequerida} ${reserva.modeloRequerido}) añadida al Checkout Wizard.'),
                   backgroundColor: AppPalette.secondary,
                 ),
               );
@@ -779,7 +779,7 @@ class CatalogoScreenState extends State<CatalogoScreen> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                   icon: const Icon(Icons.bookmark_add, size: 18),
-                  label: const Text('¿NO ESTÁ? ENCARGAR POR BACKORDER', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                  label: const Text('¿NO ESTÁ? VENTA EN VERDE', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                   onPressed: () async {
                     final messenger = ScaffoldMessenger.of(context);
                     final reserva = await ModalBackorderForm.mostrar(context);
@@ -796,7 +796,7 @@ class CatalogoScreenState extends State<CatalogoScreen> {
                     );
                     messenger.showSnackBar(
                       SnackBar(
-                        content: Text('Reserva por encargo (${reserva.marcaRequerida} ${reserva.modeloRequerido}) añadida al Checkout Wizard.'),
+                        content: Text('Venta en verde (${reserva.marcaRequerida} ${reserva.modeloRequerido}) añadida al Checkout Wizard.'),
                         backgroundColor: AppPalette.secondary,
                       ),
                     );

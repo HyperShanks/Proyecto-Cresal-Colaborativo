@@ -186,8 +186,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('RES-5401'), findsOneWidget);
-    expect(find.text('Reserva Backorder'), findsOneWidget);
-    expect(find.text('ESPECIFICACIONES DE LA RESERVA BACKORDER'), findsOneWidget);
+    expect(find.text('Ventas en Verde'), findsOneWidget);
+    expect(find.text('ESPECIFICACIONES DE VENTA EN VERDE'), findsOneWidget);
     expect(find.text('Hyundai'), findsOneWidget);
     expect(find.text('Tucson 2.0 CRDi Turbo Diesel'), findsOneWidget);
   });
@@ -350,5 +350,67 @@ void main() {
     expect(provider.esMetodoActivo('Efectivo'), isTrue);
     expect(provider.esMetodoActivo('Debito'), isTrue);
     expect(provider.pagosDivididos.length, 2);
+  });
+
+  testWidgets('Detalle de orden: Renderiza nombre identificable completo del activo, SKU y misceláneos',
+      (tester) async {
+    setDesktopViewport(tester);
+
+    final ordenConDetalleRico = CobroPendienteModel(
+      idReferencia: 'ord-rico-001',
+      folioDocumento: 'ORD-1001',
+      tipoOperacion: 'VENTA',
+      estadoDocumento: 'Reservada',
+      clienteNombre: 'Juan Perez',
+      clienteRut: '12.345.678-9',
+      vendedorNombre: 'Carlos Vendedor',
+      fechaEmision: DateTime.now(),
+      fechaEmisionFormateada: '12/09/2026',
+      horaEmisionFormateada: '18:30',
+      totalOperacion: 950000,
+      abonoPrevio: 0,
+      montoACobrar: 950000,
+      articulos: [
+        ArticuloResumenModel(
+          cantidad: 1,
+          tipo: 'INVENTARIADO',
+          descripcion: 'Motor',
+          categoria: 'Motor',
+          marca: 'Toyota',
+          modelo: 'Hilux',
+          anio: 2021,
+          detalleTecnico: '2.8L • Diésel',
+          sku: 'MOT-TOY-HIL-21',
+          precio: 900000,
+          subtotal: 900000,
+        ),
+        ArticuloResumenModel(
+          cantidad: 2,
+          tipo: 'MISCELANEO',
+          descripcion: 'Empaquetadura de Culata Reforzada',
+          sku: null,
+          precio: 25000,
+          subtotal: 50000,
+        ),
+      ],
+    );
+
+    provider.seleccionarOrden(ordenConDetalleRico);
+
+    await tester.pumpWidget(createTestWidget(PanelDetalleCobro(provider: provider)));
+    await tester.pumpAndSettle();
+
+    // 1. Verificar nombre identificable completo del activo (marca, modelo, año, detalle técnico)
+    expect(find.text('Motor - Toyota Hilux 2021 (2.8L • Diésel)'), findsOneWidget);
+    expect(find.text('SKU: MOT-TOY-HIL-21'), findsOneWidget);
+
+    // 2. Verificar ítem misceláneo
+    expect(find.text('Empaquetadura de Culata Reforzada'), findsOneWidget);
+    expect(find.text('Misceláneo'), findsOneWidget);
+
+    // 3. Verificar que NO contenga patente ni ubicación
+    expect(find.textContaining('Patente'), findsNothing);
+    expect(find.textContaining('Galpón'), findsNothing);
+    expect(find.textContaining('Pallet'), findsNothing);
   });
 }

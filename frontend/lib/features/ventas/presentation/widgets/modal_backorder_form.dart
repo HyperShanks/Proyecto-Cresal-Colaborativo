@@ -123,8 +123,8 @@ class _ModalBackorderFormState extends State<ModalBackorderForm> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('Reserva por Encargo', style: AppTypography.title.copyWith(fontSize: 18)),
-                Text('Compra en Verde (Sin stock inmediato)', style: AppTypography.small.copyWith(color: AppPalette.secondary, fontWeight: FontWeight.w600)),
+                Text('Venta en Verde', style: AppTypography.title.copyWith(fontSize: 18)),
+                Text('Pedido por encargo (Sin stock inmediato)', style: AppTypography.small.copyWith(color: AppPalette.secondary, fontWeight: FontWeight.w600)),
               ],
             ),
           ),
@@ -152,7 +152,7 @@ class _ModalBackorderFormState extends State<ModalBackorderForm> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Esta pieza se registrará como backorder. Generará un abono en caja y una orden de búsqueda para adquisiciones/bodega.',
+                          'Esta pieza se registrará como Venta en Verde. Generará un abono en caja y una orden de búsqueda para adquisiciones/bodega.',
                           style: AppTypography.small.copyWith(color: AppPalette.textSecondary, fontSize: 11),
                         ),
                       ),
