@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/routes/route_observer.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../../auth/services/auth_service.dart';
@@ -23,8 +24,10 @@ class CajaMainScreen extends StatefulWidget {
   State<CajaMainScreen> createState() => _CajaMainScreenState();
 }
 
-class _CajaMainScreenState extends State<CajaMainScreen> {
+class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final GlobalKey<HistorialCajaScreenState> _historialKey =
+      GlobalKey<HistorialCajaScreenState>();
   late final CajaProvider _cajaProvider;
   bool _providerInterno = false;
 
@@ -50,7 +53,24 @@ class _CajaMainScreenState extends State<CajaMainScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != null) {
+      routeObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void didPopNext() {
+    super.didPopNext();
+    _cajaProvider.cargarCobrosPendientes(sucursalId: _idSucursal);
+    _historialKey.currentState?.refrescar();
+  }
+
+  @override
   void dispose() {
+    routeObserver.unsubscribe(this);
     if (_providerInterno) {
       _cajaProvider.dispose();
     }
@@ -171,6 +191,11 @@ class _CajaMainScreenState extends State<CajaMainScreen> {
               setState(() {
                 _selectedNavIndex = index;
               });
+              if (index == 0) {
+                _cajaProvider.cargarCobrosPendientes(sucursalId: _idSucursal);
+              } else if (index == 1) {
+                _historialKey.currentState?.refrescar();
+              }
             },
           ),
           body: SafeArea(
@@ -185,11 +210,14 @@ class _CajaMainScreenState extends State<CajaMainScreen> {
                     children: [
                       _buildHeader(),
                       Expanded(
-                        child: _selectedNavIndex == 0
-                            ? _buildBandejaCobrosView()
-                            : _selectedNavIndex == 1
-                                ? _buildHistorialPagosView()
-                                : const SoporteDesktopView(),
+                        child: IndexedStack(
+                          index: _selectedNavIndex.clamp(0, 2),
+                          children: [
+                            _buildBandejaCobrosView(),
+                            _buildHistorialPagosView(),
+                            const SoporteDesktopView(),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -304,6 +332,7 @@ class _CajaMainScreenState extends State<CajaMainScreen> {
                     setState(() {
                       _selectedNavIndex = 0;
                     });
+                    _cajaProvider.cargarCobrosPendientes(sucursalId: _idSucursal);
                   },
                 ),
                 const SizedBox(height: 6),
@@ -316,6 +345,7 @@ class _CajaMainScreenState extends State<CajaMainScreen> {
                     setState(() {
                       _selectedNavIndex = 1;
                     });
+                    _historialKey.currentState?.refrescar();
                   },
                 ),
                 const SizedBox(height: 6),
@@ -673,6 +703,7 @@ class _CajaMainScreenState extends State<CajaMainScreen> {
 
   Widget _buildHistorialPagosView() {
     return HistorialCajaScreen(
+      key: _historialKey,
       sucursalId: _idSucursal,
     );
   }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../core/routes/route_observer.dart';
 import '../../services/ordenes_service.dart';
 import '../../services/ordenes_sync_notifier.dart';
 import '../widgets/orden_card.dart';
@@ -21,10 +22,10 @@ class HistorialScreen extends StatefulWidget {
   });
 
   @override
-  State<HistorialScreen> createState() => _HistorialScreenState();
+  State<HistorialScreen> createState() => HistorialScreenState();
 }
 
-class _HistorialScreenState extends State<HistorialScreen> {
+class HistorialScreenState extends State<HistorialScreen> with RouteAware {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final TextEditingController _searchController = TextEditingController();
 
@@ -57,6 +58,21 @@ class _HistorialScreenState extends State<HistorialScreen> {
     }
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != null) {
+      routeObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void didPopNext() {
+    super.didPopNext();
+    refrescar();
+  }
+
   void _onSyncNotification() {
     if (mounted) {
       _cargarOrdenes();
@@ -65,9 +81,15 @@ class _HistorialScreenState extends State<HistorialScreen> {
 
   @override
   void dispose() {
+    routeObserver.unsubscribe(this);
     OrdenesSyncNotifier.instance.removeListener(_onSyncNotification);
     _searchController.dispose();
     super.dispose();
+  }
+
+  /// Método público para forzar recarga de órdenes (Auto-Refresh SPEC-HU-TAREA-20)
+  Future<void> refrescar() async {
+    await _cargarOrdenes();
   }
 
   Future<void> _cargarOrdenes() async {

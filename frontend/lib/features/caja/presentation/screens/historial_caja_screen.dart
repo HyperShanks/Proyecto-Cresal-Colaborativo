@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/routes/route_observer.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../../auth/services/auth_service.dart';
@@ -21,10 +22,10 @@ class HistorialCajaScreen extends StatefulWidget {
   });
 
   @override
-  State<HistorialCajaScreen> createState() => _HistorialCajaScreenState();
+  State<HistorialCajaScreen> createState() => HistorialCajaScreenState();
 }
 
-class _HistorialCajaScreenState extends State<HistorialCajaScreen> {
+class HistorialCajaScreenState extends State<HistorialCajaScreen> with RouteAware {
   late final HistorialCajaProvider _provider;
   bool _providerInterno = false;
   final TextEditingController _searchController = TextEditingController();
@@ -49,6 +50,26 @@ class _HistorialCajaScreenState extends State<HistorialCajaScreen> {
     }
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != null) {
+      routeObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void didPopNext() {
+    super.didPopNext();
+    refrescar();
+  }
+
+  /// Método público para forzar recarga (Auto-Refresh SPEC-HU-TAREA-20)
+  void refrescar() {
+    _provider.cargarHistorial(pagina: 1);
+  }
+
   Future<void> _initAsync() async {
     final sucursalId = await AuthService.getSucursalId();
     if (!mounted) return;
@@ -60,6 +81,7 @@ class _HistorialCajaScreenState extends State<HistorialCajaScreen> {
 
   @override
   void dispose() {
+    routeObserver.unsubscribe(this);
     _searchController.dispose();
     if (_providerInterno) {
       _provider.dispose();

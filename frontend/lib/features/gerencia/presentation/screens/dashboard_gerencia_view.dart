@@ -1,5 +1,6 @@
 // frontend/lib/features/gerencia/presentation/screens/dashboard_gerencia_view.dart
 import 'package:flutter/material.dart';
+import '../../../../core/routes/route_observer.dart';
 import '../../../../routes/app_routes.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/utils/currency_formatter.dart';
@@ -33,7 +34,7 @@ class DashboardGerenciaView extends StatefulWidget {
 }
 
 class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, RouteAware {
   int? _sucursalSeleccionada;
   bool _cargando = false;
   String? _mensajeError;
@@ -72,7 +73,23 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != null) {
+      routeObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void didPopNext() {
+    super.didPopNext();
+    _cargarDashboard();
+  }
+
+  @override
   void dispose() {
+    routeObserver.unsubscribe(this);
     // Libero explícitamente el controlador de animación según RULES.md
     _spinController.dispose();
     super.dispose();

@@ -5,6 +5,7 @@ import 'features/auth/presentation/screens/splash_screen.dart';
 import 'routes/app_routes.dart';
 
 import 'core/theme/theme_controller.dart';
+import 'core/routes/route_observer.dart';
 
 void main() {
   runApp(const MyApp());
@@ -28,6 +29,7 @@ class _MyAppState extends State<MyApp> {
           debugShowCheckedModeBanner: false,
           navigatorKey: ApiService.navigatorKey,
           scaffoldMessengerKey: ApiService.scaffoldMessengerKey,
+          navigatorObservers: [routeObserver],
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
           themeMode: currentThemeMode,

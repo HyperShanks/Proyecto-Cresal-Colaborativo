@@ -1,6 +1,7 @@
 // lib/features/ventas/presentation/screens/bandeja_precios_screen.dart
 
 import 'package:flutter/material.dart';
+import '../../../../core/routes/route_observer.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../models/pendiente_precio_model.dart';
@@ -22,10 +23,10 @@ class BandejaPreciosScreen extends StatefulWidget {
   });
 
   @override
-  State<BandejaPreciosScreen> createState() => _BandejaPreciosScreenState();
+  State<BandejaPreciosScreen> createState() => BandejaPreciosScreenState();
 }
 
-class _BandejaPreciosScreenState extends State<BandejaPreciosScreen> {
+class BandejaPreciosScreenState extends State<BandejaPreciosScreen> with RouteAware {
   List<ActivoPendientePrecioModel> _pendientes = [];
   bool _isLoading = true;
   String? _errorMessage;
@@ -34,6 +35,32 @@ class _BandejaPreciosScreenState extends State<BandejaPreciosScreen> {
   void initState() {
     super.initState();
     _cargarPendientes();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != null) {
+      routeObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void didPopNext() {
+    super.didPopNext();
+    refrescar();
+  }
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    super.dispose();
+  }
+
+  /// Método público para forzar recarga (Auto-Refresh SPEC-HU-TAREA-20)
+  Future<void> refrescar() async {
+    await _cargarPendientes();
   }
 
   Future<void> _cargarPendientes() async {

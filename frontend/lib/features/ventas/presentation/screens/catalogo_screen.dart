@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../core/routes/route_observer.dart';
 import '../../../auth/services/auth_service.dart';
 import '../../controllers/cart_controller.dart';
 import '../../models/catalogo_model.dart';
@@ -35,7 +36,7 @@ class CatalogoScreen extends StatefulWidget {
   State<CatalogoScreen> createState() => CatalogoScreenState();
 }
 
-class CatalogoScreenState extends State<CatalogoScreen> {
+class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
@@ -91,7 +92,23 @@ class CatalogoScreenState extends State<CatalogoScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != null) {
+      routeObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void didPopNext() {
+    super.didPopNext();
+    refrescarCatalogo();
+  }
+
+  @override
   void dispose() {
+    routeObserver.unsubscribe(this);
     CatalogoScreen.refreshNotifier.removeListener(_onExternalRefresh);
     _debounceTimer?.cancel();
     _searchController.dispose();
