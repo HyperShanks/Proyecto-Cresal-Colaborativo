@@ -819,22 +819,12 @@ def confirmar_reingreso(
         )
 
     try:
-        # Estado Disponible (1)
-        estado_disponible = db.query(Estado_Activo).filter(Estado_Activo.nombre_estado == "Disponible").first()
-        if not estado_disponible:
-            estado_disponible = Estado_Activo(id_estado=1, nombre_estado="Disponible")
-            db.add(estado_disponible)
-            db.flush()
-
-        # Actualizar ubicación si fue suministrada y válida
+        # Actualizar ubicación física si fue suministrada y válida
         if payload.ubicacion_pasillo is not None and payload.ubicacion_pasillo.strip():
             activo.ubicacion_pasillo = payload.ubicacion_pasillo.strip().upper()
         if payload.ubicacion_pallet is not None and payload.ubicacion_pallet.strip():
             activo.ubicacion_pallet = payload.ubicacion_pallet.strip().upper()
 
-        # Mutación con control de concurrencia optimista
-        activo.id_estado = estado_disponible.id_estado
-        activo.version_lock = (activo.version_lock or 1) + 1
         activo.fecha_actualizacion = datetime.now(timezone.utc)
         activo.observacion_estado = f"Reingreso físico confirmado tras anulación orden #{str(orden.id_orden)[:8].upper()} por {usuario_logeado.nombres} {usuario_logeado.apellidos}"
 

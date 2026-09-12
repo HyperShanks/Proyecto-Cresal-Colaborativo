@@ -19,6 +19,8 @@ from models import (
     Categoria_Activo,
     Transaccion_Pago,
     Auditoria_Barrera,
+    Detalle_Motor,
+    Detalle_Caja_Cambio,
 )
 from schemas import (
     CajaVerificarAccesoResponse,
@@ -116,30 +118,68 @@ def obtener_cobros_pendientes(
         ).all()
 
         for orden, cliente, vendedor in ordenes_query:
-            # Obtener detalles de la orden
+            # Obtener detalles de la orden enriquecidos con especificaciones tecnicas
             detalles_raw = (
-                db.query(Detalle_Orden, Activo_Inventariado, Vehiculo_Origen, Categoria_Activo)
+                db.query(
+                    Detalle_Orden,
+                    Activo_Inventariado,
+                    Vehiculo_Origen,
+                    Categoria_Activo,
+                    Detalle_Motor,
+                    Detalle_Caja_Cambio,
+                )
                 .outerjoin(Activo_Inventariado, Detalle_Orden.id_activo == Activo_Inventariado.id_activo)
                 .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
                 .outerjoin(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
+                .outerjoin(Detalle_Motor, Activo_Inventariado.id_activo == Detalle_Motor.id_activo)
+                .outerjoin(Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo)
                 .filter(Detalle_Orden.id_orden == orden.id_orden)
             ).all()
 
             articulos_dto: List[ArticuloResumenDTO] = []
-            for det, activo, vehiculo, categoria in detalles_raw:
+            for det, activo, vehiculo, categoria, motor, caja in detalles_raw:
+                cat_str = categoria.nombre_categoria if categoria else None
+                marca_str = vehiculo.marca if vehiculo else None
+                modelo_str = vehiculo.modelo if vehiculo else None
+                anio_int = vehiculo.anio if vehiculo else None
+
+                # Detalle técnico identificable (cilindrada, combustible, transmisión)
+                tec_parts = []
+                if motor:
+                    if motor.cilindrada:
+                        tec_parts.append(motor.cilindrada)
+                    if motor.combustible:
+                        tec_parts.append(motor.combustible)
+                if caja and caja.transmision_tipo:
+                    tec_parts.append(caja.transmision_tipo)
+                detalle_tec_str = " • ".join(tec_parts) if tec_parts else None
+
                 if activo:
                     tipo_art = "INVENTARIADO"
                     sku_art = activo.sku_qr_fisico
-                    if det.descripcion_manual:
+
+                    es_desc_antigua_solo_sku = bool(
+                        det.descripcion_manual
+                        and (f"- SKU: {activo.sku_qr_fisico}" in det.descripcion_manual or f"SKU: {activo.sku_qr_fisico}" in det.descripcion_manual)
+                    )
+
+                    if det.descripcion_manual and not es_desc_antigua_solo_sku:
                         desc_art = det.descripcion_manual
                     else:
-                        cat_str = categoria.nombre_categoria if categoria else "Repuesto"
-                        veh_str = f"{vehiculo.marca} {vehiculo.modelo}" if vehiculo else ""
-                        desc_art = f"{cat_str} {veh_str}".strip() or "Repuesto Inventariado"
+                        cat_base = cat_str or "Repuesto"
+                        veh_parts = [p for p in [marca_str, modelo_str, str(anio_int) if anio_int else None] if p]
+                        veh_text = f" - {' '.join(veh_parts)}" if veh_parts else ""
+                        tec_text = f" ({detalle_tec_str})" if detalle_tec_str else ""
+                        desc_art = f"{cat_base}{veh_text}{tec_text}".strip() or "Repuesto Inventariado"
                 else:
-                    tipo_art = "DESARME"
                     sku_art = None
-                    desc_art = det.descripcion_manual or "Pieza en Desarme"
+                    desc_man = det.descripcion_manual or ""
+                    if "[RESERVA EN VERDE]" in desc_man or "[BACKORDER]" in desc_man:
+                        tipo_art = "RESERVA"
+                        desc_art = desc_man.replace("[BACKORDER]", "[VENTA EN VERDE]").replace("[RESERVA EN VERDE]", "[VENTA EN VERDE]")
+                    else:
+                        tipo_art = "MISCELANEO"
+                        desc_art = desc_man or "Ítem Misceláneo"
 
                 precio_unit = det.precio_unitario if det.precio_unitario is not None else det.precio_final
                 articulos_dto.append(
@@ -150,6 +190,11 @@ def obtener_cobros_pendientes(
                         sku=sku_art,
                         precio=precio_unit,
                         subtotal=det.precio_final,
+                        categoria=cat_str,
+                        marca=marca_str,
+                        modelo=modelo_str,
+                        anio=anio_int,
+                        detalle_tecnico=detalle_tec_str,
                     )
                 )
 
@@ -609,28 +654,65 @@ def obtener_historial_caja(
 
         # Obtener detalles de repuestos/artículos
         detalles_raw = (
-            db.query(Detalle_Orden, Activo_Inventariado, Vehiculo_Origen, Categoria_Activo)
+            db.query(
+                Detalle_Orden,
+                Activo_Inventariado,
+                Vehiculo_Origen,
+                Categoria_Activo,
+                Detalle_Motor,
+                Detalle_Caja_Cambio,
+            )
             .outerjoin(Activo_Inventariado, Detalle_Orden.id_activo == Activo_Inventariado.id_activo)
             .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
             .outerjoin(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
+            .outerjoin(Detalle_Motor, Activo_Inventariado.id_activo == Detalle_Motor.id_activo)
+            .outerjoin(Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo)
             .filter(Detalle_Orden.id_orden == orden.id_orden)
         ).all()
 
         articulos_dto: List[HistorialArticuloDTO] = []
-        for det, activo, vehiculo, categoria in detalles_raw:
+        for det, activo, vehiculo, categoria, motor, caja in detalles_raw:
+            cat_str = categoria.nombre_categoria if categoria else None
+            marca_str = vehiculo.marca if vehiculo else None
+            modelo_str = vehiculo.modelo if vehiculo else None
+            anio_int = vehiculo.anio if vehiculo else None
+
+            tec_parts = []
+            if motor:
+                if motor.cilindrada:
+                    tec_parts.append(motor.cilindrada)
+                if motor.combustible:
+                    tec_parts.append(motor.combustible)
+            if caja and caja.transmision_tipo:
+                tec_parts.append(caja.transmision_tipo)
+            detalle_tec_str = " • ".join(tec_parts) if tec_parts else None
+
             if activo:
                 tipo_art = "INVENTARIADO"
                 sku_art = activo.sku_qr_fisico
-                if det.descripcion_manual:
+
+                es_desc_antigua_solo_sku = bool(
+                    det.descripcion_manual
+                    and (f"- SKU: {activo.sku_qr_fisico}" in det.descripcion_manual or f"SKU: {activo.sku_qr_fisico}" in det.descripcion_manual)
+                )
+
+                if det.descripcion_manual and not es_desc_antigua_solo_sku:
                     desc_art = det.descripcion_manual
                 else:
-                    cat_str = categoria.nombre_categoria if categoria else "Repuesto"
-                    veh_str = f"{vehiculo.marca} {vehiculo.modelo}" if vehiculo else ""
-                    desc_art = f"{cat_str} {veh_str}".strip() or "Repuesto Inventariado"
+                    cat_base = cat_str or "Repuesto"
+                    veh_parts = [p for p in [marca_str, modelo_str, str(anio_int) if anio_int else None] if p]
+                    veh_text = f" - {' '.join(veh_parts)}" if veh_parts else ""
+                    tec_text = f" ({detalle_tec_str})" if detalle_tec_str else ""
+                    desc_art = f"{cat_base}{veh_text}{tec_text}".strip() or "Repuesto Inventariado"
             else:
-                tipo_art = "DESARME"
                 sku_art = None
-                desc_art = det.descripcion_manual or "Pieza en Desarme"
+                desc_man = det.descripcion_manual or ""
+                if "[RESERVA EN VERDE]" in desc_man or "[BACKORDER]" in desc_man:
+                    tipo_art = "RESERVA"
+                    desc_art = desc_man.replace("[BACKORDER]", "[VENTA EN VERDE]").replace("[RESERVA EN VERDE]", "[VENTA EN VERDE]")
+                else:
+                    tipo_art = "MISCELANEO"
+                    desc_art = desc_man or "Ítem Misceláneo"
 
             precio_unit = det.precio_unitario if det.precio_unitario is not None else det.precio_final
             articulos_dto.append(
@@ -641,6 +723,11 @@ def obtener_historial_caja(
                     sku=sku_art,
                     precio=precio_unit,
                     subtotal=det.precio_final,
+                    categoria=cat_str,
+                    marca=marca_str,
+                    modelo=modelo_str,
+                    anio=anio_int,
+                    detalle_tecnico=detalle_tec_str,
                 )
             )
 

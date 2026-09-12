@@ -335,7 +335,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                           ),
                           const SizedBox(width: 5),
                           Text(
-                            isVenta ? 'Venta en Tienda' : 'Reserva Backorder',
+                            isVenta ? 'Venta en Tienda' : 'Ventas en Verde',
                             style: AppTypography.small.copyWith(
                               color: isVenta ? AppPalette.warningText : AppPalette.tertiary,
                               fontWeight: FontWeight.w700,
@@ -536,7 +536,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
               Text(
                 isVenta
                     ? 'DETALLE DE REPUESTOS Y ARTÍCULOS'
-                    : 'ESPECIFICACIONES DE LA RESERVA BACKORDER',
+                    : 'ESPECIFICACIONES DE VENTA EN VERDE',
                 style: AppTypography.title.copyWith(
                   fontSize: 13,
                   fontWeight: FontWeight.w800,
@@ -574,7 +574,10 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
       ),
       itemBuilder: (context, idx) {
         final art = articulos[idx];
+        final tieneSku = art.sku != null && art.sku!.isNotEmpty;
+
         return Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Container(
               width: 32,
@@ -600,24 +603,47 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    art.descripcion,
+                    art.nombreDisplay,
                     style: AppTypography.body.copyWith(
                       fontWeight: FontWeight.w600,
                       color: AppPalette.textPrimaryLight,
                       fontSize: 13,
                     ),
                   ),
-                  if (art.sku != null && art.sku!.isNotEmpty)
+                  const SizedBox(height: 2),
+                  if (tieneSku)
                     Text(
                       'SKU: ${art.sku}',
                       style: AppTypography.small.copyWith(
                         color: AppPalette.textSecondaryLight,
+                        fontWeight: FontWeight.w600,
                         fontSize: 11,
+                      ),
+                    )
+                  else
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                      decoration: BoxDecoration(
+                        color: art.tipo == 'RESERVA'
+                            ? AppPalette.warning.withValues(alpha: 0.12)
+                            : AppPalette.neutral.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        art.tipo == 'RESERVA' ? 'Venta en Verde' : 'Misceláneo',
+                        style: AppTypography.small.copyWith(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: art.tipo == 'RESERVA'
+                              ? AppPalette.warningText
+                              : AppPalette.textSecondaryLight,
+                        ),
                       ),
                     ),
                 ],
               ),
             ),
+            const SizedBox(width: 8),
             Text(
               CobroPendienteCard.formatClp(art.subtotal),
               style: AppTypography.body.copyWith(
@@ -634,7 +660,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
 
   Widget _buildBackorderGrid(BackorderEspecificacionesModel? bo) {
     if (bo == null) {
-      return const Text('Sin especificaciones de backorder disponibles.');
+      return const Text('Sin especificaciones de venta en verde disponibles.');
     }
 
     return Column(

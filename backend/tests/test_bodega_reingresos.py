@@ -304,14 +304,15 @@ def test_confirmar_reingreso_exitoso_y_version_lock(client, reingreso_db, auth_b
     assert data["ubicacion_pasillo"] == "P-03"
     assert data["ubicacion_pallet"] == "PAL-99"
 
-    # Verificar que version_lock se incrementó y el activo está en estado Disponible (1)
+    # SPEC-HU-TAREA-19: El activo permanece en estado Disponible (1) fijado por ventas,
+    # se actualiza su ubicación física en rack y NO se incrementa version_lock en bodega
     db = TestingSessionLocal()
     try:
         act_db = db.query(Activo_Inventariado).filter(Activo_Inventariado.sku_qr_fisico == "MOT-NIS-SEN-001").first()
         assert act_db.id_estado == 1
         assert act_db.ubicacion_pasillo == "P-03"
         assert act_db.ubicacion_pallet == "PAL-99"
-        assert act_db.version_lock == version_inicial + 1
+        assert act_db.version_lock == version_inicial
     finally:
         db.close()
 

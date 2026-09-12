@@ -223,7 +223,7 @@ void main() {
       await tester.tap(find.text('Abrir Modal'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Reserva por Encargo'), findsOneWidget);
+      expect(find.text('Venta en Verde'), findsOneWidget);
       expect(find.text('AÑADIR RESERVA'), findsOneWidget);
 
       // Intentar guardar con campos vacíos -> Valida campos requeridos
@@ -245,7 +245,7 @@ void main() {
       expect(find.text('Ítems & Reservas'), findsOneWidget);
       expect(find.text('Cliente CRM'), findsOneWidget);
       expect(find.text('Siguiente'), findsOneWidget);
-      expect(find.text('Reserva Backorder'), findsOneWidget);
+      expect(find.text('Venta en Verde'), findsOneWidget);
     });
 
     testWidgets('CheckoutWizardScreen permite activar Consumidor Final y avanzar de paso', (tester) async {

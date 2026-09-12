@@ -191,7 +191,7 @@ class _BandejaCobrosPanelState extends State<BandejaCobrosPanel> {
           ),
           const SizedBox(width: 4),
           _buildPill(
-            label: 'Backorder (${provider.totalBackordersCount})',
+            label: 'Ventas en Verde (${provider.totalBackordersCount})',
             isSelected: provider.filtroTipo == 'BACKORDER',
             onTap: () => provider.setFiltroTipo('BACKORDER'),
           ),

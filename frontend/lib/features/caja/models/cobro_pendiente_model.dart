@@ -3,11 +3,16 @@ library;
 
 class ArticuloResumenModel {
   final int cantidad;
-  final String tipo; // 'INVENTARIADO' | 'DESARME'
+  final String tipo; // 'INVENTARIADO' | 'MISCELANEO' | 'DESARME' | 'RESERVA'
   final String descripcion;
   final String? sku;
   final int precio;
   final int subtotal;
+  final String? categoria;
+  final String? marca;
+  final String? modelo;
+  final int? anio;
+  final String? detalleTecnico;
 
   ArticuloResumenModel({
     required this.cantidad,
@@ -16,7 +21,37 @@ class ArticuloResumenModel {
     this.sku,
     required this.precio,
     required this.subtotal,
+    this.categoria,
+    this.marca,
+    this.modelo,
+    this.anio,
+    this.detalleTecnico,
   });
+
+  bool get esInventariado => tipo == 'INVENTARIADO';
+
+  /// Nombre técnico identificable del producto: Categoría - Marca Modelo Año (Detalle Técnico)
+  String get nombreDisplay {
+    if (marca != null || modelo != null || anio != null) {
+      final vehiculoParts = <String>[];
+      if (marca != null && marca!.isNotEmpty) vehiculoParts.add(marca!);
+      if (modelo != null && modelo!.isNotEmpty) vehiculoParts.add(modelo!);
+      if (anio != null) vehiculoParts.add(anio.toString());
+
+      final cat = (categoria != null && categoria!.isNotEmpty)
+          ? categoria!
+          : (descripcion.contains(' - ') ? descripcion.split(' - ').first : descripcion);
+
+      final tec = (detalleTecnico != null && detalleTecnico!.isNotEmpty)
+          ? ' ($detalleTecnico)'
+          : '';
+
+      if (vehiculoParts.isNotEmpty) {
+        return '$cat - ${vehiculoParts.join(' ')}$tec';
+      }
+    }
+    return descripcion;
+  }
 
   factory ArticuloResumenModel.fromJson(Map<String, dynamic> json) =>
       ArticuloResumenModel(
@@ -26,6 +61,11 @@ class ArticuloResumenModel {
         sku: json['sku'] as String?,
         precio: json['precio'] as int? ?? 0,
         subtotal: json['subtotal'] as int? ?? 0,
+        categoria: json['categoria'] as String?,
+        marca: json['marca'] as String?,
+        modelo: json['modelo'] as String?,
+        anio: json['anio'] as int?,
+        detalleTecnico: json['detalle_tecnico'] as String?,
       );
 
   Map<String, dynamic> toJson() => {
@@ -35,6 +75,11 @@ class ArticuloResumenModel {
         'sku': sku,
         'precio': precio,
         'subtotal': subtotal,
+        'categoria': categoria,
+        'marca': marca,
+        'modelo': modelo,
+        'anio': anio,
+        'detalle_tecnico': detalleTecnico,
       };
 }
 

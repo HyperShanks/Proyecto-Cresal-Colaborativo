@@ -262,7 +262,7 @@ void main() {
       );
 
       expect(find.text('RES-5401'), findsOneWidget);
-      expect(find.text('Reserva Backorder'), findsOneWidget);
+      expect(find.text('Ventas en Verde'), findsOneWidget);
       expect(find.text('Camila Andrea Soto Lagos'), findsOneWidget);
       expect(find.text('Abono Inicial:'), findsOneWidget);
       expect(find.text('\$300.000'), findsOneWidget);
@@ -299,7 +299,7 @@ void main() {
       expect(find.text('2 órdenes esperando cobro'), findsOneWidget);
       expect(find.text('Todos (2)'), findsOneWidget);
       expect(find.text('Saldos Venta (1)'), findsOneWidget);
-      expect(find.text('Backorder (1)'), findsOneWidget);
+      expect(find.text('Ventas en Verde (1)'), findsOneWidget);
       expect(find.text('ORD-9780'), findsOneWidget);
       expect(find.text('RES-5401'), findsOneWidget);
 
@@ -386,7 +386,7 @@ void main() {
       await tester.tap(find.text('RES-5401').first);
       await tester.pumpAndSettle();
 
-      expect(find.text('ESPECIFICACIONES DE LA RESERVA BACKORDER'), findsOneWidget);
+      expect(find.text('ESPECIFICACIONES DE VENTA EN VERDE'), findsOneWidget);
       expect(find.text('Tucson 2.0 CRDi Turbo Diesel'), findsOneWidget);
       expect(find.text('PRECIO ACORDADO'), findsOneWidget);
     });

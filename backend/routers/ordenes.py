@@ -16,7 +16,8 @@ from models import (
     Usuario, Cliente, Comuna, Orden_Venta, Detalle_Orden,
     Despacho, Activo_Inventariado, Estado_Activo,
     Vehiculo_Origen, Categoria_Activo, Transaccion_Pago,
-    Tracking_Logistico, Sucursal, Reservas_Backorder
+    Tracking_Logistico, Sucursal, Reservas_Backorder,
+    Detalle_Motor, Detalle_Caja_Cambio
 )
 from schemas import (
     OrdenCreateRequest, OrdenResponse,
@@ -2002,7 +2003,31 @@ def checkout_wizard(
 
             cat = db.query(Categoria_Activo).filter(Categoria_Activo.id_categoria == activo.id_categoria).first()
             cat_nombre = cat.nombre_categoria if cat else "Repuesto"
-            desc = f"{cat_nombre} - SKU: {activo.sku_qr_fisico}"
+            veh = db.query(Vehiculo_Origen).filter(Vehiculo_Origen.id_vehiculo == activo.id_vehiculo).first() if activo.id_vehiculo else None
+            motor = db.query(Detalle_Motor).filter(Detalle_Motor.id_activo == activo.id_activo).first()
+            caja = db.query(Detalle_Caja_Cambio).filter(Detalle_Caja_Cambio.id_activo == activo.id_activo).first()
+
+            tec_parts = []
+            if motor:
+                if motor.cilindrada:
+                    tec_parts.append(motor.cilindrada)
+                if motor.combustible:
+                    tec_parts.append(motor.combustible)
+            if caja and caja.transmision_tipo:
+                tec_parts.append(caja.transmision_tipo)
+
+            veh_parts = []
+            if veh:
+                if veh.marca:
+                    veh_parts.append(veh.marca)
+                if veh.modelo:
+                    veh_parts.append(veh.modelo)
+                if veh.anio:
+                    veh_parts.append(str(veh.anio))
+
+            veh_str = f" - {' '.join(veh_parts)}" if veh_parts else ""
+            tec_str = f" ({' • '.join(tec_parts)})" if tec_parts else ""
+            desc = f"{cat_nombre}{veh_str}{tec_str}".strip() or f"{cat_nombre} ({activo.sku_qr_fisico})"
 
             detalle = Detalle_Orden(
                 id_detalle=uuid.uuid4(),

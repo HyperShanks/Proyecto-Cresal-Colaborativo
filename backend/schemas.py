@@ -248,11 +248,16 @@ class BackorderEspecificacionesDTO(BaseModel):
 
 class ArticuloResumenDTO(BaseModel):
     cantidad: int
-    tipo: str  # 'INVENTARIADO' | 'DESARME'
+    tipo: str  # 'INVENTARIADO' | 'MISCELANEO' | 'DESARME' | 'RESERVA'
     descripcion: str
     sku: Optional[str] = None
     precio: int
     subtotal: int
+    categoria: Optional[str] = None
+    marca: Optional[str] = None
+    modelo: Optional[str] = None
+    anio: Optional[int] = None
+    detalle_tecnico: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -1020,6 +1025,11 @@ class HistorialArticuloDTO(BaseModel):
     sku: Optional[str] = None
     precio: int
     subtotal: int
+    categoria: Optional[str] = None
+    marca: Optional[str] = None
+    modelo: Optional[str] = None
+    anio: Optional[int] = None
+    detalle_tecnico: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

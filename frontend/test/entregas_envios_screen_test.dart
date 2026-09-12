@@ -312,5 +312,21 @@ void main() {
 
       expect(find.text('Entregas y Envíos'), findsOneWidget);
     });
+
+    testWidgets('SPEC-HU-TAREA-19: Elimina bypass de entrega manual en mesón de ventas', (tester) async {
+      await const FlutterSecureStorage().write(key: 'user_id_rol', value: '2');
+      await const FlutterSecureStorage().write(key: 'user_rol', value: 'Vendedor');
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: EntregasEnviosScreen(),
+        ),
+      );
+      await tester.pump();
+
+      // No debe existir el botón de confirmación de entrega manual
+      expect(find.text('Confirmar Entrega'), findsNothing);
+      expect(find.text('CONFIRMAR ENTREGA'), findsNothing);
+    });
   });
 }
