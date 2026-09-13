@@ -1273,14 +1273,16 @@ def buscar_activo_por_numero_ingreso(
         Activo_Inventariado.estado == "Activo",
     ).all()
 
-    # Un activo está pendiente de paletizado si id_estado == 5 (En Desarme) o no tiene ubicación física válida
+    # Un activo está pendiente de paletizado únicamente si id_estado == 5 (En Desarme) Y no tiene ubicación física válida
     activos_pendientes = [
         a for a in activos
         if a.id_estado == 5
-        or not a.ubicacion_pasillo
-        or a.ubicacion_pasillo in ("", "S/P")
-        or not a.ubicacion_pallet
-        or a.ubicacion_pallet in ("", "S/P")
+        and (
+            not a.ubicacion_pasillo
+            or a.ubicacion_pasillo in ("", "S/P")
+            or not a.ubicacion_pallet
+            or a.ubicacion_pallet in ("", "S/P")
+        )
     ]
 
     if not activos or not activos_pendientes:

@@ -22,9 +22,9 @@ class ResultadoCard extends StatelessWidget {
   });
 
   String _formatearUbicacionHumana() {
-    final pasillo = (itemCompleto['pasillo']?.toString() ?? '').trim();
-    final pallet = (itemCompleto['pallet']?.toString() ?? '').trim();
-    final galpon = (itemCompleto['galpon']?.toString() ?? '').trim();
+    final pasillo = (itemCompleto['pasillo']?.toString() ?? itemCompleto['ubicacion_pasillo']?.toString() ?? '').trim();
+    final pallet = (itemCompleto['pallet']?.toString() ?? itemCompleto['ubicacion_pallet']?.toString() ?? '').trim();
+    final galpon = (itemCompleto['galpon']?.toString() ?? itemCompleto['ubicacion_galpon']?.toString() ?? '').trim();
 
     final bool tienePasillo = pasillo.isNotEmpty && pasillo != 'S/P' && pasillo != 'null';
     final bool tienePallet = pallet.isNotEmpty && pallet != 'S/P' && pallet != 'null';
@@ -216,36 +216,6 @@ class ResultadoCard extends StatelessWidget {
                       ] else ...[
                         Row(
                           children: [
-                            Container(
-                              key: const Key('chip_galpon_destacado'),
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: tieneGalpon
-                                    ? AppPalette.primary.withValues(alpha: 0.15)
-                                    : AppPalette.warning.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(
-                                  color: tieneGalpon
-                                      ? AppPalette.primary
-                                      : AppPalette.warning.withValues(alpha: 0.6),
-                                  width: 1.2,
-                                ),
-                              ),
-                              child: Text(
-                                tieneGalpon ? 'GALPÓN: $galpon' : 'SIN GALPÓN ASIGNADO',
-                                style: AppTypography.small.copyWith(
-                                  color: tieneGalpon ? AppPalette.primary : AppPalette.warning,
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 11,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
                             const Icon(
                               Icons.location_on,
                               size: 14,
@@ -259,7 +229,7 @@ class ResultadoCard extends StatelessWidget {
                                   fontWeight: FontWeight.w600,
                                   fontSize: 12,
                                 ),
-                                overflow: TextOverflow.ellipsis,
+                                softWrap: true,
                               ),
                             ),
                           ],

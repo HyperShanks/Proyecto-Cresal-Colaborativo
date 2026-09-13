@@ -471,16 +471,25 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
       final datosCajaTemp = datosVehiculo['caja_cambios'] ?? {};
 
       List<String> opcionesDisponibles = [];
-      if (datosMotorTemp['pendiente'] == true || datosMotorTemp['id_estado'] == 5) {
+      if (datosMotorTemp['id_estado'] == 5 && datosMotorTemp['pendiente'] != false) {
         opcionesDisponibles.add('Motor');
       }
-      if (datosCajaTemp['pendiente'] == true || datosCajaTemp['id_estado'] == 5) {
+      if (datosCajaTemp['id_estado'] == 5 && datosCajaTemp['pendiente'] != false) {
         opcionesDisponibles.add('Caja de Cambios');
       }
 
       if (opcionesDisponibles.isEmpty) {
-        if (datosMotorTemp['id_activo'] != null) opcionesDisponibles.add('Motor');
-        if (datosCajaTemp['id_activo'] != null) opcionesDisponibles.add('Caja de Cambios');
+        setState(() {
+          _isLoading = false;
+          _vehiculoEncontrado = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('El activo asociado a este número ya fue paletizado previamente o no requiere este flujo.'),
+            backgroundColor: AppPalette.secondary,
+          ),
+        );
+        return;
       }
 
       setState(() {

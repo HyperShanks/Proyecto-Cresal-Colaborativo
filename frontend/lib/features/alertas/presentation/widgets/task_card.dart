@@ -426,189 +426,200 @@ class _TaskCardState extends State<TaskCard> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (BuildContext ctx) {
-        return Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Indicador de arrastre (pill)
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 20),
-                  decoration: BoxDecoration(
-                    color: AppPalette.neutral.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(10),
+        return SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Indicador de arrastre (pill)
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 20),
+                    decoration: BoxDecoration(
+                      color: AppPalette.neutral.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
                 ),
-              ),
 
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    tarea.ordenRef ?? (esImpresion ? 'PENDIENTE: IMPRESIÓN' : (esReingreso ? 'LOGÍSTICA INVERSA' : 'TAREA OPERATIVA')),
-                    style: AppTypography.small.copyWith(
-                      color: accentColor,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  if (tarea.esTraslado || tarea.tipoAlerta == 'TRASLADO')
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: AppPalette.secondary.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: AppPalette.secondary),
-                      ),
-                      child: Text(
-                        'TRASLADO INTER-SUCURSAL',
-                        style: AppTypography.small.copyWith(
-                          color: AppPalette.secondary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 9,
-                        ),
-                      ),
-                    ),
-                  if (esReingreso)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: AppPalette.error.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: AppPalette.error.withValues(alpha: 0.6)),
-                      ),
-                      child: Text(
-                        'ORDEN ANULADA',
-                        style: AppTypography.small.copyWith(
-                          color: AppPalette.error,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 9,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 8),
-
-              Text(tituloFormateado, style: AppTypography.headline),
-              if (tarea.skuQrFisico != null && tarea.skuQrFisico!.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Text('SKU: ${tarea.skuQrFisico}', style: AppTypography.small.copyWith(color: const Color(0xFF00A3FF), fontWeight: FontWeight.bold)),
-              ],
-              const SizedBox(height: 20),
-
-              // Recuadro de Ubicación (SPEC-HU-TAREA-16)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppPalette.background,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: AppPalette.neutral.withValues(alpha: 0.2),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      esReingreso ? 'UBICACIÓN ASIGNADA DE RETORNO' : 'UBICACIÓN EXACTA',
-                      style: AppTypography.small.copyWith(fontSize: 11),
+                    Expanded(
+                      child: Text(
+                        tarea.ordenRef ?? (esImpresion ? 'PENDIENTE: IMPRESIÓN' : (esReingreso ? 'LOGÍSTICA INVERSA' : 'TAREA OPERATIVA')),
+                        style: AppTypography.small.copyWith(
+                          color: accentColor,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                    const SizedBox(height: 8),
-                    if (tarea.ubicacion.isEmpty ||
-                        tarea.ubicacion == 'Ubicación Pendiente' ||
-                        (tarea.ubicacion == 'S/P - S/P' &&
-                            (tarea.ubicacionGalpon == null || tarea.ubicacionGalpon!.isEmpty))) ...[
-                      Row(
-                        children: [
-                          const Icon(Icons.warning_amber_rounded, size: 18, color: AppPalette.warning),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Sin Galpón / Sin Ubicación asignada',
-                            style: AppTypography.body.copyWith(
-                              color: AppPalette.warning,
-                              fontWeight: FontWeight.bold,
-                            ),
+                    if (tarea.esTraslado || tarea.tipoAlerta == 'TRASLADO')
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppPalette.secondary.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: AppPalette.secondary),
+                        ),
+                        child: Text(
+                          'TRASLADO INTER-SUCURSAL',
+                          style: AppTypography.small.copyWith(
+                            color: AppPalette.secondary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 9,
                           ),
-                        ],
+                        ),
                       ),
-                    ] else ...[
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.location_on_rounded,
-                            size: 20,
-                            color: AppPalette.primary,
+                    if (esReingreso)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppPalette.error.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: AppPalette.error.withValues(alpha: 0.6)),
+                        ),
+                        child: Text(
+                          'ORDEN ANULADA',
+                          style: AppTypography.small.copyWith(
+                            color: AppPalette.error,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 9,
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _formatearUbicacionMinimalista(tarea),
-                              style: AppTypography.title.copyWith(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w900,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
-                    ],
                   ],
                 ),
-              ),
+                const SizedBox(height: 8),
 
-              // RECUADRO DE INSTRUCCIONES DEL VENDEDOR / MOTIVO (Destacado)
-              if (tarea.notaEspecial != null) ...[
-                const SizedBox(height: 16),
+                Text(tituloFormateado, style: AppTypography.headline),
+                if (tarea.skuQrFisico != null && tarea.skuQrFisico!.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text('SKU: ${tarea.skuQrFisico}', style: AppTypography.small.copyWith(color: const Color(0xFF00A3FF), fontWeight: FontWeight.bold)),
+                ],
+                const SizedBox(height: 20),
+
+                // Recuadro de Ubicación (SPEC-HU-TAREA-16)
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: AppPalette.secondary.withValues(alpha: 0.1),
+                    color: AppPalette.background,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppPalette.secondary, width: 1.5),
+                    border: Border.all(
+                      color: AppPalette.neutral.withValues(alpha: 0.2),
+                    ),
                   ),
-                  child: Row(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(
-                        Icons.info_outline,
-                        color: AppPalette.secondary,
-                        size: 24,
+                      Text(
+                        esReingreso ? 'UBICACIÓN ASIGNADA DE RETORNO' : 'UBICACIÓN EXACTA',
+                        style: AppTypography.small.copyWith(fontSize: 11),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                      const SizedBox(height: 8),
+                      if (tarea.ubicacion.isEmpty ||
+                          tarea.ubicacion == 'Ubicación Pendiente' ||
+                          (tarea.ubicacion == 'S/P - S/P' &&
+                              (tarea.ubicacionGalpon == null || tarea.ubicacionGalpon!.isEmpty))) ...[
+                        Row(
                           children: [
+                            const Icon(Icons.warning_amber_rounded, size: 18, color: AppPalette.warning),
+                            const SizedBox(width: 8),
                             Text(
-                              'DETALLE DE LA TAREA',
-                              style: AppTypography.small.copyWith(
-                                color: AppPalette.secondary,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 10,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              tarea.notaEspecial!,
+                              'Sin Galpón / Sin Ubicación asignada',
                               style: AppTypography.body.copyWith(
-                                color: AppPalette.textPrimary,
-                                fontWeight: FontWeight.w600,
+                                color: AppPalette.warning,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                           ],
                         ),
-                      ),
+                      ] else ...[
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Padding(
+                              padding: EdgeInsets.only(top: 2.0),
+                              child: Icon(
+                                Icons.location_on_rounded,
+                                size: 18,
+                                color: AppPalette.primary,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _formatearUbicacionMinimalista(tarea),
+                                style: AppTypography.body.copyWith(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppPalette.textPrimary,
+                                  height: 1.35,
+                                ),
+                                softWrap: true,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),
-              ],
+
+                // RECUADRO DE INSTRUCCIONES DEL VENDEDOR / MOTIVO (Destacado)
+                if (tarea.notaEspecial != null) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppPalette.secondary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppPalette.secondary, width: 1.5),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.info_outline,
+                          color: AppPalette.secondary,
+                          size: 24,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'DETALLE DE LA TAREA',
+                                style: AppTypography.small.copyWith(
+                                  color: AppPalette.secondary,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 10,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                tarea.notaEspecial!,
+                                style: AppTypography.body.copyWith(
+                                  color: AppPalette.textPrimary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                softWrap: true,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
 
               const SizedBox(height: 24),
 
@@ -738,9 +749,10 @@ class _TaskCardState extends State<TaskCard> {
               const SizedBox(height: 16),
             ],
           ),
-        );
-      },
-    );
+        ),
+      );
+    },
+  );
 
     if (!mounted || accion == null) return;
 
@@ -989,22 +1001,28 @@ class _TaskCardState extends State<TaskCard> {
                     ),
                   ] else ...[
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(
-                          Icons.location_on_rounded,
-                          size: 16,
-                          color: AppPalette.primary,
+                        const Padding(
+                          padding: EdgeInsets.only(top: 2.0),
+                          child: Icon(
+                            Icons.location_on_rounded,
+                            size: 16,
+                            color: AppPalette.primary,
+                          ),
                         ),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
                             _formatearUbicacionMinimalista(tarea),
                             key: const Key('chip_galpon_tarea'),
-                            style: AppTypography.title.copyWith(
-                              fontWeight: FontWeight.w900,
-                              fontSize: 14,
+                            style: AppTypography.body.copyWith(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13.5,
+                              color: AppPalette.textPrimary,
+                              height: 1.3,
                             ),
-                            overflow: TextOverflow.ellipsis,
+                            softWrap: true,
                           ),
                         ),
                       ],
@@ -1016,24 +1034,53 @@ class _TaskCardState extends State<TaskCard> {
 
             if (tarea.notaEspecial != null) ...[
               const SizedBox(height: 12),
-              Row(
-                children: [
-                  const Icon(
-                    Icons.warning_amber_rounded,
-                    color: AppPalette.secondary,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      tarea.notaEspecial!,
-                      style: AppTypography.small.copyWith(
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppPalette.secondary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: AppPalette.secondary.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.only(top: 1.0),
+                      child: Icon(
+                        Icons.info_outline,
                         color: AppPalette.secondary,
-                        fontWeight: FontWeight.bold,
+                        size: 16,
                       ),
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'DETALLE DE LA TAREA',
+                            style: AppTypography.small.copyWith(
+                              color: AppPalette.secondary,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 9.5,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            tarea.notaEspecial!,
+                            style: AppTypography.small.copyWith(
+                              color: AppPalette.textPrimary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                            ),
+                            softWrap: true,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
 
@@ -1106,7 +1153,7 @@ class _TaskCardState extends State<TaskCard> {
         return Row(
           children: [
             Expanded(
-              flex: 3,
+              flex: 1,
               child: SizedBox(
                 height: 45,
                 child: ElevatedButton.icon(
@@ -1122,12 +1169,16 @@ class _TaskCardState extends State<TaskCard> {
                     }
                   },
                   icon: const Icon(Icons.print, color: Colors.white, size: 18),
-                  label: Text(
-                    'IMPRIMIR QR',
-                    style: AppTypography.button.copyWith(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                  label: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      'IMPRIMIR QR',
+                      style: AppTypography.button.copyWith(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                    ),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppPalette.error,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                   ),
                 ),
@@ -1135,19 +1186,23 @@ class _TaskCardState extends State<TaskCard> {
             ),
             const SizedBox(width: 10),
             Expanded(
-              flex: 3,
+              flex: 1,
               child: SizedBox(
                 height: 45,
                 child: ElevatedButton.icon(
                   key: Key('btn_barrera_${tarea.idTarea}'),
                   onPressed: () => _abrirBarreraSalida(),
                   icon: const Icon(Icons.qr_code_scanner, color: Colors.white, size: 18),
-                  label: Text(
-                    'BARRERA',
-                    style: AppTypography.button.copyWith(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                  label: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      'BARRERA',
+                      style: AppTypography.button.copyWith(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                    ),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppPalette.success,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                   ),
                 ),
@@ -1162,7 +1217,7 @@ class _TaskCardState extends State<TaskCard> {
         return Row(
           children: [
             Expanded(
-              flex: 3,
+              flex: 1,
               child: SizedBox(
                 height: 45,
                 child: ElevatedButton.icon(
@@ -1175,12 +1230,16 @@ class _TaskCardState extends State<TaskCard> {
                           child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                         )
                       : const Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
-                  label: Text(
-                    'LISTO',
-                    style: AppTypography.button.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
+                  label: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      'LISTO',
+                      style: AppTypography.button.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
+                    ),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppPalette.primary,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(6),
                     ),
@@ -1190,19 +1249,23 @@ class _TaskCardState extends State<TaskCard> {
             ),
             const SizedBox(width: 10),
             Expanded(
-              flex: 3,
+              flex: 1,
               child: SizedBox(
                 height: 45,
                 child: ElevatedButton.icon(
                   key: Key('btn_barrera_${tarea.idTarea}'),
                   onPressed: () => _abrirBarreraSalida(),
                   icon: const Icon(Icons.qr_code_scanner, color: Colors.white, size: 20),
-                  label: Text(
-                    'BARRERA',
-                    style: AppTypography.button.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
+                  label: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      'BARRERA',
+                      style: AppTypography.button.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
+                    ),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppPalette.success,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                   ),
                 ),
@@ -1268,7 +1331,7 @@ class _TaskCardState extends State<TaskCard> {
       return Row(
         children: [
           Expanded(
-            flex: 3,
+            flex: 1,
             child: SizedBox(
               height: 45,
               child: ElevatedButton.icon(
@@ -1284,12 +1347,16 @@ class _TaskCardState extends State<TaskCard> {
                   }
                 },
                 icon: const Icon(Icons.print, color: Colors.white, size: 18),
-                label: Text(
-                  'IMPRIMIR QR',
-                  style: AppTypography.button.copyWith(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                label: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    'IMPRIMIR QR',
+                    style: AppTypography.button.copyWith(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                  ),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppPalette.error,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                 ),
               ),
@@ -1297,7 +1364,7 @@ class _TaskCardState extends State<TaskCard> {
           ),
           const SizedBox(width: 10),
           Expanded(
-            flex: 2,
+            flex: 1,
             child: SizedBox(
               height: 45,
               child: OutlinedButton.icon(
@@ -1306,12 +1373,16 @@ class _TaskCardState extends State<TaskCard> {
                   _mostrarDetalleModal(accentColor, AppPalette.surface);
                 },
                 icon: const Icon(Icons.visibility_outlined, color: AppPalette.textPrimary, size: 18),
-                label: Text(
-                  'DETALLES',
-                  style: AppTypography.button.copyWith(fontSize: 12),
+                label: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    'DETALLES',
+                    style: AppTypography.button.copyWith(fontSize: 12),
+                  ),
                 ),
                 style: OutlinedButton.styleFrom(
                   side: BorderSide(color: accentColor),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(6),
                   ),
@@ -1326,7 +1397,7 @@ class _TaskCardState extends State<TaskCard> {
       children: [
         if (tarea.idDetalle != null) ...[
           Expanded(
-            flex: 3,
+            flex: 1,
             child: SizedBox(
               height: 45,
               child: ElevatedButton.icon(
@@ -1339,12 +1410,16 @@ class _TaskCardState extends State<TaskCard> {
                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                       )
                     : const Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
-                label: Text(
-                  'LISTO',
-                  style: AppTypography.button.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
+                label: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    'LISTO',
+                    style: AppTypography.button.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppPalette.success,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(6),
                   ),
@@ -1355,7 +1430,7 @@ class _TaskCardState extends State<TaskCard> {
           const SizedBox(width: 10),
         ],
         Expanded(
-          flex: tarea.idDetalle != null ? 2 : 5,
+          flex: tarea.idDetalle != null ? 1 : 5,
           child: SizedBox(
             height: 45,
             child: OutlinedButton.icon(
@@ -1364,12 +1439,16 @@ class _TaskCardState extends State<TaskCard> {
                 _mostrarDetalleModal(accentColor, AppPalette.surface);
               },
               icon: const Icon(Icons.visibility_outlined, color: AppPalette.textPrimary, size: 18),
-              label: Text(
-                'DETALLES',
-                style: AppTypography.button.copyWith(fontSize: 12),
+              label: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  'DETALLES',
+                  style: AppTypography.button.copyWith(fontSize: 12),
+                ),
               ),
               style: OutlinedButton.styleFrom(
                 side: BorderSide(color: accentColor),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(6),
                 ),

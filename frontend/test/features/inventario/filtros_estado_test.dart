@@ -75,13 +75,14 @@ void main() {
         ),
       );
 
-      // Verificación de Chip de Galpón
-      expect(find.byKey(const Key('chip_galpon_destacado')), findsOneWidget);
-      expect(find.text('GALPÓN: Galpón A'), findsOneWidget);
+      // Verificación de que el chip duplicado de Galpón fue eliminado
+      expect(find.byKey(const Key('chip_galpon_destacado')), findsNothing);
+      expect(find.text('GALPÓN: Galpón A'), findsNothing);
 
-      // Verificación de subtítulo de pasillo y pallet
+      // Verificación de la ubicación oficial única
       expect(find.textContaining('Pasillo: P-03'), findsOneWidget);
       expect(find.textContaining('Pallet: PL-12'), findsOneWidget);
+      expect(find.textContaining('Galpón: Galpón A'), findsOneWidget);
     });
 
     testWidgets('Muestra "Sin Galpón / Sin Ubicación asignada" en activo huérfano de ubicación', (tester) async {

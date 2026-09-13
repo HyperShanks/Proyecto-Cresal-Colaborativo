@@ -341,8 +341,8 @@ def obtener_pendientes_paletizado(
         .filter(
             models.Activo_Inventariado.estado == "Activo",
             models.Activo_Inventariado.id_sucursal_actual == suc_target,
+            models.Activo_Inventariado.id_estado == 5,
             or_(
-                models.Activo_Inventariado.id_estado == 5,
                 models.Activo_Inventariado.ubicacion_pasillo == None,
                 models.Activo_Inventariado.ubicacion_pasillo == "",
                 models.Activo_Inventariado.ubicacion_pasillo == "S/P",
@@ -550,7 +550,35 @@ async def guardar_paletizado(
         raise HTTPException(status_code=400, detail="Máximo 10 fotografías comerciales permitidas.")
 
     # ========================================================
-    # PASO A. SUBIR IMÁGENES A SUPABASE STORAGE
+    # PASO 1. VALIDACIÓN PREVIA EN BASE DE DATOS
+    # ========================================================
+    # 1. Buscar el activo específico (Motor o Caja) usando el Folio
+    query_activo = db.query(models.Activo_Inventariado).join(models.Vehiculo_Origen).filter(
+        models.Vehiculo_Origen.numero_ingreso == numero_ingreso
+    )
+    
+    id_categoria = 1 if tipo_repuesto == "Motor" else 2
+    query_activo = query_activo.filter(models.Activo_Inventariado.id_categoria == id_categoria)
+    
+    activo = query_activo.first()
+    
+    if not activo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No se encontró el activo '{tipo_repuesto}' asociado al folio {numero_ingreso}."
+        )
+
+    # 2. Validar que el activo se encuentre en estado 'Desarme' (ID 5)
+    if activo.id_estado != 5:
+        estado_actual = db.query(models.Estado_Activo).filter(models.Estado_Activo.id_estado == activo.id_estado).first()
+        nombre_estado_actual = estado_actual.nombre_estado if estado_actual else f"Estado {activo.id_estado}"
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"El repuesto '{tipo_repuesto}' del folio {numero_ingreso} no puede ser paletizado porque se encuentra en estado '{nombre_estado_actual}'. Solo se pueden paletizar repuestos en estado 'Desarme'."
+        )
+
+    # ========================================================
+    # PASO 2. SUBIR IMÁGENES A SUPABASE STORAGE
     # ========================================================
     urls_fotos_publicas = []
     
@@ -572,7 +600,7 @@ async def guardar_paletizado(
             supabase.storage.from_(BUCKET_NAME).upload(
                 path=nombre_archivo_nube, 
                 file=contenido_imagen,
-                file_options={"cache-control": "3600", "content-type": "image/jpeg"}
+                file_options={"cache-control": "3600", "content-type": "image/jpeg", "upsert": "true"}
             )
             
             url_publica = supabase.storage.from_(BUCKET_NAME).get_public_url(nombre_archivo_nube)
@@ -588,26 +616,10 @@ async def guardar_paletizado(
             )
 
     # ========================================================
-    # PASO B. GUARDAR EN POSTGRESQL CON TRANSACCIÓN (SQLAlchemy)
+    # PASO 3. GUARDAR EN POSTGRESQL CON TRANSACCIÓN (SQLAlchemy)
     # ========================================================
     try:
-        # 1. Buscar el activo específico (Motor o Caja) usando el Folio
-        query_activo = db.query(models.Activo_Inventariado).join(models.Vehiculo_Origen).filter(
-            models.Vehiculo_Origen.numero_ingreso == numero_ingreso
-        )
-        
-        id_categoria = 1 if tipo_repuesto == "Motor" else 2
-        query_activo = query_activo.filter(models.Activo_Inventariado.id_categoria == id_categoria)
-        
-        activo = query_activo.first()
-        
-        if not activo:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"No se encontró el activo '{tipo_repuesto}' asociado al folio {numero_ingreso}."
-            )
-
-        # 2. Actualizar la Ubicación Física y Observaciones (PERSISTENCIA LOGÍSTICA)
+        # Actualizar la Ubicación Física y Observaciones (PERSISTENCIA LOGÍSTICA)
         activo.ubicacion_galpon = galpon
         activo.ubicacion_pasillo = pasillo
         activo.ubicacion_pallet = pallet
@@ -625,7 +637,7 @@ async def guardar_paletizado(
         
         db.flush()
         
-        # 3. Guardar las URLs de las fotos en Multimedia_Activo (PERSISTENCIA COMERCIAL)
+        # Guardar las URLs de las fotos en Multimedia_Activo (PERSISTENCIA COMERCIAL)
         for url in urls_fotos_publicas:
             nueva_multimedia = models.Multimedia_Activo(
                 id_activo=activo.id_activo,
@@ -634,7 +646,7 @@ async def guardar_paletizado(
             )
             db.add(nueva_multimedia)
             
-        # 4. Confirmar la transacción completa (ACID)
+        # Confirmar la transacción completa (ACID)
         db.commit()
         db.refresh(activo)
         

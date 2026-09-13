@@ -46,7 +46,7 @@ def auth_headers():
             if not c:
                 db.add(models.Categoria_Activo(id_categoria=cat_id, nombre_categoria=cat_nom))
 
-        for est_id, est_nom in [(1, "Disponible"), (2, "Reservado"), (3, "Vendido"), (5, "En Desarme")]:
+        for est_id, est_nom in [(1, "Disponible"), (2, "Reservado"), (3, "Vendido"), (5, "En Desarme"), (6, "Entregado"), (7, "Paletizado")]:
             e = db.query(models.Estado_Activo).filter_by(id_estado=est_id).first()
             if not e:
                 db.add(models.Estado_Activo(id_estado=est_id, nombre_estado=est_nom))
@@ -145,10 +145,11 @@ def test_registro_ingreso_vehiculo_manual_fallback(client, auth_headers):
     assert data["numero_ingreso"] == "9999"
 
 
-def test_obtener_pendientes_paletizado_flexibilizado(client, auth_headers):
+def test_obtener_pendientes_paletizado_solo_desarme(client, auth_headers):
     """
-    Verifica que GET /api/v1/vehiculos/pendientes-paletizado retorne activos
-    de la sucursal activa con id_estado == 5 o ubicacion_pasillo nula / 'S/P'.
+    Verifica que GET /api/v1/vehiculos/pendientes-paletizado retorne únicamente activos
+    de la sucursal activa con id_estado == 5 (En Desarme) y no incluya activos
+    en estado Disponible (1) o Entregado (6) aunque su ubicación sea nula o 'S/P'.
     """
     db = TestingSessionLocal()
     try:
@@ -176,11 +177,11 @@ def test_obtener_pendientes_paletizado_flexibilizado(client, auth_headers):
             fecha_creacion=datetime.now(),
         )
 
-        act_sp = models.Activo_Inventariado(
+        act_disponible_sp = models.Activo_Inventariado(
             id_activo=uuid.uuid4(),
             sku_qr_fisico=f"CAJ-PD2-{uuid.uuid4().hex[:4].upper()}",
             id_categoria=2,
-            id_estado=1,  # Estado 1 pero sin ubicación ("S/P")
+            id_estado=1,  # Estado 1 (Disponible) con ubicación "S/P"
             id_sucursal_actual=1,
             id_vehiculo=veh.id_vehiculo,
             estado="Activo",
@@ -189,7 +190,20 @@ def test_obtener_pendientes_paletizado_flexibilizado(client, auth_headers):
             fecha_creacion=datetime.now(),
         )
 
-        db.add_all([act_desarme, act_sp])
+        act_entregado_null = models.Activo_Inventariado(
+            id_activo=uuid.uuid4(),
+            sku_qr_fisico=f"MOT-PD3-{uuid.uuid4().hex[:4].upper()}",
+            id_categoria=1,
+            id_estado=6,  # Estado 6 (Entregado) con ubicación liberada (None)
+            id_sucursal_actual=1,
+            id_vehiculo=veh.id_vehiculo,
+            estado="Activo",
+            ubicacion_pasillo=None,
+            ubicacion_pallet=None,
+            fecha_creacion=datetime.now(),
+        )
+
+        db.add_all([act_desarme, act_disponible_sp, act_entregado_null])
         db.commit()
 
         # Consultar endpoint en vehiculos
@@ -198,7 +212,8 @@ def test_obtener_pendientes_paletizado_flexibilizado(client, auth_headers):
         items_veh = res_veh.json()
         ids_veh = [item["id_activo"] for item in items_veh]
         assert str(act_desarme.id_activo) in ids_veh
-        assert str(act_sp.id_activo) in ids_veh
+        assert str(act_disponible_sp.id_activo) not in ids_veh
+        assert str(act_entregado_null.id_activo) not in ids_veh
 
         # Consultar endpoint en bodega
         res_bod = client.get("/api/v1/bodega/pendientes-paletizado?sucursal_id=1", headers=auth_headers)
@@ -206,7 +221,118 @@ def test_obtener_pendientes_paletizado_flexibilizado(client, auth_headers):
         items_bod = res_bod.json()
         ids_bod = [item["id_activo"] for item in items_bod]
         assert str(act_desarme.id_activo) in ids_bod
-        assert str(act_sp.id_activo) in ids_bod
+        assert str(act_disponible_sp.id_activo) not in ids_bod
+        assert str(act_entregado_null.id_activo) not in ids_bod
+    finally:
+        db.close()
+
+
+def test_guardar_paletizado_rechaza_activo_no_en_desarme(client, auth_headers):
+    """
+    Verifica que guardar_paletizado rechace con HTTP 400 si el activo está en estado != 5
+    (ej: Entregado ID 6 o Disponible ID 1) antes de tocar Supabase Storage.
+    """
+    db = TestingSessionLocal()
+    try:
+        folio = f"ING-ENT-{uuid.uuid4().hex[:4].upper()}"
+        veh = models.Vehiculo_Origen(
+            id_vehiculo=uuid.uuid4(),
+            numero_ingreso=folio,
+            patente=f"ET{uuid.uuid4().hex[:4].upper()}",
+            marca="Nissan",
+            modelo="Qashqai",
+            anio=2021,
+        )
+        db.add(veh)
+        db.flush()
+
+        act_motor = models.Activo_Inventariado(
+            id_activo=uuid.uuid4(),
+            sku_qr_fisico=f"MOT-ET-{folio}",
+            id_categoria=1,
+            id_estado=6,  # Entregado
+            id_sucursal_actual=1,
+            id_vehiculo=veh.id_vehiculo,
+            estado="Activo",
+            ubicacion_pasillo=None,
+            ubicacion_pallet=None,
+            ubicacion_galpon=None,
+            fecha_creacion=datetime.now(),
+        )
+        db.add(act_motor)
+        db.commit()
+
+        foto_dummy = ("test.jpg", b"fake image data", "image/jpeg")
+        response = client.post(
+            "/api/v1/vehiculos/guardar-paletizado",
+            headers=auth_headers,
+            data={
+                "numero_ingreso": folio,
+                "tipo_repuesto": "Motor",
+                "galpon": "G1",
+                "pasillo": "P1",
+                "pallet": "01",
+            },
+            files=[("fotos_comerciales", foto_dummy)],
+        )
+        assert response.status_code == 400
+        assert "Solo se pueden paletizar repuestos en estado 'Desarme'" in response.json()["detail"]
+    finally:
+        db.close()
+
+
+def test_consultar_ingreso_rechaza_activos_no_en_desarme(client, auth_headers):
+    """
+    Verifica que GET /api/v1/inventario/ingreso/{numero_ingreso} responda 400
+    cuando los activos del vehículo ya fueron entregados o no están en Desarme (id_estado != 5).
+    """
+    db = TestingSessionLocal()
+    try:
+        folio = f"ING-DISP-{uuid.uuid4().hex[:4].upper()}"
+        veh = models.Vehiculo_Origen(
+            id_vehiculo=uuid.uuid4(),
+            numero_ingreso=folio,
+            patente=f"DP{uuid.uuid4().hex[:4].upper()}",
+            marca="Mazda",
+            modelo="CX-5",
+            anio=2020,
+        )
+        db.add(veh)
+        db.flush()
+
+        act_motor = models.Activo_Inventariado(
+            id_activo=uuid.uuid4(),
+            sku_qr_fisico=f"MOT-DP-{folio}",
+            id_categoria=1,
+            id_estado=1,  # Disponible
+            id_sucursal_actual=1,
+            id_vehiculo=veh.id_vehiculo,
+            estado="Activo",
+            ubicacion_pasillo="P1",
+            ubicacion_pallet="01",
+            ubicacion_galpon="G1",
+            fecha_creacion=datetime.now(),
+        )
+        act_caja = models.Activo_Inventariado(
+            id_activo=uuid.uuid4(),
+            sku_qr_fisico=f"CAJ-DP-{folio}",
+            id_categoria=2,
+            id_estado=6,  # Entregado (ubicacion liberada a None)
+            id_sucursal_actual=1,
+            id_vehiculo=veh.id_vehiculo,
+            estado="Activo",
+            ubicacion_pasillo=None,
+            ubicacion_pallet=None,
+            ubicacion_galpon=None,
+            fecha_creacion=datetime.now(),
+        )
+        db.add_all([act_motor, act_caja])
+        db.commit()
+
+        # Consultar endpoint de inventario por ingreso
+        res = client.get(f"/api/v1/inventario/ingreso/{folio}", headers=auth_headers)
+        assert res.status_code == 400
+        assert "El activo asociado a este número ya fue paletizado previamente" in res.json()["detail"]
     finally:
         db.close()
 
