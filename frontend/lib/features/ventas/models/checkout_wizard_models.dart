@@ -256,6 +256,8 @@ class CheckoutWizardRequestModel {
 /// DTO de respuesta transaccional tras procesar el Checkout Wizard
 class CheckoutWizardResponseModel {
   final String idOrden;
+  final int? numeroOrden;
+  final String? folio;
   final String estado;
   final int totalVenta;
   final int montoPendiente;
@@ -266,6 +268,8 @@ class CheckoutWizardResponseModel {
 
   const CheckoutWizardResponseModel({
     required this.idOrden,
+    this.numeroOrden,
+    this.folio,
     required this.estado,
     required this.totalVenta,
     required this.montoPendiente,
@@ -275,9 +279,24 @@ class CheckoutWizardResponseModel {
     required this.mensaje,
   });
 
+  String get folioDisplay {
+    if (folio != null && folio!.isNotEmpty && !folio!.startsWith('TX-QR-')) {
+      return folio!;
+    }
+    if (numeroOrden != null) {
+      return 'ORD-${numeroOrden.toString().padLeft(4, '0')}';
+    }
+    if (idOrden.length >= 8) {
+      return 'ORD-${idOrden.substring(0, 8).toUpperCase()}';
+    }
+    return 'ORD-$idOrden';
+  }
+
   factory CheckoutWizardResponseModel.fromJson(Map<String, dynamic> json) {
     return CheckoutWizardResponseModel(
       idOrden: json['id_orden']?.toString() ?? '',
+      numeroOrden: json['numero_orden'] as int?,
+      folio: json['folio']?.toString(),
       estado: json['estado']?.toString() ?? json['estado_orden']?.toString() ?? 'Reservada',
       totalVenta: json['total_venta'] is int ? json['total_venta'] : int.tryParse(json['total_venta']?.toString() ?? '0') ?? 0,
       montoPendiente: json['monto_pendiente'] is int ? json['monto_pendiente'] : int.tryParse(json['monto_pendiente']?.toString() ?? '0') ?? 0,

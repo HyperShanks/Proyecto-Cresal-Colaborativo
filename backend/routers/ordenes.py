@@ -339,6 +339,8 @@ def crear_orden(
 
         return OrdenResponse(
             id_orden=nueva_orden.id_orden,
+            numero_orden=nueva_orden.numero_orden,
+            folio=nueva_orden.folio,
             estado_orden=nueva_orden.estado_orden,
             total_venta=nueva_orden.total_venta,
             monto_pendiente=nueva_orden.monto_pendiente,
@@ -501,6 +503,7 @@ def listar_ordenes_auditoria(
         )
         query = query.filter(
             or_(
+                cast(Orden_Venta.numero_orden, String).ilike(f"%{term.upper().replace('ORD-', '').lstrip('0')}%") if term.upper().replace('ORD-', '').lstrip('0').isdigit() else cast(Orden_Venta.numero_orden, String).ilike(f"%{term}%"),
                 Orden_Venta.qr_transaccional_salida.ilike(f"%{term}%"),
                 cast(Orden_Venta.id_orden, String).ilike(f"%{term}%"),
                 Cliente.nombres.ilike(f"%{term}%"),
@@ -515,10 +518,20 @@ def listar_ordenes_auditoria(
     total_registros = query.count()
     total_paginas = max(1, (total_registros + limite - 1) // limite)
 
-    # Cálculo consolidado del monto total vendido en la consulta (sin ORDER BY para evitar GroupingError en PostgreSQL)
+    # Cálculo consolidado del monto efectivamente recaudado/abonado en la consulta (sin ORDER BY para evitar GroupingError en PostgreSQL)
+    # - Si la orden está 'Anulada': $0 recaudado.
+    # - Para órdenes con abono (ej. Reservada) o pagadas: suma lo efectivamente abonado/pagado: (total_venta - monto_pendiente)
+    monto_recaudado_expr = case(
+        (Orden_Venta.estado_orden.ilike("Anulada"), 0),
+        (
+            Orden_Venta.total_venta > func.coalesce(Orden_Venta.monto_pendiente, 0),
+            Orden_Venta.total_venta - func.coalesce(Orden_Venta.monto_pendiente, 0),
+        ),
+        else_=0,
+    )
     total_monto_consolidado = (
         query.order_by(None)
-        .with_entities(func.coalesce(func.sum(Orden_Venta.total_venta), 0))
+        .with_entities(func.coalesce(func.sum(monto_recaudado_expr), 0))
         .scalar()
         or 0
     )
@@ -834,6 +847,8 @@ def obtener_mis_ventas(
         resultado.append(
             OrdenHistorialItemResponse(
                 id_orden=orden.id_orden,
+                numero_orden=orden.numero_orden,
+                folio=orden.folio,
                 estado_orden=orden.estado_orden,
                 total_venta=orden.total_venta,
                 monto_pendiente=orden.monto_pendiente,
@@ -1056,7 +1071,7 @@ def listar_entregas_envios(
                 vendedor_asignado_nombre = f"{v_asig_db.nombres} {v_asig_db.apellidos or ''}".strip()
 
         todos_listos = all(d.estado_preparacion == "Listo" for d in detalles_resumen) if detalles_resumen else True
-        folio = orden.qr_transaccional_salida or f"ORD-{str(orden.id_orden)[:8].upper()}"
+        folio = orden.folio
 
         # Filtro Específico: Cliente (Nombre, RUT, Teléfono)
         if busqueda_cliente and busqueda_cliente.strip():
@@ -1082,6 +1097,7 @@ def listar_entregas_envios(
         # Filtro General (Compatibilidad)
         if term_busqueda:
             folio_upper = folio.upper()
+            numero_str = str(orden.numero_orden) if orden.numero_orden is not None else ""
             rut_upper = (cliente_resumen.rut_cliente if cliente_resumen else "").upper()
             nom_upper = f"{cliente_resumen.nombres if cliente_resumen else ''} {cliente_resumen.apellidos if cliente_resumen else ''}".upper()
             rec_rut_upper = (despacho_resumen.receptor_rut if despacho_resumen else "").upper()
@@ -1091,6 +1107,8 @@ def listar_entregas_envios(
 
             matches = (
                 term_busqueda in folio_upper
+                or (bool(numero_str) and term_busqueda in numero_str)
+                or (bool(orden.qr_transaccional_salida) and term_busqueda in orden.qr_transaccional_salida.upper())
                 or term_busqueda in rut_upper
                 or term_busqueda in nom_upper
                 or term_busqueda in rec_rut_upper
@@ -1105,6 +1123,7 @@ def listar_entregas_envios(
         items_response.append(
             EntregaEnvioItemResponse(
                 id_orden=orden.id_orden,
+                numero_orden=orden.numero_orden,
                 folio=folio,
                 tipo_entrega=tipo_entrega_item,
                 estado_orden=orden.estado_orden,
@@ -1204,7 +1223,7 @@ def confirmar_entrega_tienda(
         db.commit()
         db.refresh(orden)
 
-        folio = orden.qr_transaccional_salida or f"ORD-{str(orden.id_orden)[:8].upper()}"
+        folio = orden.folio
         return EntregaConfirmacionResponse(
             id_orden=orden.id_orden,
             folio=folio,
@@ -1294,7 +1313,7 @@ def marcar_despacho_enviado(
         db.refresh(despacho)
         db.refresh(orden)
 
-        folio = orden.qr_transaccional_salida or f"ORD-{str(orden.id_orden)[:8].upper()}"
+        folio = orden.folio
         return DespachoEnvioResponse(
             id_despacho=despacho.id_despacho,
             id_orden=orden.id_orden,
@@ -1468,6 +1487,8 @@ def pagar_orden(
 
         return OrdenPagoResponse(
             id_orden=orden.id_orden,
+            numero_orden=orden.numero_orden,
+            folio=orden.folio,
             id_pago=nuevo_pago.id_pago,
             estado_orden=orden.estado_orden,
             total_venta=orden.total_venta,
@@ -2210,6 +2231,8 @@ def checkout_wizard(
 
         return CheckoutWizardResponse(
             id_orden=orden.id_orden,
+            numero_orden=orden.numero_orden,
+            folio=orden.folio,
             estado=orden.estado_orden,
             estado_orden=orden.estado_orden,
             total_venta=orden.total_venta,

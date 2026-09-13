@@ -228,17 +228,20 @@ class Orden_Venta(Base):
     abono_requerido = Column(Integer, nullable=False, default=0)
     fecha_creacion = Column(DateTime, nullable=False, server_default=text("now()"))
     fecha_actualizacion = Column(DateTime, nullable=True)
+    numero_orden = Column(Integer, nullable=True)
 
     @property
     def folio(self) -> str:
         """
-        Retorno el folio formateado de la orden.
-        Si posee qr_transaccional_salida lo utilizo, de lo contrario
-        genero la convención ORD-XXXX con los primeros caracteres del UUID.
+        Retorna el folio comercial formateado de la orden.
+        Si posee numero_orden asignado por BD, formatea ORD-0001.
+        De lo contrario, genera la convención ORD-XXXXXXXX con los primeros 8 caracteres del UUID.
         """
-        if self.qr_transaccional_salida:
+        if self.numero_orden is not None:
+            return f"ORD-{self.numero_orden:04d}"
+        if self.qr_transaccional_salida and self.qr_transaccional_salida.startswith("ORD-"):
             return self.qr_transaccional_salida
-        return f"ORD-{str(self.id_orden).replace('-', '')[:4].upper()}"
+        return f"ORD-{str(self.id_orden).replace('-', '')[:8].upper()}"
 
 class Detalle_Orden(Base):
     __tablename__ = "Detalle_Orden"

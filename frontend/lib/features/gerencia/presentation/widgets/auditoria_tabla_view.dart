@@ -654,24 +654,27 @@ class AuditoriaTablaView extends StatelessWidget {
               ],
             ),
 
-          // Total consolidado a la derecha
-          Text.rich(
-            TextSpan(
-              text: 'Total Consolidado en Vista: ',
-              style: AppTypography.small.copyWith(
-                color: const Color(0xFF64748B),
-                fontSize: 12.5,
-              ),
-              children: [
-                TextSpan(
-                  text: CobroPendienteCard.formatClp(totalConsolidado),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF004C89), // AppPalette.tertiary
-                    fontSize: 14.5,
-                  ),
+          // Total consolidado a la derecha con tooltip explicativo
+          Tooltip(
+            message: 'Monto efectivamente recaudado en órdenes procesadas y abonos de reservas (excluye anuladas y saldos pendientes)',
+            child: Text.rich(
+              TextSpan(
+                text: 'Total Consolidado en Vista: ',
+                style: AppTypography.small.copyWith(
+                  color: const Color(0xFF64748B),
+                  fontSize: 12.5,
                 ),
-              ],
+                children: [
+                  TextSpan(
+                    text: CobroPendienteCard.formatClp(totalConsolidado),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF004C89), // AppPalette.tertiary
+                      fontSize: 14.5,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],

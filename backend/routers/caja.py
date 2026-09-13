@@ -17,6 +17,7 @@ from models import (
     Activo_Inventariado,
     Vehiculo_Origen,
     Categoria_Activo,
+    Estado_Activo,
     Transaccion_Pago,
     Auditoria_Barrera,
     Detalle_Motor,
@@ -32,6 +33,9 @@ from schemas import (
     ModalidadCobroEnum,
     RegistrarCobroRequest,
     RegistrarCobroResponse,
+    ValidarActivoBackorderRequest,
+    ValidarActivoBackorderResponse,
+    ActivoDetalleBackorderDTO,
     HistorialPagoDetalleDTO,
     HistorialArticuloDTO,
     HistorialMovimientoDTO,
@@ -199,10 +203,7 @@ def obtener_cobros_pendientes(
                 )
 
             # Folio representativo
-            if orden.qr_transaccional_salida and orden.qr_transaccional_salida.startswith("ORD-"):
-                folio_doc = orden.qr_transaccional_salida
-            else:
-                folio_doc = f"ORD-{str(orden.id_orden).replace('-', '')[:4].upper()}"
+            folio_doc = orden.folio
 
             total_op = orden.total_venta
             abono_req = getattr(orden, "abono_requerido", 0) or 0
@@ -350,6 +351,98 @@ def obtener_cobros_pendientes(
 
 
 @router.post(
+    "/cobros/validar-activo-backorder",
+    response_model=ValidarActivoBackorderResponse,
+    summary="Validar Atributos de Activo para Backorder",
+    description="Valida que el activo ingresado cumpla con los requisitos del backorder y retorna sus especificaciones técnicas."
+)
+def validar_activo_backorder(
+    payload: ValidarActivoBackorderRequest,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_caja_role),
+):
+    reserva = db.query(Reservas_Backorder).filter(Reservas_Backorder.id_reserva == payload.id_documento).first()
+    if not reserva:
+        raise HTTPException(status_code=404, detail="Reserva Backorder no encontrada.")
+
+    activo_raw = (
+        db.query(Activo_Inventariado, Vehiculo_Origen, Detalle_Motor, Detalle_Caja_Cambio, Categoria_Activo, Estado_Activo)
+        .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
+        .outerjoin(Detalle_Motor, Activo_Inventariado.id_activo == Detalle_Motor.id_activo)
+        .outerjoin(Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo)
+        .outerjoin(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
+        .outerjoin(Estado_Activo, Activo_Inventariado.id_estado == Estado_Activo.id_estado)
+        .filter(Activo_Inventariado.sku_qr_fisico == payload.sku_activo)
+        .first()
+    )
+
+    if not activo_raw:
+        raise HTTPException(status_code=404, detail=f"Activo con SKU {payload.sku_activo} no encontrado en inventario.")
+
+    activo, vehiculo, motor, caja_cambio, categoria, estado_activo = activo_raw
+    discrepancias = []
+
+    if vehiculo and reserva.marca_requerida and vehiculo.marca.lower() != reserva.marca_requerida.lower():
+        discrepancias.append(f"Marca requerida: {reserva.marca_requerida}, Marca del repuesto: {vehiculo.marca}")
+
+    if vehiculo and reserva.modelo_requerido and vehiculo.modelo.lower() != reserva.modelo_requerido.lower():
+        discrepancias.append(f"Modelo requerido: {reserva.modelo_requerido}, Modelo del repuesto: {vehiculo.modelo}")
+
+    if motor and reserva.cilindrada_requerida and motor.cilindrada:
+        req_c = reserva.cilindrada_requerida.lower().replace("l","").replace("cc","").strip()
+        act_c = motor.cilindrada.lower().replace("l","").replace("cc","").strip()
+        if req_c != act_c:
+            discrepancias.append(f"Cilindrada requerida: {reserva.cilindrada_requerida}, Cilindrada del repuesto: {motor.cilindrada}")
+
+    if motor and reserva.combustible_requerido and motor.combustible and motor.combustible.lower() != reserva.combustible_requerido.lower():
+        discrepancias.append(f"Combustible requerido: {reserva.combustible_requerido}, Combustible del repuesto: {motor.combustible}")
+
+    transmision_act = None
+    if caja_cambio and caja_cambio.transmision_tipo:
+        transmision_act = caja_cambio.transmision_tipo
+    elif motor and motor.transmision_tipo:
+        transmision_act = motor.transmision_tipo
+
+    if transmision_act and reserva.transmision_requerida and transmision_act.lower() != reserva.transmision_requerida.lower():
+        discrepancias.append(f"Transmisión requerida: {reserva.transmision_requerida}, Transmisión del repuesto: {transmision_act}")
+
+    coincide = len(discrepancias) == 0
+    mensaje = "El repuesto cumple con todas las especificaciones solicitadas." if coincide else "Hay discrepancias en los atributos técnicos."
+
+    ubicacion_partes = []
+    if activo.ubicacion_galpon:
+        ubicacion_partes.append(f"Galpón {activo.ubicacion_galpon}")
+    if activo.ubicacion_pasillo:
+        ubicacion_partes.append(f"Pasillo {activo.ubicacion_pasillo}")
+    if activo.ubicacion_pallet:
+        ubicacion_partes.append(f"Pallet {activo.ubicacion_pallet}")
+    ubicacion_str = " • ".join(ubicacion_partes) if ubicacion_partes else None
+
+    activo_detalle = ActivoDetalleBackorderDTO(
+        sku=activo.sku_qr_fisico,
+        categoria=categoria.nombre_categoria if categoria else None,
+        marca=vehiculo.marca if vehiculo else None,
+        modelo=vehiculo.modelo if vehiculo else None,
+        anio=vehiculo.anio if vehiculo else None,
+        cilindrada=motor.cilindrada if motor else None,
+        combustible=motor.combustible if motor else None,
+        transmision=transmision_act,
+        patente=vehiculo.patente if vehiculo else None,
+        vin=vehiculo.vin if vehiculo else None,
+        ubicacion=ubicacion_str,
+        precio_referencia=activo.precio_referencia,
+        estado_conservacion=estado_activo.nombre_estado if estado_activo else (activo.observacion_estado or activo.estado),
+    )
+
+    return ValidarActivoBackorderResponse(
+        coincide=coincide,
+        discrepancias=discrepancias,
+        mensaje=mensaje,
+        activo_detalle=activo_detalle
+    )
+
+
+@router.post(
     "/cobros/registrar",
     response_model=RegistrarCobroResponse,
     status_code=status.HTTP_200_OK,
@@ -379,6 +472,13 @@ def registrar_cobro(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Descuadre financiero: El monto total ingresado no cubre el saldo pendiente de la orden (${payload.monto_declarado:,})."
+        )
+
+    # 1.1 Validación de Monto Declarado estrictamente positivo (Evita montos extremos <= 0)
+    if payload.monto_declarado <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El monto a cobrar debe ser estrictamente mayor a $0."
         )
 
     # 2. Validación de montos individuales > 0 (CA-06)
@@ -478,21 +578,95 @@ def registrar_cobro(
             reserva.monto_abonado += payload.monto_declarado
             reserva.fecha_actualizacion = now_utc
             nuevo_saldo = reserva.precio_acordado - reserva.monto_abonado
+            
+            target_id_orden = None
             if nuevo_saldo == 0:
+                if not payload.sku_activo_atribuido:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Para saldar el backorder, debe atribuir el SKU del activo físico."
+                    )
+                
+                from models import Estado_Activo, Vehiculo_Origen, Detalle_Orden
+                
+                activo = db.query(Activo_Inventariado).filter(Activo_Inventariado.sku_qr_fisico == payload.sku_activo_atribuido).first()
+                if not activo:
+                    raise HTTPException(status_code=404, detail=f"Activo con SKU {payload.sku_activo_atribuido} no encontrado.")
+                
+                estado_disponible = db.query(Estado_Activo).filter(Estado_Activo.nombre_estado == "Disponible").first()
+                if not estado_disponible or activo.id_estado != estado_disponible.id_estado:
+                    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="El activo ingresado no está Disponible.")
+                
+                vehiculo = db.query(Vehiculo_Origen).filter(Vehiculo_Origen.id_vehiculo == activo.id_vehiculo).first()
+                hay_discrepancia = False
+                if vehiculo:
+                    if reserva.marca_requerida and vehiculo.marca.lower() != reserva.marca_requerida.lower(): hay_discrepancia = True
+                    if reserva.modelo_requerido and vehiculo.modelo.lower() != reserva.modelo_requerido.lower(): hay_discrepancia = True
+                
+                if hay_discrepancia and not payload.forzar_atribucion:
+                    raise HTTPException(status_code=400, detail="El activo físico no coincide con lo requerido por el Backorder. Active la sobreescritura si desea continuar.")
+
+                estado_vendido = db.query(Estado_Activo).filter(Estado_Activo.nombre_estado == "Vendido").first()
+                if not estado_vendido:
+                    estado_vendido = Estado_Activo(id_estado=3, nombre_estado="Vendido")
+                    db.add(estado_vendido)
+                    db.flush()
+                activo.id_estado = estado_vendido.id_estado
+                activo.reservado_por = None
+                activo.reserva_expira_en = None
+                
+                reserva.id_activo_asignado = activo.id_activo
                 reserva.estado_reserva = "Completada"
+
+                qr_hash = f"TX-QR-{uuid.uuid4()}"
+                nueva_orden = Orden_Venta(
+                    id_cliente=reserva.id_cliente,
+                    id_vendedor=reserva.id_vendedor,
+                    id_cajera=current_user.id_usuario,
+                    id_sucursal=reserva.id_sucursal_registro,
+                    estado_orden="Pagada",
+                    qr_transaccional_salida=qr_hash,
+                    total_venta=reserva.precio_acordado,
+                    monto_pendiente=0,
+                    abono_requerido=0,
+                    fecha_creacion=now_utc,
+                    fecha_actualizacion=now_utc,
+                )
+                db.add(nueva_orden)
+                db.flush()
+
+                reserva.id_orden = nueva_orden.id_orden
+
+                detalle = Detalle_Orden(
+                    id_orden=nueva_orden.id_orden,
+                    id_activo=activo.id_activo,
+                    descripcion_manual=f"[BACKORDER] {reserva.marca_requerida} {reserva.modelo_requerido}",
+                    notas_preparacion="Entregado en caja por backorder",
+                    cantidad=1,
+                    precio_unitario=reserva.precio_acordado,
+                    precio_final=reserva.precio_acordado,
+                    estado_preparacion="Listo",
+                )
+                db.add(detalle)
+                db.flush()
+                
+                db.query(Transaccion_Pago).filter(Transaccion_Pago.id_reserva == reserva.id_reserva).update({"id_orden": nueva_orden.id_orden})
+                
+                folio_doc = f"ORD-{str(nueva_orden.id_orden).replace('-', '')[:4].upper()}"
+                estado_resultado = "Completada"
+                target_id_orden = nueva_orden.id_orden
             else:
                 reserva.estado_reserva = "Confirmada"
-            qr_hash = None
-
-            folio_doc = f"RES-{str(reserva.id_reserva).replace('-', '')[:4].upper()}"
-            estado_resultado = reserva.estado_reserva
+                qr_hash = None
+                folio_doc = f"RES-{str(reserva.id_reserva).replace('-', '')[:4].upper()}"
+                estado_resultado = reserva.estado_reserva
 
             # Registrar cada método en Transaccion_Pago
             for pago_item in payload.pagos:
                 id_transaccion = uuid.uuid4()
                 transaccion = Transaccion_Pago(
                     id_pago=id_transaccion,
-                    id_orden=None,
+                    id_orden=target_id_orden,
                     id_reserva=reserva.id_reserva,
                     monto=pago_item.monto,
                     metodo_pago=pago_item.metodo.value,
@@ -757,10 +931,7 @@ def obtener_historial_caja(
             )
 
         # Folio
-        if orden.qr_transaccional_salida and orden.qr_transaccional_salida.startswith("ORD-"):
-            folio_doc = orden.qr_transaccional_salida
-        else:
-            folio_doc = f"ORD-{str(orden.id_orden).replace('-', '')[:4].upper()}"
+        folio_doc = orden.folio
 
         fecha_fmt, hora_fmt, dt_utc = format_chile_datetime(orden.fecha_creacion)
         dt_chile = dt_utc.astimezone(tz_chile)

@@ -30,6 +30,12 @@ class CajaProvider extends ChangeNotifier {
   bool _isProcesandoCobro = false;
   RegistrarCobroResponseModel? _ultimoResultadoCobro;
 
+  // ── ESTADO REACTIVO DE ATRIBUCIÓN BACKORDER ──
+  String? _skuActivoAtribuido;
+  bool _forzarAtribucion = false;
+  ValidarActivoBackorderResponseModel? _validacionActivo;
+  bool _isRevisandoActivo = false;
+
   CajaProvider({
     ICajaService? cajaService,
   }) : _cajaService = cajaService ?? CajaService();
@@ -59,14 +65,32 @@ class CajaProvider extends ChangeNotifier {
   RegistrarCobroResponseModel? get ultimoResultadoCobro =>
       _ultimoResultadoCobro;
 
+  String? get skuActivoAtribuido => _skuActivoAtribuido;
+  bool get forzarAtribucion => _forzarAtribucion;
+  ValidarActivoBackorderResponseModel? get validacionActivo => _validacionActivo;
+  bool get isRevisandoActivo => _isRevisandoActivo;
+
   int get totalPagosIngresados =>
       _pagosDivididos.fold(0, (sum, p) => sum + p.monto);
 
   int get diferenciaCuadratura => _montoDeclarado - totalPagosIngresados;
 
+  /// Valida que el monto declarado esté dentro del rango permitido (1 <= monto <= saldo pendiente).
+  bool get esMontoValido {
+    if (_ordenSeleccionada == null) return false;
+    final maxPermitido = _ordenSeleccionada!.montoACobrar;
+    return _montoDeclarado > 0 && _montoDeclarado <= maxPermitido;
+  }
+
+  /// Indica si el monto declarado excede el saldo pendiente de la orden.
+  bool get esMontoExcedido {
+    if (_ordenSeleccionada == null) return false;
+    return _montoDeclarado > _ordenSeleccionada!.montoACobrar;
+  }
+
   bool get esCuadraturaValida =>
       diferenciaCuadratura == 0 &&
-      _montoDeclarado > 0 &&
+      esMontoValido &&
       _pagosDivididos.isNotEmpty &&
       _pagosDivididos.every((p) => p.monto > 0);
 
@@ -175,6 +199,9 @@ class CajaProvider extends ChangeNotifier {
       _montoDeclarado = 0;
       _pagosDivididos = [];
     }
+    _skuActivoAtribuido = null;
+    _forzarAtribucion = false;
+    _validacionActivo = null;
     notifyListeners();
   }
 
@@ -187,6 +214,14 @@ class CajaProvider extends ChangeNotifier {
     if (_ordenSeleccionada != null) {
       if (_modalidad == 'LIQUIDACION') {
         _montoDeclarado = _ordenSeleccionada!.montoACobrar;
+      } else if (_modalidad == 'ABONO') {
+        // En abono, si el monto declarado supera el saldo pendiente o es <= 0, sugerir 50%
+        if (_montoDeclarado >= _ordenSeleccionada!.montoACobrar || _montoDeclarado <= 0) {
+          _montoDeclarado = (_ordenSeleccionada!.montoACobrar * 0.5).round();
+          if (_montoDeclarado <= 0) {
+            _montoDeclarado = _ordenSeleccionada!.montoACobrar;
+          }
+        }
       }
       if (_modalidadPago == 'UNICO' || _pagosDivididos.length <= 1) {
         final metodoActual = _pagosDivididos.isNotEmpty ? _pagosDivididos.first.metodo : 'Efectivo';
@@ -328,8 +363,43 @@ class CajaProvider extends ChangeNotifier {
           monto: _ordenSeleccionada!.montoACobrar,
         ),
       ];
+      _skuActivoAtribuido = null;
+      _forzarAtribucion = false;
+      _validacionActivo = null;
       notifyListeners();
     }
+  }
+
+  /// Valida el SKU de un activo ingresado contra la reserva backorder activa.
+  Future<void> validarActivoBackorder(String sku) async {
+    if (_ordenSeleccionada == null || !_ordenSeleccionada!.esBackorder) return;
+    
+    _isRevisandoActivo = true;
+    _errorMessage = null;
+    notifyListeners();
+    
+    try {
+      final req = ValidarActivoBackorderRequestModel(
+        idDocumento: _ordenSeleccionada!.idReferencia,
+        skuActivo: sku,
+      );
+      _validacionActivo = await _cajaService.validarActivoBackorder(req);
+      _skuActivoAtribuido = sku;
+      _forzarAtribucion = false;
+    } catch (e) {
+      _errorMessage = e.toString().replaceAll('Exception: ', '');
+      _validacionActivo = null;
+      _skuActivoAtribuido = null;
+      _forzarAtribucion = false;
+    } finally {
+      _isRevisandoActivo = false;
+      notifyListeners();
+    }
+  }
+
+  void setForzarAtribucion(bool val) {
+    _forzarAtribucion = val;
+    notifyListeners();
   }
 
   /// Procesa el cobro enviando la petición atómica al Backend (FastAPI).
@@ -347,6 +417,8 @@ class CajaProvider extends ChangeNotifier {
         modalidad: _modalidad,
         montoDeclarado: _montoDeclarado,
         pagos: _pagosDivididos,
+        skuActivoAtribuido: _skuActivoAtribuido,
+        forzarAtribucion: _forzarAtribucion,
       );
 
       final resultado = await _cajaService.registrarCobro(request);

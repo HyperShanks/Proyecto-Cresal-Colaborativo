@@ -241,22 +241,22 @@ def test_entregas_envios_endpoint_y_filtros(client, auth_headers):
         assert res_todos.status_code == 200, res_todos.text
         data_todos = res_todos.json()
         folios = [item["folio"] for item in data_todos]
-        assert orden_retiro.qr_transaccional_salida in folios
-        assert orden_despacho.qr_transaccional_salida in folios
+        assert orden_retiro.folio in folios
+        assert orden_despacho.folio in folios
 
         # B. Consulta filtrada por tipo 'retiro'
         res_ret = client.get("/api/v1/ordenes/entregas-envios?sucursal_id=1&tipo=retiro", headers=auth_headers)
         assert res_ret.status_code == 200
         data_ret = res_ret.json()
         assert all(item["tipo_entrega"] == "Retiro" for item in data_ret)
-        assert orden_retiro.qr_transaccional_salida in [item["folio"] for item in data_ret]
+        assert orden_retiro.folio in [item["folio"] for item in data_ret]
 
         # C. Consulta filtrada por tipo 'despacho'
         res_desp = client.get("/api/v1/ordenes/entregas-envios?sucursal_id=1&tipo=despacho", headers=auth_headers)
         assert res_desp.status_code == 200
         data_desp = res_desp.json()
         assert all(item["tipo_entrega"] == "Despacho" for item in data_desp)
-        assert orden_despacho.qr_transaccional_salida in [item["folio"] for item in data_desp]
+        assert orden_despacho.folio in [item["folio"] for item in data_desp]
 
         # D. Búsqueda por RUT
         res_rut = client.get("/api/v1/ordenes/entregas-envios?sucursal_id=1&busqueda=15.999.888-7", headers=auth_headers)
@@ -469,14 +469,14 @@ def test_listar_vendedores_y_filtros_cliente_vendedor_privacidad(client, auth_he
         assert res_vend2.status_code == 200
         data_v2 = res_vend2.json()
         assert len(data_v2) >= 1
-        assert data_v2[0]["folio"] == orden_privada.qr_transaccional_salida
+        assert data_v2[0]["folio"] == orden_privada.folio
         assert data_v2[0]["vendedor_asignado_nombre"] == "Pedro Asignado"
 
         # 4. Probar filtro por vendedor
         res_fv = client.get("/api/v1/ordenes/entregas-envios?sucursal_id=1&busqueda_vendedor=Pedro", headers=headers_vend2)
         assert res_fv.status_code == 200
         data_fv = res_fv.json()
-        assert any(item["folio"] == orden_privada.qr_transaccional_salida for item in data_fv)
+        assert any(item["folio"] == orden_privada.folio for item in data_fv)
 
         # 5. Probar filtro por estado_pago
         res_pagados = client.get("/api/v1/ordenes/entregas-envios?sucursal_id=1&estado_pago=pagados", headers=headers_vend2)

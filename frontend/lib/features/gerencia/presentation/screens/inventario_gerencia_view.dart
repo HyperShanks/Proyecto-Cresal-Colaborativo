@@ -10,6 +10,7 @@ import '../../../../core/theme/tokens/app_typography.dart';
 import '../../../ventas/models/catalogo_model.dart';
 import '../../../inventario/services/inventario_service.dart';
 import '../../services/gerencia_service.dart';
+import '../../../ventas/presentation/widgets/visor_imagen_completa_dialog.dart';
 
 enum ModoVistaStock { tarjetas, tabla }
 
@@ -785,25 +786,30 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Cabecera Fotográfica con Zoom suave por GPU
+          // Cabecera Fotográfica con Zoom suave por GPU y navegación interactiva
           Stack(
             children: [
               _CardImageZoom(
                 imagenes: item.imagenes,
                 fallbackBuilder: _buildFallbackImage,
+                titulo: item.tituloRepuesto,
+                sku: item.skuQrFisico,
               ),
 
               // Badge Superior Flotante: Estado Físico
               Positioned(
                 top: 10,
                 left: 10,
+                child: IgnorePointer(
                   child: _buildBadgeEstado(estadoNombre),
                 ),
+              ),
 
-                // Badge Inferior Flotante: SKU QR Físico
-                Positioned(
-                  bottom: 8,
-                  left: 10,
+              // Badge Inferior Flotante: SKU QR Físico
+              Positioned(
+                bottom: 8,
+                left: 10,
+                child: IgnorePointer(
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
@@ -828,8 +834,9 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
+          ),
 
             // Cuerpo de la Tarjeta
             Expanded(
@@ -1284,57 +1291,133 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
               ),
             ),
 
-            // 2. Pieza / Ficha Técnica
+            // 2. Pieza / Ficha Técnica (con miniatura interactiva)
             Expanded(
               flex: 4,
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
+                child: Row(
                   children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                          decoration: BoxDecoration(
-                            color: item.idCategoria == 1
-                                ? const Color(0xFFE0F2FE)
-                                : const Color(0xFFFEF3C7),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            item.nombreCategoria,
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: item.idCategoria == 1
-                                  ? const Color(0xFF075985)
-                                  : const Color(0xFF78350F),
+                    // Miniatura interactiva de foto con acceso directo al visor en grande
+                    Tooltip(
+                      message: item.imagenes.isNotEmpty
+                          ? 'Click para ver ${item.imagenes.length} ${item.imagenes.length == 1 ? "foto" : "fotos"} en grande'
+                          : 'Sin fotografías registradas',
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: item.imagenes.isNotEmpty
+                            ? () => VisorImagenCompletaDialog.show(
+                                  context,
+                                  fotografias: item.imagenes,
+                                  initialIndex: 0,
+                                  titulo: item.tituloRepuesto,
+                                  sku: item.skuQrFisico,
+                                )
+                            : null,
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Container(
+                              width: 42,
+                              height: 42,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF1F5F9),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: AppPalette.borderLight),
+                              ),
+                              clipBehavior: Clip.antiAlias,
+                              child: item.imagenes.isNotEmpty
+                                  ? Image.network(
+                                      item.imagenes.first,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => const Icon(
+                                        Icons.directions_car,
+                                        size: 20,
+                                        color: Color(0xFF94A3B8),
+                                      ),
+                                    )
+                                  : const Icon(
+                                      Icons.directions_car,
+                                      size: 20,
+                                      color: Color(0xFFCBD5E1),
+                                    ),
                             ),
-                          ),
+                            if (item.imagenes.length > 1)
+                              Positioned(
+                                right: -2,
+                                bottom: -2,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 0.8),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: Colors.white24, width: 0.5),
+                                  ),
+                                  child: Text(
+                                    '+${item.imagenes.length - 1}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 8,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            item.tituloRepuesto,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                decoration: BoxDecoration(
+                                  color: item.idCategoria == 1
+                                      ? const Color(0xFFE0F2FE)
+                                      : const Color(0xFFFEF3C7),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  item.nombreCategoria,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: item.idCategoria == 1
+                                        ? const Color(0xFF075985)
+                                        : const Color(0xFF78350F),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  item.tituloRepuesto,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12,
+                                    color: Color(0xFF0F172A),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${item.combustible ?? ""} • ${item.transmisionTipo ?? ""}${item.cilindrada != null ? " • ${item.cilindrada!}L" : ""}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 12,
-                              color: Color(0xFF0F172A),
-                            ),
+                            style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${item.combustible ?? ""} • ${item.transmisionTipo ?? ""}${item.cilindrada != null ? " • ${item.cilindrada!}L" : ""}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -1867,25 +1950,76 @@ class _TasacionDialogState extends State<_TasacionDialog> {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Container(
-                                width: 64,
-                                height: 64,
-                                color: const Color(0xFFE2E8F0),
-                                child: widget.item.imagenes.isNotEmpty
-                                    ? Image.network(
-                                        widget.item.imagenes.first,
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (context, error, stackTrace) => const Icon(
-                                          Icons.directions_car,
-                                          color: Color(0xFF94A3B8),
-                                        ),
-                                      )
-                                    : const Icon(
-                                        Icons.directions_car,
-                                        color: Color(0xFF94A3B8),
+                            Tooltip(
+                              message: widget.item.imagenes.isNotEmpty
+                                  ? 'Click para ver fotos en alta resolución'
+                                  : 'Sin fotos registradas',
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(8),
+                                onTap: widget.item.imagenes.isNotEmpty
+                                    ? () => VisorImagenCompletaDialog.show(
+                                          context,
+                                          fotografias: widget.item.imagenes,
+                                          initialIndex: 0,
+                                          titulo: widget.item.tituloRepuesto,
+                                          sku: widget.item.skuQrFisico,
+                                        )
+                                    : null,
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Container(
+                                        width: 64,
+                                        height: 64,
+                                        color: const Color(0xFFE2E8F0),
+                                        child: widget.item.imagenes.isNotEmpty
+                                            ? Image.network(
+                                                widget.item.imagenes.first,
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (context, error, stackTrace) => const Icon(
+                                                  Icons.directions_car,
+                                                  color: Color(0xFF94A3B8),
+                                                ),
+                                              )
+                                            : const Icon(
+                                                Icons.directions_car,
+                                                color: Color(0xFF94A3B8),
+                                              ),
                                       ),
+                                    ),
+                                    if (widget.item.imagenes.isNotEmpty)
+                                      Positioned(
+                                        right: 3,
+                                        bottom: 3,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withValues(alpha: 0.75),
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Icon(Icons.fullscreen, size: 9, color: Colors.white70),
+                                              if (widget.item.imagenes.length > 1) ...[
+                                                const SizedBox(width: 2),
+                                                Text(
+                                                  '${widget.item.imagenes.length}',
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 9,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ],
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
                               ),
                             ),
                             const SizedBox(width: 12),
@@ -1946,6 +2080,36 @@ class _TasacionDialogState extends State<_TasacionDialog> {
                                       fontWeight: FontWeight.w500,
                                     ),
                                   ),
+                                  if (widget.item.imagenes.isNotEmpty) ...[
+                                    const SizedBox(height: 6),
+                                    InkWell(
+                                      onTap: () => VisorImagenCompletaDialog.show(
+                                        context,
+                                        fotografias: widget.item.imagenes,
+                                        initialIndex: 0,
+                                        titulo: widget.item.tituloRepuesto,
+                                        sku: widget.item.skuQrFisico,
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.fullscreen, size: 14, color: AppPalette.primary),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            widget.item.imagenes.length > 1
+                                                ? 'Ver las ${widget.item.imagenes.length} fotos en alta resolución'
+                                                : 'Ver foto en alta resolución',
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w700,
+                                              color: AppPalette.primary,
+                                              decoration: TextDecoration.underline,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
@@ -2111,16 +2275,20 @@ class _TasacionDialogState extends State<_TasacionDialog> {
 }
 
 
-/// Widget optimizado para el encabezado fotográfico con zoom al pasar el mouse.
-/// Utiliza [AnimatedScale] en la capa del compositor de la GPU, garantizando 60/120 fps
-/// sin provocar pasadas de layout (markNeedsLayout = 0) ni reflows en la grilla.
+/// Widget optimizado para el encabezado fotográfico con navegación multi-imagen,
+/// carrusel de fotografías, zoom al pasar el mouse y apertura de visor en alta resolución.
+/// Utiliza [AnimatedScale] en la capa del compositor de la GPU, garantizando 60/120 fps.
 class _CardImageZoom extends StatefulWidget {
   final List<String> imagenes;
   final Widget Function() fallbackBuilder;
+  final String? titulo;
+  final String? sku;
 
   const _CardImageZoom({
     required this.imagenes,
     required this.fallbackBuilder,
+    this.titulo,
+    this.sku,
   });
 
   @override
@@ -2129,10 +2297,50 @@ class _CardImageZoom extends StatefulWidget {
 
 class _CardImageZoomState extends State<_CardImageZoom> {
   bool _isHovered = false;
+  int _currentIndex = 0;
+
+  @override
+  void didUpdateWidget(covariant _CardImageZoom oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.imagenes.length != oldWidget.imagenes.length) {
+      if (_currentIndex >= widget.imagenes.length) {
+        _currentIndex = math.max(0, widget.imagenes.length - 1);
+      }
+    }
+  }
+
+  void _irAAnterior() {
+    if (widget.imagenes.length <= 1) return;
+    setState(() {
+      _currentIndex = (_currentIndex - 1 + widget.imagenes.length) % widget.imagenes.length;
+    });
+  }
+
+  void _irASiguiente() {
+    if (widget.imagenes.length <= 1) return;
+    setState(() {
+      _currentIndex = (_currentIndex + 1) % widget.imagenes.length;
+    });
+  }
+
+  void _abrirVisorGrande() {
+    if (widget.imagenes.isEmpty) return;
+    VisorImagenCompletaDialog.show(
+      context,
+      fotografias: widget.imagenes,
+      initialIndex: _currentIndex,
+      titulo: widget.titulo,
+      sku: widget.sku,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final totalFotos = widget.imagenes.length;
+    final tieneFotos = totalFotos > 0;
+
     return MouseRegion(
+      cursor: tieneFotos ? SystemMouseCursors.click : SystemMouseCursors.basic,
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       child: Container(
@@ -2143,18 +2351,167 @@ class _CardImageZoomState extends State<_CardImageZoom> {
           borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
         ),
         clipBehavior: Clip.antiAlias,
-        child: AnimatedScale(
-          scale: _isHovered ? 1.05 : 1.0,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOutCubic,
-          child: widget.imagenes.isNotEmpty
-              ? Image.network(
-                  widget.imagenes.first,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) =>
-                      widget.fallbackBuilder(),
-                )
-              : widget.fallbackBuilder(),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Capa interactiva de imagen con zoom suave por GPU
+            GestureDetector(
+              onTap: tieneFotos ? _abrirVisorGrande : null,
+              onHorizontalDragEnd: (details) {
+                if (totalFotos <= 1) return;
+                if (details.primaryVelocity! < -80) {
+                  _irASiguiente();
+                } else if (details.primaryVelocity! > 80) {
+                  _irAAnterior();
+                }
+              },
+              child: AnimatedScale(
+                scale: _isHovered ? 1.04 : 1.0,
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOutCubic,
+                child: tieneFotos
+                    ? AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 200),
+                        transitionBuilder: (child, animation) => FadeTransition(
+                          opacity: animation,
+                          child: child,
+                        ),
+                        child: Image.network(
+                          widget.imagenes[_currentIndex.clamp(0, totalFotos - 1)],
+                          key: ValueKey('card-img-${widget.imagenes[_currentIndex.clamp(0, totalFotos - 1)]}-$_currentIndex'),
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          height: 155,
+                          errorBuilder: (context, error, stackTrace) =>
+                              widget.fallbackBuilder(),
+                        ),
+                      )
+                    : widget.fallbackBuilder(),
+              ),
+            ),
+
+            // Botón Ampliar Pantalla Completa (esquina superior derecha, aparece en hover)
+            if (tieneFotos)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: AnimatedOpacity(
+                  opacity: _isHovered ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 150),
+                  child: Tooltip(
+                    message: 'Ver en tamaño grande',
+                    child: Material(
+                      color: Colors.black.withValues(alpha: 0.65),
+                      borderRadius: BorderRadius.circular(6),
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        onTap: _abrirVisorGrande,
+                        hoverColor: Colors.black.withValues(alpha: 0.85),
+                        child: const Padding(
+                          padding: EdgeInsets.all(5),
+                          child: Icon(Icons.fullscreen, color: Colors.white, size: 16),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+            // Flechas laterales de carrusel (cuando hay más de 1 imagen)
+            if (totalFotos > 1) ...[
+              // Flecha Izquierda
+              Positioned(
+                left: 6,
+                top: 0,
+                bottom: 0,
+                child: Center(
+                  child: AnimatedOpacity(
+                    opacity: _isHovered ? 1.0 : 0.75,
+                    duration: const Duration(milliseconds: 150),
+                    child: Tooltip(
+                      message: 'Foto anterior',
+                      child: Material(
+                        color: Colors.black.withValues(alpha: 0.6),
+                        shape: const CircleBorder(),
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
+                          onTap: _irAAnterior,
+                          hoverColor: Colors.black.withValues(alpha: 0.85),
+                          child: const Padding(
+                            padding: EdgeInsets.all(5),
+                            child: Icon(Icons.chevron_left, color: Colors.white, size: 18),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              // Flecha Derecha
+              Positioned(
+                right: 6,
+                top: 0,
+                bottom: 0,
+                child: Center(
+                  child: AnimatedOpacity(
+                    opacity: _isHovered ? 1.0 : 0.75,
+                    duration: const Duration(milliseconds: 150),
+                    child: Tooltip(
+                      message: 'Foto siguiente',
+                      child: Material(
+                        color: Colors.black.withValues(alpha: 0.6),
+                        shape: const CircleBorder(),
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
+                          onTap: _irASiguiente,
+                          hoverColor: Colors.black.withValues(alpha: 0.85),
+                          child: const Padding(
+                            padding: EdgeInsets.all(5),
+                            child: Icon(Icons.chevron_right, color: Colors.white, size: 18),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              // Pill Contador de Fotos (esquina inferior derecha)
+              Positioned(
+                bottom: 8,
+                right: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.7),
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.25),
+                        blurRadius: 4,
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.photo_library_outlined, size: 11, color: Colors.white70),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${_currentIndex + 1}/$totalFotos',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );

@@ -333,6 +333,36 @@ class RegistrarCobroRequest(BaseModel):
     modalidad: ModalidadCobroEnum
     monto_declarado: int = Field(gt=0, description="Monto total acordado a pagar")
     pagos: List[TransaccionPagoItemSchema] = Field(min_length=1)
+    sku_activo_atribuido: Optional[str] = Field(None, description="SKU del activo físico a atribuir (Obligatorio en Backorder al pagar el saldo final)")
+    forzar_atribucion: Optional[bool] = Field(False, description="Permite sobreescribir la validación técnica del backorder")
+
+
+class ValidarActivoBackorderRequest(BaseModel):
+    id_documento: UUID = Field(..., description="ID de la reserva backorder")
+    sku_activo: str = Field(..., description="SKU del repuesto físico a atribuir")
+
+
+class ActivoDetalleBackorderDTO(BaseModel):
+    sku: str
+    categoria: Optional[str] = None
+    marca: Optional[str] = None
+    modelo: Optional[str] = None
+    anio: Optional[int] = None
+    cilindrada: Optional[str] = None
+    combustible: Optional[str] = None
+    transmision: Optional[str] = None
+    patente: Optional[str] = None
+    vin: Optional[str] = None
+    ubicacion: Optional[str] = None
+    precio_referencia: Optional[int] = None
+    estado_conservacion: Optional[str] = None
+
+
+class ValidarActivoBackorderResponse(BaseModel):
+    coincide: bool
+    discrepancias: List[str] = []
+    mensaje: str
+    activo_detalle: Optional[ActivoDetalleBackorderDTO] = None
 
 
 class RegistrarCobroResponse(BaseModel):
@@ -584,6 +614,8 @@ class OrdenResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id_orden: UUID
+    numero_orden: Optional[int] = None
+    folio: Optional[str] = None
     estado_orden: str
     total_venta: int
     monto_pendiente: int
@@ -610,6 +642,8 @@ class OrdenPagoResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id_orden: UUID
+    numero_orden: Optional[int] = None
+    folio: Optional[str] = None
     id_pago: UUID
     estado_orden: str
     total_venta: int
@@ -679,6 +713,8 @@ class OrdenHistorialItemResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id_orden: UUID
+    numero_orden: Optional[int] = None
+    folio: Optional[str] = None
     estado_orden: str
     total_venta: int
     monto_pendiente: int
@@ -697,6 +733,7 @@ class EntregaEnvioItemResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id_orden: UUID
+    numero_orden: Optional[int] = None
     folio: str
     tipo_entrega: str
     estado_orden: str
@@ -1179,6 +1216,8 @@ class CheckoutWizardRequest(BaseModel):
 class CheckoutWizardResponse(BaseModel):
     """Respuesta transaccional tras procesar el Checkout Wizard."""
     id_orden: UUID
+    numero_orden: Optional[int] = None
+    folio: Optional[str] = None
     estado: str = "Reservada"
     estado_orden: str = "Reservada"
     total_venta: int

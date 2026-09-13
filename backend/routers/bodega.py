@@ -464,6 +464,15 @@ def verificar_qr_salida(
 
     orden = db.query(Orden_Venta).filter(Orden_Venta.qr_transaccional_salida == token).first()
     if not orden:
+        # Fallback: permitir también ingresar el número o folio comercial si el operador lo digita
+        if token.upper().startswith("ORD-"):
+            posible_num = token.upper().replace("ORD-", "").strip()
+            if posible_num.isdigit():
+                orden = db.query(Orden_Venta).filter(Orden_Venta.numero_orden == int(posible_num)).first()
+        elif token.isdigit():
+            orden = db.query(Orden_Venta).filter(Orden_Venta.numero_orden == int(token)).first()
+
+    if not orden:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Código QR transaccional no encontrado o inválido."
@@ -486,13 +495,13 @@ def verificar_qr_salida(
     if orden.estado_orden == "Completada":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"La orden #{str(orden.id_orden)[:8].upper()} ya fue entregada y completada anteriormente."
+            detail=f"La orden #{orden.folio} ya fue entregada y completada anteriormente."
         )
 
     if orden.estado_orden != "Pagada" or orden.monto_pendiente > 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"La orden #{str(orden.id_orden)[:8].upper()} no se encuentra pagada en caja (Saldo pendiente: ${orden.monto_pendiente})."
+            detail=f"La orden #{orden.folio} no se encuentra pagada en caja (Saldo pendiente: ${orden.monto_pendiente})."
         )
 
     # Datos del cliente
@@ -521,26 +530,26 @@ def verificar_qr_salida(
                     partes_ub.append(f"Pasillo: {activo.ubicacion_pasillo.strip()}")
                 if activo.ubicacion_pallet and activo.ubicacion_pallet.strip():
                     partes_ub.append(f"Pallet: {activo.ubicacion_pallet.strip()}")
-                ubicacion = ", ".join(partes_ub) if partes_ub else f"Pasillo: {activo.ubicacion_pasillo or 'S/P'}, Pallet: {activo.ubicacion_pallet or 'S/P'}"
-                sku = activo.sku_qr_fisico
-                es_inv = True
-                total_fisicos += 1
+                ubicacion = " | ".join(partes_ub) if partes_ub else "Sin ubicación registrada"
+                sku = activo.sku_qr_fisico or str(activo.id_activo)[:8]
                 qr_impreso = bool(activo.qr_impreso)
                 etiqueta_data = _construir_etiqueta_data(db, activo, vehiculo)
+                es_inv = True
+                total_fisicos += 1
             else:
-                titulo = d.descripcion_manual or "Repuesto Desconocido"
-                ubicacion = "N/A"
-                sku = None
-                es_inv = False
-                qr_impreso = True
+                titulo = d.descripcion_manual or "Repuesto no catalogado"
+                ubicacion = "Pieza eliminada de inventario"
+                sku = "DESCONOCIDO"
+                qr_impreso = False
                 etiqueta_data = None
+                es_inv = False
         else:
-            titulo = d.descripcion_manual or "Venta Libre / Servicio"
-            ubicacion = "Venta Libre"
-            sku = None
-            es_inv = False
+            titulo = d.descripcion_manual or "Misceláneo / Servicio"
+            ubicacion = "Mostrador / Despacho"
+            sku = "MISCELÁNEO (No requiere escaneo físico)"
             qr_impreso = True
             etiqueta_data = None
+            es_inv = False
 
         items_info.append(ItemSalidaInfo(
             id_detalle=d.id_detalle,
@@ -556,7 +565,7 @@ def verificar_qr_salida(
             etiqueta_data=etiqueta_data,
         ))
 
-    folio = f"ORD-{str(orden.id_orden)[:8].upper()}"
+    folio = orden.folio
     print(f"✅ [BARRERA] Inspección de orden {folio} exitosa: {len(items_info)} ítems ({total_fisicos} físicos requeridos).")
 
     return VerificarQrSalidaResponse(
@@ -591,6 +600,15 @@ def escanear_salida(
     print(f"🚪 [BARRERA] Iniciando confirmación de entrega para token: '{token}' por: {user_ident}")
 
     orden = db.query(Orden_Venta).filter(Orden_Venta.qr_transaccional_salida == token).first()
+    if not orden:
+        # Fallback: si se envió el número o folio comercial
+        if token.upper().startswith("ORD-"):
+            posible_num = token.upper().replace("ORD-", "").strip()
+            if posible_num.isdigit():
+                orden = db.query(Orden_Venta).filter(Orden_Venta.numero_orden == int(posible_num)).first()
+        elif token.isdigit():
+            orden = db.query(Orden_Venta).filter(Orden_Venta.numero_orden == int(token)).first()
+
     if not orden:
         print(f"⚠️ [BARRERA] Token QR '{token}' no encontrado.")
         raise HTTPException(

@@ -25,9 +25,11 @@ class PanelDetalleCobro extends StatefulWidget {
 
 class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
   final TextEditingController _abonoCustomController = TextEditingController();
+  final TextEditingController _skuActivoController = TextEditingController();
   final List<TextEditingController> _montoControllers = [];
   String? _lastIdReferencia;
   int? _lastPagosCount;
+  int _intentosFallidosSku = 0;
 
   @override
   void initState() {
@@ -44,6 +46,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
   @override
   void dispose() {
     _abonoCustomController.dispose();
+    _skuActivoController.dispose();
     for (final c in _montoControllers) {
       c.dispose();
     }
@@ -83,6 +86,9 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
 
       _abonoCustomController.text =
           widget.provider.montoDeclarado > 0 ? widget.provider.montoDeclarado.toString() : '';
+          
+      _skuActivoController.clear();
+      _intentosFallidosSku = 0;
     } else {
       // Actualizar valores de controladores si difieren del provider
       for (int i = 0; i < pagos.length && i < _montoControllers.length; i++) {
@@ -239,6 +245,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
   Widget _buildPanelContent(BuildContext context, CobroPendienteModel orden) {
     final isVenta = orden.esVenta;
     final esAbono = widget.provider.modalidad == 'ABONO';
+    final requiereAtribucion = !isVenta && !esAbono;
 
     return Container(
       color: AppPalette.backgroundLight,
@@ -265,13 +272,19 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
 
           const SizedBox(height: 16),
 
+          // ── 4.5 SECCIÓN ATRIBUCIÓN DE ACTIVO (BACKORDER FULL PAYMENT) ──
+          if (requiereAtribucion) ...[
+             _buildBackorderAttributionSection(context, orden),
+             const SizedBox(height: 16),
+          ],
+
           // ── 5. PASARELA DE MÉTODOS DE PAGO (PAGO ÚNICO / SPLIT) (ST-F04 / CA-04) ──
           _buildMetodosPagoSection(),
 
           const SizedBox(height: 16),
 
           // ── 6. INDICADOR DE CUADRATURA Y BOTÓN PROCESAR (ST-F05 / CA-05) ──
-          _buildCuadraturaYAccion(context),
+          _buildCuadraturaYAccion(context, orden),
         ],
       ),
     );
@@ -879,49 +892,157 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                 ],
               ),
             ),
-            const SizedBox(height: 12),
-            // Input para monto de abono
-            Text(
-              'Monto Acordado a Abonar (\$ CLP):',
-              style: AppTypography.small.copyWith(
-                fontWeight: FontWeight.w700,
-                color: AppPalette.textPrimaryLight,
-                fontSize: 12,
-              ),
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Monto Acordado a Abonar (\$ CLP):',
+                  style: AppTypography.small.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppPalette.textPrimaryLight,
+                    fontSize: 12,
+                  ),
+                ),
+                Text(
+                  'Máx permitido: ${CobroPendienteCard.formatClp(orden.montoACobrar)}',
+                  style: AppTypography.small.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: (widget.provider.montoDeclarado > orden.montoACobrar || widget.provider.montoDeclarado <= 0)
+                        ? AppPalette.error
+                        : AppPalette.primary,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
+
+            // Atajos rápidos de porcentaje sobre el saldo pendiente
+            Row(
+              children: [
+                _buildPresetChip(
+                  label: '25%',
+                  seleccionado: widget.provider.montoDeclarado == (orden.montoACobrar * 0.25).round(),
+                  onTap: () {
+                    final v = (orden.montoACobrar * 0.25).round();
+                    _abonoCustomController.text = v.toString();
+                    widget.provider.setMontoDeclarado(v);
+                    _sincronizarControllers();
+                  },
+                ),
+                const SizedBox(width: 6),
+                _buildPresetChip(
+                  label: '50%',
+                  seleccionado: widget.provider.montoDeclarado == (orden.montoACobrar * 0.50).round(),
+                  onTap: () {
+                    final v = (orden.montoACobrar * 0.50).round();
+                    _abonoCustomController.text = v.toString();
+                    widget.provider.setMontoDeclarado(v);
+                    _sincronizarControllers();
+                  },
+                ),
+                const SizedBox(width: 6),
+                _buildPresetChip(
+                  label: '75%',
+                  seleccionado: widget.provider.montoDeclarado == (orden.montoACobrar * 0.75).round(),
+                  onTap: () {
+                    final v = (orden.montoACobrar * 0.75).round();
+                    _abonoCustomController.text = v.toString();
+                    widget.provider.setMontoDeclarado(v);
+                    _sincronizarControllers();
+                  },
+                ),
+                const SizedBox(width: 6),
+                _buildPresetChip(
+                  label: 'Saldo Total',
+                  seleccionado: widget.provider.montoDeclarado == orden.montoACobrar,
+                  onTap: () {
+                    final v = orden.montoACobrar;
+                    _abonoCustomController.text = v.toString();
+                    widget.provider.setMontoDeclarado(v);
+                    _sincronizarControllers();
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+
             TextField(
               controller: _abonoCustomController,
               keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(9),
+              ],
               style: AppTypography.body.copyWith(
-                color: AppPalette.textPrimaryLight,
+                color: (widget.provider.montoDeclarado > orden.montoACobrar || widget.provider.montoDeclarado <= 0)
+                    ? AppPalette.error
+                    : AppPalette.textPrimaryLight,
                 fontWeight: FontWeight.w700,
                 fontSize: 14,
               ),
               decoration: InputDecoration(
                 prefixText: '\$ ',
                 prefixStyle: AppTypography.body.copyWith(
-                  color: AppPalette.textPrimaryLight,
+                  color: (widget.provider.montoDeclarado > orden.montoACobrar || widget.provider.montoDeclarado <= 0)
+                      ? AppPalette.error
+                      : AppPalette.textPrimaryLight,
                   fontWeight: FontWeight.w700,
                   fontSize: 14,
                 ),
-                hintText: 'Ej: 150000',
+                hintText: 'Ej: ${(orden.montoACobrar * 0.5).round()}',
                 hintStyle: AppTypography.body.copyWith(
                   color: AppPalette.textSecondaryLight.withValues(alpha: 0.6),
                   fontSize: 14,
                 ),
                 filled: true,
-                fillColor: AppPalette.backgroundLight,
+                fillColor: (widget.provider.montoDeclarado > orden.montoACobrar || widget.provider.montoDeclarado <= 0)
+                    ? AppPalette.errorBg
+                    : AppPalette.backgroundLight,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AppPalette.borderLight),
+                  borderSide: BorderSide(
+                    color: (widget.provider.montoDeclarado > orden.montoACobrar || widget.provider.montoDeclarado <= 0)
+                        ? AppPalette.errorBorder
+                        : AppPalette.borderLight,
+                  ),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(
+                    color: (widget.provider.montoDeclarado > orden.montoACobrar || widget.provider.montoDeclarado <= 0)
+                        ? AppPalette.errorBorder
+                        : AppPalette.borderLight,
+                  ),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AppPalette.primary, width: 2),
+                  borderSide: BorderSide(
+                    color: (widget.provider.montoDeclarado > orden.montoACobrar || widget.provider.montoDeclarado <= 0)
+                        ? AppPalette.error
+                        : AppPalette.primary,
+                    width: 2,
+                  ),
                 ),
+                suffixIcon: widget.provider.montoDeclarado > orden.montoACobrar
+                    ? TextButton(
+                        onPressed: () {
+                          _abonoCustomController.text = orden.montoACobrar.toString();
+                          widget.provider.setMontoDeclarado(orden.montoACobrar);
+                          _sincronizarControllers();
+                        },
+                        child: Text(
+                          'Ajustar al máx',
+                          style: AppTypography.small.copyWith(
+                            color: AppPalette.error,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 11,
+                          ),
+                        ),
+                      )
+                    : null,
               ),
               onChanged: (val) {
                 final nuevoMonto = int.tryParse(val) ?? 0;
@@ -929,6 +1050,82 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                 _sincronizarControllers();
               },
             ),
+
+            if (widget.provider.montoDeclarado > orden.montoACobrar) ...[
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppPalette.errorBg,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: AppPalette.errorBorder),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.error_outline_rounded, size: 14, color: AppPalette.errorText),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'El abono no puede superar el saldo pendiente de ${CobroPendienteCard.formatClp(orden.montoACobrar)}.',
+                        style: AppTypography.small.copyWith(
+                          color: AppPalette.errorText,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ] else if (widget.provider.montoDeclarado <= 0) ...[
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppPalette.errorBg,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: AppPalette.errorBorder),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.error_outline_rounded, size: 14, color: AppPalette.errorText),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'El abono debe ser estrictamente mayor a \$0.',
+                        style: AppTypography.small.copyWith(
+                          color: AppPalette.errorText,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ] else ...[
+              const SizedBox(height: 6),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Monto mínimo: \$1',
+                    style: AppTypography.small.copyWith(
+                      color: AppPalette.textSecondaryLight,
+                      fontSize: 11,
+                    ),
+                  ),
+                  Text(
+                    'Saldo restante tras abono: ${CobroPendienteCard.formatClp(orden.montoACobrar - widget.provider.montoDeclarado > 0 ? orden.montoACobrar - widget.provider.montoDeclarado : 0)}',
+                    style: AppTypography.small.copyWith(
+                      color: AppPalette.textSecondaryLight,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ],
       ),
@@ -1355,12 +1552,24 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
     );
   }
 
-  Widget _buildCuadraturaYAccion(BuildContext context) {
+  Widget _buildCuadraturaYAccion(BuildContext context, CobroPendienteModel orden) {
     final montoDeclarado = widget.provider.montoDeclarado;
     final totalIngresado = widget.provider.totalPagosIngresados;
     final diferencia = widget.provider.diferenciaCuadratura;
     final esValida = widget.provider.esCuadraturaValida;
     final isProcesando = widget.provider.isProcesandoCobro;
+    
+    final maxPermitido = orden.montoACobrar;
+    final bool montoExcedido = montoDeclarado > maxPermitido;
+    final bool montoInvalido = montoDeclarado <= 0;
+    
+    final requiereAtribucion = !orden.esVenta && widget.provider.modalidad != 'ABONO';
+    final validacion = widget.provider.validacionActivo;
+    final activoAtribuido = widget.provider.skuActivoAtribuido != null && (validacion?.coincide == true || widget.provider.forzarAtribucion);
+    final validacionBloqueada = requiereAtribucion && !activoAtribuido;
+    final puedeProcesar = esValida && !validacionBloqueada && !montoExcedido && !montoInvalido;
+
+    final bool operacionValida = esValida && !montoExcedido && !montoInvalido;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -1368,12 +1577,12 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
         color: AppPalette.surfaceLight,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: esValida ? AppPalette.successBorder : AppPalette.errorBorder,
+          color: operacionValida ? AppPalette.successBorder : AppPalette.errorBorder,
           width: 1.5,
         ),
         boxShadow: [
           BoxShadow(
-            color: (esValida ? AppPalette.success : AppPalette.error).withValues(alpha: 0.05),
+            color: (operacionValida ? AppPalette.success : AppPalette.error).withValues(alpha: 0.05),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -1401,9 +1610,9 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                     Text(
                       CobroPendienteCard.formatClp(montoDeclarado),
                       style: AppTypography.title.copyWith(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: AppPalette.textPrimaryLight,
+                        color: montoExcedido ? AppPalette.error : AppPalette.textPrimaryLight,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 20,
                       ),
                     ),
                   ],
@@ -1425,9 +1634,9 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                     Text(
                       CobroPendienteCard.formatClp(totalIngresado),
                       style: AppTypography.title.copyWith(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
                         color: AppPalette.textPrimaryLight,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 20,
                       ),
                     ),
                   ],
@@ -1449,9 +1658,9 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                     Text(
                       CobroPendienteCard.formatClp(diferencia.abs()),
                       style: AppTypography.title.copyWith(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: esValida ? AppPalette.success : AppPalette.error,
+                        color: diferencia == 0 ? AppPalette.success : AppPalette.error,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 20,
                       ),
                     ),
                   ],
@@ -1462,33 +1671,37 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
 
           const SizedBox(height: 14),
 
-          // Indicador Visual de Estado (Verde / Rojo) (ST-F05)
+          // Banner de Cuadratura Dinámico (Verde/Rojo)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              color: esValida ? AppPalette.successBg : AppPalette.errorBg,
+              color: operacionValida ? AppPalette.successBg : AppPalette.errorBg,
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: esValida ? AppPalette.successBorder : AppPalette.errorBorder,
+                color: operacionValida ? AppPalette.successBorder : AppPalette.errorBorder,
               ),
             ),
             child: Row(
               children: [
                 Icon(
-                  esValida ? Icons.check_circle_rounded : Icons.error_outline_rounded,
+                  operacionValida ? Icons.check_circle_rounded : Icons.error_outline_rounded,
                   size: 20,
-                  color: esValida ? AppPalette.success : AppPalette.error,
+                  color: operacionValida ? AppPalette.success : AppPalette.error,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    esValida
-                        ? 'Cuadratura Exacta: Los métodos de pago suman el 100% del monto acordado.'
-                        : diferencia > 0
-                            ? 'Descuadre Financiero: Faltan ${CobroPendienteCard.formatClp(diferencia)} por asignar.'
-                            : 'Descuadre Financiero: Sobran ${CobroPendienteCard.formatClp(diferencia.abs())} en los métodos.',
+                    montoExcedido
+                        ? 'Monto Excedido: El monto a cobrar (${CobroPendienteCard.formatClp(montoDeclarado)}) no puede superar el saldo pendiente (${CobroPendienteCard.formatClp(maxPermitido)}).'
+                        : montoInvalido
+                            ? 'Monto Inválido: El monto a cobrar debe ser estrictamente mayor a \$0.'
+                            : esValida
+                                ? 'Cuadratura Exacta: Los métodos de pago suman el 100% del monto acordado.'
+                                : diferencia > 0
+                                    ? 'Descuadre Financiero: Faltan ${CobroPendienteCard.formatClp(diferencia)} por asignar.'
+                                    : 'Descuadre Financiero: Sobran ${CobroPendienteCard.formatClp(diferencia.abs())} en los métodos.',
                     style: AppTypography.small.copyWith(
-                      color: esValida ? AppPalette.successText : AppPalette.errorText,
+                      color: operacionValida ? AppPalette.successText : AppPalette.errorText,
                       fontWeight: FontWeight.w700,
                       fontSize: 12,
                     ),
@@ -1506,11 +1719,11 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
             height: 52,
             child: ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: esValida ? AppPalette.success : AppPalette.disabled,
-                foregroundColor: esValida ? AppPalette.textPrimary : AppPalette.disabledText,
+                backgroundColor: operacionValida ? AppPalette.success : AppPalette.disabled,
+                foregroundColor: operacionValida ? AppPalette.textPrimary : AppPalette.disabledText,
                 disabledBackgroundColor: AppPalette.disabled,
                 disabledForegroundColor: AppPalette.disabledText,
-                elevation: esValida ? 2 : 0,
+                elevation: operacionValida ? 2 : 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
@@ -1525,25 +1738,496 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                       ),
                     )
                   : Icon(
-                      esValida ? Icons.check_circle_rounded : Icons.lock_rounded,
+                      operacionValida ? Icons.check_circle_rounded : Icons.lock_rounded,
                       size: 22,
                     ),
               label: Text(
                 isProcesando
                     ? 'PROCESANDO PAGO...'
-                    : esValida
-                        ? 'CONFIRMAR Y PROCESAR COBRO'
-                        : 'PAGO BLOQUEADO (DESCUADRE)',
+                    : validacionBloqueada 
+                        ? 'FALTA ATRIBUIR ACTIVO'
+                        : montoExcedido
+                            ? 'MONTO SUPERA EL SALDO PENDIENTE'
+                            : montoInvalido
+                                ? 'MONTO DE ABONO INVÁLIDO'
+                                : operacionValida
+                                    ? 'CONFIRMAR Y PROCESAR COBRO'
+                                    : 'PAGO BLOQUEADO (DESCUADRE)',
                 style: AppTypography.button.copyWith(
                   fontWeight: FontWeight.w900,
                   fontSize: 15,
                   letterSpacing: 0.5,
                 ),
               ),
-              onPressed: (esValida && !isProcesando)
+              onPressed: (puedeProcesar && !isProcesando)
                   ? () => _handleProcesarCobro()
                   : null,
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPresetChip({
+    required String label,
+    required bool seleccionado,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: seleccionado ? AppPalette.tertiary : AppPalette.backgroundLight,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: seleccionado ? AppPalette.tertiary : AppPalette.borderLight,
+          ),
+        ),
+        child: Text(
+          label,
+          style: AppTypography.small.copyWith(
+            color: seleccionado ? Colors.white : AppPalette.textSecondaryLight,
+            fontWeight: FontWeight.w700,
+            fontSize: 11,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBackorderAttributionSection(BuildContext context, CobroPendienteModel orden) {
+    final validacion = widget.provider.validacionActivo;
+    final isRevisando = widget.provider.isRevisandoActivo;
+    final atribuido = widget.provider.skuActivoAtribuido != null;
+    final forzar = widget.provider.forzarAtribucion;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppPalette.surfaceLight,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: validacion?.coincide == false ? AppPalette.errorBorder : AppPalette.borderLight),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.inventory_2_rounded, size: 18, color: AppPalette.primary),
+              const SizedBox(width: 8),
+              Text(
+                'ATRIBUCIÓN DE ACTIVO FÍSICO',
+                style: AppTypography.title.copyWith(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: AppPalette.textSecondaryLight,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Ingresa el SKU del repuesto físico que se entregará al cliente. Este paso es obligatorio para saldar un Backorder.',
+            style: AppTypography.small.copyWith(
+              color: AppPalette.textPrimaryLight,
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _skuActivoController,
+                  enabled: !atribuido || (validacion?.coincide == false && !forzar),
+                  style: AppTypography.body.copyWith(
+                    color: AppPalette.textPrimaryLight,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                  textInputAction: TextInputAction.search,
+                  onSubmitted: (isRevisando || (atribuido && validacion?.coincide == true) || forzar)
+                      ? null
+                      : (_) => _ejecutarValidacionSku(),
+                  decoration: InputDecoration(
+                    hintText: 'Ej: MOT-1020',
+                    prefixIcon: const Icon(Icons.tag_rounded, size: 20, color: AppPalette.primary),
+                    filled: true,
+                    fillColor: AppPalette.backgroundLight,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: AppPalette.borderLight),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppPalette.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                icon: isRevisando 
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Icon(Icons.search_rounded, size: 18),
+                label: Text('Validar', style: AppTypography.button.copyWith(fontSize: 13)),
+                onPressed: isRevisando || (atribuido && validacion?.coincide == true) || forzar ? null : _ejecutarValidacionSku,
+              ),
+            ],
+          ),
+          
+          if (validacion != null) ...[
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: validacion.coincide ? AppPalette.successBg : AppPalette.errorBg,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: validacion.coincide ? AppPalette.successBorder : AppPalette.errorBorder),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        validacion.coincide ? Icons.check_circle_rounded : Icons.error_outline_rounded,
+                        color: validacion.coincide ? AppPalette.successText : AppPalette.errorText,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          validacion.mensaje,
+                          style: AppTypography.body.copyWith(
+                            color: validacion.coincide ? AppPalette.successText : AppPalette.errorText,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (!validacion.coincide && validacion.discrepancias.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    ...validacion.discrepancias.map((d) => Padding(
+                      padding: const EdgeInsets.only(left: 26, top: 2),
+                      child: Text('• $d', style: AppTypography.small.copyWith(color: AppPalette.errorText, fontWeight: FontWeight.w600)),
+                    )),
+                  ],
+                ],
+              ),
+            ),
+
+            if (validacion.activoDetalle != null) ...[
+              _buildDetalleActivoIngresado(validacion.activoDetalle!, orden.especificacionesBackorder),
+            ],
+          ],
+          
+          if (validacion != null && !validacion.coincide && _intentosFallidosSku >= 3 && !forzar) ...[
+             const SizedBox(height: 14),
+             SizedBox(
+               width: double.infinity,
+               child: OutlinedButton.icon(
+                 style: OutlinedButton.styleFrom(
+                   foregroundColor: AppPalette.error,
+                   side: const BorderSide(color: AppPalette.error),
+                   padding: const EdgeInsets.symmetric(vertical: 12),
+                 ),
+                 icon: const Icon(Icons.warning_amber_rounded, size: 18),
+                 label: const Text('Ignorar advertencia y forzar atribución', style: TextStyle(fontWeight: FontWeight.bold)),
+                 onPressed: () {
+                   widget.provider.setForzarAtribucion(true);
+                 },
+               ),
+             ),
+          ],
+          if (forzar) ...[
+             const SizedBox(height: 14),
+             Container(
+               padding: const EdgeInsets.all(10),
+               decoration: BoxDecoration(
+                 color: AppPalette.warningBg,
+                 borderRadius: BorderRadius.circular(8),
+                 border: Border.all(color: AppPalette.warningBorder),
+               ),
+               child: Row(
+                 children: [
+                   const Icon(Icons.warning_amber_rounded, color: AppPalette.warningText, size: 18),
+                   const SizedBox(width: 8),
+                   Expanded(
+                     child: Text(
+                       'Validación técnica ignorada manualmente. El activo será atribuido al backorder bajo responsabilidad de la caja.',
+                       style: AppTypography.small.copyWith(color: AppPalette.warningText, fontWeight: FontWeight.w700),
+                     ),
+                   ),
+                 ],
+               ),
+             ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _ejecutarValidacionSku() async {
+    final sku = _skuActivoController.text.trim();
+    if (sku.isEmpty) return;
+    await widget.provider.validarActivoBackorder(sku);
+    final res = widget.provider.validacionActivo;
+    if (res != null && !res.coincide) {
+      setState(() {
+        _intentosFallidosSku++;
+      });
+    }
+  }
+
+  Widget _buildDetalleActivoIngresado(
+    ActivoDetalleBackorderModel detalle,
+    BackorderEspecificacionesModel? bo,
+  ) {
+    final bool marcaCoincide = bo?.marca == null ||
+        (detalle.marca != null && detalle.marca!.trim().toLowerCase() == bo!.marca.trim().toLowerCase());
+    final bool modeloCoincide = bo?.modelo == null ||
+        (detalle.modelo != null && detalle.modelo!.trim().toLowerCase() == bo!.modelo.trim().toLowerCase());
+
+    return Container(
+      margin: const EdgeInsets.only(top: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppPalette.backgroundLight,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppPalette.borderLight),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppPalette.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.inventory_2_rounded, size: 20, color: AppPalette.primary),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'REPUESTO FÍSICO EN BODEGA',
+                          style: AppTypography.title.copyWith(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
+                            color: AppPalette.textPrimaryLight,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppPalette.primary.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            detalle.sku,
+                            style: AppTypography.small.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: AppPalette.primary,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Ficha técnica del repuesto físico para cotejo contra la reserva.',
+                      style: AppTypography.small.copyWith(
+                        color: AppPalette.textSecondaryLight,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (detalle.estadoConservacion != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppPalette.successBg,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: AppPalette.successBorder),
+                  ),
+                  child: Text(
+                    detalle.estadoConservacion!,
+                    style: AppTypography.small.copyWith(
+                      color: AppPalette.successText,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          const Divider(height: 1, color: AppPalette.borderLight),
+          const SizedBox(height: 14),
+
+          // Grilla de detalles técnicos del activo
+          Row(
+            children: [
+              Expanded(
+                child: _buildActivoInfoItem(
+                  icon: Icons.directions_car_rounded,
+                  label: 'Vehículo Origen (Marca / Modelo)',
+                  value: '${detalle.marca ?? "-"} ${detalle.modelo ?? "-"}',
+                  badgeText: (marcaCoincide && modeloCoincide) ? 'Coincide' : 'Difiere',
+                  isMatch: marcaCoincide && modeloCoincide,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildActivoInfoItem(
+                  icon: Icons.calendar_today_rounded,
+                  label: 'Año / Categoría',
+                  value: '${detalle.anio != null ? detalle.anio.toString() : "S/A"} • ${detalle.categoria ?? "Repuesto"}',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _buildActivoInfoItem(
+                  icon: Icons.speed_rounded,
+                  label: 'Motor / Combustible',
+                  value: '${detalle.cilindrada ?? "-"} • ${detalle.combustible ?? "-"}',
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildActivoInfoItem(
+                  icon: Icons.settings_input_component_rounded,
+                  label: 'Transmisión',
+                  value: detalle.transmision ?? 'No especificada',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _buildActivoInfoItem(
+                  icon: Icons.warehouse_rounded,
+                  label: 'Ubicación Física',
+                  value: detalle.ubicacion ?? 'Sin ubicación registrada',
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildActivoInfoItem(
+                  icon: Icons.tag_rounded,
+                  label: 'Patente / VIN',
+                  value: '${detalle.patente ?? "S/P"} • ${detalle.vin ?? "S/V"}',
+                ),
+              ),
+            ],
+          ),
+          if (detalle.precioReferencia != null && detalle.precioReferencia! > 0) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildActivoInfoItem(
+                    icon: Icons.payments_outlined,
+                    label: 'Precio de Referencia',
+                    value: CobroPendienteCard.formatClp(detalle.precioReferencia!),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActivoInfoItem({
+    required IconData icon,
+    required String label,
+    required String value,
+    String? badgeText,
+    bool isMatch = true,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppPalette.surfaceLight,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppPalette.borderLight),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 14, color: AppPalette.textSecondaryLight),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  label,
+                  style: AppTypography.small.copyWith(
+                    color: AppPalette.textSecondaryLight,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (badgeText != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: isMatch ? AppPalette.successBg : AppPalette.errorBg,
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: isMatch ? AppPalette.successBorder : AppPalette.errorBorder),
+                  ),
+                  child: Text(
+                    badgeText,
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                      color: isMatch ? AppPalette.successText : AppPalette.errorText,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: AppTypography.body.copyWith(
+              fontWeight: FontWeight.w700,
+              fontSize: 12,
+              color: AppPalette.textPrimaryLight,
+            ),
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),

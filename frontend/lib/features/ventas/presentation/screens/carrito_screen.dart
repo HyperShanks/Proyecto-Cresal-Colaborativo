@@ -570,10 +570,7 @@ class _CarritoScreenState extends State<CarritoScreen> {
   }
 
   Future<void> _mostrarModalExito(BuildContext context, OrdenResponseModel orden) async {
-    final folio = orden.qrTransaccionalSalida ??
-        (orden.idOrden.length >= 8
-            ? 'ORD-${orden.idOrden.substring(0, 8).toUpperCase()}'
-            : orden.idOrden);
+    final folio = orden.folioDisplay;
 
     return showDialog<void>(
       context: context,

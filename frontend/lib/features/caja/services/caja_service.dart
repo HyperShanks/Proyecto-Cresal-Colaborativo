@@ -16,6 +16,10 @@ abstract class ICajaService {
     RegistrarCobroRequestModel request,
   );
 
+  Future<ValidarActivoBackorderResponseModel> validarActivoBackorder(
+    ValidarActivoBackorderRequestModel request,
+  );
+
   Future<HistorialCajaResponseModel> obtenerHistorialCaja({
     required int sucursalId,
     String periodo = 'HOY',
@@ -98,6 +102,33 @@ class CajaService implements ICajaService {
       return RegistrarCobroResponseModel.fromJson(data);
     } else {
       String mensaje = 'Error al registrar cobro (${response.statusCode})';
+      try {
+        final errJson = json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        if (errJson.containsKey('detail')) {
+          mensaje = errJson['detail'].toString();
+        }
+      } catch (_) {}
+      throw Exception(mensaje);
+    }
+  }
+
+  @override
+  Future<ValidarActivoBackorderResponseModel> validarActivoBackorder(
+    ValidarActivoBackorderRequestModel request,
+  ) async {
+    final uri = Uri.parse('$_endpoint/cobros/validar-activo-backorder');
+
+    final response = await ApiService.post(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode(request.toJson()),
+    );
+
+    if (response.statusCode == 200) {
+      final data = json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      return ValidarActivoBackorderResponseModel.fromJson(data);
+    } else {
+      String mensaje = 'Error al validar activo (${response.statusCode})';
       try {
         final errJson = json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
         if (errJson.containsKey('detail')) {

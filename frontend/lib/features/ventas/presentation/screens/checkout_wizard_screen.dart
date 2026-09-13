@@ -377,7 +377,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Folio: ${res.idOrden.length >= 8 ? "ORD-${res.idOrden.substring(0, 8).toUpperCase()}" : res.idOrden}', style: AppTypography.small.copyWith(color: AppPalette.secondary, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+              Text('Folio: ${res.folioDisplay}', style: AppTypography.small.copyWith(color: AppPalette.secondary, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               Text('Total Venta: \$${res.totalVenta}', style: AppTypography.body.copyWith(fontWeight: FontWeight.bold)),
               Text('Monto Pendiente en Caja: \$${res.montoPendiente}', style: AppTypography.body.copyWith(color: AppPalette.secondary)),

@@ -371,8 +371,9 @@ def test_ordenes_filtro_por_sucursal_y_consolidado_global(
     folios_201 = [it["folio"] for it in res_201.json()["items"]]
     assert "ORD-AUD-001" in folios_201
     assert "ORD-AUD-002" not in folios_201
+    assert res_201.json()["total_monto_consolidado"] == 85000
 
-    # 2. Filtro Sucursal 202 (Patio Desarme)
+    # 2. Filtro Sucursal 202 (Patio Desarme) - Orden con abono de 100.000 (total 150.000 - 50.000 pendiente)
     res_202 = client.get(
         "/api/v1/ordenes?id_sucursal=202",
         headers={"Authorization": f"Bearer {token_gerente}"},
@@ -381,8 +382,9 @@ def test_ordenes_filtro_por_sucursal_y_consolidado_global(
     folios_202 = [it["folio"] for it in res_202.json()["items"]]
     assert "ORD-AUD-002" in folios_202
     assert "ORD-AUD-001" not in folios_202
+    assert res_202.json()["total_monto_consolidado"] == 100000
 
-    # 3. Consolidado Global (sin sucursal)
+    # 3. Consolidado Global (sin sucursal) - Suma 85.000 (pagada) + 100.000 (abono) = 185.000
     res_global = client.get(
         "/api/v1/ordenes",
         headers={"Authorization": f"Bearer {token_gerente}"},
@@ -391,6 +393,7 @@ def test_ordenes_filtro_por_sucursal_y_consolidado_global(
     folios_global = [it["folio"] for it in res_global.json()["items"]]
     assert "ORD-AUD-001" in folios_global
     assert "ORD-AUD-002" in folios_global
+    assert res_global.json()["total_monto_consolidado"] == 185000
 
 
 def test_ordenes_filtro_multidimensional_estado_y_metodo_pago(

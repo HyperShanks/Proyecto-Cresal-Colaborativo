@@ -11,6 +11,8 @@ import 'ordenes_sync_notifier.dart';
 /// DTO de respuesta para la creación y consulta de órdenes de venta.
 class OrdenResponseModel {
   final String idOrden;
+  final int? numeroOrden;
+  final String? folio;
   final String estadoOrden;
   final int totalVenta;
   final int montoPendiente;
@@ -21,6 +23,8 @@ class OrdenResponseModel {
 
   const OrdenResponseModel({
     required this.idOrden,
+    this.numeroOrden,
+    this.folio,
     required this.estadoOrden,
     required this.totalVenta,
     required this.montoPendiente,
@@ -33,6 +37,8 @@ class OrdenResponseModel {
   factory OrdenResponseModel.fromJson(Map<String, dynamic> json) {
     return OrdenResponseModel(
       idOrden: json['id_orden']?.toString() ?? '',
+      numeroOrden: json['numero_orden'] as int?,
+      folio: json['folio']?.toString(),
       estadoOrden: json['estado_orden']?.toString() ?? 'Reservada',
       totalVenta: json['total_venta'] as int? ?? 0,
       montoPendiente: json['monto_pendiente'] as int? ?? 0,
@@ -41,6 +47,19 @@ class OrdenResponseModel {
       fechaCreacion: json['fecha_creacion']?.toString(),
       totalItems: json['total_items'] as int? ?? 0,
     );
+  }
+
+  String get folioDisplay {
+    if (folio != null && folio!.isNotEmpty && !folio!.startsWith('TX-QR-')) {
+      return folio!;
+    }
+    if (numeroOrden != null) {
+      return 'ORD-${numeroOrden.toString().padLeft(4, '0')}';
+    }
+    if (idOrden.length >= 8) {
+      return 'ORD-${idOrden.substring(0, 8).toUpperCase()}';
+    }
+    return 'ORD-$idOrden';
   }
 
   /// Retorna el monto formateado en pesos chilenos (ej: $520.000)
@@ -70,6 +89,8 @@ class OrdenResponseModel {
 /// DTO de respuesta para la confirmación de pago y emisión del QR transaccional (HU-3.6).
 class OrdenPagoResponseModel {
   final String idOrden;
+  final int? numeroOrden;
+  final String? folio;
   final String idPago;
   final String estadoOrden;
   final int totalVenta;
@@ -83,6 +104,8 @@ class OrdenPagoResponseModel {
 
   const OrdenPagoResponseModel({
     required this.idOrden,
+    this.numeroOrden,
+    this.folio,
     required this.idPago,
     required this.estadoOrden,
     required this.totalVenta,
@@ -98,6 +121,8 @@ class OrdenPagoResponseModel {
   factory OrdenPagoResponseModel.fromJson(Map<String, dynamic> json) {
     return OrdenPagoResponseModel(
       idOrden: json['id_orden']?.toString() ?? '',
+      numeroOrden: json['numero_orden'] as int?,
+      folio: json['folio']?.toString(),
       idPago: json['id_pago']?.toString() ?? '',
       estadoOrden: json['estado_orden']?.toString() ?? 'Pagada',
       totalVenta: json['total_venta'] as int? ?? 0,
@@ -109,6 +134,19 @@ class OrdenPagoResponseModel {
       mensaje: json['mensaje']?.toString() ?? 'Pago registrado exitosamente',
       fechaPago: json['fecha_pago']?.toString() ?? '',
     );
+  }
+
+  String get folioDisplay {
+    if (folio != null && folio!.isNotEmpty && !folio!.startsWith('TX-QR-')) {
+      return folio!;
+    }
+    if (numeroOrden != null) {
+      return 'ORD-${numeroOrden.toString().padLeft(4, '0')}';
+    }
+    if (idOrden.length >= 8) {
+      return 'ORD-${idOrden.substring(0, 8).toUpperCase()}';
+    }
+    return 'ORD-$idOrden';
   }
 }
 
@@ -274,6 +312,8 @@ class DetalleOrdenItemModel {
 /// DTO completo de orden de venta para el historial del vendedor (HU-3.5).
 class OrdenHistorialModel {
   final String idOrden;
+  final int? numeroOrden;
+  final String? folio;
   String estadoOrden;
   final int totalVenta;
   final int montoPendiente;
@@ -287,6 +327,8 @@ class OrdenHistorialModel {
 
   OrdenHistorialModel({
     required this.idOrden,
+    this.numeroOrden,
+    this.folio,
     required this.estadoOrden,
     required this.totalVenta,
     required this.montoPendiente,
@@ -317,6 +359,8 @@ class OrdenHistorialModel {
 
   OrdenHistorialModel copyWith({
     String? idOrden,
+    int? numeroOrden,
+    String? folio,
     String? estadoOrden,
     int? totalVenta,
     int? montoPendiente,
@@ -330,6 +374,8 @@ class OrdenHistorialModel {
   }) {
     return OrdenHistorialModel(
       idOrden: idOrden ?? this.idOrden,
+      numeroOrden: numeroOrden ?? this.numeroOrden,
+      folio: folio ?? this.folio,
       estadoOrden: estadoOrden ?? this.estadoOrden,
       totalVenta: totalVenta ?? this.totalVenta,
       montoPendiente: montoPendiente ?? this.montoPendiente,
@@ -349,6 +395,12 @@ class OrdenHistorialModel {
   String get montoPendienteFormateado => OrdenResponseModel._formatearMonto(montoPendiente);
 
   String get folioDisplay {
+    if (folio != null && folio!.isNotEmpty && !folio!.startsWith('TX-QR-')) {
+      return folio!;
+    }
+    if (numeroOrden != null) {
+      return 'ORD-${numeroOrden.toString().padLeft(4, '0')}';
+    }
     if (qrTransaccionalSalida != null &&
         qrTransaccionalSalida!.startsWith('ORD-')) {
       return qrTransaccionalSalida!;
@@ -397,6 +449,8 @@ class OrdenHistorialModel {
   factory OrdenHistorialModel.fromJson(Map<String, dynamic> json) {
     return OrdenHistorialModel(
       idOrden: json['id_orden']?.toString() ?? '',
+      numeroOrden: json['numero_orden'] as int?,
+      folio: json['folio']?.toString(),
       estadoOrden: json['estado_orden']?.toString() ?? 'Reservada',
       totalVenta: json['total_venta'] as int? ?? 0,
       montoPendiente: json['monto_pendiente'] as int? ?? 0,
@@ -1026,6 +1080,7 @@ class VendedorModel {
 /// DTO para la vista de Entregas en Tienda y Despachos Externos.
 class EntregaEnvioModel {
   final String idOrden;
+  final int? numeroOrden;
   final String folio;
   final String tipoEntrega; // 'Retiro' o 'Despacho'
   final String estadoOrden;
@@ -1046,6 +1101,7 @@ class EntregaEnvioModel {
 
   const EntregaEnvioModel({
     required this.idOrden,
+    this.numeroOrden,
     required this.folio,
     required this.tipoEntrega,
     required this.estadoOrden,
@@ -1083,8 +1139,12 @@ class EntregaEnvioModel {
       OrdenResponseModel._formatearMonto(montoPendiente);
 
   String get folioDisplay {
-    if (folio.isNotEmpty) return folio;
-    if (qrTransaccionalSalida != null && qrTransaccionalSalida!.isNotEmpty) {
+    if (folio.isNotEmpty && !folio.startsWith('TX-QR-')) return folio;
+    if (numeroOrden != null) {
+      return 'ORD-${numeroOrden.toString().padLeft(4, '0')}';
+    }
+    if (qrTransaccionalSalida != null &&
+        qrTransaccionalSalida!.startsWith('ORD-')) {
       return qrTransaccionalSalida!;
     }
     return idOrden.length >= 8
@@ -1150,6 +1210,8 @@ class EntregaEnvioModel {
   OrdenHistorialModel toHistorialModel() {
     return OrdenHistorialModel(
       idOrden: idOrden,
+      numeroOrden: numeroOrden,
+      folio: folioDisplay,
       estadoOrden: estadoOrden,
       totalVenta: totalVenta,
       montoPendiente: montoPendiente,
@@ -1166,6 +1228,7 @@ class EntregaEnvioModel {
   factory EntregaEnvioModel.fromJson(Map<String, dynamic> json) {
     return EntregaEnvioModel(
       idOrden: json['id_orden']?.toString() ?? '',
+      numeroOrden: json['numero_orden'] as int?,
       folio: json['folio']?.toString() ?? '',
       tipoEntrega: json['tipo_entrega']?.toString() ?? 'Retiro',
       estadoOrden: json['estado_orden']?.toString() ?? 'Reservada',

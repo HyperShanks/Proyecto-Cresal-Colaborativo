@@ -154,7 +154,12 @@ class _OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
   @override
   Widget build(BuildContext context) {
     final items = _data?.items ?? [];
-    final totalConsolidado = _data?.totalMontoConsolidado ?? 0;
+    final totalConsolidado = _data?.totalMontoConsolidado ??
+        items.fold<int>(0, (acc, it) {
+          if (it.esAnulada) return acc;
+          final pagado = it.totalVenta - it.montoPendiente;
+          return acc + (pagado > 0 ? pagado : 0);
+        });
     final totalRegistros = _data?.totalRegistros ?? items.length;
 
     return Column(
