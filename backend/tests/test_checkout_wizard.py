@@ -238,7 +238,8 @@ def test_checkout_wizard_flujo_completo_hibrido(client, wizard_db, auth_vendedor
     assert "id_orden" in data
     assert data["estado"] == "Reservada"
     assert data["total_venta"] == 1150000
-    assert data["monto_pendiente"] == 650000
+    assert data["monto_pendiente"] == 1150000
+    assert data["abono_requerido"] == 150000
     assert data["activos_reservados"] == 1
     assert data["reservas_generadas"] == 1
     assert data["despacho_generado"] is True
@@ -251,6 +252,8 @@ def test_checkout_wizard_flujo_completo_hibrido(client, wizard_db, auth_vendedor
         orden_db = db.query(Orden_Venta).filter(Orden_Venta.id_orden == id_orden).first()
         assert orden_db is not None
         assert orden_db.estado_orden == "Reservada"
+        assert orden_db.monto_pendiente == 1150000
+        assert orden_db.abono_requerido == 150000
 
         # Activo inventariado cambió a Reservado (id_estado = 2) y version_lock = 2
         act_db = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == wizard_db["activo_disp_id"]).first()
@@ -267,7 +270,8 @@ def test_checkout_wizard_flujo_completo_hibrido(client, wizard_db, auth_vendedor
         assert reserva_db.marca_requerida == "Toyota"
         assert reserva_db.modelo_requerido == "Corolla"
         assert reserva_db.precio_acordado == 450000
-        assert reserva_db.monto_abonado == 150000
+        assert reserva_db.monto_abonado == 0
+        assert reserva_db.abono_requerido == 150000
         assert reserva_db.estado_reserva == "Pendiente"
 
         # Registro en Despacho

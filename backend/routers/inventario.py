@@ -534,6 +534,7 @@ def obtener_catalogo(
             combustible=combustible_val,
             transmision_tipo=transmision_val,
             ubicacion_pasillo=activo.ubicacion_pasillo,
+            ubicacion_galpon=activo.ubicacion_galpon,
             ubicacion_pallet=activo.ubicacion_pallet,
             id_estado=activo.id_estado,
             estado_activo=est.nombre_estado,

@@ -74,6 +74,7 @@ class CatalogoItem {
     String? combustible,
     String? transmisionTipo,
     String? ubicacionPasillo,
+    String? ubicacionGalpon,
     String? ubicacionPallet,
     String? estadoActivo,
     String? numeroMotor,
@@ -99,6 +100,7 @@ class CatalogoItem {
       combustible: combustible ?? this.combustible,
       transmisionTipo: transmisionTipo ?? this.transmisionTipo,
       ubicacionPasillo: ubicacionPasillo ?? this.ubicacionPasillo,
+      ubicacionGalpon: ubicacionGalpon ?? this.ubicacionGalpon,
       ubicacionPallet: ubicacionPallet ?? this.ubicacionPallet,
       estadoActivo: estadoActivo ?? this.estadoActivo,
       numeroMotor: numeroMotor ?? this.numeroMotor,
@@ -182,11 +184,24 @@ class CatalogoItem {
     return nombreCategoria;
   }
 
-  /// Ubicación física en bodega
+  /// Ubicación física en bodega formateada con el mismo método de las tareas de bodega (separada con punto)
   String get ubicacionFormateada {
-    final pasillo = ubicacionPasillo ?? 'S/P';
-    final pallet = ubicacionPallet ?? 'S/P';
-    return '$pasillo - $pallet';
+    final partes = <String>[];
+    final galpon = (ubicacionGalpon ?? '').trim();
+    if (galpon.isNotEmpty && galpon != 'S/G') {
+      partes.add(galpon.toLowerCase().startsWith('galpón') || galpon.toLowerCase().startsWith('galpon')
+          ? galpon
+          : 'Galpón: $galpon');
+    }
+    final pasillo = (ubicacionPasillo ?? '').trim();
+    final pasilloVal = pasillo.isNotEmpty ? pasillo : 'S/P';
+    partes.add(pasilloVal.toLowerCase().startsWith('pasillo') ? pasilloVal : 'Pasillo: $pasilloVal');
+
+    final pallet = (ubicacionPallet ?? '').trim();
+    final palletVal = pallet.isNotEmpty ? pallet : 'S/P';
+    partes.add(palletVal.toLowerCase().startsWith('pallet') ? palletVal : 'Pallet: $palletVal');
+
+    return partes.join(' • ');
   }
 
   /// Formato de moneda chilena (CLP) con separadores de miles

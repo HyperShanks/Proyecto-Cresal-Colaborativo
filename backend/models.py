@@ -225,6 +225,7 @@ class Orden_Venta(Base):
     qr_transaccional_salida = Column(String(255), nullable=True, unique=True)
     total_venta = Column(Integer, nullable=False, default=0)
     monto_pendiente = Column(Integer, nullable=False, default=0)
+    abono_requerido = Column(Integer, nullable=False, default=0)
     fecha_creacion = Column(DateTime, nullable=False, server_default=text("now()"))
     fecha_actualizacion = Column(DateTime, nullable=True)
 
@@ -279,6 +280,7 @@ class Reservas_Backorder(Base):
     notas_preparacion = Column(String(255), nullable=True)
     precio_acordado = Column(Integer, nullable=False)
     monto_abonado = Column(Integer, nullable=False, default=0)
+    abono_requerido = Column(Integer, nullable=False, default=0)
     id_activo_asignado = Column(UUID(as_uuid=True), ForeignKey("Activo_Inventariado.id_activo"), nullable=True)
     estado_reserva = Column(String(30), nullable=False, server_default="Pendiente")
     fecha_creacion = Column(DateTime, nullable=False, server_default=text("now()"))

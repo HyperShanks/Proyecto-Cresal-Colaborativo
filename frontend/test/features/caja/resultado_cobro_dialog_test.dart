@@ -191,7 +191,7 @@ void main() {
       // Instrucción Operativa con advertencia de retención
       expect(
         find.text(
-          'Entregue comprobante de abono al cliente. La orden queda retenida en estado \'Reservada\' / Confirmada sin código QR de salida hasta la liquidación final o arribo a bodega.',
+          'La orden queda retenida en estado \'Reservada\' / Confirmada sin código QR de salida hasta la liquidación final o arribo a bodega.',
         ),
         findsOneWidget,
       );

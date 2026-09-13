@@ -205,8 +205,21 @@ def obtener_cobros_pendientes(
                 folio_doc = f"ORD-{str(orden.id_orden).replace('-', '')[:4].upper()}"
 
             total_op = orden.total_venta
-            monto_cobrar = orden.monto_pendiente
-            abono_prev = max(0, total_op - monto_cobrar)
+            abono_req = getattr(orden, "abono_requerido", 0) or 0
+
+            if orden.monto_pendiente == total_op:
+                # El cliente no ha pagado nada aún
+                abono_prev = 0
+                if abono_req > 0:
+                    # Se requiere un abono comercial acordado
+                    monto_cobrar = min(abono_req, orden.monto_pendiente)
+                else:
+                    # Venta estándar sin abono: se cobra el total pendiente
+                    monto_cobrar = orden.monto_pendiente
+            else:
+                # El cliente ya abonó previamente y viene por el saldo faltante
+                abono_prev = max(0, total_op - orden.monto_pendiente)
+                monto_cobrar = orden.monto_pendiente
 
             fecha_fmt, hora_fmt, dt_utc = format_chile_datetime(orden.fecha_creacion)
             cliente_nombre = f"{cliente.nombres} {cliente.apellidos}".strip()
@@ -241,15 +254,24 @@ def obtener_cobros_pendientes(
             .join(Usuario, Reservas_Backorder.id_vendedor == Usuario.id_usuario)
             .outerjoin(Categoria_Activo, Reservas_Backorder.id_categoria_requerida == Categoria_Activo.id_categoria)
             .filter(Reservas_Backorder.id_sucursal_registro == sucursal_id)
-            .filter(Reservas_Backorder.estado_reserva.in_(["Pendiente", "Reservada"]))
+            .filter(Reservas_Backorder.estado_reserva.in_(["Pendiente", "Reservada", "Confirmada"]))
             .filter((Reservas_Backorder.precio_acordado - Reservas_Backorder.monto_abonado) > 0)
         ).all()
 
         for res, cliente, vendedor, categoria in reservas_query:
             folio_doc = f"RES-{str(res.id_reserva).replace('-', '')[:4].upper()}"
             total_op = res.precio_acordado
-            abono_prev = res.monto_abonado
-            monto_cobrar = res.precio_acordado - res.monto_abonado
+            abono_req = getattr(res, "abono_requerido", 0) or 0
+
+            if res.monto_abonado == 0:
+                abono_prev = 0
+                if abono_req > 0:
+                    monto_cobrar = min(abono_req, res.precio_acordado)
+                else:
+                    monto_cobrar = res.precio_acordado
+            else:
+                abono_prev = res.monto_abonado
+                monto_cobrar = res.precio_acordado - res.monto_abonado
 
             cat_nombre = categoria.nombre_categoria if categoria else "Repuesto Solicitado"
             transito_str = res.notas_preparacion or "En Tránsito Marítimo (Arribo est.: 10 días)"
@@ -454,9 +476,12 @@ def registrar_cobro(
                 )
 
             reserva.monto_abonado += payload.monto_declarado
-            reserva.estado_reserva = "Confirmada"
             reserva.fecha_actualizacion = now_utc
             nuevo_saldo = reserva.precio_acordado - reserva.monto_abonado
+            if nuevo_saldo == 0:
+                reserva.estado_reserva = "Completada"
+            else:
+                reserva.estado_reserva = "Confirmada"
             qr_hash = None
 
             folio_doc = f"RES-{str(reserva.id_reserva).replace('-', '')[:4].upper()}"

@@ -209,14 +209,12 @@ def crear_orden(
 
         # ── Paso A.2: Cabecera Orden_Venta ──────────────────────────────────
         # Tarea 2: Toda orden creada en Mesón nace en 'Reservada' con qr_transaccional_salida = NULL.
-        # El acuerdo de abono comercial solo se registra como propuesta y monto pendiente sin generar registros en Transaccion_Pago.
+        # El acuerdo de abono comercial solo se registra como propuesta en abono_requerido sin restar del saldo pendiente (que sigue siendo el total) ni generar registros en Transaccion_Pago.
         now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
 
         monto_abono_val = orden_in.monto_abono if (orden_in.monto_abono is not None and orden_in.monto_abono > 0) else 0
         if monto_abono_val > total_calculado:
             monto_abono_val = total_calculado
-
-        monto_pendiente_calc = total_calculado - monto_abono_val
 
         nueva_orden = Orden_Venta(
             id_cliente=cliente.id_cliente,
@@ -226,7 +224,8 @@ def crear_orden(
             estado_orden="Reservada",
             qr_transaccional_salida=None,
             total_venta=total_calculado,
-            monto_pendiente=monto_pendiente_calc,
+            monto_pendiente=total_calculado,
+            abono_requerido=monto_abono_val,
             fecha_creacion=now_utc,
             fecha_actualizacion=now_utc,
         )
@@ -343,6 +342,7 @@ def crear_orden(
             estado_orden=nueva_orden.estado_orden,
             total_venta=nueva_orden.total_venta,
             monto_pendiente=nueva_orden.monto_pendiente,
+            abono_requerido=nueva_orden.abono_requerido,
             qr_transaccional_salida=nueva_orden.qr_transaccional_salida,
             mensaje="Orden de venta generada exitosamente y derivada a caja.",
             fecha_creacion=nueva_orden.fecha_creacion.isoformat() if nueva_orden.fecha_creacion else None,
@@ -1991,6 +1991,10 @@ def checkout_wizard(
         sucursal_id = current_user.id_sucursal or 1
         vendedor_asig = request.id_vendedor_asignado or current_user.id_usuario
 
+        abono_req_val = request.monto_abono or 0
+        if abono_req_val == 0 and request.reservas:
+            abono_req_val = sum((r.abono_requerido if getattr(r, "abono_requerido", None) is not None else r.monto_abonado) for r in request.reservas)
+
         orden = Orden_Venta(
             id_orden=id_orden,
             id_cliente=cliente.id_cliente,
@@ -1999,7 +2003,8 @@ def checkout_wizard(
             id_sucursal=sucursal_id,
             estado_orden="Reservada",
             total_venta=request.total_venta,
-            monto_pendiente=request.monto_pendiente,
+            monto_pendiente=request.total_venta,
+            abono_requerido=abono_req_val,
             fecha_creacion=datetime.now(timezone.utc),
             fecha_actualizacion=datetime.now(timezone.utc)
         )
@@ -2102,6 +2107,7 @@ def checkout_wizard(
             categoria = db.query(Categoria_Activo).filter(Categoria_Activo.id_categoria == r.id_categoria_requerida).first()
             cat_label = categoria.nombre_categoria if categoria else f"Categoría {r.id_categoria_requerida}"
 
+            abono_res = r.abono_requerido if getattr(r, "abono_requerido", None) is not None else r.monto_abonado
             reserva_bo = Reservas_Backorder(
                 id_reserva=uuid.uuid4(),
                 id_cliente=cliente.id_cliente,
@@ -2117,7 +2123,8 @@ def checkout_wizard(
                 transmision_requerida=r.transmision_requerida,
                 notas_preparacion=r.notas_preparacion,
                 precio_acordado=r.precio_acordado,
-                monto_abonado=r.monto_abonado,
+                monto_abonado=0,
+                abono_requerido=abono_res,
                 estado_reserva="Pendiente",
                 fecha_creacion=datetime.now(timezone.utc)
             )
@@ -2134,7 +2141,7 @@ def checkout_wizard(
                 id_orden=orden.id_orden,
                 id_activo=None,
                 descripcion_manual=desc_res,
-                notas_preparacion=r.notas_preparacion or f"Reserva por encargo. Abono acordado: ${r.monto_abonado:,}".replace(",", "."),
+                notas_preparacion=r.notas_preparacion or f"Reserva por encargo. Abono acordado: ${abono_res:,}".replace(",", "."),
                 cantidad=1,
                 precio_unitario=r.precio_acordado,
                 precio_final=r.precio_acordado,
@@ -2195,6 +2202,7 @@ def checkout_wizard(
             estado_orden=orden.estado_orden,
             total_venta=orden.total_venta,
             monto_pendiente=orden.monto_pendiente,
+            abono_requerido=orden.abono_requerido,
             reservas_generadas=reservas_creadas,
             activos_reservados=activos_reservados,
             despacho_generado=despacho_generado,

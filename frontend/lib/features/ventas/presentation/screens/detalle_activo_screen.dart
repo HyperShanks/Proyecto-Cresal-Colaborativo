@@ -507,16 +507,30 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
             children: [
               Expanded(
                 child: _buildLocationTile(
+                  'Galpón',
+                  (widget.item.ubicacionGalpon != null && widget.item.ubicacionGalpon!.trim().isNotEmpty)
+                      ? widget.item.ubicacionGalpon!.trim()
+                      : 'S/G',
+                  Icons.warehouse_outlined,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildLocationTile(
                   'Pasillo',
-                  widget.item.ubicacionPasillo ?? 'S/P',
+                  (widget.item.ubicacionPasillo != null && widget.item.ubicacionPasillo!.trim().isNotEmpty)
+                      ? widget.item.ubicacionPasillo!.trim()
+                      : 'S/P',
                   Icons.view_column_outlined,
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               Expanded(
                 child: _buildLocationTile(
                   'Pallet',
-                  widget.item.ubicacionPallet ?? 'S/P',
+                  (widget.item.ubicacionPallet != null && widget.item.ubicacionPallet!.trim().isNotEmpty)
+                      ? widget.item.ubicacionPallet!.trim()
+                      : 'S/P',
                   Icons.inventory_2_outlined,
                 ),
               ),
@@ -529,7 +543,7 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
 
   Widget _buildLocationTile(String label, String value, IconData icon) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
         color: AppPalette.background,
         borderRadius: BorderRadius.circular(10),
@@ -537,25 +551,29 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
       child: Row(
         children: [
           Icon(icon, size: 20, color: AppPalette.secondary),
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: AppTypography.small.copyWith(
-                  fontSize: 11,
-                  color: AppPalette.textSecondary,
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: AppTypography.small.copyWith(
+                    fontSize: 11,
+                    color: AppPalette.textSecondary,
+                  ),
                 ),
-              ),
-              Text(
-                value,
-                style: AppTypography.body.copyWith(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 15,
+                Text(
+                  value,
+                  style: AppTypography.body.copyWith(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),

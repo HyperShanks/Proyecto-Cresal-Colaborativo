@@ -132,7 +132,8 @@ def test_crear_orden_con_abono_parcial(client, auth_headers):
         assert res.status_code == 201, res.text
         data = res.json()
         assert data["total_venta"] == 500000
-        assert data["monto_pendiente"] == 300000
+        assert data["monto_pendiente"] == 500000
+        assert data["abono_requerido"] == 200000
         assert data["estado_orden"] == "Reservada"
     finally:
         db.close()

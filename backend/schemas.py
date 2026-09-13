@@ -587,6 +587,7 @@ class OrdenResponse(BaseModel):
     estado_orden: str
     total_venta: int
     monto_pendiente: int
+    abono_requerido: int = 0
     qr_transaccional_salida: Optional[str] = None
     mensaje: str
     fecha_creacion: Optional[str] = None
@@ -679,6 +680,7 @@ class OrdenHistorialItemResponse(BaseModel):
     estado_orden: str
     total_venta: int
     monto_pendiente: int
+    abono_requerido: int = 0
     qr_transaccional_salida: Optional[str] = None
     fecha_creacion: Optional[str] = None
     fecha_actualizacion: Optional[str] = None
@@ -698,6 +700,7 @@ class EntregaEnvioItemResponse(BaseModel):
     estado_orden: str
     total_venta: int
     monto_pendiente: int
+    abono_requerido: int = 0
     qr_transaccional_salida: Optional[str] = None
     fecha_creacion: Optional[str] = None
     fecha_actualizacion: Optional[str] = None
@@ -1123,6 +1126,7 @@ class ReservaBackorderDTO(BaseModel):
     notas_preparacion: Optional[str] = None
     precio_acordado: int
     monto_abonado: int = 0
+    abono_requerido: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -1177,6 +1181,7 @@ class CheckoutWizardResponse(BaseModel):
     estado_orden: str = "Reservada"
     total_venta: int
     monto_pendiente: int
+    abono_requerido: int = 0
     reservas_generadas: int = 0
     activos_reservados: int = 0
     despacho_generado: bool = False

@@ -353,7 +353,7 @@ class ResultadoCobroDialog extends StatelessWidget {
           Text(
             emiteQr
                 ? 'Derive al cliente al Mesón de Venta para la entrega física de sus piezas y repuestos.'
-                : 'Entregue comprobante de abono al cliente. La orden queda retenida en estado \'Reservada\' / Confirmada sin código QR de salida hasta la liquidación final o arribo a bodega.',
+                : 'La orden queda retenida en estado \'Reservada\' / Confirmada sin código QR de salida hasta la liquidación final o arribo a bodega.',
             style: AppTypography.small.copyWith(
               fontSize: 12,
               fontWeight: FontWeight.w500,
