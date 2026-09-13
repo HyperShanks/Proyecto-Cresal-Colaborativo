@@ -1,0 +1,175 @@
+# Arquitectura de Sesión JWT, Control de Turnos y Periodo de Gracia
+
+**Proyecto:** Cresal-SaaS (Frontend Flutter + Backend FastAPI)  
+**Estándar:** Desacoplamiento AuthN (Identidad) vs. AuthZ (Políticas de Negocio Operativas)  
+**Audiencia:** Desarrolladores, Arquitectos de Software, Auditores y Gerencia  
+
+---
+
+## 1. Contexto y Problema Inicial
+
+Durante la operación continua de la plataforma en mostrador de ventas y bodegas, se detectó un fallo crítico de continuidad operativa:
+- **Expiración intempestiva:** Los usuarios sufrían constantes desconexiones y errores `401 Unauthorized` mientras interactuaban activamente con la app.
+- **Destrucción de trabajo en curso:** Al gatillarse el error 401, el cliente Flutter invocaba un vaciado total del carrito en el backend, liberando los repuestos reservados y expulsando bruscamente al vendedor a la pantalla de login.
+- **Incertidumbre de turnos:** Existía la duda de si el token JWT debía expirar con la jornada laboral (Lunes a Viernes 18:30, Sábados 14:00) y qué ocurría cuando un vendedor estaba en medio de la venta de un repuesto de alto valor (ej. un motor) justo a la hora de salida, o cuando vendedores móviles consultaban repuestos fuera de horario.
+
+---
+
+## 2. Revisión y Comparativa de Documentación Existente (.md)
+
+Antes de definir la solución técnica, se auditó la totalidad de los archivos de especificación del repositorio:
+
+| Documento Auditado | Contenido / Directriz Relevante | Diagnóstico y Brecha Detectada |
+| :--- | :--- | :--- |
+| `AUDIT-SPRINTS-1-TO-3.md` | Hallazgo ALTO-04: Recomendaba `TOKEN_EXPIRE_MINUTES: int = 480` (8 horas de jornada laboral). | En el código de `backend/core/config.py` se encontraba fijado por defecto en **30 minutos**, provocando la muerte de la sesión a la media hora exacta de uso. |
+| `DICCIONARIO_ERRORES.md` | Error `SESSION_EXPIRED` (401): *"Tu sesión ha expirado. Ingresa tu PIN nuevamente. Redirigir automáticamente a `/pin-login` limpiando credenciales."* | La implementación en Flutter malinterpretó "limpiar credenciales" llamando a `logout()`, lo que ejecutaba `CartController.liberarYVaciarEnBackend()`, eliminando el carrito del cliente. |
+| `USUARIOS_ROLES.md` | Establece el modelo de **Enrolamiento de Terminal** (Email/Password) y **Reingreso Rápido por PIN** (4 dígitos en pantalla táctil/numpad). | Los dispositivos físicos tienen roles dispares: la PDA de bodega no sale del galpón, mientras que los vendedores y gerencia operan en celulares y laptops dentro y fuera del horario de oficina. |
+| `specs/SPEC-HU-TAREA-1.md` | Especifica que el vencimiento de sesión por inactividad debe regresar a `PinLoginScreen` **sin borrar el enrolamiento**. | No existía un detector de inactividad de pantalla; el JWT moría por reloj absoluto sin importar si el usuario estaba tipeando o navegando. |
+| `specs/SPEC-HU-TAREA-3.md` | Define la reserva temporal atómica de **15 minutos** en base de datos (`Activo_Inventariado.reserva_expira_en`). | Esta reserva existía para evitar colisiones entre vendedores, pero no estaba conectada con el control de cierre de tienda. |
+
+---
+
+## 3. Diagnóstico de los 3 Errores de Código
+
+1. **`TOKEN_EXPIRE_MINUTES = 30` en `backend/core/config.py`:**  
+   Al arrancar la aplicación sin cargar el `.env` local de la subcarpeta, Pydantic caía en el valor predeterminado de 30 minutos.
+2. **Carga relativa de `.env`:**  
+   `ConfigDict(env_file=".env")` buscaba el archivo en el directorio de ejecución actual (`cwd`). Al iniciar desde la raíz del repositorio, ignoraba `backend/.env`.
+3. **Flujo 401 autodestructivo en Frontend:**  
+   En `frontend/lib/features/auth/services/auth_service.dart`, el método `manejarSesionExpirada()` ejecutaba `await logout()`, invocando la liberación de reservas en backend y vaciando el carrito del vendedor en curso.
+
+---
+
+## 4. Desacoplamiento Arquitectónico: AuthN (Identidad) vs. AuthZ (Políticas de Negocio)
+
+La industria de software empresarial (ERPs de distribución, POS de retail y recicladores vehiculares como LKQ y Copart) prohíbe explícitamente acoplar la expiración del JWT a la hora de salida de los trabajadores:
+
+```mermaid
+flowchart LR
+    subgraph Capa_AuthN [Autenticación - AuthN]
+        Token[JWT Bearer 24 Horas] -->|Identidad Criptográfica| SesionActiva[Sesión Continua de Trabajo]
+        Inactividad[Inactividad Física de Pantalla] -->|Bloqueo de UI| PinLock[PinLoginScreen: 4 Dígitos]
+    end
+
+    subgraph Capa_AuthZ [Autorización y Negocio - AuthZ]
+        CrearOrden[POST /api/v1/ordenes] --> Policy{validar_horario_operativo_ordenes}
+        Policy -->|Dentro de Horario| Permitir[201 Created]
+        Policy -->|Periodo de Gracia +30min| Permitir
+        Policy -->|Reserva Activa en BD| Permitir
+        Policy -->|Fuera de Horario y Sin Reserva| Denegar[403 OUT_OF_OPERATING_HOURS]
+    end
+```
+
+### ¿Por qué 24 horas y por qué NO da "Pase Libre"?
+* **¿Qué otorga el token de 24 horas?**  
+  Otorga únicamente **identidad de red**: el backend sabe quién es el usuario. Permite que el operario trabaje su jornada completa (incluyendo horas extra o inventarios de cierre de mes) sin ser expulsado sorpresivamente. Si suelta el dispositivo, la pantalla se bloquea por PIN, pero el estado de la aplicación no se destruye.
+* **¿Da pase libre para vender de noche o en domingos?**  
+  **NO.** Las operaciones críticas (crear órdenes, modificar inventario, cobrar en caja) están blindadas por la política de autorización de negocio (`core/policies.py`). Si un vendedor de mesón envía un pedido a las 22:00 horas, el endpoint responde con un `HTTP 403 Forbidden` informando que la sucursal se encuentra cerrada.
+
+---
+
+## 5. Evaluación de Soluciones y Decisión de Diseño
+
+Se evaluaron dos alternativas para implementar el control de turnos:
+
+| Criterio | Opción Descartada: Tabla Dinámica en BD (`horarios_sucursal`) | Opción Seleccionada: Políticas en Código (`core/policies.py`) |
+| :--- | :--- | :--- |
+| **Impacto en BD** | Requiere migración DDL (`CREATE TABLE`), claves foráneas y modelo ORM. | **0 cambios en PostgreSQL** (cero riesgo de migración). |
+| **Sobrecarga (Overhead)** | Consulta a base de datos en cada intento de checkout. | Instantáneo en memoria utilizando `ZoneInfo("America/Santiago")`. |
+| **Mantenimiento** | Requiere desarrollar un módulo administrativo CRUD completo para gestionar aperturas y cierres. | Centralizado en configuración limpia y testeada. |
+| **Idoneidad para Cresal** | Sobre-ingeniería para una red de sucursales con horarios comerciales estables. | **Ideal**: Sencilla, robusta, altamente testeable y lista para producción. |
+
+---
+
+## 6. Resolución del Caso Crítico: Venta al Filo de la Salida
+
+### El problema:
+Un cliente entra a las 18:25 a comprar un motor de $1.800.000. A las 18:30 suena el timbre de salida. El vendedor está cargando los datos del cliente en el checkout. ¿Se debe bloquear la venta? **Jamás.**
+
+### La solución: Doble Barrera con Periodo de Gracia (Grace Period)
+1. **Margen de Gracia Temporal (30 minutos post-cierre):**
+   - Lunes a Viernes: Apertura 08:30, Cierre 18:30. Gracia extendida hasta las **19:00**.
+   - Sábados: Apertura 09:00, Cierre 14:00. Gracia extendida hasta las **14:30**.
+   - Domingos: Cerrado para venta presencial.
+2. **Respeto a Reservas Atómicas Preexistentes:**
+   - Si son las 19:15 y el vendedor continúa en el checkout, el backend inspecciona los ítems en `Activo_Inventariado`.
+   - Si el motor posee una reserva atómica activa (`reserva_expira_en > now_utc`) asignada a ese vendedor antes del corte, **el sistema reconoce la transacción como en curso y permite consolidar la orden**.
+   - Si un vendedor intenta iniciar una venta nueva desde cero a las 19:15, el sistema la rechaza inmediatamente.
+
+---
+
+## 7. Matriz de Roles y Reglas de Negocio
+
+| ID Rol | Rol | Restricción Horaria | Justificación Operativa |
+| :---: | :--- | :---: | :--- |
+| **1** | **Bodeguero** | **Sujeto a Turno** | La PDA física permanece en la base de carga de la bodega. Despachos y recepciones solo ocurren con el patio abierto. |
+| **2** | **Vendedor Mesón** | **Sujeto a Turno + Gracia** | Opera en el mostrador físico de la sucursal. Regulado por el horario del local comercial. |
+| **3** | **Caja** | **Sujeto a Turno + Cierre** | Cobros vinculados a la presencia de la cajera en la estación POS. Requiere ventana de gracia para cuadre diario. |
+| **4** | **Gerente** | **Exento (24/7)** | Requiere supervisar KPIs, facturación y auditorías en cualquier momento (ej. domingo en la noche). |
+| **5** | **Administrador** | **Exento (24/7)** | Mantenimiento técnico de infraestructura, diagnósticos y configuración de sistema. |
+| **6** | **Jefe de Ventas** | **Exento (24/7)** | Tasación de precios en `/bandeja_precios`, aprobaciones de crédito y supervisión comercial. |
+| **7** | **Vendedor Online** | **Exento (24/7)** | Canal omnicanal y remoto; cotizaciones y coordinación de despachos para regiones a deshora. |
+
+---
+
+## 8. Flujo Operativo Real End-to-End
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Vendedor as Vendedor (Mesón)
+    participant App as App Flutter (POS/Móvil)
+    participant API as FastAPI Backend
+    participant DB as PostgreSQL (Supabase)
+
+    Note over Vendedor,DB: Inicio de Jornada (08:30 AM)
+    Vendedor->>App: Ingresa PIN "2002" en PinLoginScreen
+    App->>API: POST /api/auth/login-pin (id_usuario, pin)
+    API-->>App: JWT Bearer (Vigencia 24 Horas)
+    App->>App: Carga Carrito persistido desde Storage
+
+    Note over Vendedor,DB: Operación Diaria (Venta de Motor al Filo del Cierre - 18:25 PM)
+    Vendedor->>App: Agrega Motor al Carrito
+    App->>API: POST /api/v1/carrito/reservar (id_activo)
+    API->>DB: UPDATE Activo_Inventariado (id_estado=2, reserva_expira_en=now+15min)
+    API-->>App: 200 OK (Motor Reservado)
+
+    Note over Vendedor,DB: Cierre de Tienda (18:30 PM) -> Sucursal Cierra Puertas
+    Note over Vendedor,DB: Vendedor finaliza datos del cliente (18:38 PM - Dentro de Gracia)
+    Vendedor->>App: Presiona "Confirmar Venta"
+    App->>API: POST /api/v1/ordenes (Items, Cliente, Despacho)
+    API->>API: validar_horario_operativo_ordenes()
+    Note right of API: Hora 18:38 en Chile: Está dentro de la gracia (18:30 - 19:00).<br/>Además, el motor tiene reserva activa en BD.
+    API->>DB: Inserción ACID de Orden_Venta y Detalle
+    API-->>App: 201 Created (Orden Generada Exitosamente)
+
+    Note over Vendedor,DB: Intento Fuera de Horario (Ej: Domingo 15:00 PM sin reserva)
+    Vendedor->>App: Intenta crear orden nueva
+    App->>API: POST /api/v1/ordenes
+    API->>API: validar_horario_operativo_ordenes()
+    API-->>App: 403 Forbidden ("Los domingos la sucursal permanece cerrada...")
+    App-->>Vendedor: Muestra advertencia amigable sin destruir el carrito
+```
+
+---
+
+## 9. Verificación y Validación Automatizada
+
+Las modificaciones fueron verificadas contra la suite de pruebas unitarias y de integración del proyecto:
+
+1. **Pruebas de Políticas de Horario y Gracia (`pytest tests/test_politicas_horario.py -v`):**
+   - Horario regular semanal (L-V 11:00) -> `PASSED`.
+   - Periodo de gracia semanal (L-V 18:45) -> `PASSED`.
+   - Cierre nocturno semanal (L-V 20:30) -> `PASSED`.
+   - Sábado regular (11:00) y sábado gracia (14:15) -> `PASSED`.
+   - Domingo cerrado -> `PASSED`.
+   - Bypass para roles exentos (4, 5, 6, 7) en domingo a las 23:00 -> `PASSED`.
+   - Vendedor mesón fuera de horario con reserva viva de motor en BD -> `PASSED`.
+   - Vendedor mesón fuera de horario con reserva expirada -> Rechazo `403` -> `PASSED`.
+2. **Pruebas de Autenticación y Enrolamiento (`pytest tests/test_auth_enrolamiento_pin.py tests/test_auth_register.py -v`):**
+   - 16 pruebas ejecutadas exitosamente (`16 passed`).
+3. **Pruebas de Integración Transaccional de Órdenes (`pytest tests/test_ordenes_transaccional.py -v`):**
+   - 9 pruebas de transaccionalidad ACID ejecutadas exitosamente (`9 passed`).
+4. **Pruebas en Frontend (`flutter test test/api_service_test.dart test/features/auth/`):**
+   - 28 pruebas widget y unitarias ejecutadas exitosamente (`28 passed`).
+   - `flutter analyze lib/features/auth/services/auth_service.dart`: 0 advertencias, 0 errores.

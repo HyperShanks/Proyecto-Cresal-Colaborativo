@@ -472,8 +472,18 @@ class AuthService {
   static Future<void> logout() => clearToken();
 
   /// Manejador global invocado cuando se detecta un 401 Unauthorized
+  /// Invalida las claves de sesión activa sin destruir ni vaciar el carrito del usuario,
+  /// permitiendo que al reingresar el PIN en el terminal conserve sus productos intactos.
   static Future<void> manejarSesionExpirada() async {
-    await logout();
+    ThemeController.reset();
+    await _storage.delete(key: _tokenKey);
+    await _storage.delete(key: _rolKey);
+    await _storage.delete(key: _idRolKey);
+    await _storage.delete(key: _sucursalKey);
+    await _storage.delete(key: _sucursalNombreKey);
+    await _storage.delete(key: _nombreUsuarioKey);
+    await _storage.delete(key: _userModelKey);
+
     BodegaPollingService.instance.reset();
 
     // Redirigir a login

@@ -33,6 +33,7 @@ from schemas import (
     HistorialPagoDetalleDTO, HistorialArticuloDTO, HistorialMovimientoDTO,
 )
 from core.security import get_current_user, require_auditoria_or_caja_role
+from core.policies import validar_horario_operativo_ordenes
 
 
 router = APIRouter(
@@ -73,6 +74,9 @@ def crear_orden(
     3. Rollback inmediato ante cualquier fallo.
     """
     # ── 1. Validaciones Previas de Negocio ──────────────────────────────────
+    # 1.0 Validación de Horario Operativo y Periodo de Gracia por Rol
+    validar_horario_operativo_ordenes(current_user, orden_in.items, db)
+
     if not orden_in.consentimiento_legal:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1853,6 +1857,9 @@ def checkout_wizard(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Acceso restringido: Solo el personal de Ventas o Administración puede procesar el checkout."
         )
+
+    # 1.1 Validación de Horario Operativo y Periodo de Gracia por Rol
+    validar_horario_operativo_ordenes(current_user, request.items_inventariados, db)
 
     # 2. Validar o Crear Cliente (Micro-CRM / Consumidor Final)
     cliente = None
