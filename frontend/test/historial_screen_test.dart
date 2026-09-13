@@ -369,6 +369,97 @@ void main() {
 
       expect(find.text('¿Deshacer esta Orden?'), findsNothing);
     });
+
+    testWidgets('Orden pagada de misceláneos muestra banner y botón MARCAR COMO ENTREGADO', (tester) async {
+      final ordenMiscelaneo = OrdenHistorialModel(
+        idOrden: 'ord-misc-001',
+        estadoOrden: 'Pagada',
+        totalVenta: 10000,
+        montoPendiente: 0,
+        totalItems: 1,
+        fechaCreacion: '2026-09-13T10:00:00Z',
+        detalles: [
+          DetalleOrdenItemModel(
+            idDetalle: 'det-misc-1',
+            idCategoria: 5,
+            nombreCategoria: 'Fijaciones',
+            titulo: 'Perno',
+            cantidad: 1,
+            precioFinal: 10000,
+            subtotal: 10000,
+            esInventariado: false,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: OrdenDetailSheet(
+              orden: ordenMiscelaneo,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Entrega Inmediata en Mesón'), findsNWidgets(2));
+      expect(find.text('MARCAR COMO ENTREGADO'), findsOneWidget);
+    });
+
+    testWidgets('Orden mixta (Motor + Misceláneo) muestra badges diferenciados y banner de orden mixta', (tester) async {
+      final ordenMixta = OrdenHistorialModel(
+        idOrden: 'ord-mixta-001',
+        estadoOrden: 'Pagada',
+        totalVenta: 1690000,
+        montoPendiente: 0,
+        totalItems: 2,
+        qrTransaccionalSalida: 'TX-QR-TEST-001',
+        fechaCreacion: '2026-09-13T10:00:00Z',
+        detalles: [
+          DetalleOrdenItemModel(
+            idDetalle: 'det-mot-1',
+            idCategoria: 1,
+            nombreCategoria: 'Motores',
+            titulo: 'Motor Toyota Yaris 2018',
+            cantidad: 1,
+            precioFinal: 1680000,
+            subtotal: 1680000,
+            esInventariado: true,
+          ),
+          DetalleOrdenItemModel(
+            idDetalle: 'det-perno-2',
+            idCategoria: 5,
+            nombreCategoria: 'Fijaciones',
+            titulo: 'Perno',
+            cantidad: 1,
+            precioFinal: 10000,
+            subtotal: 10000,
+            esInventariado: false,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: OrdenDetailSheet(
+              orden: ordenMixta,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Mixta'), findsOneWidget);
+      expect(find.text('Retiro en Bodega (Barrera)'), findsOneWidget);
+      expect(find.text('Entrega Inmediata en Mesón'), findsOneWidget);
+      expect(find.text('Orden Mixta (Mesón + Bodega)'), findsOneWidget);
+      expect(find.text('MARCAR COMO ENTREGADO'), findsNothing);
+      expect(find.text('MOSTRAR QR DE ENTREGA (BODEGA)'), findsOneWidget);
+    });
   });
 
   group('HistorialFiltrosDrawer Widget Tests', () {

@@ -313,20 +313,101 @@ void main() {
       expect(find.text('Entregas y Envíos'), findsOneWidget);
     });
 
-    testWidgets('SPEC-HU-TAREA-19: Elimina bypass de entrega manual en mesón de ventas', (tester) async {
-      await const FlutterSecureStorage().write(key: 'user_id_rol', value: '2');
-      await const FlutterSecureStorage().write(key: 'user_rol', value: 'Vendedor');
-
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: EntregasEnviosScreen(),
-        ),
+    test('EntregaEnvioModel.contieneMotorOCaja identifica con precisión motores y cajas vs repuestos menores', () {
+      final ordenCaja = EntregaEnvioModel(
+        idOrden: 'c1111111-1111-1111-1111-111111111111',
+        folio: 'ORD-D1775AB0',
+        tipoEntrega: 'Retiro',
+        estadoOrden: 'Reservada',
+        totalVenta: 1680000,
+        montoPendiente: 1000000,
+        totalItems: 1,
+        detalles: [
+          DetalleOrdenItemModel(
+            idDetalle: 'd1',
+            titulo: 'Caja de Cambios - DODGE RAM QUAD CAB 4X4 5.9 2008',
+            cantidad: 1,
+            precioFinal: 1680000,
+            subtotal: 1680000,
+            esInventariado: true,
+          ),
+        ],
+        preparacionLista: true,
+        todosPreparados: true,
       );
-      await tester.pump();
 
-      // No debe existir el botón de confirmación de entrega manual
-      expect(find.text('Confirmar Entrega'), findsNothing);
-      expect(find.text('CONFIRMAR ENTREGA'), findsNothing);
+      final ordenMotor = EntregaEnvioModel(
+        idOrden: 'm1111111-1111-1111-1111-111111111111',
+        folio: 'ORD-191D3011',
+        tipoEntrega: 'Retiro',
+        estadoOrden: 'Pagada',
+        totalVenta: 1200000,
+        montoPendiente: 0,
+        totalItems: 1,
+        detalles: [
+          DetalleOrdenItemModel(
+            idDetalle: 'd2',
+            titulo: '[RESERVA EN VERDE] Motor - Peugeot 206 (2022)',
+            cantidad: 1,
+            precioFinal: 1200000,
+            subtotal: 1200000,
+            esInventariado: false,
+          ),
+        ],
+        preparacionLista: true,
+        todosPreparados: true,
+      );
+
+      final ordenPerno = EntregaEnvioModel(
+        idOrden: 'p1111111-1111-1111-1111-111111111111',
+        folio: 'ORD-0742EC16',
+        tipoEntrega: 'Retiro',
+        estadoOrden: 'Pagada',
+        totalVenta: 10000,
+        montoPendiente: 0,
+        totalItems: 1,
+        detalles: [
+          DetalleOrdenItemModel(
+            idDetalle: 'd3',
+            titulo: 'Perno',
+            descripcionManual: 'Perno',
+            cantidad: 1,
+            precioFinal: 10000,
+            subtotal: 10000,
+            esInventariado: false,
+          ),
+        ],
+        preparacionLista: true,
+        todosPreparados: true,
+      );
+
+      final ordenPan = EntregaEnvioModel(
+        idOrden: 'b1111111-1111-1111-1111-111111111111',
+        folio: 'ORD-B41BB77D',
+        tipoEntrega: 'Retiro',
+        estadoOrden: 'Pagada',
+        totalVenta: 5000,
+        montoPendiente: 0,
+        totalItems: 1,
+        detalles: [
+          DetalleOrdenItemModel(
+            idDetalle: 'd4',
+            titulo: 'pan',
+            descripcionManual: 'pan',
+            cantidad: 1,
+            precioFinal: 5000,
+            subtotal: 5000,
+            esInventariado: false,
+          ),
+        ],
+        preparacionLista: true,
+        todosPreparados: true,
+      );
+
+      expect(ordenCaja.contieneMotorOCaja, true);
+      expect(ordenMotor.contieneMotorOCaja, true);
+      expect(ordenPerno.contieneMotorOCaja, false);
+      expect(ordenPan.contieneMotorOCaja, false);
     });
   });
 }

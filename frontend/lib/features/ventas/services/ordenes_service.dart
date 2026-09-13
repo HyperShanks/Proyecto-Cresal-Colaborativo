@@ -187,6 +187,8 @@ class DespachoOrdenResumenModel {
 class DetalleOrdenItemModel {
   final String idDetalle;
   final String? idActivo;
+  final int? idCategoria;
+  final String? nombreCategoria;
   final String titulo;
   final String? skuQrFisico;
   final String? descripcionManual;
@@ -202,6 +204,8 @@ class DetalleOrdenItemModel {
   DetalleOrdenItemModel({
     required this.idDetalle,
     this.idActivo,
+    this.idCategoria,
+    this.nombreCategoria,
     required this.titulo,
     this.skuQrFisico,
     this.descripcionManual,
@@ -219,6 +223,29 @@ class DetalleOrdenItemModel {
   String get subtotalFormateado => OrdenResponseModel._formatearMonto(subtotal);
   String get tituloDisplay => titulo.isNotEmpty ? titulo : (descripcionManual ?? 'Repuesto Misceláneo');
 
+  bool get esMotorOCaja {
+    final cat = (nombreCategoria ?? '').trim().toLowerCase();
+    if (cat.contains('motor') || cat.contains('caja')) return true;
+    if (idCategoria == 1 || idCategoria == 2) return true;
+    final t = tituloDisplay.toLowerCase();
+    if (t.contains('motor') ||
+        t.contains('caja de cambio') ||
+        t.contains('cajas de cambio') ||
+        t.contains('caja de cambios') ||
+        t.contains('cajas de cambios') ||
+        t.startsWith('caja ') ||
+        t == 'caja' ||
+        t.contains('caja transmision') ||
+        t.contains('caja manual') ||
+        t.contains('caja automatica') ||
+        t.contains('caja automática')) {
+      return true;
+    }
+    return false;
+  }
+
+  String get tipoEntregaLabel => esMotorOCaja ? 'Retiro en Bodega' : 'Entrega en Mesón';
+
   factory DetalleOrdenItemModel.fromJson(Map<String, dynamic> json) {
     final cant = json['cantidad'] as int? ?? 1;
     final pFinal = json['precio_final'] as int? ?? 0;
@@ -227,6 +254,8 @@ class DetalleOrdenItemModel {
     return DetalleOrdenItemModel(
       idDetalle: json['id_detalle']?.toString() ?? '',
       idActivo: json['id_activo']?.toString(),
+      idCategoria: json['id_categoria'] as int?,
+      nombreCategoria: json['nombre_categoria']?.toString(),
       titulo: json['titulo']?.toString() ?? 'Repuesto',
       skuQrFisico: json['sku_qr_fisico']?.toString(),
       descripcionManual: json['descripcion_manual']?.toString(),
@@ -274,6 +303,9 @@ class OrdenHistorialModel {
   bool get esPagada => estadoOrden.toLowerCase() == 'pagada';
   bool get esCompletada => estadoOrden.toLowerCase() == 'completada';
   bool get esAnulada => estadoOrden.toLowerCase() == 'anulada';
+  bool get contieneMotorOCaja => detalles.any((d) => d.esMotorOCaja);
+  bool get contieneMiscelaneos => detalles.any((d) => !d.esMotorOCaja);
+  bool get esMixta => contieneMotorOCaja && contieneMiscelaneos;
 
   /// Indica si la orden cuenta con código QR transaccional emitido para entrega en bodega (HU-3.6).
   bool get tieneQrDisponible =>
@@ -1039,6 +1071,9 @@ class EntregaEnvioModel {
   bool get esPagada => estadoOrden.toLowerCase() == 'pagada';
   bool get esCompletada => estadoOrden.toLowerCase() == 'completada';
   bool get esAnulada => estadoOrden.toLowerCase() == 'anulada';
+  bool get contieneMotorOCaja => detalles.any((d) => d.esMotorOCaja);
+  bool get contieneMiscelaneos => detalles.any((d) => !d.esMotorOCaja);
+  bool get esMixta => contieneMotorOCaja && contieneMiscelaneos;
   bool get tieneQrDisponible =>
       esPagada &&
       qrTransaccionalSalida != null &&

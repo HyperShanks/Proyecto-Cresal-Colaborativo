@@ -670,6 +670,8 @@ class DetalleOrdenItemResponse(BaseModel):
     es_inventariado: bool
     preparacion_lista: Optional[bool] = False
     estado_preparacion: Optional[str] = "Pendiente"
+    id_categoria: Optional[int] = None
+    nombre_categoria: Optional[str] = None
 
 
 class OrdenHistorialItemResponse(BaseModel):

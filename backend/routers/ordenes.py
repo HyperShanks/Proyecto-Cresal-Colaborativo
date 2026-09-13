@@ -789,6 +789,8 @@ def obtener_mis_ventas(
             titulo_item = d.descripcion_manual or "Repuesto Misceláneo"
             es_inv = False
 
+            id_cat = None
+            nom_cat = None
             if d.id_activo:
                 es_inv = True
                 activo_db = (
@@ -801,6 +803,8 @@ def obtener_mis_ventas(
                 if activo_db:
                     act, veh, cat = activo_db
                     sku_fisico = act.sku_qr_fisico
+                    id_cat = cat.id_categoria if cat else None
+                    nom_cat = cat.nombre_categoria if cat else None
                     nombre_cat = cat.nombre_categoria if cat else "Repuesto"
                     if veh:
                         titulo_item = f"{nombre_cat} - {veh.marca} {veh.modelo} {veh.anio or ''}".strip()
@@ -811,6 +815,8 @@ def obtener_mis_ventas(
                 DetalleOrdenItemResponse(
                     id_detalle=d.id_detalle,
                     id_activo=d.id_activo,
+                    id_categoria=id_cat,
+                    nombre_categoria=nom_cat,
                     titulo=titulo_item,
                     sku_qr_fisico=sku_fisico,
                     descripcion_manual=d.descripcion_manual,
@@ -992,6 +998,8 @@ def listar_entregas_envios(
             titulo_item = d.descripcion_manual or "Repuesto Misceláneo"
             es_inv = False
 
+            id_cat = None
+            nom_cat = None
             if d.id_activo:
                 es_inv = True
                 activo_db = (
@@ -1004,6 +1012,8 @@ def listar_entregas_envios(
                 if activo_db:
                     act, veh, cat = activo_db
                     sku_fisico = act.sku_qr_fisico
+                    id_cat = cat.id_categoria if cat else None
+                    nom_cat = cat.nombre_categoria if cat else None
                     nombre_cat = cat.nombre_categoria if cat else "Repuesto"
                     if veh:
                         titulo_item = f"{nombre_cat} - {veh.marca} {veh.modelo} {veh.anio or ''}".strip()
@@ -1014,6 +1024,8 @@ def listar_entregas_envios(
                 DetalleOrdenItemResponse(
                     id_detalle=d.id_detalle,
                     id_activo=d.id_activo,
+                    id_categoria=id_cat,
+                    nombre_categoria=nom_cat,
                     titulo=titulo_item,
                     sku_qr_fisico=sku_fisico,
                     descripcion_manual=d.descripcion_manual,
