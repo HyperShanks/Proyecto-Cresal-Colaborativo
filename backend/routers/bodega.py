@@ -61,15 +61,18 @@ def obtener_resumen_alertas(
     """
     target_sucursal = sucursal_id if sucursal_id is not None else (usuario_logeado.id_sucursal or 1)
 
-    # 1. Preparaciones y traslados pendientes (estado_preparacion != 'Listo')
+    # 1. Preparaciones y traslados pendientes (no listas o pagadas pendientes de barrera)
     conteo_preparacion = (
         db.query(Detalle_Orden)
         .join(Orden_Venta, Detalle_Orden.id_orden == Orden_Venta.id_orden)
         .join(Activo_Inventariado, Detalle_Orden.id_activo == Activo_Inventariado.id_activo)
         .filter(
-            Detalle_Orden.estado_preparacion != "Listo",
             Activo_Inventariado.id_estado.in_([2, 3]),
             Activo_Inventariado.id_sucursal_actual == target_sucursal,
+            or_(
+                Detalle_Orden.estado_preparacion != "Listo",
+                Orden_Venta.estado_orden == "Pagada",
+            ),
             Orden_Venta.estado_orden.in_(["Reservada", "Pagada"]),
         )
         .count()
@@ -151,9 +154,12 @@ def obtener_tareas_pendientes(
         .join(Activo_Inventariado, Detalle_Orden.id_activo == Activo_Inventariado.id_activo)
         .join(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
         .filter(
-            Detalle_Orden.estado_preparacion != "Listo",
             Activo_Inventariado.id_estado.in_([2, 3]),  # 2: Reservado, 3: Vendido
             Activo_Inventariado.id_sucursal_actual == sucursal_id,
+            or_(
+                Detalle_Orden.estado_preparacion != "Listo",
+                Orden_Venta.estado_orden == "Pagada",
+            ),
             Orden_Venta.estado_orden.in_(["Reservada", "Pagada"]),
         )
         .all()

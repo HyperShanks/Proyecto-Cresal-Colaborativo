@@ -1037,9 +1037,10 @@ class _TaskCardState extends State<TaskCard> {
       );
     }
 
-    // 2. Estado Pagada / Salida (LIBERADA): No ocultar botón LISTO (SPEC-HU-TAREA-19)
+    // 2. Estado Pagada / Salida (LIBERADA): No ocultar botón LISTO si aún no está listo (SPEC-HU-TAREA-19 / CONTINUIDAD)
     if (tarea.tipoAlerta == 'LIBERADA') {
-      if (tarea.idDetalle != null) {
+      final estaListo = (tarea.estadoPreparacion ?? '').toLowerCase() == 'listo';
+      if (tarea.idDetalle != null && !estaListo) {
         return Row(
           children: [
             Expanded(
@@ -1076,14 +1077,7 @@ class _TaskCardState extends State<TaskCard> {
                 height: 45,
                 child: ElevatedButton.icon(
                   key: Key('btn_barrera_${tarea.idTarea}'),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const AuditoriaSalidaScreen(),
-                      ),
-                    );
-                  },
+                  onPressed: () => _abrirBarreraSalida(),
                   icon: const Icon(Icons.qr_code_scanner, color: Colors.white, size: 20),
                   label: Text(
                     'BARRERA',

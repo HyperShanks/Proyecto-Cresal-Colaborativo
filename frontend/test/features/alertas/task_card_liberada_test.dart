@@ -83,6 +83,35 @@ void main() {
       expect(find.text('BARRERA'), findsOneWidget);
     });
 
+    testWidgets('Tarea LIBERADA con estadoPreparacion Listo renderiza únicamente el botón BARRERA', (tester) async {
+      const tareaListo = TareaAlerta(
+        idTarea: 'ORD-55667788',
+        tipoAlerta: 'LIBERADA',
+        accionRequerida: 'ESCANEAR EN BARRERA',
+        ordenRef: 'ORDEN #ORD-5555',
+        tituloPieza: 'Motor - Nissan Kicks',
+        categoria: 'Motor',
+        ubicacion: 'P-01 - PAL-05',
+        idDetalle: 'det-listo-001',
+        estadoPreparacion: 'Listo',
+      );
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: TaskCard(tarea: tareaListo),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('btn_listo_ORD-55667788')), findsNothing);
+      expect(find.byKey(const Key('btn_barrera_ORD-55667788')), findsOneWidget);
+      expect(find.text('BARRERA'), findsOneWidget);
+    });
+
     testWidgets('Tarea PREPARACION renderiza botón LISTO y DETALLES, ocultando BARRERA', (tester) async {
       const tareaPreparacion = TareaAlerta(
         idTarea: 'ORD-11223344',

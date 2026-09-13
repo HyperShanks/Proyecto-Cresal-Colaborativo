@@ -283,6 +283,22 @@ def test_retencion_tareas_en_estado_2_y_estado_3(client, db_session, auth_header
     assert tarea_retenida["estado_bloqueo"] is None
     assert tarea_retenida["accion_requerida"] == "ESCANEAR EN BARRERA"
 
+    # 6. Bodeguero marca 'Listo' la preparación física en la orden ya Pagada
+    res_listo = client.patch(
+        f"/api/v1/bodega/tareas/{tarea_retenida['id_detalle']}/completar-preentrega",
+        headers=auth_headers_bodega_vina
+    )
+    assert res_listo.status_code == 200
+
+    # 7. La tarea DEBE SEGUIR VISIBLE como LIBERADA porque aún no se entrega en barrera
+    res_bodega_3 = client.get("/api/v1/bodega/tareas-pendientes?sucursal_id=1", headers=auth_headers_bodega_vina)
+    assert res_bodega_3.status_code == 200
+    tarea_post_listo = next((t for t in res_bodega_3.json() if t.get("id_activo") == str(activo.id_activo)), None)
+    assert tarea_post_listo is not None, "La orden Pagada DEBE permanecer como LIBERADA incluso después de marcar 'Listo'"
+    assert tarea_post_listo["tipo_alerta"] == "LIBERADA"
+    assert tarea_post_listo["estado_preparacion"] == "Listo"
+    assert tarea_post_listo["accion_requerida"] == "ESCANEAR EN BARRERA"
+
 
 def test_accion_listo_completar_preentrega_exitoso(client, db_session, auth_headers_vendedor, auth_headers_bodega_vina):
     """
