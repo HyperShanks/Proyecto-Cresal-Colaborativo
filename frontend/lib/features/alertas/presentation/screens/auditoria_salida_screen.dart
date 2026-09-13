@@ -136,11 +136,15 @@ class _AuditoriaSalidaScreenState extends State<AuditoriaSalidaScreen>
 
     final itemsEsperados = _ordenVerificada?.itemsRequeridos ?? [];
     if (itemsEsperados.isNotEmpty) {
-      final coincide = itemsEsperados.any(
-        (item) =>
-            item.skuQrFisico != null && item.skuQrFisico!.toUpperCase() == sku,
-      );
-      if (!coincide) {
+      ItemSalidaInfoModel? itemCoincidente;
+      for (final it in itemsEsperados) {
+        if (it.skuQrFisico != null && it.skuQrFisico!.toUpperCase() == sku) {
+          itemCoincidente = it;
+          break;
+        }
+      }
+
+      if (itemCoincidente == null) {
         HapticFeedback.heavyImpact();
         final primer = itemsEsperados.first;
         final detalleEsperado = primer.skuQrFisico != null
@@ -151,6 +155,17 @@ class _AuditoriaSalidaScreenState extends State<AuditoriaSalidaScreen>
           mensaje:
               'Cuidado: La pieza escaneada ($sku) no pertenece a la orden ${_ordenVerificada?.folio ?? ""}.$detalleEsperado',
           codigoError: 'PIEZA_MISMATCH',
+        );
+        return;
+      }
+
+      if (!itemCoincidente.qrImpreso) {
+        HapticFeedback.heavyImpact();
+        CustomErrorSnackbar.mostrar(
+          context,
+          mensaje:
+              'La pieza ($sku) no registra impresión de etiqueta QR. Debe imprimir la etiqueta antes de autorizar la salida.',
+          codigoError: 'QR_NO_IMPRESO',
         );
         return;
       }
@@ -320,49 +335,175 @@ class _AuditoriaSalidaScreenState extends State<AuditoriaSalidaScreen>
     if (tieneToken &&
         !tienePieza &&
         (_ordenVerificada?.itemsRequeridos.isNotEmpty ?? false)) {
-      final item = _ordenVerificada!.itemsRequeridos.first;
       customBodyPaso2 = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Pieza requerida: ${_formatearNombreRepuesto(item.titulo)}',
-            style: AppTypography.small.copyWith(
-              color: AppPalette.textPrimary,
-              fontWeight: FontWeight.bold,
-              fontSize: 12.5,
-            ),
-          ),
-          const SizedBox(height: 6.0),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+        children: _ordenVerificada!.itemsRequeridos.map((item) {
+          final sinImprimir = !item.qrImpreso;
+          return Container(
+            margin: const EdgeInsets.only(bottom: 8.0),
+            padding: const EdgeInsets.all(10.0),
             decoration: BoxDecoration(
-              color: AppPalette.primary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(6.0),
+              color: sinImprimir
+                  ? AppPalette.error.withValues(alpha: 0.08)
+                  : AppPalette.background,
+              borderRadius: BorderRadius.circular(8.0),
               border: Border.all(
-                color: AppPalette.primary.withValues(alpha: 0.35),
+                color: sinImprimir
+                    ? AppPalette.error.withValues(alpha: 0.5)
+                    : Colors.white12,
               ),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(
-                  Icons.location_on,
-                  size: 14.0,
-                  color: AppPalette.primary,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _formatearNombreRepuesto(item.titulo),
+                            style: AppTypography.small.copyWith(
+                              color: AppPalette.textPrimary,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12.5,
+                            ),
+                          ),
+                          if (item.skuQrFisico != null) ...[
+                            const SizedBox(height: 2.0),
+                            Text(
+                              'SKU: ${item.skuQrFisico}',
+                              style: AppTypography.small.copyWith(
+                                color: const Color(0xFF00A3FF),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 11.0,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    if (sinImprimir)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6.0,
+                          vertical: 2.0,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppPalette.error.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(4.0),
+                          border: Border.all(
+                            color: AppPalette.error,
+                            width: 0.8,
+                          ),
+                        ),
+                        child: Text(
+                          'SIN QR',
+                          style: AppTypography.small.copyWith(
+                            color: AppPalette.error,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 10.0,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
-                const SizedBox(width: 4.0),
-                Text(
-                  _formatearUbicacion(item.ubicacion),
-                  style: AppTypography.small.copyWith(
-                    color: AppPalette.primary,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 11.5,
+                const SizedBox(height: 6.0),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8.0,
+                        vertical: 3.0,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppPalette.primary.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(4.0),
+                        border: Border.all(
+                          color: AppPalette.primary.withValues(alpha: 0.35),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.location_on,
+                            size: 13.0,
+                            color: AppPalette.primary,
+                          ),
+                          const SizedBox(width: 4.0),
+                          Text(
+                            _formatearUbicacion(item.ubicacion),
+                            style: AppTypography.small.copyWith(
+                              color: AppPalette.primary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 11.0,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                if (sinImprimir && item.etiquetaData != null) ...[
+                  const SizedBox(height: 10.0),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 38.0,
+                    child: ElevatedButton.icon(
+                      key: Key('btn_imprimir_salida_${item.idDetalle}'),
+                      onPressed: () async {
+                        final messenger = ScaffoldMessenger.of(context);
+                        final resultado = await Navigator.pushNamed(
+                          context,
+                          '/etiqueta-preview',
+                          arguments: item.etiquetaData,
+                        );
+                        if (!mounted) return;
+                        if (resultado == true) {
+                          setState(() {
+                            item.qrImpreso = true;
+                          });
+                          messenger.showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                '✅ Etiqueta impresa y registrada. Ahora proceda a escanear el código QR físico.',
+                              ),
+                              backgroundColor: AppPalette.success,
+                              duration: Duration(seconds: 3),
+                            ),
+                          );
+                        }
+                      },
+                      icon: const Icon(
+                        Icons.print,
+                        size: 16.0,
+                        color: Colors.white,
+                      ),
+                      label: Text(
+                        'IMPRIMIR ETIQUETA QR AHORA',
+                        style: AppTypography.button.copyWith(
+                          fontSize: 11.5,
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppPalette.error,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6.0),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
-          ),
-        ],
+          );
+        }).toList(),
       );
     }
 

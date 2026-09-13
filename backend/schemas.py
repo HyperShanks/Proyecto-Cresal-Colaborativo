@@ -914,6 +914,8 @@ class ItemSalidaInfo(BaseModel):
     notas_preparacion: Optional[str] = None
     cantidad: int
     precio_final: int
+    qr_impreso: bool = True
+    etiqueta_data: Optional[dict] = None
 
 
 class VerificarQrSalidaRequest(BaseModel):
@@ -990,6 +992,7 @@ class TareaAlertaResponse(BaseModel):
     ubicacion_pasillo: Optional[str] = None
     ubicacion_pallet: Optional[str] = None
     ubicacion_galpon: Optional[str] = None
+    qr_impreso: Optional[bool] = None
 
 
 class CompletarPreentregaResponse(BaseModel):

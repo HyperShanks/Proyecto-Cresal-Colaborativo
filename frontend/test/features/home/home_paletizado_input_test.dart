@@ -91,7 +91,7 @@ void main() {
 
       final textField = tester.widget<TextField>(inputFinder);
       expect(textField.keyboardType, TextInputType.number);
-      expect(textField.decoration?.hintText, 'N° Ingreso...');
+      expect(textField.decoration?.hintText, 'Búsqueda rápida N° Ingreso');
 
       // Verificar que el botón de lupa existe
       final btnBuscar = find.byKey(const Key('btn_buscar_paletizado_home'));

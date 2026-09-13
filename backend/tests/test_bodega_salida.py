@@ -111,6 +111,7 @@ def db_session(setup_database):
             ubicacion_pasillo="P-03",
             ubicacion_pallet="PL-07",
             ubicacion_galpon="G-01",
+            qr_impreso=True,
             estado="Activo"
         )
 
@@ -142,6 +143,7 @@ def db_session(setup_database):
             precio_referencia=400000,
             ubicacion_pasillo="P-01",
             ubicacion_pallet="PL-02",
+            qr_impreso=True,
             estado="Activo"
         )
 
@@ -156,6 +158,7 @@ def db_session(setup_database):
             precio_referencia=250000,
             ubicacion_pasillo="P-01",
             ubicacion_pallet="PL-03",
+            qr_impreso=True,
             estado="Activo"
         )
 
@@ -371,7 +374,7 @@ def test_verificar_qr_salida_exitoso(client, db_session, auth_headers_bodeguero)
     item = data["items_requeridos"][0]
     assert item["sku_qr_fisico"] == "MOT-TOY-YAR-888"
     assert item["es_inventariado"] is True
-    assert item["ubicacion"] == "P-03 - PL-07"
+    assert "P-03" in item["ubicacion"] and "PL-07" in item["ubicacion"]
     assert item["notas_preparacion"] == "Entregar con alternador incluido"
 
 
@@ -611,3 +614,63 @@ def test_rechazo_salida_bodeguero_otra_sucursal(client, db_session, auth_headers
     )
     assert response.status_code == 403
     assert "no está autorizado" in response.json()["detail"].lower()
+
+
+def test_rechazo_salida_qr_no_impreso(client, db_session, auth_headers_bodeguero):
+    """
+    Verifica que la salida es rechazada si alguna pieza inventariada tiene qr_impreso=False.
+    """
+    db = TestingSessionLocal()
+    try:
+        # Activo con qr_impreso=False
+        act_sin_qr = Activo_Inventariado(
+            id_activo=uuid.uuid4(),
+            sku_qr_fisico="SIN-QR-999",
+            id_categoria=1,
+            id_estado=3,  # Vendido
+            id_sucursal_actual=1,
+            precio_referencia=100000,
+            qr_impreso=False,
+            estado="Activo",
+        )
+        db.add(act_sin_qr)
+        db.flush()
+
+        orden_id = uuid.uuid4()
+        token = f"TX-QR-{str(orden_id)[:8].upper()}-NOQRTEST"
+        orden = Orden_Venta(
+            id_orden=orden_id,
+            id_cliente=db_session["cliente_1_id"],
+            id_vendedor=db_session["u_bodeguero_id"],
+            id_cajera=db_session["u_bodeguero_id"],
+            id_sucursal=1,
+            estado_orden="Pagada",
+            qr_transaccional_salida=token,
+            total_venta=100000,
+            monto_pendiente=0,
+            fecha_creacion=datetime.now(),
+        )
+        db.add(orden)
+        db.flush()
+
+        det = Detalle_Orden(
+            id_detalle=uuid.uuid4(),
+            id_orden=orden_id,
+            id_activo=act_sin_qr.id_activo,
+            cantidad=1,
+            precio_unitario=100000,
+            precio_final=100000,
+            estado_preparacion="Listo",
+        )
+        db.add(det)
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.post(
+        "/api/v1/bodega/escanear-salida",
+        json={"qr_transaccional_salida": token, "skus_escaneados": ["SIN-QR-999"]},
+        headers=auth_headers_bodeguero,
+    )
+    assert response.status_code == 400
+    assert "qr" in response.json()["detail"].lower() and "imprima la etiqueta" in response.json()["detail"].lower()

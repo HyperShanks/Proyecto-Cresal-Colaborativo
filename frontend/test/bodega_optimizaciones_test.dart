@@ -160,6 +160,7 @@ void main() {
         accionRequerida: 'ESCANEAR EN BARRERA',
         idDetalle: '33333333-3333-3333-3333-333333333333',
         categoria: 'Motor',
+        estadoPreparacion: 'Listo',
       );
 
       await tester.pumpWidget(

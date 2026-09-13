@@ -681,20 +681,55 @@ class _TaskCardState extends State<TaskCard> {
                 const SizedBox(height: 12),
               ],
 
-              // Botón de Impresión (solo cuando es IMPRESION)
-              if (esImpresion) ...[
+              // ALERTA PREVENTIVA SI FALTA IMPRIMIR QR
+              if (tarea.qrImpreso == false) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppPalette.error.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppPalette.error, width: 1.5),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.print_disabled_rounded, color: AppPalette.error, size: 24),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Esta pieza no registra impresión de código QR. Imprima la etiqueta y adhiérala físicamente antes de completar la entrega o salida.',
+                          style: AppTypography.small.copyWith(
+                            color: AppPalette.error,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+
+              // Botón de Impresión (solo cuando es IMPRESION o cuando falta imprimir QR o tiene etiquetaData)
+              if (esImpresion || tarea.qrImpreso == false || tarea.etiquetaData != null) ...[
                 SizedBox(
                   width: double.infinity,
                   height: 50,
                   child: OutlinedButton.icon(
                     onPressed: () => Navigator.pop(ctx, 'imprimir'),
-                    icon: const Icon(Icons.print, color: AppPalette.textPrimary),
+                    icon: Icon(
+                      Icons.print,
+                      color: tarea.qrImpreso == false ? AppPalette.error : AppPalette.textPrimary,
+                    ),
                     label: Text(
-                      'GENERAR ETIQUETA QR',
-                      style: AppTypography.button.copyWith(color: AppPalette.textPrimary),
+                      tarea.qrImpreso == false ? 'IMPRIMIR ETIQUETA QR (OBLIGATORIA)' : 'GENERAR ETIQUETA QR',
+                      style: AppTypography.button.copyWith(
+                        color: tarea.qrImpreso == false ? AppPalette.error : AppPalette.textPrimary,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: accentColor),
+                      side: BorderSide(color: tarea.qrImpreso == false ? AppPalette.error : accentColor, width: 1.5),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                   ),
@@ -863,7 +898,10 @@ class _TaskCardState extends State<TaskCard> {
             Text(tituloFormateado, style: AppTypography.title),
             if (tarea.skuQrFisico != null && tarea.skuQrFisico!.isNotEmpty) ...[
               const SizedBox(height: 4),
-              Row(
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -888,6 +926,31 @@ class _TaskCardState extends State<TaskCard> {
                       ],
                     ),
                   ),
+                  if (tarea.qrImpreso == false) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppPalette.error.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: AppPalette.error.withValues(alpha: 0.7)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.print_disabled_rounded, size: 12, color: AppPalette.error),
+                          const SizedBox(width: 4),
+                          Text(
+                            'QR NO IMPRESO',
+                            style: AppTypography.small.copyWith(
+                              color: AppPalette.error,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ],
@@ -1039,6 +1102,61 @@ class _TaskCardState extends State<TaskCard> {
 
     // 2. Estado Pagada / Salida (LIBERADA): No ocultar botón LISTO si aún no está listo (SPEC-HU-TAREA-19 / CONTINUIDAD)
     if (tarea.tipoAlerta == 'LIBERADA') {
+      if (tarea.qrImpreso == false && tarea.etiquetaData != null) {
+        return Row(
+          children: [
+            Expanded(
+              flex: 3,
+              child: SizedBox(
+                height: 45,
+                child: ElevatedButton.icon(
+                  key: Key('btn_imprimir_qr_${tarea.idTarea}'),
+                  onPressed: () async {
+                    final resultado = await Navigator.pushNamed(
+                      context,
+                      '/etiqueta-preview',
+                      arguments: tarea.etiquetaData,
+                    );
+                    if (resultado == true && mounted) {
+                      widget.onActualizar?.call();
+                    }
+                  },
+                  icon: const Icon(Icons.print, color: Colors.white, size: 18),
+                  label: Text(
+                    'IMPRIMIR QR',
+                    style: AppTypography.button.copyWith(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppPalette.error,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              flex: 3,
+              child: SizedBox(
+                height: 45,
+                child: ElevatedButton.icon(
+                  key: Key('btn_barrera_${tarea.idTarea}'),
+                  onPressed: () => _abrirBarreraSalida(),
+                  icon: const Icon(Icons.qr_code_scanner, color: Colors.white, size: 18),
+                  label: Text(
+                    'BARRERA',
+                    style: AppTypography.button.copyWith(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppPalette.success,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      }
+
       final estaListo = (tarea.estadoPreparacion ?? '').toLowerCase() == 'listo';
       if (tarea.idDetalle != null && !estaListo) {
         return Row(
@@ -1145,7 +1263,65 @@ class _TaskCardState extends State<TaskCard> {
       );
     }
 
-    // 4. Estado Reservada / Pre-entrega Pendiente (PREPARACION / TRASLADO): Botón LISTO + DETALLES (oculta BARRERA)
+    // 4. Estado Reservada / Pre-entrega Pendiente (PREPARACION / TRASLADO):
+    if (tarea.qrImpreso == false && tarea.etiquetaData != null) {
+      return Row(
+        children: [
+          Expanded(
+            flex: 3,
+            child: SizedBox(
+              height: 45,
+              child: ElevatedButton.icon(
+                key: Key('btn_imprimir_qr_${tarea.idTarea}'),
+                onPressed: () async {
+                  final resultado = await Navigator.pushNamed(
+                    context,
+                    '/etiqueta-preview',
+                    arguments: tarea.etiquetaData,
+                  );
+                  if (resultado == true && mounted) {
+                    widget.onActualizar?.call();
+                  }
+                },
+                icon: const Icon(Icons.print, color: Colors.white, size: 18),
+                label: Text(
+                  'IMPRIMIR QR',
+                  style: AppTypography.button.copyWith(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppPalette.error,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            flex: 2,
+            child: SizedBox(
+              height: 45,
+              child: OutlinedButton.icon(
+                key: Key('btn_detalles_${tarea.idTarea}'),
+                onPressed: () {
+                  _mostrarDetalleModal(accentColor, AppPalette.surface);
+                },
+                icon: const Icon(Icons.visibility_outlined, color: AppPalette.textPrimary, size: 18),
+                label: Text(
+                  'DETALLES',
+                  style: AppTypography.button.copyWith(fontSize: 12),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: accentColor),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
     return Row(
       children: [
         if (tarea.idDetalle != null) ...[

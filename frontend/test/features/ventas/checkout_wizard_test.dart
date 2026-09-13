@@ -280,5 +280,38 @@ void main() {
       expect(find.text('3. Modalidad de Entrega y Despacho'), findsOneWidget);
       expect(find.text('Traslado Sucursal'), findsOneWidget);
     });
+
+    testWidgets('CheckoutWizardScreen diálogo ítem manual no precarga el número 1 y muestra placeholder Cantidad', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: CheckoutWizardScreen(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Abrir diálogo Ítem Manual
+      await tester.tap(find.text('+ Ítem Manual'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Añadir Ítem Manual'), findsOneWidget);
+      expect(find.text('Descripción del ítem'), findsOneWidget);
+      expect(find.text('Cantidad'), findsOneWidget);
+      expect(find.text('Precio Unitario (\$)'), findsOneWidget);
+
+      // Verificar que el campo de cantidad no tiene '1' precargado como texto
+      final textFields = tester.widgetList<TextField>(find.byType(TextField)).toList();
+      expect(textFields.length, equals(3));
+      expect(textFields[1].controller?.text, isEmpty);
+
+      // Ingresar ítem manual sin escribir cantidad (toma 1 por defecto)
+      await tester.enterText(find.byWidget(textFields[0]), 'Aceite Motor 1L');
+      await tester.enterText(find.byWidget(textFields[2]), '15000');
+      await tester.tap(find.text('Añadir'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Aceite Motor 1L'), findsOneWidget);
+      expect(find.textContaining('Cantidad: 1'), findsOneWidget);
+    });
   });
 }
+

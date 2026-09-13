@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 from typing import List, Optional, Dict
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session, aliased
-from sqlalchemy import or_, and_, func, cast, String
+from sqlalchemy import or_, and_, func, cast, String, case
 
 from database import get_db
 from models import (
@@ -732,7 +732,13 @@ def obtener_mis_ventas(
     if estado and estado.strip():
         query = query.filter(Orden_Venta.estado_orden == estado.strip())
 
-    ordenes = query.order_by(Orden_Venta.fecha_creacion.desc()).all()
+    ordenes = query.order_by(
+        case(
+            (func.lower(Orden_Venta.estado_orden) == "completada", 1),
+            else_=0,
+        ),
+        Orden_Venta.fecha_creacion.desc(),
+    ).all()
 
     resultado = []
     for orden in ordenes:
@@ -1043,12 +1049,12 @@ def listar_entregas_envios(
         # Filtro Específico: Cliente (Nombre, RUT, Teléfono)
         if busqueda_cliente and busqueda_cliente.strip():
             bc = busqueda_cliente.strip().upper()
-            rut_c = (cliente_resumen.rut_cliente if cliente_resumen else "").upper()
-            nom_c = f"{cliente_resumen.nombres if cliente_resumen else ''} {cliente_resumen.apellidos if cliente_resumen else ''}".upper()
-            tel_c = (cliente_resumen.telefono if cliente_resumen else "").upper()
-            rec_rut = (despacho_resumen.receptor_rut if despacho_resumen else "").upper()
-            rec_nom = (despacho_resumen.receptor_nombres if despacho_resumen else "").upper()
-            rec_tel = (despacho_resumen.receptor_telefono if despacho_resumen else "").upper()
+            rut_c = (cliente_resumen.rut_cliente if cliente_resumen and cliente_resumen.rut_cliente else "").upper()
+            nom_c = f"{cliente_resumen.nombres or ''} {cliente_resumen.apellidos or ''}".strip().upper() if cliente_resumen else ""
+            tel_c = (cliente_resumen.telefono if cliente_resumen and cliente_resumen.telefono else "").upper()
+            rec_rut = (despacho_resumen.receptor_rut if despacho_resumen and despacho_resumen.receptor_rut else "").upper()
+            rec_nom = (despacho_resumen.receptor_nombres if despacho_resumen and despacho_resumen.receptor_nombres else "").upper()
+            rec_tel = (despacho_resumen.receptor_telefono if despacho_resumen and despacho_resumen.receptor_telefono else "").upper()
 
             if not (bc in rut_c or bc in nom_c or bc in tel_c or bc in rec_rut or bc in rec_nom or bc in rec_tel):
                 continue
@@ -1137,6 +1143,20 @@ def confirmar_entrega_tienda(
             detail=f"La orden ya fue entregada anteriormente (Estado: {orden.estado_orden})."
         )
 
+    detalles = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == orden.id_orden).all()
+    activos_sin_imprimir = []
+    for d in detalles:
+        if d.id_activo:
+            act = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == d.id_activo).first()
+            if act and not act.qr_impreso:
+                activos_sin_imprimir.append(act.sku_qr_fisico or str(act.id_activo)[:8])
+
+    if activos_sin_imprimir:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No se puede confirmar la entrega. Las siguientes piezas no tienen su código QR impreso: {', '.join(activos_sin_imprimir)}. Imprima la etiqueta antes de entregar."
+        )
+
     try:
         # Actualizar Orden a 'Completada'
         orden.estado_orden = "Completada"
@@ -1210,6 +1230,20 @@ def marcar_despacho_enviado(
     orden = db.query(Orden_Venta).filter(Orden_Venta.id_orden == despacho.id_orden).first()
     if not orden:
         raise HTTPException(status_code=404, detail="Orden asociada al despacho no encontrada.")
+
+    detalles = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == orden.id_orden).all()
+    activos_sin_imprimir = []
+    for d in detalles:
+        if d.id_activo:
+            act = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == d.id_activo).first()
+            if act and not act.qr_impreso:
+                activos_sin_imprimir.append(act.sku_qr_fisico or str(act.id_activo)[:8])
+
+    if activos_sin_imprimir:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No se puede despachar el envío. Las siguientes piezas no tienen su código QR impreso: {', '.join(activos_sin_imprimir)}. Imprima la etiqueta antes de despachar."
+        )
 
     try:
         despacho.estado_despacho = "Enviado"

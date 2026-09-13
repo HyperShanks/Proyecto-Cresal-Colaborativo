@@ -24,6 +24,7 @@ class TareaAlerta {
   final String? ubicacionPasillo;
   final String? ubicacionPallet;
   final String? ubicacionGalpon;
+  final bool? qrImpreso;
 
   const TareaAlerta({
     required this.idTarea,
@@ -49,6 +50,7 @@ class TareaAlerta {
     this.ubicacionPasillo,
     this.ubicacionPallet,
     this.ubicacionGalpon,
+    this.qrImpreso,
   });
 
   factory TareaAlerta.fromJson(Map<String, dynamic> json) {
@@ -79,6 +81,7 @@ class TareaAlerta {
       ubicacionPasillo: json['ubicacion_pasillo']?.toString(),
       ubicacionPallet: json['ubicacion_pallet']?.toString(),
       ubicacionGalpon: json['ubicacion_galpon']?.toString(),
+      qrImpreso: json['qr_impreso'] as bool?,
     );
   }
 }

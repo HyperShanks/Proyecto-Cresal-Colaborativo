@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../../../core/utils/rut_formatter.dart';
@@ -1443,7 +1444,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
 
   void _abrirDialogoItemManual() {
     final descCtrl = TextEditingController();
-    final cantCtrl = TextEditingController(text: '1');
+    final cantCtrl = TextEditingController();
     final precioCtrl = TextEditingController();
 
     showDialog(
@@ -1456,9 +1457,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
           children: [
             TextField(controller: descCtrl, style: AppTypography.body, decoration: _inputDeco('Descripción del ítem', Icons.edit)),
             const SizedBox(height: 10),
-            TextField(controller: cantCtrl, keyboardType: TextInputType.number, style: AppTypography.body, decoration: _inputDeco('Cantidad', Icons.numbers)),
+            TextField(controller: cantCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], style: AppTypography.body, decoration: _inputDeco('Cantidad', Icons.numbers)),
             const SizedBox(height: 10),
-            TextField(controller: precioCtrl, keyboardType: TextInputType.number, style: AppTypography.body, decoration: _inputDeco('Precio Unitario (\$)', Icons.attach_money)),
+            TextField(controller: precioCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], style: AppTypography.body, decoration: _inputDeco('Precio Unitario (\$)', Icons.attach_money)),
           ],
         ),
         actions: [
@@ -1467,8 +1468,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
             style: ElevatedButton.styleFrom(backgroundColor: AppPalette.secondary, foregroundColor: AppPalette.background),
             onPressed: () {
               final desc = descCtrl.text.trim();
-              final cant = int.tryParse(cantCtrl.text) ?? 1;
-              final precio = int.tryParse(precioCtrl.text) ?? 0;
+              final cantParsed = int.tryParse(cantCtrl.text.trim());
+              final cant = (cantParsed != null && cantParsed > 0) ? cantParsed : 1;
+              final precio = int.tryParse(precioCtrl.text.trim()) ?? 0;
               if (desc.isNotEmpty && precio > 0) {
                 _controller.addItemManual(ItemManualModel(descripcion: desc, cantidad: cant, precioUnitario: precio, precioFinal: precio * cant));
                 CartController.instance.agregarVentaLibre(descripcion: desc, monto: precio, cantidad: cant);

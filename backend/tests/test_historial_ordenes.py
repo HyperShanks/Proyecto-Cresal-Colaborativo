@@ -394,3 +394,58 @@ def test_obtener_mis_ventas_orden_nocturna_chile(client, db_session, auth_header
         db.close()
 
 
+# ── TEST 10: Ordenamiento de Órdenes (Completadas al Final) ─────────────────
+def test_obtener_mis_ventas_ordenamiento_completadas_al_final(client, db_session, auth_headers_vendedor1):
+    db = TestingSessionLocal()
+    try:
+        ahora_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+
+        # Orden A: Reservada (hace 10 minutos)
+        orden_reservada = Orden_Venta(
+            id_orden=uuid.uuid4(),
+            id_cliente=db_session["orden_1"].id_cliente,
+            id_vendedor=db_session["vendedor_1"].id_usuario,
+            id_sucursal=1,
+            estado_orden="Reservada",
+            qr_transaccional_salida="ORD-ORD-RES",
+            total_venta=100000,
+            monto_pendiente=100000,
+            fecha_creacion=ahora_utc - timedelta(minutes=10),
+        )
+        # Orden B: Completada (creada recién hace 1 minuto - más nueva que la reservada)
+        orden_completada = Orden_Venta(
+            id_orden=uuid.uuid4(),
+            id_cliente=db_session["orden_1"].id_cliente,
+            id_vendedor=db_session["vendedor_1"].id_usuario,
+            id_sucursal=1,
+            estado_orden="Completada",
+            qr_transaccional_salida="ORD-ORD-COMP",
+            total_venta=200000,
+            monto_pendiente=0,
+            fecha_creacion=ahora_utc - timedelta(minutes=1),
+        )
+        db.add(orden_reservada)
+        db.add(orden_completada)
+        db.commit()
+
+        response = client.get("/api/v1/ordenes/mis-ventas", headers=auth_headers_vendedor1)
+        assert response.status_code == 200
+        data = response.json()
+
+        # En la lista, ninguna orden con estado 'Completada' debe aparecer antes de una orden activa ('Reservada' o 'Pagada')
+        encontro_completada = False
+        for item in data:
+            if item["estado_orden"].lower() == "completada":
+                encontro_completada = True
+            elif encontro_completada:
+                # Si ya encontramos una completada, no debe haber órdenes no-completadas después
+                assert False, f"Se encontró orden con estado '{item['estado_orden']}' después de una orden 'Completada'"
+
+        # Verificar que la orden completada esté en el resultado y al final
+        estados = [item["estado_orden"] for item in data]
+        assert "Completada" in estados
+        assert estados[-1] == "Completada"
+    finally:
+        db.close()
+
+
