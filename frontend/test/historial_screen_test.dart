@@ -429,9 +429,96 @@ void main() {
       await tester.pumpAndSettle();
       expect(aplicado, isTrue);
     });
+
+    testWidgets('Botón Limpiar está siempre habilitado y dispara onLimpiar', (tester) async {
+      bool limpiado = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            endDrawer: HistorialFiltrosDrawer(
+              verTodas: false,
+              filtroEstado: null,
+              onPeriodoChanged: (_) {},
+              onEstadoChanged: (_) {},
+              onAplicar: () {},
+              onLimpiar: () => limpiado = true,
+            ),
+            body: Builder(
+              builder: (ctx) => Center(
+                child: ElevatedButton(
+                  onPressed: () => Scaffold.of(ctx).openEndDrawer(),
+                  child: const Text('Abrir Filtros'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Abrir Filtros'));
+      await tester.pumpAndSettle();
+
+      final botonLimpiar = find.widgetWithText(OutlinedButton, 'Limpiar');
+      expect(botonLimpiar, findsOneWidget);
+
+      final outlinedBtn = tester.widget<OutlinedButton>(botonLimpiar);
+      expect(outlinedBtn.onPressed, isNotNull);
+
+      await tester.tap(botonLimpiar);
+      await tester.pumpAndSettle();
+      expect(limpiado, isTrue);
+    });
   });
 
   group('HistorialScreen Widget Tests', () {
+    testWidgets('Ordena órdenes colocando Completadas al final a través de inicialización y carga', (tester) async {
+      final ordenCompletada = OrdenHistorialModel(
+        idOrden: 'comp-001',
+        estadoOrden: 'Completada',
+        totalVenta: 100000,
+        montoPendiente: 0,
+        qrTransaccionalSalida: 'ORD-COMP-001',
+        fechaCreacion: '2026-08-16T15:00:00',
+        totalItems: 1,
+        cliente: const ClienteOrdenResumenModel(
+          rutCliente: '1-9',
+          nombres: 'Cliente',
+          apellidos: 'Completado',
+        ),
+        detalles: [],
+      );
+      final ordenReservada = OrdenHistorialModel(
+        idOrden: 'res-002',
+        estadoOrden: 'Reservada',
+        totalVenta: 150000,
+        montoPendiente: 150000,
+        qrTransaccionalSalida: 'ORD-RES-002',
+        fechaCreacion: '2026-08-16T10:00:00',
+        totalItems: 1,
+        cliente: const ClienteOrdenResumenModel(
+          rutCliente: '2-7',
+          nombres: 'Cliente',
+          apellidos: 'Reservado',
+        ),
+        detalles: [],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: HistorialScreen(
+            initialOrdenes: [ordenCompletada, ordenReservada],
+          ),
+        ),
+      );
+
+      expect(find.text('ORD-COMP-001'), findsOneWidget);
+      expect(find.text('ORD-RES-002'), findsOneWidget);
+
+      final topReservada = tester.getTopLeft(find.text('ORD-RES-002')).dy;
+      final topCompletada = tester.getTopLeft(find.text('ORD-COMP-001')).dy;
+      expect(topReservada, lessThan(topCompletada));
+    });
     final orden1 = ordenMock; // Carlos González, 18.765.432-1, Motor - Toyota Yaris 2018, ORD-TEST-001
     final orden2 = OrdenHistorialModel(
       idOrden: '7bb85f64-9999-4562-b3fc-2c963f66bb77',

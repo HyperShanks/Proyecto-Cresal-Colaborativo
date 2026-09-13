@@ -100,13 +100,14 @@ class _ModalBackorderFormState extends State<ModalBackorderForm> {
   Widget build(BuildContext context) {
     return AlertDialog(
       backgroundColor: AppPalette.surface,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16.0),
         side: const BorderSide(color: Colors.white12),
       ),
-      titlePadding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-      actionsPadding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
+      titlePadding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      actionsPadding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
       title: Row(
         children: [
           Container(
@@ -130,8 +131,8 @@ class _ModalBackorderFormState extends State<ModalBackorderForm> {
           ),
         ],
       ),
-      content: SizedBox(
-        width: 520,
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
         child: SingleChildScrollView(
           child: Form(
             key: _formKey,
@@ -165,6 +166,7 @@ class _ModalBackorderFormState extends State<ModalBackorderForm> {
                 Text('Categoría Requerida *', style: AppTypography.small.copyWith(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 4),
                 DropdownButtonFormField<int>(
+                  isExpanded: true,
                   initialValue: _selectedCategoriaId,
                   dropdownColor: AppPalette.surface,
                   style: AppTypography.body,
@@ -172,7 +174,10 @@ class _ModalBackorderFormState extends State<ModalBackorderForm> {
                   items: _categoriasDisponibles.map((cat) {
                     return DropdownMenuItem<int>(
                       value: cat['id'] as int,
-                      child: Text(cat['nombre'] as String),
+                      child: Text(
+                        cat['nombre'] as String,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     );
                   }).toList(),
                   onChanged: (val) {
@@ -271,41 +276,53 @@ class _ModalBackorderFormState extends State<ModalBackorderForm> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Combustible', style: AppTypography.small.copyWith(fontWeight: FontWeight.bold)),
+                          Text(
+                            'Combustible',
+                            style: AppTypography.small.copyWith(fontWeight: FontWeight.bold),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                           const SizedBox(height: 4),
                           DropdownButtonFormField<String>(
+                            isExpanded: true,
                             initialValue: _combustible,
                             dropdownColor: AppPalette.surface,
                             style: AppTypography.body,
                             decoration: _inputDecoration(''),
                             items: const [
-                              DropdownMenuItem(value: 'Bencina', child: Text('Bencina')),
-                              DropdownMenuItem(value: 'Diésel', child: Text('Diésel')),
-                              DropdownMenuItem(value: 'Híbrido', child: Text('Híbrido')),
-                              DropdownMenuItem(value: 'Eléctrico', child: Text('Eléctrico')),
+                              DropdownMenuItem(value: 'Bencina', child: Text('Bencina', overflow: TextOverflow.ellipsis)),
+                              DropdownMenuItem(value: 'Diésel', child: Text('Diésel', overflow: TextOverflow.ellipsis)),
+                              DropdownMenuItem(value: 'Híbrido', child: Text('Híbrido', overflow: TextOverflow.ellipsis)),
+                              DropdownMenuItem(value: 'Eléctrico', child: Text('Eléctrico', overflow: TextOverflow.ellipsis)),
                             ],
                             onChanged: (val) => setState(() => _combustible = val ?? 'Bencina'),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Transmisión', style: AppTypography.small.copyWith(fontWeight: FontWeight.bold)),
+                          Text(
+                            'Transmisión',
+                            style: AppTypography.small.copyWith(fontWeight: FontWeight.bold),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                           const SizedBox(height: 4),
                           DropdownButtonFormField<String>(
+                            isExpanded: true,
                             initialValue: _transmision,
                             dropdownColor: AppPalette.surface,
                             style: AppTypography.body,
                             decoration: _inputDecoration(''),
                             items: const [
-                              DropdownMenuItem(value: 'Manual', child: Text('Manual')),
-                              DropdownMenuItem(value: 'Automática', child: Text('Automática')),
-                              DropdownMenuItem(value: 'CVT', child: Text('CVT')),
-                              DropdownMenuItem(value: 'Tiptronic', child: Text('Tiptronic')),
+                              DropdownMenuItem(value: 'Manual', child: Text('Manual', overflow: TextOverflow.ellipsis)),
+                              DropdownMenuItem(value: 'Automática', child: Text('Automática', overflow: TextOverflow.ellipsis)),
+                              DropdownMenuItem(value: 'CVT', child: Text('CVT', overflow: TextOverflow.ellipsis)),
+                              DropdownMenuItem(value: 'Tiptronic', child: Text('Tiptronic', overflow: TextOverflow.ellipsis)),
                             ],
                             onChanged: (val) => setState(() => _transmision = val ?? 'Manual'),
                           ),
@@ -318,12 +335,21 @@ class _ModalBackorderFormState extends State<ModalBackorderForm> {
 
                 // Precios y Abonos
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Precio Acordado (\$) *', style: AppTypography.small.copyWith(fontWeight: FontWeight.bold, color: AppPalette.secondary)),
+                          Text(
+                            'Precio Acordado (\$) *',
+                            style: AppTypography.small.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: AppPalette.secondary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                           const SizedBox(height: 4),
                           TextFormField(
                             controller: _precioController,
@@ -341,19 +367,27 @@ class _ModalBackorderFormState extends State<ModalBackorderForm> {
                         ],
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Monto a Abonar (\$) *', style: AppTypography.small.copyWith(fontWeight: FontWeight.bold, color: AppPalette.success)),
+                          Text(
+                            'Monto a Abonar (\$) *',
+                            style: AppTypography.small.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: AppPalette.success,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                           const SizedBox(height: 4),
                           TextFormField(
                             controller: _abonoController,
                             keyboardType: TextInputType.number,
                             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                             style: AppTypography.body.copyWith(fontWeight: FontWeight.bold),
-                            decoration: _inputDecoration('Ej: 100000 (0 si no abona hoy)'),
+                            decoration: _inputDecoration('Ej: 100000'),
                             validator: (val) {
                               if (val == null || val.trim().isEmpty) return null;
                               final n = int.tryParse(val.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
@@ -368,7 +402,7 @@ class _ModalBackorderFormState extends State<ModalBackorderForm> {
                 ),
                 const SizedBox(height: 12),
 
-                // Notas técnicas
+                // Notas Técnicas / Especificaciones:
                 Text('Notas Técnicas / Especificaciones:', style: AppTypography.small.copyWith(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 4),
                 TextFormField(
@@ -408,7 +442,7 @@ class _ModalBackorderFormState extends State<ModalBackorderForm> {
       hintStyle: AppTypography.small.copyWith(color: AppPalette.textSecondary),
       filled: true,
       fillColor: AppPalette.background,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white24)),
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppPalette.primary, width: 1.5)),
     );

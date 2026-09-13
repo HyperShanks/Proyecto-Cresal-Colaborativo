@@ -299,6 +299,7 @@ def test_confirmar_entrega_tienda_y_marcar_despacho_enviado(client, auth_headers
             estado="Activo",
             ubicacion_pasillo="A",
             ubicacion_pallet="1",
+            qr_impreso=True,
             fecha_creacion=datetime.now(),
         )
         db.add(activo_ret)
@@ -482,4 +483,79 @@ def test_listar_vendedores_y_filtros_cliente_vendedor_privacidad(client, auth_he
         assert all(item["monto_pendiente"] == 0 for item in res_pagados.json())
     finally:
         db.close()
+
+
+def test_rechazo_entrega_qr_no_impreso(client, auth_headers):
+    """
+    Verifica que confirmar entrega en tienda falla con 400 si el activo físico no tiene el QR impreso.
+    """
+    db = TestingSessionLocal()
+    try:
+        user = db.query(models.Usuario).first()
+        veh = models.Vehiculo_Origen(
+            id_vehiculo=uuid.uuid4(),
+            numero_ingreso=f"ING-NOQR-{uuid.uuid4().hex[:4].upper()}",
+            patente=f"NQ{uuid.uuid4().hex[:4].upper()}",
+            marca="Toyota",
+            modelo="Corolla",
+            anio=2021,
+        )
+        db.add(veh)
+        db.flush()
+
+        activo_sin_qr = models.Activo_Inventariado(
+            id_activo=uuid.uuid4(),
+            sku_qr_fisico=f"MOT-NQ-{uuid.uuid4().hex[:4].upper()}",
+            id_categoria=1,
+            id_estado=3,  # Vendido
+            id_sucursal_actual=1,
+            id_vehiculo=veh.id_vehiculo,
+            estado="Activo",
+            qr_impreso=False,
+            fecha_creacion=datetime.now(),
+        )
+        db.add(activo_sin_qr)
+        db.flush()
+
+        cli = models.Cliente(
+            id_cliente=uuid.uuid4(),
+            rut_cliente=f"19.{uuid.uuid4().hex[:3]}.999-1",
+            nombres="Prueba",
+            apellidos="SinQR",
+            consentimiento_legal=True,
+        )
+        db.add(cli)
+        db.flush()
+
+        orden = models.Orden_Venta(
+            id_orden=uuid.uuid4(),
+            id_cliente=cli.id_cliente,
+            id_vendedor=user.id_usuario,
+            id_sucursal=1,
+            estado_orden="Pagada",
+            total_venta=200000,
+            monto_pendiente=0,
+            fecha_creacion=datetime.now(),
+        )
+        db.add(orden)
+        db.flush()
+
+        det = models.Detalle_Orden(
+            id_detalle=uuid.uuid4(),
+            id_orden=orden.id_orden,
+            id_activo=activo_sin_qr.id_activo,
+            cantidad=1,
+            precio_final=200000,
+            estado_preparacion="Listo",
+        )
+        db.add(det)
+        db.commit()
+
+        # Intentar confirmar entrega sin QR impreso
+        res = client.patch(f"/api/v1/ordenes/{orden.id_orden}/entregar", headers=auth_headers)
+        assert res.status_code == 400
+        assert "qr" in res.json()["detail"].lower() and "imprima la etiqueta" in res.json()["detail"].lower()
+    finally:
+        db.close()
+
 

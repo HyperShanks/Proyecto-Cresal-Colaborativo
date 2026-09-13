@@ -72,8 +72,6 @@ class HistorialFiltrosDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hayFiltrosActivos = verTodas || filtroEstado != null;
-
     return Drawer(
       backgroundColor: AppPalette.surface,
       elevation: 0,
@@ -223,32 +221,37 @@ class HistorialFiltrosDrawer extends StatelessWidget {
               child: Row(
                 children: [
                   Expanded(
+                    flex: 2,
                     child: SizedBox(
                       height: 48.0,
                       child: OutlinedButton(
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppPalette.textSecondary,
+                          disabledForegroundColor: AppPalette.textSecondary.withValues(alpha: 0.38),
                           side: const BorderSide(color: Colors.white24),
+                          padding: const EdgeInsets.symmetric(horizontal: 8.0),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8.0),
                           ),
                         ),
-                        onPressed: hayFiltrosActivos
-                            ? () {
-                                onLimpiar();
-                                Navigator.of(context).pop();
-                              }
-                            : null,
-                        child: const Text(
-                          'Limpiar',
-                          style: TextStyle(fontWeight: FontWeight.w600),
+                        onPressed: () {
+                          onLimpiar();
+                          Navigator.of(context).pop();
+                        },
+                        child: const FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            'Limpiar',
+                            maxLines: 1,
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
                         ),
                       ),
                     ),
                   ),
                   const SizedBox(width: 12.0),
                   Expanded(
-                    flex: 2,
+                    flex: 3,
                     child: SizedBox(
                       height: 48.0,
                       child: ElevatedButton(
@@ -256,6 +259,7 @@ class HistorialFiltrosDrawer extends StatelessWidget {
                           backgroundColor: AppPalette.primary,
                           foregroundColor: AppPalette.textPrimary,
                           elevation: 0,
+                          padding: const EdgeInsets.symmetric(horizontal: 8.0),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8.0),
                           ),
@@ -264,9 +268,13 @@ class HistorialFiltrosDrawer extends StatelessWidget {
                           onAplicar();
                           Navigator.of(context).pop();
                         },
-                        child: const Text(
-                          'Aplicar Filtros',
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                        child: const FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            'Aplicar Filtros',
+                            maxLines: 1,
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
                         ),
                       ),
                     ),

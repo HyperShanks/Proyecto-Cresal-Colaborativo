@@ -114,7 +114,13 @@ class _EtiquetaPreviewScreenState extends State<EtiquetaPreviewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final data = ModalRoute.of(context)?.settings.arguments as EtiquetaData?;
+    final rawArgs = ModalRoute.of(context)?.settings.arguments;
+    EtiquetaData? data;
+    if (rawArgs is EtiquetaData) {
+      data = rawArgs;
+    } else if (rawArgs is Map) {
+      data = EtiquetaData.fromJson(Map<String, dynamic>.from(rawArgs));
+    }
 
     if (data == null) {
       debugPrint(
@@ -132,8 +138,10 @@ class _EtiquetaPreviewScreenState extends State<EtiquetaPreviewScreen> {
       );
     }
 
+    final EtiquetaData etiqueta = data;
+
     debugPrint(
-      '📌 [PREVIEW_SCREEN] 📄 Renderizando vista previa para Folio: ${data.numeroIngreso}',
+      '📌 [PREVIEW_SCREEN] 📄 Renderizando vista previa para Folio: ${etiqueta.numeroIngreso}',
     );
 
     return Scaffold(
@@ -154,7 +162,7 @@ class _EtiquetaPreviewScreenState extends State<EtiquetaPreviewScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: FittedBox(
                   fit: BoxFit.contain,
-                  child: EtiquetaTermicaWidget(data: data),
+                  child: EtiquetaTermicaWidget(data: etiqueta),
                 ),
               ),
             ),
@@ -168,7 +176,7 @@ class _EtiquetaPreviewScreenState extends State<EtiquetaPreviewScreen> {
               child: ElevatedButton.icon(
                 onPressed: _isImprimiendo
                     ? null
-                    : () => _iniciarImpresion(data),
+                    : () => _iniciarImpresion(etiqueta),
                 icon: _isImprimiendo
                     ? const SizedBox(
                         width: 20,

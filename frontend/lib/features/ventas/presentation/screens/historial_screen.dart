@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../../../core/routes/route_observer.dart';
@@ -13,12 +14,14 @@ class HistorialScreen extends StatefulWidget {
   final VoidCallback? onOpenMenuDrawer;
   final VoidCallback? onRefreshCatalogo;
   final List<OrdenHistorialModel>? initialOrdenes;
+  final http.Client? client;
 
   const HistorialScreen({
     super.key,
     this.onOpenMenuDrawer,
     this.onRefreshCatalogo,
     this.initialOrdenes,
+    this.client,
   });
 
   @override
@@ -52,6 +55,14 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
 
     if (widget.initialOrdenes != null) {
       _ordenes = List.from(widget.initialOrdenes!);
+      _ordenes.sort((a, b) {
+        final aComp = a.estadoOrden.toLowerCase() == 'completada' ? 1 : 0;
+        final bComp = b.estadoOrden.toLowerCase() == 'completada' ? 1 : 0;
+        if (aComp != bComp) {
+          return aComp.compareTo(bComp);
+        }
+        return (b.fechaCreacion ?? '').compareTo(a.fechaCreacion ?? '');
+      });
       _isLoading = false;
     } else {
       _cargarOrdenes();
@@ -102,9 +113,20 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
       final ordenes = await OrdenesService.obtenerMisVentas(
         todas: _verTodas,
         estado: _filtroEstado,
+        client: widget.client,
       );
 
       if (!mounted) return;
+
+      // Ordenar: Completadas al final, las demás al principio (más recientes primero)
+      ordenes.sort((a, b) {
+        final aComp = a.estadoOrden.toLowerCase() == 'completada' ? 1 : 0;
+        final bComp = b.estadoOrden.toLowerCase() == 'completada' ? 1 : 0;
+        if (aComp != bComp) {
+          return aComp.compareTo(bComp);
+        }
+        return (b.fechaCreacion ?? '').compareTo(a.fechaCreacion ?? '');
+      });
 
       setState(() {
         _ordenes = ordenes;

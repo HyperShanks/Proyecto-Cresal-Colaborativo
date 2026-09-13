@@ -128,6 +128,42 @@ def obtener_resumen_alertas(
     )
 
 
+def _construir_etiqueta_data(
+    db: Session,
+    activo: Activo_Inventariado,
+    vehiculo: Optional[Vehiculo_Origen] = None,
+    motor: Optional[Detalle_Motor] = None,
+    caja: Optional[Detalle_Caja_Cambio] = None,
+) -> dict:
+    if motor is None:
+        motor = db.query(Detalle_Motor).filter(Detalle_Motor.id_activo == activo.id_activo).first()
+    if caja is None and activo.id_categoria == 2:
+        caja = db.query(Detalle_Caja_Cambio).filter(Detalle_Caja_Cambio.id_activo == activo.id_activo).first()
+
+    if activo.id_categoria == 2 and caja:
+        transmision_val = caja.transmision_tipo
+    elif motor:
+        transmision_val = motor.transmision_tipo
+    else:
+        transmision_val = None
+
+    return {
+        "id_activo": str(activo.id_activo),
+        "numero_ingreso": vehiculo.numero_ingreso if vehiculo else "N/A",
+        "marca": vehiculo.marca if vehiculo else "Desconocida",
+        "modelo": vehiculo.modelo if vehiculo else "Desconocido",
+        "anio": vehiculo.anio if vehiculo else 0,
+        "cilindrada": motor.cilindrada if motor else None,
+        "combustible": motor.combustible if motor else None,
+        "transmision": transmision_val,
+        "numero_motor": motor.numero_motor if motor else None,
+        "galpon": activo.ubicacion_galpon or "",
+        "pasillo": activo.ubicacion_pasillo or "",
+        "pallet": activo.ubicacion_pallet or "",
+        "sku_qr_fisico": activo.sku_qr_fisico or "",
+    }
+
+
 @router.get("/tareas-pendientes", response_model=List[TareaAlertaResponse])
 def obtener_tareas_pendientes(
     sucursal_id: int = Query(1, description="ID de la sucursal del bodeguero"),
@@ -202,6 +238,9 @@ def obtener_tareas_pendientes(
         cat_nombre = "Motor" if activo.id_categoria == 1 else ("Caja de Cambios" if activo.id_categoria == 2 else "Repuesto")
         titulo = f"{cat_nombre} - {vehiculo.marca} {vehiculo.modelo}" if vehiculo else cat_nombre
 
+        etiqueta_data = _construir_etiqueta_data(db, activo, vehiculo)
+        qr_impreso = bool(activo.qr_impreso)
+
         alertas.append(
             TareaAlertaResponse(
                 id_tarea=f"ORD-{str(detalle.id_detalle)[:8]}",
@@ -223,6 +262,10 @@ def obtener_tareas_pendientes(
                 id_sucursal_destino=sucursal_dest_id,
                 es_traslado=es_traslado,
                 estado_preparacion=detalle.estado_preparacion or "Pendiente",
+                id_orden=orden.id_orden,
+                sku_qr_fisico=activo.sku_qr_fisico,
+                qr_impreso=qr_impreso,
+                etiqueta_data=etiqueta_data,
             )
         )
 
@@ -347,11 +390,13 @@ def obtener_tareas_pendientes(
                 ubicacion_galpon=activo.ubicacion_galpon,
                 nota_especial="GENERAR Y PEGAR ETIQUETA QR",
                 accion_requerida="GENERAR QR AHORA",
-                etiqueta_data=etiqueta_data,
+                etiqueta_data=_construir_etiqueta_data(db, activo, vehiculo, motor, caja),
                 id_activo=activo.id_activo,
                 id_sucursal_origen=activo.id_sucursal_actual,
                 es_traslado=False,
                 estado_preparacion="Pendiente",
+                sku_qr_fisico=activo.sku_qr_fisico,
+                qr_impreso=False,
             )
         )
 
@@ -468,6 +513,7 @@ def verificar_qr_salida(
                 vehiculo = db.query(Vehiculo_Origen).filter(Vehiculo_Origen.id_vehiculo == activo.id_vehiculo).first() if activo.id_vehiculo else None
                 cat = db.query(Categoria_Activo).filter(Categoria_Activo.id_categoria == activo.id_categoria).first()
                 nombre_cat = cat.nombre_categoria if cat else "Repuesto"
+                titulo = f"{nombre_cat} - {vehiculo.marca} {vehiculo.modelo} ({vehiculo.anio})" if vehiculo else (d.descripcion_manual or nombre_cat)
                 partes_ub = []
                 if activo.ubicacion_galpon and activo.ubicacion_galpon.strip():
                     partes_ub.append(f"Galpón: {activo.ubicacion_galpon.strip()}")
@@ -479,16 +525,22 @@ def verificar_qr_salida(
                 sku = activo.sku_qr_fisico
                 es_inv = True
                 total_fisicos += 1
+                qr_impreso = bool(activo.qr_impreso)
+                etiqueta_data = _construir_etiqueta_data(db, activo, vehiculo)
             else:
                 titulo = d.descripcion_manual or "Repuesto Desconocido"
                 ubicacion = "N/A"
                 sku = None
                 es_inv = False
+                qr_impreso = True
+                etiqueta_data = None
         else:
             titulo = d.descripcion_manual or "Venta Libre / Servicio"
             ubicacion = "Venta Libre"
             sku = None
             es_inv = False
+            qr_impreso = True
+            etiqueta_data = None
 
         items_info.append(ItemSalidaInfo(
             id_detalle=d.id_detalle,
@@ -500,6 +552,8 @@ def verificar_qr_salida(
             notas_preparacion=d.notas_preparacion,
             cantidad=d.cantidad,
             precio_final=d.precio_final,
+            qr_impreso=qr_impreso,
+            etiqueta_data=etiqueta_data,
         ))
 
     folio = f"ORD-{str(orden.id_orden)[:8].upper()}"
@@ -603,6 +657,15 @@ def escanear_salida(
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Falta escanear el QR físico de {len(skus_faltantes)} pieza(s) para autorizar la salida: {', '.join(skus_faltantes)}."
+            )
+
+        # C. Validar que todas las piezas inventariadas requeridas tengan QR impreso
+        activos_sin_imprimir = [act.sku_qr_fisico for act in activos_requeridos if not act.qr_impreso]
+        if activos_sin_imprimir:
+            print(f"❌ [DUAL-SCAN] Error: Piezas sin QR impreso: {activos_sin_imprimir}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"No se puede autorizar la salida en barrera. Las siguientes piezas no registran impresión de QR físico: {', '.join(activos_sin_imprimir)}. Imprima la etiqueta antes de entregar."
             )
 
     try:

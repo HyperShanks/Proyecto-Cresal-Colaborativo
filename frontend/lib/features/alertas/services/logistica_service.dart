@@ -16,8 +16,10 @@ class ItemSalidaInfoModel {
   final String? notasPreparacion;
   final int cantidad;
   final int precioFinal;
+  bool qrImpreso;
+  final Map<String, dynamic>? etiquetaData;
 
-  const ItemSalidaInfoModel({
+  ItemSalidaInfoModel({
     required this.idDetalle,
     this.idActivo,
     required this.titulo,
@@ -27,6 +29,8 @@ class ItemSalidaInfoModel {
     this.notasPreparacion,
     required this.cantidad,
     required this.precioFinal,
+    this.qrImpreso = true,
+    this.etiquetaData,
   });
 
   factory ItemSalidaInfoModel.fromJson(Map<String, dynamic> json) {
@@ -40,6 +44,10 @@ class ItemSalidaInfoModel {
       notasPreparacion: json['notas_preparacion'],
       cantidad: json['cantidad'] ?? 1,
       precioFinal: json['precio_final'] ?? 0,
+      qrImpreso: json['qr_impreso'] ?? true,
+      etiquetaData: json['etiqueta_data'] != null
+          ? Map<String, dynamic>.from(json['etiqueta_data'])
+          : null,
     );
   }
 }
