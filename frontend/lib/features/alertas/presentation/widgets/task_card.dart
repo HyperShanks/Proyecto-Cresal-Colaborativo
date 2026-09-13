@@ -364,7 +364,9 @@ class _TaskCardState extends State<TaskCard> {
   Future<void> _abrirBarreraSalida() async {
     final resultado = await Navigator.push<bool>(
       context,
-      MaterialPageRoute(builder: (context) => const AuditoriaSalidaScreen()),
+      MaterialPageRoute(
+        builder: (context) => AuditoriaSalidaScreen(tarea: widget.tarea),
+      ),
     );
     if (resultado == true && mounted) {
       BodegaPollingService.instance.decrementarPendiente(

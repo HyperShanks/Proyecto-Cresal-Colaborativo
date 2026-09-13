@@ -462,8 +462,14 @@ def verificar_qr_salida(
                 vehiculo = db.query(Vehiculo_Origen).filter(Vehiculo_Origen.id_vehiculo == activo.id_vehiculo).first() if activo.id_vehiculo else None
                 cat = db.query(Categoria_Activo).filter(Categoria_Activo.id_categoria == activo.id_categoria).first()
                 nombre_cat = cat.nombre_categoria if cat else "Repuesto"
-                titulo = f"{nombre_cat} - {vehiculo.marca} {vehiculo.modelo} ({vehiculo.anio})" if vehiculo else (d.descripcion_manual or nombre_cat)
-                ubicacion = f"{activo.ubicacion_pasillo or 'S/P'} - {activo.ubicacion_pallet or 'S/P'}"
+                partes_ub = []
+                if activo.ubicacion_galpon and activo.ubicacion_galpon.strip():
+                    partes_ub.append(f"Galpón: {activo.ubicacion_galpon.strip()}")
+                if activo.ubicacion_pasillo and activo.ubicacion_pasillo.strip():
+                    partes_ub.append(f"Pasillo: {activo.ubicacion_pasillo.strip()}")
+                if activo.ubicacion_pallet and activo.ubicacion_pallet.strip():
+                    partes_ub.append(f"Pallet: {activo.ubicacion_pallet.strip()}")
+                ubicacion = ", ".join(partes_ub) if partes_ub else f"Pasillo: {activo.ubicacion_pasillo or 'S/P'}, Pallet: {activo.ubicacion_pallet or 'S/P'}"
                 sku = activo.sku_qr_fisico
                 es_inv = True
                 total_fisicos += 1
