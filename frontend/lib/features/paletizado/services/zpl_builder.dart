@@ -54,15 +54,27 @@ class ZplBuilder {
 
     // ── 4. Bloque Izquierdo: Código QR Factor 8 ──
     final skuLimpio = _sanitize(data.skuQrFisico);
-    sb.writeln('^FO104,104^BQN,2,8^FDQA,$skuLimpio^FS');
+    sb.writeln('^FO100,120^BQN,2,8^FDQA,$skuLimpio^FS');
 
     // Texto SKU debajo del QR (centrado)
     sb.writeln('^FO35,342^A0N,26,26^FB310,1,0,C^FD$skuLimpio^FS');
 
     // Pastilla negra de Ubicación (centrada)
     sb.writeln('^FO35,384^GB310,50,50^FS');
-    final ubicacion = 'UBICACION: G${data.galpon} - P${data.pasillo} - Pa${data.pallet}';
-    sb.writeln('^FO35,398^A0N,22,22^FR^FB310,1,0,C^FD$ubicacion^FS');
+    final partesUbicacion = <String>[];
+    if (data.galpon.trim().isNotEmpty && data.galpon.trim() != 'S/G') {
+      partesUbicacion.add('GAL: ${data.galpon.trim()}');
+    }
+    if (data.pasillo.trim().isNotEmpty && data.pasillo.trim() != 'S/P') {
+      partesUbicacion.add('PAS: ${data.pasillo.trim()}');
+    }
+    if (data.pallet.trim().isNotEmpty && data.pallet.trim() != 'S/P') {
+      partesUbicacion.add('PAL: ${data.pallet.trim()}');
+    }
+    final ubicacion = partesUbicacion.isNotEmpty
+        ? partesUbicacion.join(' | ')
+        : 'SIN UBICACION';
+    sb.writeln('^FO35,398^A0N,20,20^FR^FB310,1,0,C^FD$ubicacion^FS');
 
     // ── 5. Bloque Derecho: 7 Características Técnicas Compartidas ──
     final marca = _sanitize(data.marca);

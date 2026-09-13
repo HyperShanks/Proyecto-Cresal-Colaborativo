@@ -142,8 +142,9 @@ void main() {
       );
 
       expect(find.byKey(const Key('chip_galpon_tarea')), findsOneWidget);
-      expect(find.text('GALPÓN: Galpón Central'), findsOneWidget);
-      expect(find.textContaining('Pasillo P-01 - Pallet PL-05'), findsOneWidget);
+      expect(find.textContaining('Galpón: Galpón Central'), findsOneWidget);
+      expect(find.textContaining('Pasillo: P-01'), findsOneWidget);
+      expect(find.textContaining('Pallet: PL-05'), findsOneWidget);
     });
 
     testWidgets('Muestra aviso preventivo cuando la tarea no tiene ubicación asignada', (tester) async {
