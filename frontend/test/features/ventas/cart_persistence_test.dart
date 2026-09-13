@@ -5,7 +5,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'package:frontend/features/ventas/models/cart_item_model.dart';
 import 'package:frontend/features/ventas/models/catalogo_model.dart';

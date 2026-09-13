@@ -271,7 +271,8 @@ class OrdenHistorialModel {
   });
 
   bool get esReservada => estadoOrden.toLowerCase() == 'reservada';
-  bool get esPagada => estadoOrden.toLowerCase() == 'pagada' || estadoOrden.toLowerCase() == 'completada';
+  bool get esPagada => estadoOrden.toLowerCase() == 'pagada';
+  bool get esCompletada => estadoOrden.toLowerCase() == 'completada';
   bool get esAnulada => estadoOrden.toLowerCase() == 'anulada';
 
   /// Indica si la orden cuenta con código QR transaccional emitido para entrega en bodega (HU-3.6).
@@ -1035,9 +1036,9 @@ class EntregaEnvioModel {
   bool get estaPagada => montoPendiente == 0;
   bool get tieneSaldoPendiente => montoPendiente > 0;
   bool get esReservada => estadoOrden.toLowerCase() == 'reservada';
-  bool get esPagada =>
-      estadoOrden.toLowerCase() == 'pagada' ||
-      estadoOrden.toLowerCase() == 'completada';
+  bool get esPagada => estadoOrden.toLowerCase() == 'pagada';
+  bool get esCompletada => estadoOrden.toLowerCase() == 'completada';
+  bool get esAnulada => estadoOrden.toLowerCase() == 'anulada';
   bool get tieneQrDisponible =>
       esPagada &&
       qrTransaccionalSalida != null &&

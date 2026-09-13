@@ -715,7 +715,7 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
         labelText: label,
         labelStyle: AppTypography.small,
       ),
-      value: value,
+      initialValue: value,
       dropdownColor:
           AppPalette.surface, // ⚠️ Evita menús blancos en modo oscuro
       style: AppTypography.body, // ⚠️ Tipografía correcta

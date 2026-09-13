@@ -51,6 +51,34 @@ class _TaskCardState extends State<TaskCard> {
     return titulo;
   }
 
+  String _formatearUbicacionMinimalista(TareaAlerta tarea) {
+    final tieneGalpon = tarea.ubicacionGalpon != null &&
+        tarea.ubicacionGalpon!.trim().isNotEmpty &&
+        tarea.ubicacionGalpon != 'S/G';
+    final tienePasillo = tarea.ubicacionPasillo != null &&
+        tarea.ubicacionPasillo!.trim().isNotEmpty &&
+        tarea.ubicacionPasillo != 'S/P';
+    final tienePallet = tarea.ubicacionPallet != null &&
+        tarea.ubicacionPallet!.trim().isNotEmpty &&
+        tarea.ubicacionPallet != 'S/P';
+
+    if (tieneGalpon || tienePasillo || tienePallet) {
+      final partes = <String>[];
+      if (tieneGalpon) {
+        partes.add('Galpón: ${tarea.ubicacionGalpon!.trim()}');
+      }
+      if (tienePasillo) {
+        partes.add('Pasillo: ${tarea.ubicacionPasillo!.trim()}');
+      }
+      if (tienePallet) {
+        partes.add('Pallet: ${tarea.ubicacionPallet!.trim()}');
+      }
+      return partes.join('  •  ');
+    }
+
+    return tarea.ubicacion;
+  }
+
   Future<void> _marcarListo() async {
     if (widget.tarea.idDetalle == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -96,7 +124,7 @@ class _TaskCardState extends State<TaskCard> {
     }
   }
 
-  Future<void> _abrirDialogoConfirmarReingreso(BuildContext context) async {
+  Future<void> _abrirDialogoConfirmarReingreso() async {
     final tarea = widget.tarea;
     final idOrden = tarea.idOrden ?? (tarea.ordenRef?.replaceAll('ORDEN #', '').replaceAll('ORDEN ANULADA #', '').trim() ?? '');
     final skuInicial = tarea.skuQrFisico ?? '';
@@ -361,9 +389,24 @@ class _TaskCardState extends State<TaskCard> {
     }
   }
 
+  Future<void> _abrirBarreraSalida() async {
+    final resultado = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AuditoriaSalidaScreen(tarea: widget.tarea),
+      ),
+    );
+    if (resultado == true && mounted) {
+      BodegaPollingService.instance.decrementarPendiente(
+        tipoAlerta: widget.tarea.tipoAlerta,
+      );
+      widget.onActualizar?.call();
+      await BodegaPollingService.instance.procesarCiclo();
+    }
+  }
+
   // Método para desplegar el Modal de Acción
   Future<void> _mostrarDetalleModal(
-    BuildContext context,
     Color accentColor,
     Color buttonColor,
   ) async {
@@ -496,44 +539,23 @@ class _TaskCardState extends State<TaskCard> {
                     ] else ...[
                       Row(
                         children: [
-                          if (tarea.ubicacionGalpon != null &&
-                              tarea.ubicacionGalpon!.isNotEmpty &&
-                              tarea.ubicacionGalpon != 'S/G') ...[
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: AppPalette.primary.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: AppPalette.primary, width: 1.5),
-                              ),
-                              child: Text(
-                                'GALPÓN: ${tarea.ubicacionGalpon}',
-                                style: AppTypography.small.copyWith(
-                                  color: AppPalette.primary,
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                          ],
+                          const Icon(
+                            Icons.location_on_rounded,
+                            size: 20,
+                            color: AppPalette.primary,
+                          ),
+                          const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              (tarea.ubicacionPasillo != null &&
-                                      tarea.ubicacionPallet != null &&
-                                      tarea.ubicacionPasillo!.isNotEmpty)
-                                  ? 'Pasillo ${tarea.ubicacionPasillo} - Pallet ${tarea.ubicacionPallet}'
-                                  : tarea.ubicacion,
-                              style: AppTypography.title.copyWith(fontSize: 18, fontWeight: FontWeight.w900),
+                              _formatearUbicacionMinimalista(tarea),
+                              style: AppTypography.title.copyWith(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                              ),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        tarea.ubicacion,
-                        style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
                       ),
                     ],
                   ],
@@ -690,12 +712,9 @@ class _TaskCardState extends State<TaskCard> {
     if (accion == 'listo') {
       _marcarListo();
     } else if (accion == 'reingreso') {
-      _abrirDialogoConfirmarReingreso(context);
+      _abrirDialogoConfirmarReingreso();
     } else if (accion == 'barrera') {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => const AuditoriaSalidaScreen()),
-      );
+      await _abrirBarreraSalida();
     } else if (accion == 'imprimir' && tarea.etiquetaData != null) {
       final resultado = await Navigator.pushNamed(
         context,
@@ -745,7 +764,7 @@ class _TaskCardState extends State<TaskCard> {
     final esReingreso = tarea.tipoAlerta == 'REINGRESO';
 
     return GestureDetector(
-      onTap: () => _mostrarDetalleModal(context, accentColor, buttonColor),
+      onTap: () => _mostrarDetalleModal(accentColor, buttonColor),
       child: Container(
         margin: const EdgeInsets.only(bottom: 16.0),
         padding: const EdgeInsets.all(16.0),
@@ -908,35 +927,16 @@ class _TaskCardState extends State<TaskCard> {
                   ] else ...[
                     Row(
                       children: [
-                        if (tarea.ubicacionGalpon != null &&
-                            tarea.ubicacionGalpon!.isNotEmpty &&
-                            tarea.ubicacionGalpon != 'S/G') ...[
-                          Container(
-                            key: const Key('chip_galpon_tarea'),
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: AppPalette.primary.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(color: AppPalette.primary, width: 1.2),
-                            ),
-                            child: Text(
-                              'GALPÓN: ${tarea.ubicacionGalpon}',
-                              style: AppTypography.small.copyWith(
-                                color: AppPalette.primary,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                        ],
+                        const Icon(
+                          Icons.location_on_rounded,
+                          size: 16,
+                          color: AppPalette.primary,
+                        ),
+                        const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            (tarea.ubicacionPasillo != null &&
-                                    tarea.ubicacionPallet != null &&
-                                    tarea.ubicacionPasillo!.isNotEmpty)
-                                ? 'Pasillo ${tarea.ubicacionPasillo} - Pallet ${tarea.ubicacionPallet}'
-                                : tarea.ubicacion,
+                            _formatearUbicacionMinimalista(tarea),
+                            key: const Key('chip_galpon_tarea'),
                             style: AppTypography.title.copyWith(
                               fontWeight: FontWeight.w900,
                               fontSize: 14,
@@ -946,19 +946,6 @@ class _TaskCardState extends State<TaskCard> {
                         ),
                       ],
                     ),
-                    if (tarea.ubicacionPasillo != null &&
-                        tarea.ubicacionPallet != null &&
-                        tarea.ubicacionPasillo!.isNotEmpty &&
-                        tarea.ubicacion != 'Pasillo ${tarea.ubicacionPasillo} - Pallet ${tarea.ubicacionPallet}') ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        tarea.ubicacion,
-                        style: AppTypography.small.copyWith(
-                          color: AppPalette.textSecondary,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
                   ],
                 ],
               ),
@@ -1035,7 +1022,7 @@ class _TaskCardState extends State<TaskCard> {
         height: 46,
         child: ElevatedButton.icon(
           key: Key('btn_reingresar_${tarea.idTarea}'),
-          onPressed: () => _abrirDialogoConfirmarReingreso(context),
+          onPressed: () => _abrirDialogoConfirmarReingreso(),
           icon: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 20),
           label: Text(
             'REINGRESAR / PALETIZAR',
@@ -1118,14 +1105,7 @@ class _TaskCardState extends State<TaskCard> {
         height: 45,
         child: ElevatedButton.icon(
           key: Key('btn_barrera_${tarea.idTarea}'),
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const AuditoriaSalidaScreen(),
-              ),
-            );
-          },
+          onPressed: () => _abrirBarreraSalida(),
           icon: const Icon(Icons.qr_code_scanner, color: Colors.white, size: 20),
           label: Text(
             'BARRERA',
@@ -1211,7 +1191,7 @@ class _TaskCardState extends State<TaskCard> {
             child: OutlinedButton.icon(
               key: Key('btn_detalles_${tarea.idTarea}'),
               onPressed: () {
-                _mostrarDetalleModal(context, accentColor, AppPalette.surface);
+                _mostrarDetalleModal(accentColor, AppPalette.surface);
               },
               icon: const Icon(Icons.visibility_outlined, color: AppPalette.textPrimary, size: 18),
               label: Text(

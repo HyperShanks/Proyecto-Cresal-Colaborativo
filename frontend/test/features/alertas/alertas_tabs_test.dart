@@ -7,6 +7,8 @@ import 'package:frontend/features/alertas/presentation/screens/alertas_screen.da
 import 'package:frontend/features/alertas/presentation/widgets/alerta_preentrega_tab.dart';
 import 'package:frontend/features/alertas/presentation/widgets/alerta_reimpresion_tab.dart';
 import 'package:frontend/features/alertas/presentation/widgets/alerta_reintegracion_tab.dart';
+import 'package:frontend/features/alertas/presentation/widgets/task_card.dart';
+import 'package:frontend/features/alertas/presentation/screens/auditoria_salida_screen.dart';
 import 'package:frontend/features/alertas/services/bodega_polling_service.dart';
 
 void main() {
@@ -367,5 +369,46 @@ void main() {
       expect(errorCaptured, isNull);
     });
   });
+
+  group('TaskCard BARRERA Flow Tests', () {
+    testWidgets('TaskCard con tarea LIBERADA renderiza botón BARRERA y al presionar abre AuditoriaSalidaScreen', (tester) async {
+      const tareaLiberada = TareaAlerta(
+        idTarea: 'ORD-999',
+        tipoAlerta: 'LIBERADA',
+        tituloPieza: 'Culata de Motor Toyota',
+        accionRequerida: 'ESCANEAR EN BARRERA',
+        ubicacion: 'P-1 - R-2',
+      );
+
+      bool actualizado = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TaskCard(
+              tarea: tareaLiberada,
+              onActualizar: () {
+                actualizado = true;
+              },
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      final botonBarrera = find.byKey(const Key('btn_barrera_ORD-999'));
+      expect(botonBarrera, findsOneWidget);
+      expect(find.text('BARRERA'), findsOneWidget);
+
+      await tester.tap(botonBarrera);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.byType(AuditoriaSalidaScreen), findsOneWidget);
+      expect(actualizado, isFalse); // No actualizado todavía hasta que retorne
+    });
+  });
 }
+
 

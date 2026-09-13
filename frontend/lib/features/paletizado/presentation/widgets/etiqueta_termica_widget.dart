@@ -89,7 +89,7 @@ class EtiquetaTermicaWidget extends StatelessWidget {
                         child: FittedBox(
                           fit: BoxFit.scaleDown,
                           child: Text(
-                            'UBICACIÓN: G${data.galpon} - P${data.pasillo} - Pa${data.pallet}',
+                            _formatearUbicacion(data),
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 12,
@@ -153,6 +153,20 @@ class EtiquetaTermicaWidget extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _formatearUbicacion(EtiquetaData data) {
+    final partes = <String>[];
+    if (data.galpon.trim().isNotEmpty && data.galpon.trim() != 'S/G') {
+      partes.add('GAL: ${data.galpon.trim()}');
+    }
+    if (data.pasillo.trim().isNotEmpty && data.pasillo.trim() != 'S/P') {
+      partes.add('PAS: ${data.pasillo.trim()}');
+    }
+    if (data.pallet.trim().isNotEmpty && data.pallet.trim() != 'S/P') {
+      partes.add('PAL: ${data.pallet.trim()}');
+    }
+    return partes.isNotEmpty ? partes.join(' | ') : 'SIN UBICACIÓN';
   }
 
   // ===========================================================================

@@ -53,6 +53,12 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
       textColor = AppPalette.success;
       icon = Icons.check_circle_outline;
       label = 'Pagada';
+    } else if (_orden.esCompletada) {
+      bgColor = AppPalette.primary.withValues(alpha: 0.15);
+      borderColor = AppPalette.primary.withValues(alpha: 0.5);
+      textColor = AppPalette.primary;
+      icon = Icons.verified_outlined;
+      label = 'Completada';
     } else if (_orden.esAnulada) {
       bgColor = AppPalette.error.withValues(alpha: 0.15);
       borderColor = AppPalette.error.withValues(alpha: 0.5);
@@ -831,7 +837,60 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                     ),
                   ],
 
-                  // ── Sección 4.B: Acciones Condicionales (Solo si está Reservada) ─
+                  // ── Sección 4.B: Confirmación de Entrega en Bodega (Si está Completada) ─
+                  if (_orden.esCompletada) ...[
+                    const SizedBox(height: 20.0),
+                    Container(
+                      padding: const EdgeInsets.all(16.0),
+                      decoration: BoxDecoration(
+                        color: AppPalette.primary.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12.0),
+                        border: Border.all(color: AppPalette.primary.withValues(alpha: 0.5)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8.0),
+                            decoration: BoxDecoration(
+                              color: AppPalette.primary.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(8.0),
+                            ),
+                            child: const Icon(
+                              Icons.verified_outlined,
+                              color: AppPalette.primary,
+                              size: 28.0,
+                            ),
+                          ),
+                          const SizedBox(width: 12.0),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Orden Completada',
+                                  style: AppTypography.title.copyWith(
+                                    fontSize: 15.0,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppPalette.primary,
+                                  ),
+                                ),
+                                const SizedBox(height: 4.0),
+                                Text(
+                                  'Los repuestos fueron validados y entregados exitosamente en barrera de bodega.',
+                                  style: AppTypography.small.copyWith(
+                                    color: AppPalette.textSecondary,
+                                    fontSize: 12.0,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  // ── Sección 4.C: Acciones Condicionales (Solo si está Reservada) ─
                   if (_orden.esReservada) ...[
                     const SizedBox(height: 20.0),
                     Text(

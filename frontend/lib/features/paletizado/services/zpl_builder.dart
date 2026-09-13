@@ -33,16 +33,24 @@ class ZplBuilder {
 
     // ── 1. Inicialización y Configuración de Etiqueta (100x70 mm @ 203 DPI) ──
     sb.writeln('^XA'); // Inicio del formato ZPL
-    sb.writeln('^CI28'); // Codificación UTF-8 para caracteres en español (tildes, ñ)
-    sb.writeln('^PW800'); // Ancho de impresión: 800 dots (100 mm @ 8 dpmm / 203 DPI)
-    sb.writeln('^LL560'); // Alto de etiqueta: 560 dots (70 mm @ 8 dpmm / 203 DPI)
+    sb.writeln(
+      '^CI28',
+    ); // Codificación UTF-8 para caracteres en español (tildes, ñ)
+    sb.writeln(
+      '^PW800',
+    ); // Ancho de impresión: 800 dots (100 mm @ 8 dpmm / 203 DPI)
+    sb.writeln(
+      '^LL560',
+    ); // Alto de etiqueta: 560 dots (70 mm @ 8 dpmm / 203 DPI)
     sb.writeln('^LH0,0'); // Origen en la esquina superior izquierda
 
     // ── 2. Marco Exterior y Líneas de Estructura ──
     sb.writeln('^FO20,15^GB760,530,3^FS'); // Borde exterior rectangular
     sb.writeln('^FO20,95^GB760,0,3^FS'); // Línea separadora de Header
     sb.writeln('^FO20,455^GB760,0,3^FS'); // Línea separadora de Footer
-    sb.writeln('^FO360,95^GB0,360,3^FS'); // Línea vertical separadora (QR / Datos)
+    sb.writeln(
+      '^FO360,95^GB0,360,3^FS',
+    ); // Línea vertical separadora (QR / Datos)
 
     // ── 3. Header: Logo CRESAL y Badge del Tipo de Activo ──
     sb.writeln('^FO40,25^A0N,32,32^FDCRESAL^FS');
@@ -54,15 +62,27 @@ class ZplBuilder {
 
     // ── 4. Bloque Izquierdo: Código QR Factor 8 ──
     final skuLimpio = _sanitize(data.skuQrFisico);
-    sb.writeln('^FO104,104^BQN,2,8^FDQA,$skuLimpio^FS');
+    sb.writeln('^FO100,120^BQN,2,8^FDQA,$skuLimpio^FS');
 
     // Texto SKU debajo del QR (centrado)
     sb.writeln('^FO35,342^A0N,26,26^FB310,1,0,C^FD$skuLimpio^FS');
 
     // Pastilla negra de Ubicación (centrada)
     sb.writeln('^FO35,384^GB310,50,50^FS');
-    final ubicacion = 'UBICACION: G${data.galpon} - P${data.pasillo} - Pa${data.pallet}';
-    sb.writeln('^FO35,398^A0N,22,22^FR^FB310,1,0,C^FD$ubicacion^FS');
+    final partesUbicacion = <String>[];
+    if (data.galpon.trim().isNotEmpty && data.galpon.trim() != 'S/G') {
+      partesUbicacion.add('GAL: ${data.galpon.trim()}');
+    }
+    if (data.pasillo.trim().isNotEmpty && data.pasillo.trim() != 'S/P') {
+      partesUbicacion.add('PAS: ${data.pasillo.trim()}');
+    }
+    if (data.pallet.trim().isNotEmpty && data.pallet.trim() != 'S/P') {
+      partesUbicacion.add('PAL: ${data.pallet.trim()}');
+    }
+    final ubicacion = partesUbicacion.isNotEmpty
+        ? partesUbicacion.join(' | ')
+        : 'SIN UBICACION';
+    sb.writeln('^FO35,398^A0N,20,20^FR^FB310,1,0,C^FD$ubicacion^FS');
 
     // ── 5. Bloque Derecho: 7 Características Técnicas Compartidas ──
     final marca = _sanitize(data.marca);
@@ -77,7 +97,7 @@ class ZplBuilder {
     // Todas las características usan tamaño tipográfico homogéneo ^A0N,25,25.
     sb.writeln('^FO385,118^A0N,25,25^FDMARCA: $marca^FS');
     sb.writeln('^FO385,164^A0N,25,25^FDMODELO: $modelo^FS');
-    sb.writeln('^FO385,210^A0N,25,25^FDANIO: $anio^FS');
+    sb.writeln('^FO385,210^A0N,25,25^FDAÑO: $anio^FS');
     sb.writeln('^FO385,256^A0N,25,25^FDCILINDRADA: $cilindrada^FS');
     sb.writeln('^FO385,302^A0N,25,25^FDCOMBUSTIBLE: $combustible^FS');
     sb.writeln('^FO385,348^A0N,25,25^FDTRANSMISION: $transmision^FS');

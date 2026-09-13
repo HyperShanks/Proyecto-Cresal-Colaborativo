@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/tarea_alerta.dart';
 import '../../../core/constants/api_constants.dart';
@@ -182,7 +183,7 @@ class LogisticaService {
         'Content-Type': 'application/json',
       };
 
-      print('🚪 [SERVICE-BODEGA] Verificando QR de salida: $qrTransaccionalSalida');
+      debugPrint('🚪 [SERVICE-BODEGA] Verificando QR de salida: $qrTransaccionalSalida');
 
       final response = await httpClient.post(
         Uri.parse('${ApiConstants.bodegaEndpoint}/verificar-qr-salida'),
@@ -194,12 +195,12 @@ class LogisticaService {
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
-        print('✅ [SERVICE-BODEGA] Inspección de orden exitosa: ${data['folio']}');
+        debugPrint('✅ [SERVICE-BODEGA] Inspección de orden exitosa: ${data['folio']}');
         return VerificarQrSalidaResponseModel.fromJson(data);
       } else {
         final Map<String, dynamic> errorData = jsonDecode(utf8.decode(response.bodyBytes));
         final detail = errorData['detail'] ?? 'Error al verificar QR de salida.';
-        print('⚠️ [SERVICE-BODEGA] Error al verificar QR: $detail');
+        debugPrint('⚠️ [SERVICE-BODEGA] Error al verificar QR: $detail');
         throw Exception(detail);
       }
     } catch (e) {
@@ -227,7 +228,7 @@ class LogisticaService {
         'Content-Type': 'application/json',
       };
 
-      print('🚪 [SERVICE-BODEGA] Enviando Dual-Scan (QR: $qrTransaccionalSalida, SKUs: $skusEscaneados)...');
+      debugPrint('🚪 [SERVICE-BODEGA] Enviando Dual-Scan (QR: $qrTransaccionalSalida, SKUs: $skusEscaneados)...');
 
       final response = await httpClient.post(
         Uri.parse('${ApiConstants.bodegaEndpoint}/escanear-salida'),
@@ -242,12 +243,12 @@ class LogisticaService {
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
-        print('✅ [SERVICE-BODEGA] Match exitoso en barrera para orden: ${data['folio']}');
+        debugPrint('✅ [SERVICE-BODEGA] Match exitoso en barrera para orden: ${data['folio']}');
         return EscanearSalidaResponseModel.fromJson(data);
       } else {
         final Map<String, dynamic> errorData = jsonDecode(utf8.decode(response.bodyBytes));
         final detail = errorData['detail'] ?? 'Error al autorizar salida en barrera.';
-        print('⚠️ [SERVICE-BODEGA] Rechazo en barrera (${response.statusCode}): $detail');
+        debugPrint('⚠️ [SERVICE-BODEGA] Rechazo en barrera (${response.statusCode}): $detail');
         throw Exception(detail);
       }
     } catch (e) {
