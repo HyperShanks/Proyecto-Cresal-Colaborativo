@@ -32,7 +32,7 @@ class _OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
   Timer? _debounceTimer;
 
   int? _idSucursal;
-  String _periodo = 'todos';
+  String _periodo = 'hoy';
   String _estado = 'todos';
   String _metodoPago = 'todos';
   int _paginaActual = 1;
@@ -143,7 +143,7 @@ class _OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
     _debounceTimer?.cancel();
     _busquedaController.clear();
     setState(() {
-      _periodo = 'todos';
+      _periodo = 'hoy';
       _estado = 'todos';
       _metodoPago = 'todos';
       _paginaActual = 1;

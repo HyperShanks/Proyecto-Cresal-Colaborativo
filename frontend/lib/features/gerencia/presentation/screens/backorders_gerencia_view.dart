@@ -1,6 +1,7 @@
 // frontend/lib/features/gerencia/presentation/screens/backorders_gerencia_view.dart
 
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/tokens/app_palette.dart';
@@ -442,132 +443,63 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
           if (_backorders.isEmpty)
             _buildEmptyState()
           else
-            // Scroll horizontal para proteger de overflow en pantallas medianas
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: 1050),
-                child: DataTable(
-                  columnSpacing: 20,
-                  horizontalMargin: 16,
-                  headingRowHeight: 44,
-                  dataRowMinHeight: 56,
-                  dataRowMaxHeight: 64,
-                  headingRowColor: WidgetStateProperty.all(
-                    const Color(0xFFF8FAFC),
-                  ), // Slate 50
-                  dividerThickness: 1,
-                  columns: const [
-                    DataColumn(
-                      label: Text(
-                        'FOLIO / FECHA',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF475569),
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ),
-                    DataColumn(
-                      label: Text(
-                        'PIEZA SOLICITADA / MOTOR',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF475569),
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ),
-                    DataColumn(
-                      label: Text(
-                        'CLIENTE',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF475569),
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ),
-                    DataColumn(
-                      label: Text(
-                        'VENDEDOR',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF475569),
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ),
-                    DataColumn(
-                      numeric: true,
-                      label: Text(
-                        'PRECIO ACORDADO',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF475569),
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ),
-                    DataColumn(
-                      numeric: true,
-                      label: Text(
-                        'ABONO EN CAJA',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF475569),
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ),
-                    DataColumn(
-                      numeric: true,
-                      label: Text(
-                        'SALDO PENDIENTE',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF475569),
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ),
-                    DataColumn(
-                      label: Center(
-                        child: Text(
-                          'ESTADO RESERVA',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF475569),
-                            letterSpacing: 0.5,
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final tableWidth = math.max(constraints.maxWidth, 1150.0);
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SizedBox(
+                    width: tableWidth,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Encabezados de Columna ocupando el 100% del ancho con flex
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFF8FAFC), // Slate 50
+                            border: Border(
+                              bottom: BorderSide(
+                                color: Color(0xFFE2E8F0),
+                                width: 1,
+                              ),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              _buildHeaderCell('FOLIO / FECHA', flex: 11),
+                              _buildHeaderCell('PIEZA SOLICITADA / MOTOR', flex: 22),
+                              _buildHeaderCell('CLIENTE', flex: 14),
+                              _buildHeaderCell('VENDEDOR', flex: 13),
+                              _buildHeaderCell('PRECIO ACORDADO', flex: 12, alignment: Alignment.centerRight),
+                              _buildHeaderCell('ABONO EN CAJA', flex: 11, alignment: Alignment.centerRight),
+                              _buildHeaderCell('SALDO PENDIENTE', flex: 11, alignment: Alignment.centerRight),
+                              _buildHeaderCell('ESTADO RESERVA', flex: 12, alignment: Alignment.center),
+                              _buildHeaderCell('MATCH / ASIGNACIÓN', flex: 13, alignment: Alignment.center),
+                            ],
                           ),
                         ),
-                      ),
-                    ),
-                    DataColumn(
-                      label: Center(
-                        child: Text(
-                          'MATCH / ASIGNACIÓN',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF475569),
-                            letterSpacing: 0.5,
+
+                        // Filas de Datos con divisores y alineación proporcional
+                        ListView.separated(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: _backorders.length,
+                          separatorBuilder: (context, index) => const Divider(
+                            height: 1,
+                            thickness: 1,
+                            color: Color(0xFFF1F5F9),
                           ),
+                          itemBuilder: (context, index) {
+                            final b = _backorders[index];
+                            return _buildRowItem(b);
+                          },
                         ),
-                      ),
+                      ],
                     ),
-                  ],
-                  rows: _backorders.map((b) => _buildDataRow(b)).toList(),
-                ),
-              ),
+                  ),
+                );
+              },
             ),
 
           // Footer de la tabla
@@ -577,158 +509,207 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
     );
   }
 
-  DataRow _buildDataRow(BackorderItemModel b) {
-    return DataRow(
-      cells: [
-        // 1. Folio / Fecha
-        DataCell(
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                b.folio,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontFamily: 'monospace',
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1E293B),
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                b.fechaCreacion,
-                style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-              ),
-            ],
+  Widget _buildHeaderCell(String label, {required int flex, Alignment alignment = Alignment.centerLeft}) {
+    return Expanded(
+      flex: flex,
+      child: Align(
+        alignment: alignment,
+        child: Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF475569),
+            letterSpacing: 0.5,
           ),
         ),
+      ),
+    );
+  }
 
-        // 2. Ficha Técnica Requerida
-        DataCell(
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
+  Widget _buildRowItem(BackorderItemModel b) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      color: Colors.white,
+      child: Row(
+        children: [
+          // 1. Folio / Fecha
+          Expanded(
+            flex: 11,
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _buildCategoriaBadge(
-                      b.idCategoriaRequerida,
-                      b.categoriaNombre,
-                    ),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        '${b.marcaRequerida} ${b.modeloRequerido} (${b.anioRequerido?.toString() ?? 'S/A'})',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF0F172A),
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
+                Text(
+                  b.folio,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontFamily: 'monospace',
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1E293B),
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Comb: ${b.combustibleRequerido ?? 'N/A'} | Transm: ${b.transmisionRequerida ?? 'N/A'}',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: Color(0xFF64748B),
-                  ),
+                  b.fechaCreacion,
+                  style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
                 ),
               ],
             ),
           ),
-        ),
 
-        // 3. Cliente (CRM)
-        DataCell(
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                b.clienteNombre,
+          // 2. Ficha Técnica Requerida
+          Expanded(
+            flex: 22,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildCategoriaBadge(
+                        b.idCategoriaRequerida,
+                        b.categoriaNombre,
+                      ),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          '${b.marcaRequerida} ${b.modeloRequerido} (${b.anioRequerido?.toString() ?? 'S/A'})',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF0F172A),
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Comb: ${b.combustibleRequerido ?? 'N/A'} | Transm: ${b.transmisionRequerida ?? 'N/A'}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFF64748B),
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // 3. Cliente (CRM)
+          Expanded(
+            flex: 14,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  b.clienteNombre,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0F172A),
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (b.clienteTelefono != null && b.clienteTelefono!.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    b.clienteTelefono!,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFF64748B),
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          // 4. Vendedor
+          Expanded(
+            flex: 13,
+            child: Text(
+              b.vendedorNombre,
+              style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+
+          // 5. Precio Acordado
+          Expanded(
+            flex: 12,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                _formatoCLP(b.precioAcordado),
                 style: const TextStyle(
                   fontSize: 13,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w900,
                   color: Color(0xFF0F172A),
                 ),
               ),
-              if (b.clienteTelefono != null &&
-                  b.clienteTelefono!.isNotEmpty) ...[
-                const SizedBox(height: 2),
-                Text(
-                  b.clienteTelefono!,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: Color(0xFF64748B),
-                  ),
+            ),
+          ),
+
+          // 6. Abono en Caja
+          Expanded(
+            flex: 11,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                _formatoCLP(b.montoAbonado),
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF047857), // Emerald 700
                 ),
-              ],
-            ],
-          ),
-        ),
-
-        // 4. Vendedor
-        DataCell(
-          Text(
-            b.vendedorNombre,
-            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-          ),
-        ),
-
-        // 5. Precio Pactado
-        DataCell(
-          Text(
-            _formatoCLP(b.precioAcordado),
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w900,
-              color: Color(0xFF0F172A),
+              ),
             ),
           ),
-        ),
 
-        // 6. Abono
-        DataCell(
-          Text(
-            _formatoCLP(b.montoAbonado),
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF047857), // Emerald 700
+          // 7. Saldo Pendiente
+          Expanded(
+            flex: 11,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Text(
+                _formatoCLP(b.saldoPendiente),
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: b.saldoPendiente > 0 ? const Color(0xFFB45309) : const Color(0xFF94A3B8),
+                ),
+              ),
             ),
           ),
-        ),
 
-        // 7. Saldo
-        DataCell(
-          Text(
-            _formatoCLP(b.saldoPendiente),
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFFB45309), // Amber 700
+          // 8. Estado Reserva
+          Expanded(
+            flex: 12,
+            child: Align(
+              alignment: Alignment.center,
+              child: _buildEstadoBadge(b.estadoReserva),
             ),
           ),
-        ),
 
-        // 8. Estado Reserva
-        DataCell(Center(child: _buildEstadoBadge(b.estadoReserva))),
-
-        // 9. Match / Asignación
-        DataCell(
-          Center(
-            child: _buildMatchBadge(b.idActivoAsignado, b.activoAsignadoSku),
+          // 9. Match / Asignación
+          Expanded(
+            flex: 13,
+            child: Align(
+              alignment: Alignment.center,
+              child: _buildMatchBadge(b.idActivoAsignado, b.activoAsignadoSku),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 

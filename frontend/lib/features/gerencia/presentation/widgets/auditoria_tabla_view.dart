@@ -444,32 +444,52 @@ class AuditoriaTablaView extends StatelessWidget {
               ),
             ),
 
-            // 10. ACCIONES (Ícono de ojo y etiqueta Auditar en azul)
+            // 10. ACCIONES (Pastilla estilizada interactiva con hover pulido)
             Expanded(
               flex: 12,
               child: Align(
                 alignment: Alignment.center,
-                child: TextButton.icon(
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
+                child: OutlinedButton.icon(
+                  style: ButtonStyle(
+                    backgroundColor: WidgetStateProperty.resolveWith((states) {
+                      if (states.contains(WidgetState.hovered)) {
+                        return const Color(0xFFE0F2FE); // Azul cielo suave al pasar el mouse
+                      }
+                      return const Color(0xFFF0F9FF); // Fondo claro sutil
+                    }),
+                    foregroundColor: WidgetStateProperty.resolveWith((states) {
+                      if (states.contains(WidgetState.hovered)) {
+                        return const Color(0xFF0369A1); // Azul más vivo en hover
+                      }
+                      return const Color(0xFF0284C7);
+                    }),
+                    side: WidgetStateProperty.resolveWith((states) {
+                      if (states.contains(WidgetState.hovered)) {
+                        return const BorderSide(color: Color(0xFF0284C7), width: 1.2);
+                      }
+                      return const BorderSide(color: Color(0xFFBAE6FD), width: 1.0);
+                    }),
+                    shape: WidgetStateProperty.all(
+                      RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
                     ),
-                    foregroundColor: const Color(0xFF0284C7),
-                    minimumSize: Size.zero,
+                    padding: WidgetStateProperty.all(
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    ),
+                    minimumSize: WidgetStateProperty.all(const Size(86, 30)),
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    elevation: WidgetStateProperty.all(0),
                   ),
                   icon: const Icon(
                     Icons.visibility_outlined,
-                    size: 16,
-                    color: Color(0xFF0284C7),
+                    size: 15,
                   ),
                   label: Text(
                     'Auditar',
                     style: AppTypography.small.copyWith(
-                      color: const Color(0xFF0284C7),
                       fontWeight: FontWeight.w700,
-                      fontSize: 13,
+                      fontSize: 12,
                     ),
                   ),
                   onPressed: () => onVerDetalle(item),

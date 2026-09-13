@@ -40,6 +40,7 @@ router = APIRouter(prefix="/api/v1/inventario", tags=["Buscador Inventario"])
 @router.get("/opciones-filtros", response_model=Dict[str, List[str]])
 def obtener_opciones_filtros(
     categoria: Optional[str] = None,
+    galpon: Optional[str] = None,
     pasillo: Optional[str] = None,
     pallet: Optional[str] = None,
     marca: Optional[str] = None,
@@ -78,10 +79,6 @@ def obtener_opciones_filtros(
         elif cat_upper == "ACCESORIOS":
             query = query.filter(Activo_Inventariado.id_categoria == 3)
 
-    if pasillo:
-        query = query.filter(func.upper(Activo_Inventariado.ubicacion_pasillo) == pasillo.upper())
-    if pallet:
-        query = query.filter(func.upper(Activo_Inventariado.ubicacion_pallet) == pallet.upper())
     if marca:
         query = query.filter(func.upper(Vehiculo_Origen.marca) == marca.upper())
     if modelo:
@@ -96,13 +93,27 @@ def obtener_opciones_filtros(
             | (func.upper(Detalle_Caja_Cambio.transmision_tipo) == transmision.upper())
         )
 
-    # 3. Extraemos las opciones ÚNICAS de lo que quedó después de filtrar
+    # 3. Ubicaciones en cascada jerárquica (Galpón -> Pasillos en ese Galpón -> Pallets en ese Pasillo)
+    galpones = query.with_entities(func.upper(Activo_Inventariado.ubicacion_galpon)).distinct().all()
+
+    if galpon and galpon.strip().lower() not in ["todos", "todas"]:
+        query = query.filter(func.upper(Activo_Inventariado.ubicacion_galpon) == galpon.strip().upper())
+
+    pasillos = query.with_entities(func.upper(Activo_Inventariado.ubicacion_pasillo)).distinct().all()
+
+    if pasillo and pasillo.strip().lower() not in ["todos", "todas"]:
+        query = query.filter(func.upper(Activo_Inventariado.ubicacion_pasillo) == pasillo.strip().upper())
+
+    pallets = query.with_entities(func.upper(Activo_Inventariado.ubicacion_pallet)).distinct().all()
+
+    if pallet and pallet.strip().lower() not in ["todos", "todas"]:
+        query = query.filter(func.upper(Activo_Inventariado.ubicacion_pallet) == pallet.strip().upper())
+
+    # 4. Extraemos las opciones ÚNICAS generales
     marcas = query.with_entities(func.upper(Vehiculo_Origen.marca)).distinct().all()
     modelos = query.with_entities(func.upper(Vehiculo_Origen.modelo)).distinct().all()
     cilindradas = query.with_entities(func.upper(Detalle_Motor.cilindrada)).distinct().all()
     combustibles = query.with_entities(func.upper(Detalle_Motor.combustible)).distinct().all()
-    pasillos = query.with_entities(func.upper(Activo_Inventariado.ubicacion_pasillo)).distinct().all()
-    pallets = query.with_entities(func.upper(Activo_Inventariado.ubicacion_pallet)).distinct().all()
 
     trans_motor = query.with_entities(func.upper(Detalle_Motor.transmision_tipo)).distinct().all()
     trans_caja = query.with_entities(func.upper(Detalle_Caja_Cambio.transmision_tipo)).distinct().all()
@@ -121,6 +132,7 @@ def obtener_opciones_filtros(
         "cilindradas": limpiar_lista(cilindradas),
         "combustibles": limpiar_lista(combustibles),
         "transmisiones": limpiar_lista(transmisiones),
+        "galpones": limpiar_lista(galpones),
         "pasillos": limpiar_lista(pasillos),
         "pallets": limpiar_lista(pallets),
     }
@@ -692,7 +704,10 @@ def obtener_maestro_inventario(
     estado: Optional[str] = Query(None, description="Filtro por nombre de estado"),
     combustible: Optional[str] = Query(None, description="Filtro por combustible"),
     transmision: Optional[str] = Query(None, description="Filtro por transmisión"),
-    ubicacion: Optional[str] = Query(None, description="Filtro rápido por pasillo, pallet o galpón"),
+    ubicacion: Optional[str] = Query(None, description="Filtro rápido por pasillo, pallet o galpón (legacy)"),
+    galpon: Optional[str] = Query(None, description="Filtro por Galpón"),
+    pasillo: Optional[str] = Query(None, description="Filtro por Pasillo"),
+    pallet: Optional[str] = Query(None, description="Filtro por Pallet"),
     solo_sin_tasar: bool = Query(False, description="Filtrar únicamente ítems pendientes de tasación"),
     limit: int = Query(15, ge=1, le=100, description="Límite por página"),
     offset: int = Query(0, ge=0, description="Desplazamiento para paginación"),
@@ -717,6 +732,13 @@ def obtener_maestro_inventario(
         .outerjoin(Detalle_Motor, Activo_Inventariado.id_activo == Detalle_Motor.id_activo)
         .outerjoin(Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo)
         .filter(Activo_Inventariado.estado == "Activo")
+    )
+
+    # ⚠️ REGLA DE NEGOCIO: Excluir activos que no están físicamente en inventario de bodega
+    # ('En Desarme' / ID 5 y 'Entregado' / ID 6).
+    query = query.filter(
+        ~Activo_Inventariado.id_estado.in_([5, 6]),
+        ~func.lower(Estado_Activo.nombre_estado).in_(["en desarme", "desarme", "entregado"]),
     )
 
     if id_sucursal is not None:
@@ -759,6 +781,15 @@ def obtener_maestro_inventario(
                     func.upper(Detalle_Caja_Cambio.transmision_tipo).like(trans_term),
                 )
             )
+
+    if galpon and galpon.strip().lower() not in ["todas", "todos"]:
+        query = query.filter(func.upper(Activo_Inventariado.ubicacion_galpon) == galpon.strip().upper())
+
+    if pasillo and pasillo.strip().lower() not in ["todas", "todos"]:
+        query = query.filter(func.upper(Activo_Inventariado.ubicacion_pasillo) == pasillo.strip().upper())
+
+    if pallet and pallet.strip().lower() not in ["todas", "todos"]:
+        query = query.filter(func.upper(Activo_Inventariado.ubicacion_pallet) == pallet.strip().upper())
 
     if ubicacion and ubicacion.strip().lower() not in ["todas", "todos"]:
         u_clean = ubicacion.strip().lower()
@@ -933,6 +964,16 @@ def asignar_precio_repuesto(
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Repuesto inventariado con ID '{id_activo}' no encontrado.",
+            )
+
+        # Regla de negocio: Solo se permite tasar o modificar precio si el activo está en estado 'Paletizado' o 'Disponible'
+        # Bloquea intentos sobre repuestos 'Reservado', 'Vendido', 'En Desarme', 'Entregado', etc.
+        estado_actual = db.query(Estado_Activo).filter(Estado_Activo.id_estado == activo.id_estado).first()
+        nombre_estado_actual = estado_actual.nombre_estado.lower().strip() if estado_actual and estado_actual.nombre_estado else ""
+        if nombre_estado_actual not in ["disponible", "paletizado"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"No es posible modificar el precio de un repuesto en estado '{estado_actual.nombre_estado if estado_actual else activo.id_estado}'. Solo se permite tasar repuestos en estado 'Disponible' o 'Paletizado'.",
             )
 
         activo.precio_referencia = payload.precio_referencia

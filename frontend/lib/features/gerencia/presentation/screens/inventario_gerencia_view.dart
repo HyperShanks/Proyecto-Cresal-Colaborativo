@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../../ventas/models/catalogo_model.dart';
+import '../../../inventario/services/inventario_service.dart';
 import '../../services/gerencia_service.dart';
 
 enum ModoVistaStock { tarjetas, tabla }
@@ -40,10 +41,17 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
 
   // Filtros Secundarios
   String _categoria = 'todas';
-  String _ubicacion = 'todas';
+  String _galpon = 'todas';
+  String _pasillo = 'todas';
+  String _pallet = 'todas';
   String _combustible = 'todos';
   String _transmision = 'todas';
   String _estado = 'todos';
+
+  // Listas de opciones dinámicas según stock real
+  List<String> _galponesDisponibles = [];
+  List<String> _pasillosDisponibles = [];
+  List<String> _palletsDisponibles = [];
 
   // Paginación y Estado
   int _paginaActual = 1;
@@ -61,7 +69,32 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
     _idSucursal = widget.idSucursalInicial;
     _soloSinTasar = widget.filtroSinTasarInicial;
     _busquedaController = TextEditingController();
+    _cargarOpcionesUbicacion();
     _cargarInventario();
+  }
+
+  Future<void> _cargarOpcionesUbicacion() async {
+    try {
+      final opciones = await InventarioService.obtenerOpcionesFiltros(
+        galpon: _galpon != 'todas' && _galpon != 'todos' ? _galpon : null,
+        pasillo: _pasillo != 'todas' && _pasillo != 'todos' ? _pasillo : null,
+      );
+      if (!mounted) return;
+      setState(() {
+        _galponesDisponibles = opciones['galpones'] ?? [];
+        _pasillosDisponibles = opciones['pasillos'] ?? [];
+        _palletsDisponibles = opciones['pallets'] ?? [];
+
+        if (_pasillo != 'todas' && !_pasillosDisponibles.contains(_pasillo.toUpperCase())) {
+          _pasillo = 'todas';
+        }
+        if (_pallet != 'todas' && !_palletsDisponibles.contains(_pallet.toUpperCase())) {
+          _pallet = 'todas';
+        }
+      });
+    } catch (_) {
+      // Fallback silencioso
+    }
   }
 
   @override
@@ -123,7 +156,9 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
         estado: _estado,
         combustible: _combustible,
         transmision: _transmision,
-        ubicacion: _ubicacion,
+        galpon: _galpon,
+        pasillo: _pasillo,
+        pallet: _pallet,
         soloSinTasar: _soloSinTasar,
         busqueda: _busquedaController.text.trim(),
         limite: _limitePorPagina,
@@ -132,8 +167,17 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
 
       if (!mounted) return;
 
+      // Filtro defensivo: excluir repuestos que no están físicamente en bodega (En Desarme o Entregado)
+      final itemsValidos = res.items.where((item) {
+        final est = (item.estadoActivo ?? '').trim().toLowerCase();
+        final id = item.idEstado;
+        if (id == 5 || id == 6) return false;
+        if (est == 'en desarme' || est == 'desarme' || est == 'entregado') return false;
+        return true;
+      }).toList();
+
       setState(() {
-        _items = res.items;
+        _items = itemsValidos;
         _totalCount = res.totalCount;
         _pendientesTasacionCount = res.pendientesTasacionCount;
         _isLoading = false;
@@ -152,12 +196,15 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
     setState(() {
       _soloSinTasar = false;
       _categoria = 'todas';
-      _ubicacion = 'todas';
+      _galpon = 'todas';
+      _pasillo = 'todas';
+      _pallet = 'todas';
       _combustible = 'todos';
       _transmision = 'todas';
       _estado = 'todos';
       _paginaActual = 1;
     });
+    _cargarOpcionesUbicacion();
     _cargarInventario();
   }
 
@@ -302,23 +349,63 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                     _cargarInventario(pagina: 1);
                   },
                 ),
-                // 2. Ubicación
+                // 2. Galpón (Dinámico según stock real)
                 _buildDropdown(
-                  value: _ubicacion,
-                  items: const [
-                    DropdownMenuItem(value: 'todas', child: Text('Ubicación: Todas')),
-                    DropdownMenuItem(value: 'pasillo-A', child: Text('Pasillo A')),
-                    DropdownMenuItem(value: 'pasillo-B', child: Text('Pasillo B')),
-                    DropdownMenuItem(value: 'pasillo-C', child: Text('Pasillo C')),
-                    DropdownMenuItem(value: 'pallet-1', child: Text('Pallet 1')),
-                    DropdownMenuItem(value: 'pallet-2', child: Text('Pallet 2')),
-                    DropdownMenuItem(value: 'pallet-4', child: Text('Pallet 4')),
-                    DropdownMenuItem(value: 'pallet-8', child: Text('Pallet 8')),
-                    DropdownMenuItem(value: 'galpon-1', child: Text('Galpón 1')),
+                  value: _galponesDisponibles.contains(_galpon.toUpperCase()) || _galpon == 'todas'
+                      ? _galpon
+                      : 'todas',
+                  items: [
+                    const DropdownMenuItem(value: 'todas', child: Text('Galpón: Todos')),
+                    ..._galponesDisponibles.map(
+                      (g) => DropdownMenuItem(value: g, child: Text('Galpón $g')),
+                    ),
                   ],
                   onChanged: (val) {
                     if (val == null) return;
-                    setState(() => _ubicacion = val);
+                    setState(() {
+                      _galpon = val;
+                      _pasillo = 'todas';
+                      _pallet = 'todas';
+                    });
+                    _cargarOpcionesUbicacion();
+                    _cargarInventario(pagina: 1);
+                  },
+                ),
+                // 3. Pasillo (Dinámico según galpón y stock real)
+                _buildDropdown(
+                  value: _pasillosDisponibles.contains(_pasillo.toUpperCase()) || _pasillo == 'todas'
+                      ? _pasillo
+                      : 'todas',
+                  items: [
+                    const DropdownMenuItem(value: 'todas', child: Text('Pasillo: Todos')),
+                    ..._pasillosDisponibles.map(
+                      (p) => DropdownMenuItem(value: p, child: Text('Pasillo $p')),
+                    ),
+                  ],
+                  onChanged: (val) {
+                    if (val == null) return;
+                    setState(() {
+                      _pasillo = val;
+                      _pallet = 'todas';
+                    });
+                    _cargarOpcionesUbicacion();
+                    _cargarInventario(pagina: 1);
+                  },
+                ),
+                // 4. Pallet (Dinámico según pasillo y stock real)
+                _buildDropdown(
+                  value: _palletsDisponibles.contains(_pallet.toUpperCase()) || _pallet == 'todas'
+                      ? _pallet
+                      : 'todas',
+                  items: [
+                    const DropdownMenuItem(value: 'todas', child: Text('Pallet: Todos')),
+                    ..._palletsDisponibles.map(
+                      (p) => DropdownMenuItem(value: p, child: Text('Pallet $p')),
+                    ),
+                  ],
+                  onChanged: (val) {
+                    if (val == null) return;
+                    setState(() => _pallet = val);
                     _cargarInventario(pagina: 1);
                   },
                 ),
@@ -607,6 +694,10 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
     required List<DropdownMenuItem<String>> items,
     required ValueChanged<String?> onChanged,
   }) {
+    final effectiveValue = items.any((i) => i.value == value)
+        ? value
+        : (items.isNotEmpty ? items.first.value : null);
+
     return Container(
       height: 32,
       padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -617,7 +708,7 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
-          value: value,
+          value: effectiveValue,
           dropdownColor: Colors.white,
           icon: const Icon(Icons.expand_more, size: 16, color: Color(0xFF64748B)),
           style: const TextStyle(
@@ -676,8 +767,10 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
   Widget _buildItemCard(CatalogoItem item) {
     final tienePrecio = item.precioReferencia != null && item.precioReferencia! > 0;
     final estadoNombre = item.estadoActivo ?? 'Disponible';
-    final esPaletizado = estadoNombre.toLowerCase() == 'paletizado' || item.idEstado == 7;
-    final esBloqueado = (estadoNombre.toLowerCase() == 'reservado' || estadoNombre.toLowerCase() == 'vendido') && tienePrecio;
+    final estLower = estadoNombre.toLowerCase().trim();
+    final esPaletizado = estLower == 'paletizado';
+    final bool puedeEditar = estLower == 'disponible' || estLower == 'paletizado';
+    final bool esBloqueado = !puedeEditar;
 
     return Container(
       decoration: BoxDecoration(
@@ -967,20 +1060,23 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
   Widget _buildBadgeEstado(String estado) {
     Color bg;
     Color border;
-    final estLower = estado.toLowerCase();
+    final estLower = estado.toLowerCase().trim();
 
-    if (estLower == 'paletizado') {
-      bg = const Color(0xFFF59E0B);
-      border = const Color(0xFFD97706);
-    } else if (estLower == 'disponible') {
+    if (estLower == 'disponible') {
       bg = const Color(0xFF059669);
       border = const Color(0xFF047857);
     } else if (estLower == 'reservado') {
-      bg = const Color(0xFF334155);
-      border = const Color(0xFF1E293B);
+      bg = const Color(0xFFD97706);
+      border = const Color(0xFFB45309);
+    } else if (estLower == 'paletizado') {
+      bg = const Color(0xFF0284C7);
+      border = const Color(0xFF0369A1);
+    } else if (estLower == 'vendido') {
+      bg = const Color(0xFFDC2626);
+      border = const Color(0xFFB91C1C);
     } else {
-      bg = const Color(0xFF475569);
-      border = const Color(0xFF334155);
+      bg = const Color(0xFF4F46E5);
+      border = const Color(0xFF4338CA);
     }
 
     return Container(
@@ -1160,8 +1256,10 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
   Widget _buildTableRow(CatalogoItem item) {
     final tienePrecio = item.precioReferencia != null && item.precioReferencia! > 0;
     final estadoNombre = item.estadoActivo ?? 'Disponible';
-    final esPaletizado = estadoNombre.toLowerCase() == 'paletizado' || item.idEstado == 7;
-    final esBloqueado = (estadoNombre.toLowerCase() == 'reservado' || estadoNombre.toLowerCase() == 'vendido') && tienePrecio;
+    final estLower = estadoNombre.toLowerCase().trim();
+    final esPaletizado = estLower == 'paletizado';
+    final bool puedeEditar = estLower == 'disponible' || estLower == 'paletizado';
+    final bool esBloqueado = !puedeEditar;
 
     return InkWell(
       hoverColor: const Color(0xFFF8FAFC),
@@ -1334,12 +1432,27 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
               flex: 2,
               child: Center(
                 child: esBloqueado
-                    ? const Text(
-                        'Bloqueado',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Color(0xFF94A3B8),
-                          fontWeight: FontWeight.bold,
+                    ? Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: AppPalette.borderLight),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.lock, size: 11, color: Color(0xFF94A3B8)),
+                            const SizedBox(width: 4),
+                            Text(
+                              estadoNombre,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF94A3B8),
+                              ),
+                            ),
+                          ],
                         ),
                       )
                     : ElevatedButton.icon(
@@ -1466,6 +1579,21 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
   // 5. MODAL DE TASACIÓN GERENCIAL (FIJAR PRECIO COMERCIAL)
   // =========================================================================
   void _abrirModalTasacion(CatalogoItem item) {
+    final estLower = (item.estadoActivo ?? '').toLowerCase().trim();
+    if (estLower != 'disponible' && estLower != 'paletizado') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'No es posible modificar el precio de un repuesto en estado "${item.estadoActivo}". Solo está permitido en Disponible o Paletizado.',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          backgroundColor: AppPalette.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
     final bool esEdicionPrevia = item.precioReferencia != null && item.precioReferencia! > 0;
     showDialog(
       context: context,

@@ -9,6 +9,7 @@ class InventarioService {
 
   static Future<Map<String, List<String>>> obtenerOpcionesFiltros({
     String? categoria,
+    String? galpon,
     String? pasillo,
     String? pallet,
     String? marca,
@@ -21,6 +22,7 @@ class InventarioService {
       final Map<String, String> queryParams = {};
 
       if (categoria != null) queryParams['categoria'] = categoria;
+      if (galpon != null) queryParams['galpon'] = galpon;
       if (pasillo != null) queryParams['pasillo'] = pasillo;
       if (pallet != null) queryParams['pallet'] = pallet;
       if (marca != null) queryParams['marca'] = marca;

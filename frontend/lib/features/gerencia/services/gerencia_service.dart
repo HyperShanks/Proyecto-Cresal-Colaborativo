@@ -234,6 +234,9 @@ class GerenciaService {
     String? combustible,
     String? transmision,
     String? ubicacion,
+    String? galpon,
+    String? pasillo,
+    String? pallet,
     bool soloSinTasar = false,
     String? busqueda,
     int limite = 15,
@@ -251,6 +254,9 @@ class GerenciaService {
       if (combustible != null && combustible != 'todos') queryParams['combustible'] = combustible;
       if (transmision != null && transmision != 'todas') queryParams['transmision'] = transmision;
       if (ubicacion != null && ubicacion != 'todas') queryParams['ubicacion'] = ubicacion;
+      if (galpon != null && galpon != 'todas' && galpon != 'todos') queryParams['galpon'] = galpon;
+      if (pasillo != null && pasillo != 'todas' && pasillo != 'todos') queryParams['pasillo'] = pasillo;
+      if (pallet != null && pallet != 'todas' && pallet != 'todos') queryParams['pallet'] = pallet;
       if (soloSinTasar) queryParams['solo_sin_tasar'] = 'true';
       if (busqueda != null && busqueda.trim().isNotEmpty) queryParams['q'] = busqueda.trim();
 

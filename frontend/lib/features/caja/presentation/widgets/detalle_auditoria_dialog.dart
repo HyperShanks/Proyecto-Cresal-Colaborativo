@@ -689,42 +689,16 @@ class DetalleAuditoriaDialog extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppPalette.primary,
-                  side: const BorderSide(color: AppPalette.primary),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                icon: const Icon(Icons.print_rounded, size: 16),
-                label: const Text('Imprimir Comprobante'),
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Enviando comprobante de ${orden.folio} a impresión...'),
-                      backgroundColor: AppPalette.surfaceLight,
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                },
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppPalette.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
               ),
-              const SizedBox(width: 10),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppPalette.primary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('CERRAR'),
-              ),
-            ],
+            ),
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('CERRAR'),
           ),
         ],
       ),
