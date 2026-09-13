@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../core/widgets/cresal_logo.dart';
 import '../../../../core/theme/theme_controller.dart';
 import '../../../../routes/app_routes.dart';
 import '../../services/auth_service.dart';
@@ -87,27 +88,7 @@ class _SplashScreenState extends State<SplashScreen>
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               // Logo corporativo
-              Container(
-                width: 100,
-                height: 100,
-                decoration: BoxDecoration(
-                  color: AppPalette.primary,
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppPalette.primary.withValues(alpha: 0.45),
-                      blurRadius: 30,
-                      spreadRadius: 4,
-                    ),
-                  ],
-                ),
-                child: Center(
-                  child: Text(
-                    'C',
-                    style: AppTypography.headline.copyWith(fontSize: 52),
-                  ),
-                ),
-              ),
+              const CresalLogo(size: 100),
               const SizedBox(height: 24),
               Text(
                 'CRESAL',
