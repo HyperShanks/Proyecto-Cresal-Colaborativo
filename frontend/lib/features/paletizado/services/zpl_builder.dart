@@ -33,16 +33,24 @@ class ZplBuilder {
 
     // ── 1. Inicialización y Configuración de Etiqueta (100x70 mm @ 203 DPI) ──
     sb.writeln('^XA'); // Inicio del formato ZPL
-    sb.writeln('^CI28'); // Codificación UTF-8 para caracteres en español (tildes, ñ)
-    sb.writeln('^PW800'); // Ancho de impresión: 800 dots (100 mm @ 8 dpmm / 203 DPI)
-    sb.writeln('^LL560'); // Alto de etiqueta: 560 dots (70 mm @ 8 dpmm / 203 DPI)
+    sb.writeln(
+      '^CI28',
+    ); // Codificación UTF-8 para caracteres en español (tildes, ñ)
+    sb.writeln(
+      '^PW800',
+    ); // Ancho de impresión: 800 dots (100 mm @ 8 dpmm / 203 DPI)
+    sb.writeln(
+      '^LL560',
+    ); // Alto de etiqueta: 560 dots (70 mm @ 8 dpmm / 203 DPI)
     sb.writeln('^LH0,0'); // Origen en la esquina superior izquierda
 
     // ── 2. Marco Exterior y Líneas de Estructura ──
     sb.writeln('^FO20,15^GB760,530,3^FS'); // Borde exterior rectangular
     sb.writeln('^FO20,95^GB760,0,3^FS'); // Línea separadora de Header
     sb.writeln('^FO20,455^GB760,0,3^FS'); // Línea separadora de Footer
-    sb.writeln('^FO360,95^GB0,360,3^FS'); // Línea vertical separadora (QR / Datos)
+    sb.writeln(
+      '^FO360,95^GB0,360,3^FS',
+    ); // Línea vertical separadora (QR / Datos)
 
     // ── 3. Header: Logo CRESAL y Badge del Tipo de Activo ──
     sb.writeln('^FO40,25^A0N,32,32^FDCRESAL^FS');
@@ -89,7 +97,7 @@ class ZplBuilder {
     // Todas las características usan tamaño tipográfico homogéneo ^A0N,25,25.
     sb.writeln('^FO385,118^A0N,25,25^FDMARCA: $marca^FS');
     sb.writeln('^FO385,164^A0N,25,25^FDMODELO: $modelo^FS');
-    sb.writeln('^FO385,210^A0N,25,25^FDANIO: $anio^FS');
+    sb.writeln('^FO385,210^A0N,25,25^FDAÑO: $anio^FS');
     sb.writeln('^FO385,256^A0N,25,25^FDCILINDRADA: $cilindrada^FS');
     sb.writeln('^FO385,302^A0N,25,25^FDCOMBUSTIBLE: $combustible^FS');
     sb.writeln('^FO385,348^A0N,25,25^FDTRANSMISION: $transmision^FS');
