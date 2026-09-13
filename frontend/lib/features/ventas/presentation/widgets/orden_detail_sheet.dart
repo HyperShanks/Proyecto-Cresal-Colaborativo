@@ -8,17 +8,12 @@ import 'modal_anular_orden.dart';
 
 /// Modal inferior para visualizar el detalle técnico completo de una orden de venta (HU-3.5).
 /// Ofrece acciones condicionales de visualización de QR transaccional (HU-3.6),
-/// simulación de pago en caja para demostraciones (HU-3.6),
 /// edición de notas técnicas y anulación transaccional si está en estado 'Reservada'.
 class OrdenDetailSheet extends StatefulWidget {
   final OrdenHistorialModel orden;
   final VoidCallback? onOrderUpdated;
 
-  const OrdenDetailSheet({
-    super.key,
-    required this.orden,
-    this.onOrderUpdated,
-  });
+  const OrdenDetailSheet({super.key, required this.orden, this.onOrderUpdated});
 
   @override
   State<OrdenDetailSheet> createState() => _OrdenDetailSheetState();
@@ -132,7 +127,9 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
           children: [
             Text(
               'Indica requerimientos especiales de desmontaje o preparación técnica para el bodeguero:',
-              style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
+              style: AppTypography.small.copyWith(
+                color: AppPalette.textSecondary,
+              ),
             ),
             const SizedBox(height: 12.0),
             TextField(
@@ -141,7 +138,9 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
               style: AppTypography.body,
               decoration: InputDecoration(
                 hintText: 'Ej. Entregar con poleas y cables intactos...',
-                hintStyle: AppTypography.small.copyWith(color: AppPalette.neutral),
+                hintStyle: AppTypography.small.copyWith(
+                  color: AppPalette.neutral,
+                ),
                 filled: true,
                 fillColor: AppPalette.background,
                 border: OutlineInputBorder(
@@ -150,7 +149,10 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8.0),
-                  borderSide: const BorderSide(color: AppPalette.primary, width: 1.5),
+                  borderSide: const BorderSide(
+                    color: AppPalette.primary,
+                    width: 1.5,
+                  ),
                 ),
               ),
             ),
@@ -161,7 +163,9 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
             onPressed: () => Navigator.of(ctx).pop(null),
             child: Text(
               'Cancelar',
-              style: AppTypography.button.copyWith(color: AppPalette.textSecondary),
+              style: AppTypography.button.copyWith(
+                color: AppPalette.textSecondary,
+              ),
             ),
           ),
           ElevatedButton(
@@ -169,7 +173,9 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
               backgroundColor: AppPalette.primary,
               foregroundColor: AppPalette.textPrimary,
               elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8.0),
+              ),
             ),
             onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
             child: const Text('Guardar'),
@@ -239,154 +245,9 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
     );
 
     if (result == true && mounted) {
-      Navigator.of(context).pop(); // Cerrar el bottom sheet tras anulación exitosa
-    }
-  }
-
-  /// Simula la confirmación de pago en caja para demostraciones y pruebas del flujo (HU-3.6)
-  Future<void> _simularPagoCaja() async {
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
-
-    final confirmar = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppPalette.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14.0),
-          side: const BorderSide(color: Colors.white10),
-        ),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6.0),
-              decoration: BoxDecoration(
-                color: AppPalette.success.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(8.0),
-              ),
-              child: const Icon(
-                Icons.point_of_sale_rounded,
-                color: AppPalette.success,
-                size: 22.0,
-              ),
-            ),
-            const SizedBox(width: 10.0),
-            Text(
-              'Simular Pago en Caja',
-              style: AppTypography.title.copyWith(fontSize: 17.0),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '¿Deseas registrar la liquidación total de la orden por ${_orden.totalVentaFormateado}?',
-              style: AppTypography.body.copyWith(fontSize: 14.5),
-            ),
-            const SizedBox(height: 12.0),
-            Container(
-              padding: const EdgeInsets.all(10.0),
-              decoration: BoxDecoration(
-                color: AppPalette.background,
-                borderRadius: BorderRadius.circular(8.0),
-                border: Border.all(color: Colors.white10),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.info_outline, size: 16.0, color: AppPalette.secondary),
-                  const SizedBox(width: 8.0),
-                  Expanded(
-                    child: Text(
-                      'Esta acción confirmará el pago en el backend (ACID) y generará el código QR transaccional para retiro en bodega.',
-                      style: AppTypography.small.copyWith(fontSize: 11.5),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(
-              'Cancelar',
-              style: AppTypography.button.copyWith(color: AppPalette.textSecondary),
-            ),
-          ),
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppPalette.success,
-              foregroundColor: AppPalette.textPrimary,
-              elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
-            ),
-            icon: const Icon(Icons.check, size: 18.0),
-            label: const Text('CONFIRMAR PAGO'),
-            onPressed: () => Navigator.of(ctx).pop(true),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmar != true || !mounted) return;
-
-    setState(() => _isLoading = true);
-
-    try {
-      final responsePago = await OrdenesService.pagarOrden(
-        _orden.idOrden,
-        metodoPago: 'Efectivo',
-      );
-
-      if (!mounted) return;
-
-      setState(() {
-        _orden = _orden.copyWith(
-          estadoOrden: responsePago.estadoOrden,
-          montoPendiente: responsePago.montoPendiente,
-          qrTransaccionalSalida: responsePago.qrTransaccionalSalida,
-        );
-        _isLoading = false;
-      });
-
-      widget.onOrderUpdated?.call();
-
-      scaffoldMessenger.showSnackBar(
-        const SnackBar(
-          content: Row(
-            children: [
-              Icon(Icons.check_circle, color: Colors.white, size: 20.0),
-              SizedBox(width: 8.0),
-              Expanded(
-                child: Text(
-                  '¡Pago confirmado exitosamente! Código QR transaccional emitido.',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ),
-            ],
-          ),
-          backgroundColor: AppPalette.success,
-          duration: Duration(seconds: 3),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-
-      // Desplegar automáticamente el modal del Ticket Digital QR solo si se generó QR
-      if (mounted && _orden.tieneQrDisponible) {
-        QrTicketDialog.mostrar(context, _orden);
-      }
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      scaffoldMessenger.showSnackBar(
-        SnackBar(
-          content: Text(e.toString().replaceFirst('Exception: ', '')),
-          backgroundColor: AppPalette.error,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      Navigator.of(
+        context,
+      ).pop(); // Cerrar el bottom sheet tras anulación exitosa
     }
   }
 
@@ -416,7 +277,10 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
 
           // ── Encabezado del BottomSheet ────────────────────────────────
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16.0,
+              vertical: 8.0,
+            ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -461,10 +325,16 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                     _buildStatusBadge(),
                     const SizedBox(width: 8.0),
                     IconButton(
-                      icon: const Icon(Icons.close, color: AppPalette.textSecondary),
+                      icon: const Icon(
+                        Icons.close,
+                        color: AppPalette.textSecondary,
+                      ),
                       onPressed: () => Navigator.of(context).pop(),
                       padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                      constraints: const BoxConstraints(
+                        minWidth: 48,
+                        minHeight: 48,
+                      ),
                     ),
                   ],
                 ),
@@ -487,14 +357,20 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                     decoration: BoxDecoration(
                       color: AppPalette.background,
                       borderRadius: BorderRadius.circular(10.0),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.05),
+                      ),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.person, size: 16.0, color: AppPalette.primary),
+                            const Icon(
+                              Icons.person,
+                              size: 16.0,
+                              color: AppPalette.primary,
+                            ),
                             const SizedBox(width: 6.0),
                             Text(
                               'Datos del Cliente',
@@ -507,7 +383,8 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                         ),
                         const SizedBox(height: 8.0),
                         Text(
-                          _orden.cliente != null && _orden.cliente!.nombres.isNotEmpty
+                          _orden.cliente != null &&
+                                  _orden.cliente!.nombres.isNotEmpty
                               ? '${_orden.cliente!.nombreCompleto} (${_orden.cliente!.rutCliente})'
                               : 'Cliente General',
                           style: AppTypography.body.copyWith(
@@ -515,18 +392,24 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        if (_orden.cliente?.telefono != null && _orden.cliente!.telefono!.isNotEmpty) ...[
+                        if (_orden.cliente?.telefono != null &&
+                            _orden.cliente!.telefono!.isNotEmpty) ...[
                           const SizedBox(height: 4.0),
                           Text(
                             'Teléfono: ${_orden.cliente!.telefono}',
-                            style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
+                            style: AppTypography.small.copyWith(
+                              color: AppPalette.textSecondary,
+                            ),
                           ),
                         ],
-                        if (_orden.cliente?.correo != null && _orden.cliente!.correo!.isNotEmpty) ...[
+                        if (_orden.cliente?.correo != null &&
+                            _orden.cliente!.correo!.isNotEmpty) ...[
                           const SizedBox(height: 2.0),
                           Text(
                             'Correo: ${_orden.cliente!.correo}',
-                            style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
+                            style: AppTypography.small.copyWith(
+                              color: AppPalette.textSecondary,
+                            ),
                           ),
                         ],
                       ],
@@ -541,14 +424,20 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                       decoration: BoxDecoration(
                         color: AppPalette.background,
                         borderRadius: BorderRadius.circular(10.0),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.05),
+                        ),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
                             children: [
-                              const Icon(Icons.local_shipping, size: 16.0, color: AppPalette.secondary),
+                              const Icon(
+                                Icons.local_shipping,
+                                size: 16.0,
+                                color: AppPalette.secondary,
+                              ),
                               const SizedBox(width: 6.0),
                               Text(
                                 'Despacho a Domicilio',
@@ -567,12 +456,16 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                           const SizedBox(height: 4.0),
                           Text(
                             'Receptor: ${_orden.despacho!.receptorNombres} (${_orden.despacho!.receptorRut})',
-                            style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
+                            style: AppTypography.small.copyWith(
+                              color: AppPalette.textSecondary,
+                            ),
                           ),
                           const SizedBox(height: 2.0),
                           Text(
                             'Estado Envío: ${_orden.despacho!.estadoDespacho}',
-                            style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
+                            style: AppTypography.small.copyWith(
+                              color: AppPalette.textSecondary,
+                            ),
                           ),
                         ],
                       ),
@@ -591,141 +484,154 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                       ),
                       Text(
                         '${_orden.detalles.length} ${_orden.detalles.length == 1 ? 'ítem' : 'ítems'}',
-                        style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
+                        style: AppTypography.small.copyWith(
+                          color: AppPalette.textSecondary,
+                        ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 8.0),
 
-                  ..._orden.detalles.map((detalle) => Container(
-                        margin: const EdgeInsets.only(bottom: 10.0),
-                        padding: const EdgeInsets.all(12.0),
-                        decoration: BoxDecoration(
-                          color: AppPalette.background,
-                          borderRadius: BorderRadius.circular(10.0),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                  ..._orden.detalles.map(
+                    (detalle) => Container(
+                      margin: const EdgeInsets.only(bottom: 10.0),
+                      padding: const EdgeInsets.all(12.0),
+                      decoration: BoxDecoration(
+                        color: AppPalette.background,
+                        borderRadius: BorderRadius.circular(10.0),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.05),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(6.0),
-                                  decoration: BoxDecoration(
-                                    color: detalle.esInventariado
-                                        ? AppPalette.primary.withValues(alpha: 0.15)
-                                        : AppPalette.secondary.withValues(alpha: 0.15),
-                                    borderRadius: BorderRadius.circular(6.0),
-                                  ),
-                                  child: Icon(
-                                    detalle.esInventariado
-                                        ? Icons.precision_manufacturing_outlined
-                                        : Icons.handyman_outlined,
-                                    size: 16.0,
-                                    color: detalle.esInventariado
-                                        ? AppPalette.primary
-                                        : AppPalette.secondary,
-                                  ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(6.0),
+                                decoration: BoxDecoration(
+                                  color: detalle.esInventariado
+                                      ? AppPalette.primary.withValues(
+                                          alpha: 0.15,
+                                        )
+                                      : AppPalette.secondary.withValues(
+                                          alpha: 0.15,
+                                        ),
+                                  borderRadius: BorderRadius.circular(6.0),
                                 ),
-                                const SizedBox(width: 8.0),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        detalle.titulo,
-                                        style: AppTypography.body.copyWith(
-                                          fontSize: 14.0,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      if (detalle.skuQrFisico != null) ...[
-                                        const SizedBox(height: 2.0),
-                                        Text(
-                                          'SKU: ${detalle.skuQrFisico}',
-                                          style: AppTypography.small.copyWith(
-                                            fontSize: 12.0,
-                                            color: AppPalette.textSecondary,
-                                          ),
-                                        ),
-                                      ],
-                                      if (detalle.descripcionManual != null &&
-                                          detalle.descripcionManual!.isNotEmpty &&
-                                          detalle.descripcionManual != detalle.titulo) ...[
-                                        const SizedBox(height: 2.0),
-                                        Text(
-                                          detalle.descripcionManual!,
-                                          style: AppTypography.small.copyWith(
-                                            fontSize: 12.0,
-                                            color: AppPalette.neutral,
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
+                                child: Icon(
+                                  detalle.esInventariado
+                                      ? Icons.precision_manufacturing_outlined
+                                      : Icons.handyman_outlined,
+                                  size: 16.0,
+                                  color: detalle.esInventariado
+                                      ? AppPalette.primary
+                                      : AppPalette.secondary,
                                 ),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
+                              ),
+                              const SizedBox(width: 8.0),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      detalle.subtotalFormateado,
+                                      detalle.titulo,
                                       style: AppTypography.body.copyWith(
                                         fontSize: 14.0,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppPalette.secondary,
+                                        fontWeight: FontWeight.w600,
                                       ),
                                     ),
-                                    Text(
-                                      '${detalle.cantidad} x ${detalle.precioFinalFormateado}',
-                                      style: AppTypography.small.copyWith(
-                                        fontSize: 11.0,
-                                        color: AppPalette.textSecondary,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-
-                            // Notas de preparación técnica de este ítem
-                            if (detalle.notasPreparacion != null &&
-                                detalle.notasPreparacion!.isNotEmpty) ...[
-                              const SizedBox(height: 8.0),
-                              Container(
-                                padding: const EdgeInsets.all(8.0),
-                                decoration: BoxDecoration(
-                                  color: AppPalette.surface,
-                                  borderRadius: BorderRadius.circular(6.0),
-                                  border: Border.all(
-                                    color: AppPalette.secondary.withValues(alpha: 0.3),
-                                  ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.note_alt_outlined,
-                                      size: 14.0,
-                                      color: AppPalette.secondary,
-                                    ),
-                                    const SizedBox(width: 6.0),
-                                    Expanded(
-                                      child: Text(
-                                        'Nota: ${detalle.notasPreparacion}',
+                                    if (detalle.skuQrFisico != null) ...[
+                                      const SizedBox(height: 2.0),
+                                      Text(
+                                        'SKU: ${detalle.skuQrFisico}',
                                         style: AppTypography.small.copyWith(
                                           fontSize: 12.0,
-                                          color: AppPalette.textPrimary,
+                                          color: AppPalette.textSecondary,
                                         ),
                                       ),
-                                    ),
+                                    ],
+                                    if (detalle.descripcionManual != null &&
+                                        detalle.descripcionManual!.isNotEmpty &&
+                                        detalle.descripcionManual !=
+                                            detalle.titulo) ...[
+                                      const SizedBox(height: 2.0),
+                                      Text(
+                                        detalle.descripcionManual!,
+                                        style: AppTypography.small.copyWith(
+                                          fontSize: 12.0,
+                                          color: AppPalette.neutral,
+                                        ),
+                                      ),
+                                    ],
                                   ],
                                 ),
                               ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    detalle.subtotalFormateado,
+                                    style: AppTypography.body.copyWith(
+                                      fontSize: 14.0,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppPalette.secondary,
+                                    ),
+                                  ),
+                                  Text(
+                                    '${detalle.cantidad} x ${detalle.precioFinalFormateado}',
+                                    style: AppTypography.small.copyWith(
+                                      fontSize: 11.0,
+                                      color: AppPalette.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ],
+                          ),
+
+                          // Notas de preparación técnica de este ítem
+                          if (detalle.notasPreparacion != null &&
+                              detalle.notasPreparacion!.isNotEmpty) ...[
+                            const SizedBox(height: 8.0),
+                            Container(
+                              padding: const EdgeInsets.all(8.0),
+                              decoration: BoxDecoration(
+                                color: AppPalette.surface,
+                                borderRadius: BorderRadius.circular(6.0),
+                                border: Border.all(
+                                  color: AppPalette.secondary.withValues(
+                                    alpha: 0.3,
+                                  ),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.note_alt_outlined,
+                                    size: 14.0,
+                                    color: AppPalette.secondary,
+                                  ),
+                                  const SizedBox(width: 6.0),
+                                  Expanded(
+                                    child: Text(
+                                      'Nota: ${detalle.notasPreparacion}',
+                                      style: AppTypography.small.copyWith(
+                                        fontSize: 12.0,
+                                        color: AppPalette.textPrimary,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ],
-                        ),
-                      )),
+                        ],
+                      ),
+                    ),
+                  ),
 
                   const SizedBox(height: 12.0),
 
@@ -735,7 +641,9 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                     decoration: BoxDecoration(
                       color: AppPalette.background,
                       borderRadius: BorderRadius.circular(10.0),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.05),
+                      ),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -748,7 +656,9 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                           _orden.totalVentaFormateado,
                           style: AppTypography.headline.copyWith(
                             fontSize: 20.0,
-                            color: _orden.esAnulada ? AppPalette.neutral : AppPalette.secondary,
+                            color: _orden.esAnulada
+                                ? AppPalette.neutral
+                                : AppPalette.secondary,
                           ),
                         ),
                       ],
@@ -763,7 +673,9 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                       decoration: BoxDecoration(
                         color: AppPalette.success.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(12.0),
-                        border: Border.all(color: AppPalette.success.withValues(alpha: 0.5)),
+                        border: Border.all(
+                          color: AppPalette.success.withValues(alpha: 0.5),
+                        ),
                       ),
                       child: Column(
                         children: [
@@ -772,7 +684,9 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                               Container(
                                 padding: const EdgeInsets.all(8.0),
                                 decoration: BoxDecoration(
-                                  color: AppPalette.success.withValues(alpha: 0.2),
+                                  color: AppPalette.success.withValues(
+                                    alpha: 0.2,
+                                  ),
                                   borderRadius: BorderRadius.circular(8.0),
                                 ),
                                 child: const Icon(
@@ -795,7 +709,7 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                                       ),
                                     ),
                                     Text(
-                                      'Orden pagada. Lista para Handshake con Bodega.',
+                                      'Orden pagada. Lista para ser escaneada',
                                       style: AppTypography.small.copyWith(
                                         color: AppPalette.textSecondary,
                                         fontSize: 12.0,
@@ -815,9 +729,14 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                                 foregroundColor: AppPalette.textPrimary,
                                 elevation: 0,
                                 minimumSize: const Size(double.infinity, 48.0),
-                                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16.0,
+                                  vertical: 12.0,
+                                ),
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(AppComponents.defaultBorderRadius),
+                                  borderRadius: BorderRadius.circular(
+                                    AppComponents.defaultBorderRadius,
+                                  ),
                                 ),
                               ),
                               icon: const Icon(Icons.qr_code, size: 20.0),
@@ -829,7 +748,8 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                                   letterSpacing: 0.5,
                                 ),
                               ),
-                              onPressed: () => QrTicketDialog.mostrar(context, _orden),
+                              onPressed: () =>
+                                  QrTicketDialog.mostrar(context, _orden),
                             ),
                           ),
                         ],
@@ -845,7 +765,9 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                       decoration: BoxDecoration(
                         color: AppPalette.primary.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(12.0),
-                        border: Border.all(color: AppPalette.primary.withValues(alpha: 0.5)),
+                        border: Border.all(
+                          color: AppPalette.primary.withValues(alpha: 0.5),
+                        ),
                       ),
                       child: Row(
                         children: [
@@ -898,31 +820,6 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                       style: AppTypography.title.copyWith(fontSize: 15.0),
                     ),
                     const SizedBox(height: 10.0),
-
-                    // Botón Demo: Simular Pago en Caja
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48.0,
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppPalette.primary,
-                          foregroundColor: AppPalette.textPrimary,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10.0),
-                          ),
-                        ),
-                        icon: const Icon(Icons.point_of_sale_rounded, size: 20.0),
-                        label: const Text(
-                          '💳 Simular Pago en Caja (Demo)',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        onPressed: _isLoading ? null : _simularPagoCaja,
-                      ),
-                    ),
-
-                    const SizedBox(height: 10.0),
-
                     // Botón Editar Instrucciones a Bodega
                     SizedBox(
                       width: double.infinity,
@@ -930,7 +827,10 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                       child: OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppPalette.primary,
-                          side: const BorderSide(color: AppPalette.primary, width: 1.2),
+                          side: const BorderSide(
+                            color: AppPalette.primary,
+                            width: 1.2,
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10.0),
                           ),
@@ -940,7 +840,9 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                           'Editar Instrucciones a Bodega',
                           style: TextStyle(fontWeight: FontWeight.w600),
                         ),
-                        onPressed: _isLoading ? null : _dialogEditarInstrucciones,
+                        onPressed: _isLoading
+                            ? null
+                            : _dialogEditarInstrucciones,
                       ),
                     ),
 
@@ -952,7 +854,9 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                       height: 48.0,
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppPalette.error.withValues(alpha: 0.15),
+                          backgroundColor: AppPalette.error.withValues(
+                            alpha: 0.15,
+                          ),
                           foregroundColor: AppPalette.error,
                           elevation: 0,
                           side: BorderSide(

@@ -729,8 +729,9 @@ class OrdenesService {
     }
   }
 
-  /// Confirma el pago de una orden y genera el código QR transaccional (HU-3.6).
-  /// Permite especificar método de pago (por defecto 'Efectivo') y monto opcional.
+  /// [DEPRECATED] Endpoint legado de demostración (HU-3.6).
+  /// En el flujo operativo oficial, los pagos deben procesarse exclusivamente a través de [CajaService.registrarCobro].
+  @Deprecated('Los pagos deben ser registrados exclusivamente por el módulo de Caja a través de CajaService.registrarCobro')
   static Future<OrdenPagoResponseModel> pagarOrden(
     String idOrden, {
     String metodoPago = 'Efectivo',
@@ -897,7 +898,9 @@ class OrdenesService {
     }
   }
 
-  /// Confirma la entrega presencial de un pedido en tienda (cierre de ciclo).
+  /// [DEPRECATED] Bypass legado para confirmar entregas (SPEC-HU-TAREA-19).
+  /// En el flujo operativo oficial, la entrega presencial se realiza obligatoriamente mediante el Dual-Scan en Barrera de Bodega.
+  @Deprecated('Las entregas deben ser procesadas exclusivamente en la Barrera de Salida de Bodega')
   static Future<bool> confirmarEntregaTienda(
     String idOrden, {
     http.Client? client,

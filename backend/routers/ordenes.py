@@ -32,7 +32,7 @@ from schemas import (
     HistorialCajaResponse, HistorialOrdenItemResponse,
     HistorialPagoDetalleDTO, HistorialArticuloDTO, HistorialMovimientoDTO,
 )
-from core.security import get_current_user, require_auditoria_or_caja_role
+from core.security import get_current_user, require_auditoria_or_caja_role, require_caja_role
 from core.policies import validar_horario_operativo_ordenes
 
 
@@ -1328,7 +1328,7 @@ def pagar_orden(
     id_orden: uuid.UUID,
     pago_in: Optional[OrdenPagoRequest] = None,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(require_caja_role),
 ):
     """
     Motor Transaccional de Pago y Generación de QR (ACID):
