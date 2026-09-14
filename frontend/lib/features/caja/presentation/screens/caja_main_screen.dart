@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/routes/route_observer.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../core/widgets/cresal_logo.dart';
 import '../../../auth/services/auth_service.dart';
 import '../../../tickets/presentation/widgets/soporte_desktop_view.dart';
 import '../providers/caja_provider.dart';
@@ -294,22 +295,9 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
                       ),
                     ],
                   )
-                : Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: AppPalette.primary,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      'C',
-                      style: AppTypography.headline.copyWith(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 22,
-                        color: Colors.white,
-                      ),
-                    ),
+                : const CresalLogo(
+                    size: 40,
+                    showGlow: false,
                   ),
           ),
 

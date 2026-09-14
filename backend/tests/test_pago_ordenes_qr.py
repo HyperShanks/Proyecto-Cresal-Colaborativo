@@ -34,11 +34,11 @@ def db_session(setup_database):
         )
         db.add(suc1)
 
-        # 2. Roles
-        rol_vendedor = Rol(id_rol=1, nombre_rol="Vendedor")
-        rol_caja = Rol(id_rol=2, nombre_rol="Caja")
-        rol_bodega = Rol(id_rol=3, nombre_rol="Bodeguero")
-        db.add_all([rol_vendedor, rol_caja, rol_bodega])
+        # 2. Roles oficiales del sistema
+        rol_bodega = Rol(id_rol=1, nombre_rol="Bodeguero")
+        rol_vendedor = Rol(id_rol=2, nombre_rol="Vendedor")
+        rol_caja = Rol(id_rol=3, nombre_rol="Caja")
+        db.add_all([rol_bodega, rol_vendedor, rol_caja])
 
         # 3. Usuarios (Vendedor, Cajera y Bodeguero)
         u_vendedor_id = uuid.uuid4()
@@ -47,7 +47,7 @@ def db_session(setup_database):
 
         vendedor = Usuario(
             id_usuario=u_vendedor_id,
-            id_rol=1,
+            id_rol=2,
             id_sucursal=1,
             rut_usuario="11.111.111-1",
             nombres="Vendedor",
@@ -59,7 +59,7 @@ def db_session(setup_database):
         )
         cajera = Usuario(
             id_usuario=u_cajera_id,
-            id_rol=2,
+            id_rol=3,
             id_sucursal=1,
             rut_usuario="22.222.222-2",
             nombres="Cajera",
@@ -71,7 +71,7 @@ def db_session(setup_database):
         )
         bodeguero = Usuario(
             id_usuario=u_bodeguero_id,
-            id_rol=3,
+            id_rol=1,
             id_sucursal=1,
             rut_usuario="33.333.333-3",
             nombres="Bodeguero",
@@ -203,9 +203,32 @@ def auth_headers_bodeguero(db_session):
     return {"Authorization": f"Bearer {token}"}
 
 
+@pytest.fixture(scope="module")
+def auth_headers_vendedor(db_session):
+    token = create_access_token(data={"sub": str(db_session["u_vendedor_id"])})
+    return {"Authorization": f"Bearer {token}"}
+
+
 # ==============================================================================
 # TESTS DE CORE DE PAGOS Y GENERACIÓN DE QR TRANSACCIONAL (HU-3.6)
 # ==============================================================================
+
+def test_vendedor_no_puede_simular_pago_en_caja(client, db_session, auth_headers_vendedor):
+    """
+    Eliminación de Simulación: Verifica que un Vendedor NO puede realizar pagos directamente.
+    Debe responder con HTTP 403 Forbidden exigiendo rol de Operario de Caja o Administrador.
+    """
+    orden_id = db_session["orden_1_id"]
+
+    response = client.post(
+        f"/api/v1/ordenes/{orden_id}/pagar",
+        json={"metodo_pago": "Efectivo"},
+        headers=auth_headers_vendedor
+    )
+
+    assert response.status_code == 403
+    data = response.json()
+    assert "Acceso restringido" in data["detail"]
 
 def test_pago_orden_exitoso_y_generacion_qr(client, db_session, auth_headers_cajera):
     """

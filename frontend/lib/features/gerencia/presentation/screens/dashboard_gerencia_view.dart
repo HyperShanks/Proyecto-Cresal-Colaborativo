@@ -107,6 +107,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
   Future<void> _cargarDashboard({bool mostrarToast = false}) async {
     if (!mounted) return;
 
+    debugPrint('📊 [GERENCIA-DASHBOARD] 🔄 Solicitando KPIs, métodos de pago y flujo operativo (Sucursal: ${_sucursalSeleccionada ?? "Todas"})...');
     setState(() {
       _cargando = true;
       _mensajeError = null;
@@ -131,6 +132,11 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
       _spinController.stop();
       _spinController.reset();
 
+      debugPrint('📊 [GERENCIA-DASHBOARD] ✅ OK 200 - Métricas analíticas cargadas exitosamente:');
+      debugPrint('   • Ventas Hoy: \$${_kpis?.ventasDelDia ?? 0} | Transacciones: ${_kpis?.transaccionesHoy ?? 0}');
+      debugPrint('   • Ticket Promedio: \$${_kpis?.ticketPromedio ?? 0} | Efectivo/Electrónico: \$${_pagos?.efectivoFisico ?? 0} / \$${_pagos?.canalesElectronicos ?? 0}');
+      debugPrint('   • Despacho Bodega: ${_flujo?.enPreparacion ?? 0} en prep | ${_flujo?.listosMostrador ?? 0} listos | Cuellos de botella: ${_flujo?.cuellosBotellaPaletizados ?? 0}');
+
       if (mostrarToast && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -148,6 +154,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
       if (!mounted) return;
 
       final errorStr = e.toString().replaceFirst('Exception: ', '');
+      debugPrint('📊 [GERENCIA-DASHBOARD] ❌ Error al cargar dashboard: $errorStr');
       setState(() {
         _cargando = false;
         _mensajeError = errorStr;
@@ -377,6 +384,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                   isSelected: _vistaActiva == VistaGerencia.dashboard,
                   onTap: () {
                     if (_vistaActiva != VistaGerencia.dashboard) {
+                      debugPrint('🔀 [GERENCIA-NAV] 📂 Cambiando a pestaña: Dashboard Ejecutivo');
                       setState(() => _vistaActiva = VistaGerencia.dashboard);
                     }
                   },
@@ -391,6 +399,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                   isSelected: _vistaActiva == VistaGerencia.ordenes,
                   onTap: () {
                     if (_vistaActiva != VistaGerencia.ordenes) {
+                      debugPrint('🔀 [GERENCIA-NAV] 📂 Cambiando a pestaña: Historial de Órdenes');
                       setState(() => _vistaActiva = VistaGerencia.ordenes);
                     }
                   },
@@ -408,6 +417,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                       : null,
                   onTap: () {
                     if (_vistaActiva != VistaGerencia.inventario) {
+                      debugPrint('🔀 [GERENCIA-NAV] 📂 Cambiando a pestaña: Inventario y Tasación');
                       setState(() {
                         _vistaActiva = VistaGerencia.inventario;
                         _filtroSinTasar = false;
@@ -426,6 +436,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                   badgeText: null,
                   onTap: () {
                     if (_vistaActiva != VistaGerencia.backorders) {
+                      debugPrint('🔀 [GERENCIA-NAV] 📂 Cambiando a pestaña: Ventas en Verde');
                       setState(() {
                         _vistaActiva = VistaGerencia.backorders;
                       });

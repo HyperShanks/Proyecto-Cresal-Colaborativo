@@ -151,7 +151,7 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
                   Text(
                     numeroIngreso,
                     style: AppTypography.headline.copyWith(
-                      fontSize: 56,
+                      fontSize: 52,
                       color: AppPalette.textPrimary,
                     ),
                   ),
@@ -450,7 +450,8 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
             mensajeError.toLowerCase().contains('foto') ||
             mensajeError.toLowerCase().contains('texto') ||
             mensajeError.toLowerCase().contains('corresponde')) {
-          feedback = 'No se pudo validar el OCR de la pieza. Por favor, reintente con una foto más clara';
+          feedback =
+              'No se pudo validar el OCR de la pieza. Por favor, reintente con una foto más clara';
         } else {
           feedback = mensajeError.isNotEmpty
               ? mensajeError
@@ -498,8 +499,9 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
     BuildContext context,
     Map<String, dynamic> datosNuevos,
   ) async {
-    final TextEditingController manualIngresoController =
-        TextEditingController(text: numeroIngreso != "Cargando..." ? numeroIngreso : "");
+    final TextEditingController manualIngresoController = TextEditingController(
+      text: numeroIngreso != "Cargando..." ? numeroIngreso : "",
+    );
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -509,7 +511,11 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            const Icon(Icons.warning_amber_rounded, color: AppPalette.secondary, size: 28),
+            const Icon(
+              Icons.warning_amber_rounded,
+              color: AppPalette.secondary,
+              size: 28,
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
@@ -534,7 +540,10 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
               decoration: const InputDecoration(
                 labelText: 'N° de Ingreso Físico',
                 hintText: 'Ej: 1001',
-                prefixIcon: Icon(Icons.confirmation_number_outlined, color: AppPalette.primary),
+                prefixIcon: Icon(
+                  Icons.confirmation_number_outlined,
+                  color: AppPalette.primary,
+                ),
               ),
             ),
           ],
@@ -545,7 +554,9 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
             onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(
               'Reintentar con Cámara',
-              style: AppTypography.button.copyWith(color: AppPalette.textSecondary),
+              style: AppTypography.button.copyWith(
+                color: AppPalette.textSecondary,
+              ),
             ),
           ),
           ElevatedButton(
@@ -555,7 +566,9 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
                 Navigator.of(ctx).pop(true);
               }
             },
-            style: ElevatedButton.styleFrom(backgroundColor: AppPalette.primary),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppPalette.primary,
+            ),
             child: const Text('Confirmar'),
           ),
         ],
@@ -581,7 +594,11 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            const Icon(Icons.verified_user_outlined, color: AppPalette.primary, size: 28),
+            const Icon(
+              Icons.verified_user_outlined,
+              color: AppPalette.primary,
+              size: 28,
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
@@ -600,13 +617,17 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
             onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(
               'Cancelar',
-              style: AppTypography.button.copyWith(color: AppPalette.textSecondary),
+              style: AppTypography.button.copyWith(
+                color: AppPalette.textSecondary,
+              ),
             ),
           ),
           ElevatedButton(
             key: const Key('btn_aceptar_doble_confirmacion'),
             onPressed: () => Navigator.of(ctx).pop(true),
-            style: ElevatedButton.styleFrom(backgroundColor: AppPalette.success),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppPalette.success,
+            ),
             child: const Text('Aceptar'),
           ),
         ],
@@ -629,7 +650,9 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
         if (res['exito'] == true) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('✅ Vehículo registrado exitosamente con validación manual.'),
+              content: Text(
+                '✅ Vehículo registrado exitosamente con validación manual.',
+              ),
               backgroundColor: AppPalette.success,
               duration: Duration(seconds: 4),
               behavior: SnackBarBehavior.floating,

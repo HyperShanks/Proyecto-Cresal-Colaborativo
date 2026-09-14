@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../core/widgets/cresal_logo.dart';
 import '../../services/auth_service.dart';
 import '../../controllers/login_controller.dart';
 
@@ -306,27 +307,7 @@ class _PinLoginScreenState extends State<PinLoginScreen>
     return Column(
       children: [
         // Emblema de la empresa
-        Container(
-          width: 80,
-          height: 80,
-          decoration: BoxDecoration(
-            color: AppPalette.primary,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: AppPalette.primary.withValues(alpha: 0.4),
-                blurRadius: 20,
-                spreadRadius: 2,
-              ),
-            ],
-          ),
-          child: Center(
-            child: Text(
-              'C',
-              style: AppTypography.headline.copyWith(fontSize: 42),
-            ),
-          ),
-        ),
+        const CresalLogo(size: 84),
         const SizedBox(height: 20),
         Text(
           'CRESAL',

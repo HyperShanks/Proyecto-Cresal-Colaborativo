@@ -79,6 +79,7 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
   }
 
   Future<void> _cargarDatos() async {
+    debugPrint('🌱 [GERENCIA-VENTAS_EN_VERDE] 🔄 Solicitando KPIs y reservas en verde (Sucursal: ${_idSucursal ?? "Todas"}, Filtro: $_filtroEstado)...');
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -99,6 +100,10 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
       final kpisData = futures[0] as BackordersKpisModel;
       final listData = futures[1] as PaginatedBackordersResponse;
 
+      debugPrint('🌱 [GERENCIA-VENTAS_EN_VERDE] ✅ OK 200 - Ventas en verde cargadas exitosamente:');
+      debugPrint('   • Total reservas: ${listData.totalCount} (Activas: ${kpisData.totalActivos}, Listas para liquidar: ${kpisData.listosParaLiquidar})');
+      debugPrint('   • Señas recaudadas en caja: \$${listData.totalRecaudadoSenas} | Capital retenido: \$${kpisData.capitalRetenido}');
+
       setState(() {
         _kpis = kpisData;
         _backorders = listData.items;
@@ -108,6 +113,7 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
       });
     } catch (e) {
       if (!mounted) return;
+      debugPrint('🌱 [GERENCIA-VENTAS_EN_VERDE] ❌ Error al cargar datos: $e');
       setState(() {
         _errorMessage = e.toString().replaceAll('Exception: ', '');
         _isLoading = false;
@@ -116,6 +122,7 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
   }
 
   Future<void> _cargarBackorders() async {
+    debugPrint('🌱 [GERENCIA-VENTAS_EN_VERDE] 🔄 Filtrando reservas (Estado: $_filtroEstado, Búsqueda: "${_busquedaController.text.trim()}")...');
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -130,6 +137,8 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
 
       if (!mounted) return;
 
+      debugPrint('🌱 [GERENCIA-VENTAS_EN_VERDE] ✅ OK 200 - Filtrado completado: ${listData.items.length} reservas visibles');
+
       setState(() {
         _backorders = listData.items;
         _totalCount = listData.totalCount;
@@ -138,6 +147,7 @@ class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
       });
     } catch (e) {
       if (!mounted) return;
+      debugPrint('🌱 [GERENCIA-VENTAS_EN_VERDE] ❌ Error al filtrar: $e');
       setState(() {
         _errorMessage = e.toString().replaceAll('Exception: ', '');
         _isLoading = false;

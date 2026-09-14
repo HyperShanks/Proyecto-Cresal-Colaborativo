@@ -70,6 +70,7 @@ class _OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
 
   /// Consulto las órdenes aplicando los criterios multidimensionales actuales.
   Future<void> _cargarOrdenes({int pagina = 1}) async {
+    debugPrint('📦 [GERENCIA-ORDENES] 🔄 Solicitando historial de órdenes (Sucursal: ${_idSucursal ?? "Todas"}, Periodo: $_periodo, Estado: $_estado, Método Pago: $_metodoPago, Pág: $pagina)...');
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -88,18 +89,29 @@ class _OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
       );
 
       if (!mounted) return;
+
+      final totalReg = res.totalRegistros;
+      final totalPags = res.totalPaginas;
+      final totalVentas = res.resumenCuadre.totalRecaudado;
+      final totalTrans = res.resumenCuadre.totalOrdenesPagadas;
+      debugPrint('📦 [GERENCIA-ORDENES] ✅ OK 200 - Órdenes cargadas exitosamente:');
+      debugPrint('   • Mostrando ${res.items.length} órdenes en página $_paginaActual de $totalPags (Total global: $totalReg)');
+      debugPrint('   • Consolidado financiero periodo: \$$totalVentas ($totalTrans órdenes pagadas)');
+
       setState(() {
         _data = res;
         _isLoading = false;
       });
     } on CustomApiException catch (e) {
       if (!mounted) return;
+      debugPrint('📦 [GERENCIA-ORDENES] ❌ Error API al cargar órdenes: ${e.messageUser} (Código: ${e.errorCode})');
       setState(() {
         _errorMessage = e.messageUser;
         _isLoading = false;
       });
     } catch (e) {
       if (!mounted) return;
+      debugPrint('📦 [GERENCIA-ORDENES] ❌ Error inesperado al cargar órdenes: $e');
       setState(() {
         _errorMessage =
             'Ocurrió un error inesperado al cargar las órdenes. Intente nuevamente.';

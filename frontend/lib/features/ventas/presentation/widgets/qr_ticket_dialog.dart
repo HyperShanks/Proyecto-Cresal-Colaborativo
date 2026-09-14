@@ -14,10 +14,7 @@ import '../../services/ordenes_service.dart';
 class QrTicketDialog extends StatelessWidget {
   final OrdenHistorialModel orden;
 
-  const QrTicketDialog({
-    super.key,
-    required this.orden,
-  });
+  const QrTicketDialog({super.key, required this.orden});
 
   /// Método estático de conveniencia para invocar el modal de forma limpia y desacoplada.
   static Future<void> mostrar(BuildContext context, OrdenHistorialModel orden) {
@@ -35,7 +32,11 @@ class QrTicketDialog extends StatelessWidget {
       SnackBar(
         content: Row(
           children: [
-            const Icon(Icons.copy_rounded, color: AppPalette.textPrimary, size: 18),
+            const Icon(
+              Icons.copy_rounded,
+              color: AppPalette.textPrimary,
+              size: 18,
+            ),
             const SizedBox(width: 8),
             const Text(
               'Código QR copiado al portapapeles',
@@ -68,7 +69,10 @@ class QrTicketDialog extends StatelessWidget {
         borderRadius: BorderRadius.circular(16.0),
         side: const BorderSide(color: Colors.white12, width: 1.0),
       ),
-      insetPadding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 24.0),
+      insetPadding: const EdgeInsets.symmetric(
+        horizontal: 20.0,
+        vertical: 24.0,
+      ),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 440.0),
         child: SingleChildScrollView(
@@ -82,21 +86,26 @@ class QrTicketDialog extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(8.0),
                     decoration: BoxDecoration(
-                      color: (tieneQr
-                              ? AppPalette.primary
-                              : (esReservada ? AppPalette.warning : AppPalette.secondary))
-                          .withValues(alpha: 0.15),
+                      color:
+                          (tieneQr
+                                  ? AppPalette.primary
+                                  : (esReservada
+                                        ? AppPalette.warning
+                                        : AppPalette.secondary))
+                              .withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10.0),
                     ),
                     child: Icon(
                       tieneQr
                           ? Icons.qr_code_2_rounded
                           : (esReservada
-                              ? Icons.lock_clock_rounded
-                              : Icons.receipt_long_rounded),
+                                ? Icons.lock_clock_rounded
+                                : Icons.receipt_long_rounded),
                       color: tieneQr
                           ? AppPalette.primary
-                          : (esReservada ? AppPalette.warning : AppPalette.secondary),
+                          : (esReservada
+                                ? AppPalette.warning
+                                : AppPalette.secondary),
                       size: 24.0,
                     ),
                   ),
@@ -109,8 +118,8 @@ class QrTicketDialog extends StatelessWidget {
                           tieneQr
                               ? 'TICKET DE SALIDA'
                               : (esReservada
-                                  ? 'TICKET BLOQUEADO'
-                                  : 'COMPROBANTE DE VENTA'),
+                                    ? 'TICKET BLOQUEADO'
+                                    : 'COMPROBANTE DE VENTA'),
                           style: AppTypography.cardTitle.copyWith(
                             fontSize: 15.0,
                             letterSpacing: 1.0,
@@ -129,7 +138,11 @@ class QrTicketDialog extends StatelessWidget {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close, color: AppPalette.neutral, size: 22.0),
+                    icon: const Icon(
+                      Icons.close,
+                      color: AppPalette.neutral,
+                      size: 22.0,
+                    ),
                     onPressed: () => Navigator.of(context).pop(),
                     tooltip: 'Cerrar',
                   ),
@@ -142,7 +155,10 @@ class QrTicketDialog extends StatelessWidget {
               if (tieneQr)
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 8.0,
+                    horizontal: 12.0,
+                  ),
                   decoration: BoxDecoration(
                     color: AppPalette.success.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8.0),
@@ -175,7 +191,10 @@ class QrTicketDialog extends StatelessWidget {
               else if (esReservada)
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 8.0,
+                    horizontal: 12.0,
+                  ),
                   decoration: BoxDecoration(
                     color: AppPalette.warning.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8.0),
@@ -211,7 +230,10 @@ class QrTicketDialog extends StatelessWidget {
               else
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 8.0,
+                    horizontal: 12.0,
+                  ),
                   decoration: BoxDecoration(
                     color: AppPalette.secondary.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8.0),
@@ -273,7 +295,10 @@ class QrTicketDialog extends StatelessWidget {
                 ),
                 const SizedBox(height: 16.0),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12.0,
+                    vertical: 8.0,
+                  ),
                   decoration: BoxDecoration(
                     color: AppPalette.background,
                     borderRadius: BorderRadius.circular(8.0),
@@ -301,7 +326,8 @@ class QrTicketDialog extends StatelessWidget {
                       ),
                       InkWell(
                         borderRadius: BorderRadius.circular(6.0),
-                        onTap: () => _copiarTokenAlPortapapeles(context, qrToken),
+                        onTap: () =>
+                            _copiarTokenAlPortapapeles(context, qrToken),
                         child: const Padding(
                           padding: EdgeInsets.all(4.0),
                           child: Icon(
@@ -361,7 +387,10 @@ class QrTicketDialog extends StatelessWidget {
                       ),
                       const SizedBox(height: 14.0),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8.0),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14.0,
+                          vertical: 8.0,
+                        ),
                         decoration: BoxDecoration(
                           color: AppPalette.surface,
                           borderRadius: BorderRadius.circular(8.0),
@@ -503,7 +532,9 @@ class QrTicketDialog extends StatelessWidget {
                       children: [
                         Expanded(
                           child: Text(
-                            esReservada ? 'Total de la Venta:' : 'Total Cancelado:',
+                            esReservada
+                                ? 'Total de la Venta:'
+                                : 'Total Cancelado:',
                             style: AppTypography.title.copyWith(fontSize: 13.0),
                           ),
                         ),
@@ -512,7 +543,9 @@ class QrTicketDialog extends StatelessWidget {
                           orden.totalVentaFormateado,
                           style: AppTypography.headline.copyWith(
                             fontSize: 16.0,
-                            color: esReservada ? AppPalette.textPrimary : AppPalette.secondary,
+                            color: esReservada
+                                ? AppPalette.textPrimary
+                                : AppPalette.secondary,
                           ),
                         ),
                       ],
@@ -530,10 +563,14 @@ class QrTicketDialog extends StatelessWidget {
                   Icon(
                     tieneQr
                         ? Icons.info_outline_rounded
-                        : (esReservada ? Icons.lock_clock_outlined : Icons.info_outline_rounded),
+                        : (esReservada
+                              ? Icons.lock_clock_outlined
+                              : Icons.info_outline_rounded),
                     color: tieneQr
                         ? AppPalette.secondary
-                        : (esReservada ? AppPalette.warning : AppPalette.secondary),
+                        : (esReservada
+                              ? AppPalette.warning
+                              : AppPalette.secondary),
                     size: 16.0,
                   ),
                   const SizedBox(width: 8.0),
@@ -542,10 +579,10 @@ class QrTicketDialog extends StatelessWidget {
                       tieneQr
                           ? 'Muestre este QR al bodeguero en la Barrera de Salida para validar el Handshake y retirar el repuesto.'
                           : (esReservada
-                              ? 'Derive al cliente a Caja para liquidar el pago. Bodega no autorizará la salida física hasta la confirmación.'
-                              : 'Comprobante administrativo emitido. Los repuestos o servicios fueron entregados en mostrador.'),
+                                ? 'Derive al cliente a Caja para liquidar el pago. Bodega no autorizará la salida física hasta la confirmación.'
+                                : 'Comprobante administrativo emitido. Los repuestos o servicios fueron entregados en mostrador.'),
                       style: AppTypography.small.copyWith(
-                        fontSize: 11.5,
+                        fontSize: 14,
                         color: AppPalette.textSecondary,
                         height: 1.3,
                       ),

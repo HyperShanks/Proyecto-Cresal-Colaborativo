@@ -137,6 +137,7 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
     if (!mounted) return;
 
     final targetPage = pagina ?? _paginaActual;
+    debugPrint('🏭 [GERENCIA-INVENTARIO] 🔄 Solicitando inventario (Sucursal: ${_idSucursal ?? "Todas"}, Sin Tasar: $_soloSinTasar, Categoría: $_categoria, Pág: $targetPage)...');
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -177,6 +178,10 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
         return true;
       }).toList();
 
+      debugPrint('🏭 [GERENCIA-INVENTARIO] ✅ OK 200 - Inventario cargado exitosamente:');
+      debugPrint('   • Mostrando ${itemsValidos.length} piezas en página $targetPage (Total en BD: ${res.totalCount})');
+      debugPrint('   • Repuestos pendientes de tasación comercial: ${res.pendientesTasacionCount}');
+
       setState(() {
         _items = itemsValidos;
         _totalCount = res.totalCount;
@@ -185,6 +190,7 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
       });
     } catch (e) {
       if (!mounted) return;
+      debugPrint('🏭 [GERENCIA-INVENTARIO] ❌ Error al cargar inventario: $e');
       setState(() {
         _errorMessage = e.toString().replaceAll('Exception: ', '');
         _isLoading = false;
