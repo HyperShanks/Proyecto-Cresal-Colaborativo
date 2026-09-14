@@ -131,7 +131,7 @@ void main() {
       'version_lock': 1,
     };
 
-    testWidgets('Renderiza campos iniciales de activo y especificaciones de motor', (tester) async {
+    testWidgets('Renderiza campos iniciales de activo para edición de ubicación', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -141,15 +141,12 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Editar Información del Activo'), findsOneWidget);
+      expect(find.text('Editar Ubicación de Motor'), findsOneWidget);
       expect(find.text('SKU: MOT-123'), findsOneWidget);
       expect(find.text('P-01'), findsOneWidget);
       expect(find.text('PL-02'), findsOneWidget);
       expect(find.text('G-Principal'), findsOneWidget);
-      expect(find.text('1NZ-FE'), findsOneWidget);
-      expect(find.text('1.5L'), findsOneWidget);
-      expect(find.text('Excelente estado'), findsOneWidget);
-      expect(find.text('GUARDAR CAMBIOS'), findsOneWidget);
+      expect(find.text('GUARDAR UBICACIÓN'), findsOneWidget);
       expect(find.text('CANCELAR'), findsOneWidget);
     });
 
@@ -184,7 +181,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // No debe mostrar diálogo de cambios sin guardar
-      expect(find.text('Tienes cambios sin guardar. ¿Estás seguro de que quieres salir y descartar las modificaciones?'), findsNothing);
+      expect(find.text('Descartar cambios'), findsNothing);
       expect(dialogShown, isFalse);
     });
 
@@ -224,7 +221,7 @@ void main() {
       // Debe aparecer el diálogo con el texto exigido en SPEC-HU-TAREA-11
       expect(find.text('Descartar cambios'), findsOneWidget);
       expect(
-        find.text('Tienes cambios sin guardar. ¿Estás seguro de que quieres salir y descartar las modificaciones?'),
+        find.text('Tienes cambios sin guardar en la ubicación. ¿Estás seguro de que quieres salir y descartar las modificaciones?'),
         findsOneWidget,
       );
 
@@ -233,7 +230,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Descartar cambios'), findsNothing);
-      expect(find.text('GUARDAR CAMBIOS'), findsOneWidget);
+      expect(find.text('GUARDAR UBICACIÓN'), findsOneWidget);
 
       // Ahora si se pulsa "CANCELAR" y luego "Descartar", el modal se cierra
       await tester.tap(find.text('CANCELAR'));
@@ -243,7 +240,7 @@ void main() {
       await tester.tap(find.text('Descartar'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Editar Información del Activo'), findsNothing);
+      expect(find.text('Editar Ubicación de Motor'), findsNothing);
     });
   });
 }

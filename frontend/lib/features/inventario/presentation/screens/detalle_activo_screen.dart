@@ -31,6 +31,11 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
     _verificarRolUsuario();
   }
 
+  bool get _esEstadoEditable {
+    final estado = (_activo['estado'] ?? '').toString().toUpperCase();
+    return estado == 'DISPONIBLE' || estado == 'PALETIZADO';
+  }
+
   Future<void> _verificarRolUsuario() async {
     final idRol = await AuthService.getIdRol();
     final rol = await AuthService.getRol();
@@ -171,11 +176,11 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
           tooltip: 'Volver',
         ),
         actions: [
-          if (_puedeEditar)
+          if (_puedeEditar && _esEstadoEditable)
             IconButton(
               key: const Key('btn_editar_activo'),
-              icon: const Icon(Icons.edit_outlined, color: AppPalette.primary),
-              tooltip: 'Editar activo',
+              icon: const Icon(Icons.edit_location_alt_outlined, color: AppPalette.primary),
+              tooltip: 'Editar ubicación de activo',
               onPressed: _abrirModalEdicion,
             ),
         ],

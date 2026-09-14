@@ -39,25 +39,6 @@ def limpiar_patente(valor_raw, patentes_registradas):
         patentes_registradas[limpio] = 1
         return limpio[:10]
 
-def procesar_numero_ingreso(num_raw, idx, ingresos_registrados):
-    """Garantiza unicidad en numero_ingreso evitando colisiones UNIQUE."""
-    if pd.notnull(num_raw):
-        try:
-            base = str(int(float(num_raw))).strip()
-        except (ValueError, TypeError):
-            base = str(num_raw).strip()
-    else:
-        base = str(idx + 1)
-
-    if base in ingresos_registrados:
-        conteo = ingresos_registrados[base]
-        ingresos_registrados[base] += 1
-        resultado = f"{base}-D{conteo}"
-        return resultado[:10]
-    else:
-        ingresos_registrados[base] = 1
-        return base[:10]
-
 def procesar_anio(valor_raw):
     try:
         if pd.isna(valor_raw):
@@ -67,12 +48,163 @@ def procesar_anio(valor_raw):
     except (ValueError, TypeError):
         return 2000
 
+def sanitizar_secuencia_ingresos(df, col_indice):
+    """
+    Procesa, audita y blinda la columna de N° de Ingreso (Columna A) del Excel.
+    
+    Reglas estrictas de negocio:
+    1. Solo deben existir números de ingreso autoincrementables/enteros positivos y estrictamente ÚNICOS.
+    2. Si un valor no es numérico (ej. 'x', NaN, vacío) o es un duplicado/anomalía, pero se encuentra
+       en un hueco correlativo resoluble (ej. 1, 2, 3, x, 5 -> x pasa a 4):
+       Se INTERPOLA y se reemplaza por el correlativo exacto.
+    3. Si un valor no es numérico (ej. 'con con', 'con con') y no puede interpolarse sin colisionar
+       (ej. 1, 2, 3, con con, con con, 4, 5 donde ya viene el 4):
+       Se ELIMINA / IGNORA la fila (no se sube a la base de datos).
+    4. Si un número está repetido (ej. 834 repetido, o texto repetido) y no existe un hueco correlativo
+       libre donde reubicarlo:
+       Se ELIMINA / IGNORA la fila duplicada.
+    """
+    total_filas = len(df)
+    
+    def parse_int_seguro(v):
+        if pd.isna(v):
+            return None
+        s = str(v).strip()
+        if not s:
+            return None
+        try:
+            n = int(float(s))
+            return n if n > 0 else None
+        except (ValueError, TypeError):
+            return None
+
+    raw_vals = [df.iloc[i][col_indice] for i in range(total_filas)]
+    parsed_vals = [parse_int_seguro(v) for v in raw_vals]
+
+    # Conteo de ocurrencias de cada número para detectar duplicados globales
+    conteo_numeros = {}
+    for v in parsed_vals:
+        if v is not None:
+            conteo_numeros[v] = conteo_numeros.get(v, 0) + 1
+
+    # Identificación de anclas confiables:
+    # Si un número aparece repetido, sólo el que esté en orden secuencial se toma como ancla.
+    candidatos = [None] * total_filas
+    vistos = set()
+    ultimo_valido = 0
+
+    for i in range(total_filas):
+        v = parsed_vals[i]
+        if v is None:
+            candidatos[i] = None
+        else:
+            if v in vistos:
+                # Duplicado: debe ser evaluado para posible interpolación o descarte
+                candidatos[i] = None
+            elif v <= ultimo_valido and conteo_numeros[v] > 1:
+                # Duplicado anómalo retrógrado (ej. 1085 en fila 1810 cuando veníamos en 1809)
+                candidatos[i] = None
+            elif v <= ultimo_valido:
+                # Retorno de secuencia no explicado
+                candidatos[i] = None
+            else:
+                candidatos[i] = v
+                vistos.add(v)
+                ultimo_valido = v
+
+    # Resolución de bloques problemáticos mediante interpolación acotada o descarte
+    resolucion = [None] * total_filas
+    acciones = {}
+
+    i = 0
+    while i < total_filas:
+        if candidatos[i] is not None:
+            resolucion[i] = candidatos[i]
+            acciones[i] = ("CONSERVADO", f"Valor original {candidatos[i]}")
+            i += 1
+        else:
+            i_start = i
+            while i < total_filas and candidatos[i] is None:
+                i += 1
+            i_end = i - 1
+            k = i_end - i_start + 1
+
+            i_prev = i_start - 1
+            i_next = i_end + 1
+
+            A = resolucion[i_prev] if i_prev >= 0 else None
+            B = candidatos[i_next] if i_next < total_filas else None
+
+            # Condición de hueco exacto: B - A == k + 1
+            interpolable = False
+            if A is not None and B is not None and B > A and (B - A == k + 1):
+                interpolable = True
+                for j in range(i_start, i_end + 1):
+                    val_interp = A + (j - i_start + 1)
+                    resolucion[j] = val_interp
+                    raw_str = str(raw_vals[j])
+                    acciones[j] = ("REPARADO", f"Original '{raw_str}' interpolado a {val_interp}")
+            elif A is None and B is not None and (B - k >= 1):
+                interpolable = True
+                for j in range(i_start, i_end + 1):
+                    val_interp = B - (i_end - j + 1)
+                    resolucion[j] = val_interp
+                    raw_str = str(raw_vals[j])
+                    acciones[j] = ("REPARADO", f"Original '{raw_str}' interpolado a {val_interp}")
+            
+            if not interpolable:
+                for j in range(i_start, i_end + 1):
+                    raw_str = str(raw_vals[j])
+                    resolucion[j] = None
+                    if parsed_vals[j] is None:
+                        acciones[j] = ("IGNORADO", f"No numérico '{raw_str}' descartado por no encajar en correlatividad.")
+                    else:
+                        acciones[j] = ("IGNORADO", f"Número '{raw_str}' repetido/fuera de secuencia descartado sin correlatividad libre.")
+
+    # Construcción de DataFrame depurado y reporte forense
+    filas_validas = []
+    reporte = {
+        "total_original": total_filas,
+        "conservados": 0,
+        "reparados": 0,
+        "descartados": 0,
+        "detalles_reparados": [],
+        "detalles_descartados": [],
+    }
+
+    ingresos_asignados = set()
+
+    for idx in range(total_filas):
+        val_res = resolucion[idx]
+        tipo_acc, detalle = acciones[idx]
+        fila_excel = idx + 2 # Fila considerando encabezado en Fila 1
+        
+        if val_res is not None and val_res not in ingresos_asignados:
+            ingresos_asignados.add(val_res)
+            row_dict = df.iloc[idx].to_dict()
+            row_dict["_numero_ingreso_limpio"] = str(val_res)
+            row_dict["_fila_original_excel"] = fila_excel
+            filas_validas.append(row_dict)
+            
+            if tipo_acc == "REPARADO":
+                reporte["reparados"] += 1
+                reporte["detalles_reparados"].append((fila_excel, detalle))
+            else:
+                reporte["conservados"] += 1
+        else:
+            reporte["descartados"] += 1
+            reporte["detalles_descartados"].append((fila_excel, detalle))
+
+    df_limpio = pd.DataFrame(filas_validas)
+    return df_limpio, reporte
+
 def ejecutar_migracion():
     if not os.path.exists(EXCEL_FILE):
-        print(f"[!] Error: No se encontró el archivo {EXCEL_FILE}")
+        print(f"[!] Error: No se encontró el archivo de matriz '{EXCEL_FILE}'.")
+        print("    Asegúrate de colocar el archivo Excel en esta carpeta antes de ejecutar.")
         return
 
-    print(f"[+] Leyendo {EXCEL_FILE}...")
+    print(f"[+] Leyendo archivo matriz '{EXCEL_FILE}'...")
     df = pd.read_excel(EXCEL_FILE)
 
     col_indice = df.columns[0]
@@ -86,8 +218,34 @@ def ejecutar_migracion():
         if "motor" in c_str and "n" in c_str: 
             col_motor = c
 
+    print("\n" + "=" * 76)
+    print(" AUDITORÍA Y DEPURACIÓN DE NÚMEROS DE INGRESO (COLUMNA A)")
+    print("=" * 76)
+    df_limpio, reporte = sanitizar_secuencia_ingresos(df, col_indice)
+
+    print(f"[*] Total de filas originales en Excel : {reporte['total_original']}")
+    print(f"[*] Registros numéricos conservados   : {reporte['conservados']}")
+    print(f"[*] Registros reparados (huecos 'x')   : {reporte['reparados']}")
+    print(f"[*] Registros descartados / eliminados : {reporte['descartados']}")
+    print("=" * 76)
+
+    if reporte["detalles_reparados"]:
+        print(f"\n[i] Detalle de registros reparados por correlatividad ({len(reporte['detalles_reparados'])}):")
+        for fila, detalle in reporte["detalles_reparados"][:15]:
+            print(f"    - Fila {fila}: {detalle}")
+        if len(reporte["detalles_reparados"]) > 15:
+            print(f"    ... y {len(reporte['detalles_reparados']) - 15} correcciones adicionales.")
+
+    if reporte["detalles_descartados"]:
+        print(f"\n[!] Detalle de registros ignorados / eliminados ({len(reporte['detalles_descartados'])}):")
+        for fila, detalle in reporte["detalles_descartados"][:15]:
+            print(f"    - Fila {fila}: {detalle}")
+        if len(reporte["detalles_descartados"]) > 15:
+            print(f"    ... y {len(reporte['detalles_descartados']) - 15} descartes adicionales.")
+
+    print("=" * 76 + "\n")
+
     patentes_registradas = {}
-    ingresos_registrados = {}
 
     print("[+] Conectando a la base de datos PostgreSQL mediante SQLAlchemy...")
     db = SessionLocal()
@@ -102,8 +260,8 @@ def ejecutar_migracion():
         
         print(f"[+] {len(vehiculos_existentes)} vehículos ya registrados en BD.")
 
-        total = len(df)
-        print(f"[+] {total} filas encontradas en el Excel.")
+        total_a_procesar = len(df_limpio)
+        print(f"[+] Procesando {total_a_procesar} vehículos 100% limpios y validados...")
         
         BATCH_SIZE = 500
         vehiculos_creados = 0
@@ -114,9 +272,9 @@ def ejecutar_migracion():
         detalles_motor_batch = []
         detalles_caja_batch = []
         
-        for idx, row in df.iterrows():
+        for idx, row in df_limpio.iterrows():
             patente_final = limpiar_patente(row.get("Patente"), patentes_registradas)
-            num_ingreso_final = procesar_numero_ingreso(row.get(col_indice), idx, ingresos_registrados)
+            num_ingreso_final = str(row["_numero_ingreso_limpio"])
 
             marca_raw = str(row.get("Marca")).strip() if pd.notnull(row.get("Marca")) else "DESCONOCIDA"
             modelo_raw = str(row.get("Modelo")).strip() if pd.notnull(row.get("Modelo")) else "DESCONOCIDO"
@@ -201,7 +359,7 @@ def ejecutar_migracion():
                 activos_creados += 1
 
             # Commit en lotes optimizados
-            if len(vehiculos_batch) >= BATCH_SIZE or idx == total - 1:
+            if len(vehiculos_batch) >= BATCH_SIZE or idx == total_a_procesar - 1:
                 if vehiculos_batch:
                     db.bulk_save_objects(vehiculos_batch)
                 if activos_batch:
@@ -212,19 +370,21 @@ def ejecutar_migracion():
                     db.bulk_save_objects(detalles_caja_batch)
                     
                 db.commit()
-                print(f"    -> Progreso: {idx + 1} / {total} procesados (Modo Bulk de alta velocidad)...")
+                print(f"    -> Progreso: {idx + 1} / {total_a_procesar} procesados (Modo Bulk de alta velocidad)...")
                 
                 vehiculos_batch.clear()
                 activos_batch.clear()
                 detalles_motor_batch.clear()
                 detalles_caja_batch.clear()
 
-        print(f"[OK] Migración exitosa. Nuevos Vehículos: {vehiculos_creados} | Nuevos Repuestos (Motor/Caja): {activos_creados}")
+        print(f"\n[OK] Migración completada exitosamente.")
+        print(f"     Nuevos Vehículos registrados : {vehiculos_creados}")
+        print(f"     Nuevos Repuestos (Motor/Caja): {activos_creados}")
 
     except Exception as err:
         db.rollback()
-        print(f"[!] Error crítico durante la migración en la fila {idx}: {err}")
-        print("Abortando y revirtiendo la transacción para prevenir inconsistencias.")
+        print(f"[!] Error crítico durante la migración: {err}")
+        print("    Abortando y revirtiendo la transacción para prevenir inconsistencias.")
     finally:
         db.close()
 

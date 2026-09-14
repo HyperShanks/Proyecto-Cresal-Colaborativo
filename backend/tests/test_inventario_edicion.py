@@ -97,7 +97,8 @@ def db_session(setup_database):
         est_res = Estado_Activo(id_estado=2, nombre_estado="Reservado")
         est_vend = Estado_Activo(id_estado=3, nombre_estado="Vendido")
         est_entr = Estado_Activo(id_estado=6, nombre_estado="Entregado")
-        db.add_all([est_disp, est_res, est_vend, est_entr])
+        est_palet = Estado_Activo(id_estado=7, nombre_estado="Paletizado")
+        db.add_all([est_disp, est_res, est_vend, est_entr, est_palet])
 
         # Vehículo de origen
         vehiculo = Vehiculo_Origen(
@@ -169,6 +170,36 @@ def db_session(setup_database):
         )
         db.add(activo_entregado)
 
+        # Activo 4: Paletizado (id_estado = 7, editable)
+        activo_paletizado = Activo_Inventariado(
+            id_activo=uuid.uuid4(),
+            sku_qr_fisico="MOT-TOY-COR-004",
+            id_categoria=1,
+            id_estado=7,  # Paletizado
+            id_sucursal_actual=1,
+            id_vehiculo=vehiculo.id_vehiculo,
+            ubicacion_pasillo="P-04",
+            ubicacion_pallet="PL-40",
+            version_lock=1,
+            estado="Activo",
+        )
+        db.add(activo_paletizado)
+
+        # Activo 5: Reservado (id_estado = 2, no editable)
+        activo_reservado = Activo_Inventariado(
+            id_activo=uuid.uuid4(),
+            sku_qr_fisico="MOT-TOY-COR-005",
+            id_categoria=1,
+            id_estado=2,  # Reservado
+            id_sucursal_actual=1,
+            id_vehiculo=vehiculo.id_vehiculo,
+            ubicacion_pasillo="P-05",
+            ubicacion_pallet="PL-50",
+            version_lock=1,
+            estado="Activo",
+        )
+        db.add(activo_reservado)
+
         db.commit()
 
         yield {
@@ -179,6 +210,8 @@ def db_session(setup_database):
             "activo_1": activo_1,
             "activo_vendido": activo_vendido,
             "activo_entregado": activo_entregado,
+            "activo_paletizado": activo_paletizado,
+            "activo_reservado": activo_reservado,
         }
     finally:
         db.close()
@@ -199,7 +232,6 @@ def test_editar_activo_exitoso_bodeguero(client, db_session):
         "ubicacion_pasillo": "P-05",
         "ubicacion_galpon": "G-B",
         "ubicacion_pallet": "PL-99",
-        "observacion_estado": "Revisado por control de calidad.",
         "version_lock_esperado": 1,
     }
 
@@ -215,7 +247,6 @@ def test_editar_activo_exitoso_bodeguero(client, db_session):
     assert data["ubicacion_pasillo"] == "P-05"
     assert data["ubicacion_galpon"] == "G-B"
     assert data["ubicacion_pallet"] == "PL-99"
-    assert data["observacion_estado"] == "Revisado por control de calidad."
     assert data["version_lock"] == 2
     assert "actualizado exitosamente" in data["mensaje"].lower()
 
@@ -226,9 +257,9 @@ def test_editar_activo_exitoso_bodeguero(client, db_session):
     assert activo_1.version_lock == 2
 
 
-def test_editar_activo_actualiza_motor_y_cilindrada(client, db_session):
+def test_editar_activo_actualiza_ubicacion_pallet_y_galpon(client, db_session):
     """
-    Edición de especificaciones técnicas: Admin (id_rol=5) actualiza numero_motor y cilindrada.
+    Edición de ubicación: Admin (id_rol=5) actualiza ubicacion_pallet y ubicacion_galpon.
     """
     user_admin = db_session["user_admin"]
     activo_1 = db_session["activo_1"]
@@ -237,8 +268,8 @@ def test_editar_activo_actualiza_motor_y_cilindrada(client, db_session):
     headers = {"Authorization": f"Bearer {token}"}
 
     payload = {
-        "numero_motor": "2NZ-FE-999999",
-        "cilindrada": "1.3L",
+        "ubicacion_pallet": "PL-55",
+        "ubicacion_galpon": "G-C",
         "version_lock_esperado": 2,  # Ahora es 2 tras la prueba anterior
     }
 
@@ -250,15 +281,71 @@ def test_editar_activo_actualiza_motor_y_cilindrada(client, db_session):
 
     assert response.status_code == 200
     data = response.json()
-    assert data["numero_motor"] == "2NZ-FE-999999"
-    assert data["cilindrada"] == "1.3L"
+    assert data["ubicacion_pallet"] == "PL-55"
+    assert data["ubicacion_galpon"] == "G-C"
     assert data["version_lock"] == 3
 
     # Verificar en BD
     db = db_session["db"]
-    motor = db.query(Detalle_Motor).filter(Detalle_Motor.id_activo == activo_1.id_activo).first()
-    assert motor.numero_motor == "2NZ-FE-999999"
-    assert motor.cilindrada == "1.3L"
+    db.refresh(activo_1)
+    assert activo_1.ubicacion_pallet == "PL-55"
+    assert activo_1.ubicacion_galpon == "G-C"
+
+
+def test_editar_activo_exitoso_en_estado_paletizado(client, db_session):
+    """
+    Regla de Negocio: Activos en estado 'Paletizado' (id_estado=7) pueden editar su ubicación.
+    """
+    user_bodega = db_session["user_bodega"]
+    activo_paletizado = db_session["activo_paletizado"]
+
+    token = create_access_token(data={"sub": str(user_bodega.id_usuario)})
+    headers = {"Authorization": f"Bearer {token}"}
+
+    payload = {
+        "ubicacion_pasillo": "P-99",
+        "ubicacion_pallet": "PL-99",
+        "version_lock_esperado": 1,
+    }
+
+    response = client.patch(
+        f"/api/v1/inventario/{activo_paletizado.id_activo}",
+        json=payload,
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["ubicacion_pasillo"] == "P-99"
+    assert data["ubicacion_pallet"] == "PL-99"
+    assert data["version_lock"] == 2
+
+
+def test_editar_activo_rechazo_pieza_reservada_400(client, db_session):
+    """
+    Regla de Negocio: Activos en estado 'Reservado' (id_estado=2) NO pueden ser editados.
+    """
+    user_bodega = db_session["user_bodega"]
+    activo_reservado = db_session["activo_reservado"]
+
+    token = create_access_token(data={"sub": str(user_bodega.id_usuario)})
+    headers = {"Authorization": f"Bearer {token}"}
+
+    payload = {
+        "ubicacion_pasillo": "P-99",
+        "version_lock_esperado": 1,
+    }
+
+    response = client.patch(
+        f"/api/v1/inventario/{activo_reservado.id_activo}",
+        json=payload,
+        headers=headers,
+    )
+
+    assert response.status_code == 400
+    data = response.json()
+    detail = data.get("detail", "")
+    assert "Solo es posible modificar la ubicación de repuestos en estado 'Disponible' o 'Paletizado'" in detail
 
 
 def test_editar_activo_colision_concurrencia_optimista_409(client, db_session):
@@ -297,7 +384,7 @@ def test_editar_activo_colision_concurrencia_optimista_409(client, db_session):
 def test_editar_activo_rechazo_pieza_vendida_400(client, db_session):
     """
     Intento de editar un repuesto en estado 'Vendido' (id_estado=3).
-    Debe responder 400 Bad Request con el mensaje exigido en SPEC Sección 3.
+    Debe responder 400 Bad Request indicando que solo se permite en Disponible o Paletizado.
     """
     user_bodega = db_session["user_bodega"]
     activo_vendido = db_session["activo_vendido"]
@@ -319,13 +406,13 @@ def test_editar_activo_rechazo_pieza_vendida_400(client, db_session):
     assert response.status_code == 400
     data = response.json()
     detail = data.get("detail", "")
-    assert "Este artículo ya fue despachado o cobrado. Ya no es posible modificar su ubicación técnica." in detail
+    assert "Solo es posible modificar la ubicación de repuestos en estado 'Disponible' o 'Paletizado'" in detail
 
 
 def test_editar_activo_rechazo_pieza_entregada_400(client, db_session):
     """
     Intento de editar un repuesto en estado 'Entregado' (id_estado=6).
-    Debe responder 400 Bad Request con el mensaje exigido en SPEC Sección 3.
+    Debe responder 400 Bad Request indicando que solo se permite en Disponible o Paletizado.
     """
     user_admin = db_session["user_admin"]
     activo_entregado = db_session["activo_entregado"]
@@ -347,7 +434,7 @@ def test_editar_activo_rechazo_pieza_entregada_400(client, db_session):
     assert response.status_code == 400
     data = response.json()
     detail = data.get("detail", "")
-    assert "Este artículo ya fue despachado o cobrado. Ya no es posible modificar su ubicación técnica." in detail
+    assert "Solo es posible modificar la ubicación de repuestos en estado 'Disponible' o 'Paletizado'" in detail
 
 
 def test_editar_activo_rechazo_rol_no_autorizado_403(client, db_session):

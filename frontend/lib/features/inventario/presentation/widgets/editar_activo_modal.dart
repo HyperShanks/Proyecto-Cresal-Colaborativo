@@ -3,6 +3,8 @@ import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../services/inventario_service.dart';
 
+/// Modal para editar exclusivamente la ubicación logística de un activo en bodega (Pasillo, Pallet, Galpón).
+/// Solo disponible para repuestos en estado 'Disponible' o 'Paletizado'.
 class EditarActivoModal extends StatefulWidget {
   final Map<String, dynamic> activo;
 
@@ -19,44 +21,24 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
   late final TextEditingController _pasilloController;
   late final TextEditingController _palletController;
   late final TextEditingController _galponController;
-  late final TextEditingController _observacionController;
-  late final TextEditingController _numeroMotorController;
-  late final TextEditingController _cilindradaController;
 
   late final String _initialPasillo;
   late final String _initialPallet;
   late final String _initialGalpon;
-  late final String _initialObservacion;
-  late final String _initialNumeroMotor;
-  late final String _initialCilindrada;
 
   bool _isSaving = false;
-  late final bool _esMotor;
 
   @override
   void initState() {
     super.initState();
 
-    final cat = widget.activo['categoria']?.toString().toUpperCase() ?? '';
-    _esMotor = cat.contains('MOTOR');
-
     _initialPasillo = (widget.activo['pasillo'] ?? widget.activo['ubicacion_pasillo'] ?? '').toString().trim();
     _initialPallet = (widget.activo['pallet'] ?? widget.activo['ubicacion_pallet'] ?? '').toString().trim();
     _initialGalpon = (widget.activo['galpon'] ?? widget.activo['ubicacion_galpon'] ?? '').toString().trim();
 
-    final rawObs = (widget.activo['observacion'] ?? widget.activo['observacion_estado'] ?? '').toString().trim();
-    _initialObservacion = rawObs == 'Sin observaciones registradas.' ? '' : rawObs;
-
-    _initialNumeroMotor = (widget.activo['numero_motor'] ?? '').toString().trim();
-    _initialCilindrada = (widget.activo['cilindrada'] ?? '').toString().trim();
-    final cleanCilindrada = _initialCilindrada == 'N/A' ? '' : _initialCilindrada;
-
-    _pasilloController = TextEditingController(text: _initialPasillo);
-    _palletController = TextEditingController(text: _initialPallet);
-    _galponController = TextEditingController(text: _initialGalpon);
-    _observacionController = TextEditingController(text: _initialObservacion);
-    _numeroMotorController = TextEditingController(text: _initialNumeroMotor);
-    _cilindradaController = TextEditingController(text: cleanCilindrada);
+    _pasilloController = TextEditingController(text: _initialPasillo == 'S/P' ? '' : _initialPasillo);
+    _palletController = TextEditingController(text: _initialPallet == 'S/P' ? '' : _initialPallet);
+    _galponController = TextEditingController(text: _initialGalpon == 'S/G' ? '' : _initialGalpon);
   }
 
   @override
@@ -64,20 +46,19 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
     _pasilloController.dispose();
     _palletController.dispose();
     _galponController.dispose();
-    _observacionController.dispose();
-    _numeroMotorController.dispose();
-    _cilindradaController.dispose();
     super.dispose();
   }
 
   bool _isFormDirty() {
-    final cilindradaEsperada = _initialCilindrada == 'N/A' ? '' : _initialCilindrada;
-    return _pasilloController.text.trim() != _initialPasillo ||
-        _palletController.text.trim() != _initialPallet ||
-        _galponController.text.trim() != _initialGalpon ||
-        _observacionController.text.trim() != _initialObservacion ||
-        _numeroMotorController.text.trim() != _initialNumeroMotor ||
-        _cilindradaController.text.trim() != cilindradaEsperada;
+    final curPasillo = _pasilloController.text.trim();
+    final curPallet = _palletController.text.trim();
+    final curGalpon = _galponController.text.trim();
+
+    final initP = _initialPasillo == 'S/P' ? '' : _initialPasillo;
+    final initPl = _initialPallet == 'S/P' ? '' : _initialPallet;
+    final initG = _initialGalpon == 'S/G' ? '' : _initialGalpon;
+
+    return curPasillo != initP || curPallet != initPl || curGalpon != initG;
   }
 
   Future<bool> _mostrarDialogoConfirmacionDescarte() async {
@@ -90,7 +71,7 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
           style: AppTypography.title.copyWith(color: AppPalette.textPrimary),
         ),
         content: Text(
-          'Tienes cambios sin guardar. ¿Estás seguro de que quieres salir y descartar las modificaciones?',
+          'Tienes cambios sin guardar en la ubicación. ¿Estás seguro de que quieres salir y descartar las modificaciones?',
           style: AppTypography.body.copyWith(color: AppPalette.textSecondary),
         ),
         actions: [
@@ -139,13 +120,7 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
         'ubicacion_pasillo': _pasilloController.text.trim(),
         'ubicacion_pallet': _palletController.text.trim(),
         'ubicacion_galpon': _galponController.text.trim(),
-        'observacion_estado': _observacionController.text.trim(),
       };
-
-      if (_esMotor) {
-        payload['numero_motor'] = _numeroMotorController.text.trim();
-        payload['cilindrada'] = _cilindradaController.text.trim();
-      }
 
       final resultado = await InventarioService.editarActivo(idActivo, payload);
 
@@ -153,44 +128,61 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
       setState(() => _isSaving = false);
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text(
-            'Activo actualizado exitosamente.',
+        const SnackBar(
+          content: Text(
+            'Ubicación actualizada exitosamente.',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
           ),
           backgroundColor: AppPalette.success,
-          duration: const Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
         ),
       );
 
-      Navigator.of(context).pop(resultado);
+      Navigator.of(context).pop({
+        'ubicacion_pasillo': _pasilloController.text.trim(),
+        'ubicacion_pallet': _palletController.text.trim(),
+        'ubicacion_galpon': _galponController.text.trim(),
+        'version_lock': resultado['version_lock'] ?? (versionLock + 1),
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() => _isSaving = false);
 
-      final errorMsg = e.toString().replaceFirst('Exception: ', '');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            errorMsg,
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-          ),
-          backgroundColor: AppPalette.error,
-          duration: const Duration(seconds: 4),
-        ),
-      );
+      final errorMsg = e.toString().replaceFirst('Exception: ', '').replaceAll('"', '');
 
-      // En caso de conflicto de concurrencia (409), cerramos notificando para recargar datos
       if (errorMsg.contains('modificada por otro usuario recientemente')) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              errorMsg,
+              style: const TextStyle(color: Colors.white),
+            ),
+            backgroundColor: AppPalette.warning,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+          ),
+        );
         Navigator.of(context).pop({'conflict': true});
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              errorMsg,
+              style: const TextStyle(color: Colors.white),
+            ),
+            backgroundColor: AppPalette.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final sku = widget.activo['sku'] ?? widget.activo['sku_qr_fisico'] ?? 'S/N';
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final sku = widget.activo['sku']?.toString() ?? widget.activo['sku_qr_fisico']?.toString() ?? 'S/N';
+    final categoria = widget.activo['categoria']?.toString() ?? 'Repuesto';
 
     return PopScope(
       canPop: !_isFormDirty(),
@@ -203,7 +195,7 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
       },
       child: Container(
         constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.88,
+          maxHeight: MediaQuery.of(context).size.height * 0.70,
         ),
         padding: EdgeInsets.only(bottom: bottomInset),
         decoration: const BoxDecoration(
@@ -234,7 +226,7 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Icon(
-                      Icons.edit_note_rounded,
+                      Icons.edit_location_alt_rounded,
                       color: AppPalette.primary,
                       size: 24,
                     ),
@@ -245,7 +237,7 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Editar Información del Activo',
+                          'Editar Ubicación de $categoria',
                           style: AppTypography.title.copyWith(
                             fontSize: 16,
                             color: AppPalette.textPrimary,
@@ -271,7 +263,7 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
               ),
             ),
 
-            // Formulario Scrollable
+            // Formulario Scrollable enfocado exclusivamente en ubicación
             Flexible(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(20),
@@ -286,7 +278,15 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
                         letterSpacing: 1.1,
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Indica la posición física de almacenamiento del activo en bodega.',
+                      style: AppTypography.small.copyWith(
+                        color: AppPalette.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
 
                     // Fila Pasillo y Pallet
                     Row(
@@ -310,7 +310,7 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 16),
 
                     // Galpón
                     _buildTextField(
@@ -318,51 +318,6 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
                       label: 'Galpón',
                       hintText: 'Ej. Galpón Central / G-A',
                       icon: Icons.warehouse_outlined,
-                    ),
-                    const SizedBox(height: 22),
-
-                    // Específico para Motores
-                    if (_esMotor) ...[
-                      Text(
-                        'DETALLES DE MOTOR',
-                        style: AppTypography.small.copyWith(
-                          color: AppPalette.primary,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.1,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      _buildTextField(
-                        controller: _numeroMotorController,
-                        label: 'Número de Motor',
-                        hintText: 'Ej. 1NZ-FE-789012',
-                        icon: Icons.numbers_outlined,
-                      ),
-                      const SizedBox(height: 14),
-                      _buildTextField(
-                        controller: _cilindradaController,
-                        label: 'Cilindrada',
-                        hintText: 'Ej. 1.5L / 1500cc',
-                        icon: Icons.speed_outlined,
-                      ),
-                      const SizedBox(height: 22),
-                    ],
-
-                    Text(
-                      'OBSERVACIÓN TÉCNICA / ESTADO FÍSICO',
-                      style: AppTypography.small.copyWith(
-                        color: AppPalette.primary,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.1,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _buildTextField(
-                      controller: _observacionController,
-                      label: 'Notas de Estado',
-                      hintText: 'Describe el estado físico o notas de control...',
-                      icon: Icons.notes_outlined,
-                      maxLines: 3,
                     ),
                   ],
                 ),
@@ -383,55 +338,48 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
               child: Row(
                 children: [
                   Expanded(
-                    child: SizedBox(
-                      height: 50,
-                      child: OutlinedButton(
-                        onPressed: _isSaving ? null : _handleCancelOrClose,
-                        style: OutlinedButton.styleFrom(
-                          side: BorderSide(
-                            color: AppPalette.neutral.withValues(alpha: 0.3),
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
+                    child: OutlinedButton(
+                      onPressed: _isSaving ? null : _handleCancelOrClose,
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        side: BorderSide(color: AppPalette.neutral.withValues(alpha: 0.4)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                        child: Text(
-                          'CANCELAR',
-                          style: AppTypography.button.copyWith(
-                            color: AppPalette.textPrimary,
-                          ),
-                        ),
+                      ),
+                      child: Text(
+                        'CANCELAR',
+                        style: AppTypography.button.copyWith(color: AppPalette.textSecondary),
                       ),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: SizedBox(
-                      height: 50,
-                      child: ElevatedButton.icon(
-                        onPressed: _isSaving ? null : _guardarCambios,
-                        icon: _isSaving
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                ),
-                              )
-                            : const Icon(Icons.save_rounded, color: Colors.white),
-                        label: Text(
-                          _isSaving ? 'GUARDANDO...' : 'GUARDAR CAMBIOS',
-                          style: AppTypography.button.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
+                    flex: 2,
+                    child: ElevatedButton.icon(
+                      onPressed: _isSaving ? null : _guardarCambios,
+                      icon: _isSaving
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.check_rounded, color: Colors.white),
+                      label: Text(
+                        _isSaving ? 'GUARDANDO...' : 'GUARDAR UBICACIÓN',
+                        style: AppTypography.button.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
                         ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppPalette.primary,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppPalette.primary,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
                         ),
                       ),
                     ),
@@ -450,7 +398,6 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
     required String label,
     required String hintText,
     required IconData icon,
-    int maxLines = 1,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -458,37 +405,32 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
         Text(
           label,
           style: AppTypography.small.copyWith(
-            color: AppPalette.textSecondary,
             fontWeight: FontWeight.bold,
-            fontSize: 11,
+            color: AppPalette.textPrimary,
           ),
         ),
         const SizedBox(height: 6),
         TextField(
           controller: controller,
-          maxLines: maxLines,
           style: AppTypography.body.copyWith(color: AppPalette.textPrimary),
           decoration: InputDecoration(
             hintText: hintText,
-            hintStyle: AppTypography.body.copyWith(
-              color: AppPalette.textSecondary.withValues(alpha: 0.5),
-            ),
+            hintStyle: AppTypography.body.copyWith(color: AppPalette.textSecondary.withValues(alpha: 0.5)),
             prefixIcon: Icon(icon, color: AppPalette.primary, size: 20),
             filled: true,
             fillColor: AppPalette.surface,
             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: AppPalette.neutral.withValues(alpha: 0.2)),
+            ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(
-                color: AppPalette.neutral.withValues(alpha: 0.2),
-              ),
+              borderSide: BorderSide(color: AppPalette.neutral.withValues(alpha: 0.2)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(
-                color: AppPalette.primary,
-                width: 1.5,
-              ),
+              borderSide: const BorderSide(color: AppPalette.primary, width: 1.5),
             ),
           ),
         ),

@@ -1147,21 +1147,25 @@ def editar_activo_inventariado(
             detail=f"Activo inventariado con ID '{id_activo}' no encontrado.",
         )
 
-    # 2. Regla de Negocio: Pieza vendida o despachada no puede modificarse
-    # id_estado: 3 = Vendido, 6 = Entregado
+    # 2. Regla de Negocio: Solo activos en estado 'Disponible' o 'Paletizado' pueden editar su ubicación
+    # id_estado: 1 = Disponible, 7 = Paletizado
     estado_obj = (
         db.query(Estado_Activo)
         .filter(Estado_Activo.id_estado == activo_existente.id_estado)
         .first()
     )
     nombre_estado = estado_obj.nombre_estado if estado_obj else ""
-    if activo_existente.id_estado in [3, 6] or nombre_estado in ["Vendido", "Entregado"]:
+    nombre_estado_lower = nombre_estado.strip().lower()
+    estados_permitidos_id = {1, 7}
+    estados_permitidos_nombre = {"disponible", "paletizado"}
+
+    if activo_existente.id_estado not in estados_permitidos_id and nombre_estado_lower not in estados_permitidos_nombre:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Este artículo ya fue despachado o cobrado. Ya no es posible modificar su ubicación técnica.",
+            detail=f"Solo es posible modificar la ubicación de repuestos en estado 'Disponible' o 'Paletizado'. El artículo actual se encuentra en estado '{nombre_estado or activo_existente.id_estado}'.",
         )
 
-    # 3. Transacción atómica con control de concurrencia optimista
+    # 3. Transacción atómica con control de concurrencia optimista (solo ubicación)
     try:
         update_values = {
             "version_lock": Activo_Inventariado.version_lock + 1,
@@ -1173,8 +1177,6 @@ def editar_activo_inventariado(
             update_values["ubicacion_galpon"] = payload.ubicacion_galpon
         if payload.ubicacion_pallet is not None:
             update_values["ubicacion_pallet"] = payload.ubicacion_pallet
-        if payload.observacion_estado is not None:
-            update_values["observacion_estado"] = payload.observacion_estado
 
         stmt = (
             update(Activo_Inventariado)
@@ -1194,28 +1196,11 @@ def editar_activo_inventariado(
                        "Los datos se actualizarán ahora para que revises los cambios antes de volver a editar.",
             )
 
-        # 4. Actualizar Detalle_Motor si se proporcionan campos de motor
-        motor = db.query(Detalle_Motor).filter(Detalle_Motor.id_activo == id_activo).first()
-        if payload.numero_motor is not None or payload.cilindrada is not None:
-            if motor:
-                if payload.numero_motor is not None:
-                    motor.numero_motor = payload.numero_motor
-                if payload.cilindrada is not None:
-                    motor.cilindrada = payload.cilindrada
-            else:
-                motor = Detalle_Motor(
-                    id_activo=id_activo,
-                    numero_motor=payload.numero_motor,
-                    cilindrada=payload.cilindrada,
-                )
-                db.add(motor)
-
         db.commit()
 
         # Recargar activo actualizado
         db.refresh(activo_existente)
-        if motor:
-            db.refresh(motor)
+        motor = db.query(Detalle_Motor).filter(Detalle_Motor.id_activo == id_activo).first()
 
         return EditarActivoResponse(
             id_activo=activo_existente.id_activo,
