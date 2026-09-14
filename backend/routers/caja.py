@@ -932,6 +932,13 @@ def obtener_historial_caja(
 
         # Folio
         folio_doc = orden.folio
+        if not folio_doc or folio_doc.startswith("TX-QR-"):
+            if orden.numero_orden:
+                folio_doc = f"ORD-{orden.numero_orden:04d}"
+            elif orden.id_orden:
+                folio_doc = f"ORD-{str(orden.id_orden).replace('-', '')[:8].upper()}"
+            else:
+                folio_doc = "ORD-0000"
 
         fecha_fmt, hora_fmt, dt_utc = format_chile_datetime(orden.fecha_creacion)
         dt_chile = dt_utc.astimezone(tz_chile)

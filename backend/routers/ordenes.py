@@ -660,10 +660,20 @@ def listar_ordenes_auditoria(
                 )
             )
 
+        # Asegurar formato comercial ORD-XXXX si el folio viniera como TX-QR-... o nulo
+        folio_display = orden.folio
+        if not folio_display or folio_display.startswith("TX-QR-"):
+            if orden.numero_orden:
+                folio_display = f"ORD-{orden.numero_orden:04d}"
+            elif orden.id_orden:
+                folio_display = f"ORD-{str(orden.id_orden).replace('-', '')[:8].upper()}"
+            else:
+                folio_display = "ORD-0000"
+
         items.append(
             HistorialOrdenItemResponse(
                 id_orden=orden.id_orden,
-                folio=orden.folio,
+                folio=folio_display,
                 tipo_operacion="VENTA",
                 emite_qr=bool(orden.qr_transaccional_salida) or (orden.monto_pendiente <= 0),
                 fecha_iso=fecha_iso,

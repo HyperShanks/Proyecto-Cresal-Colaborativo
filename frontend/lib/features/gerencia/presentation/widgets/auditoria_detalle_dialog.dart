@@ -156,7 +156,7 @@ class AuditoriaDetalleDialog extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          orden.folio,
+                          orden.folioDisplay,
                           style: AppTypography.headline.copyWith(
                             fontSize: 24,
                             fontWeight: FontWeight.w900,
@@ -534,7 +534,7 @@ class AuditoriaDetalleDialog extends StatelessWidget {
                             ),
                           ),
                           Text(
-                            'Folio: ${orden.folio}',
+                            'Folio: ${orden.folioDisplay}',
                             style: AppTypography.small.copyWith(
                               color: const Color(0xFF94A3B8),
                               fontSize: 11,

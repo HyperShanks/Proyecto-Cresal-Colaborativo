@@ -247,6 +247,25 @@ class HistorialOrdenItemModel {
   bool get esAnulada => estadoOrden == 'Anulada';
   bool get esSplit => modalidadPago.toLowerCase() == 'split';
 
+  String get folioDisplay {
+    if (folio.isNotEmpty && !folio.startsWith('TX-QR-') && !folio.startsWith('TX-')) {
+      return folio;
+    }
+    if (folio.startsWith('TX-QR-')) {
+      final sinPrefijo = folio.replaceFirst('TX-QR-', '').replaceAll('-', '');
+      if (sinPrefijo.length >= 4) {
+        final sub = sinPrefijo.length >= 8 ? sinPrefijo.substring(0, 8) : sinPrefijo;
+        return 'ORD-${sub.toUpperCase()}';
+      }
+    }
+    if (idOrden.length >= 8) {
+      final clean = idOrden.replaceAll('-', '');
+      final sub = clean.length >= 8 ? clean.substring(0, 8) : clean;
+      return 'ORD-${sub.toUpperCase()}';
+    }
+    return folio.isNotEmpty ? folio : 'ORD-0000';
+  }
+
   factory HistorialOrdenItemModel.fromJson(Map<String, dynamic> json) =>
       HistorialOrdenItemModel(
         idOrden: json['id_orden'] as String? ?? '',

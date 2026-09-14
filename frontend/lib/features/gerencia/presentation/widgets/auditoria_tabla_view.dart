@@ -262,7 +262,7 @@ class AuditoriaTablaView extends StatelessWidget {
             Expanded(
               flex: 12,
               child: Text(
-                item.folio,
+                item.folioDisplay,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AppTypography.body.copyWith(
