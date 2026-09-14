@@ -4,7 +4,7 @@
 # autogenere la documentación Swagger.
 
 import uuid
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, text, CheckConstraint
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, text, CheckConstraint, Sequence
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from database import Base
@@ -228,7 +228,7 @@ class Orden_Venta(Base):
     abono_requerido = Column(Integer, nullable=False, default=0)
     fecha_creacion = Column(DateTime, nullable=False, server_default=text("now()"))
     fecha_actualizacion = Column(DateTime, nullable=True)
-    numero_orden = Column(Integer, nullable=True)
+    numero_orden = Column(Integer, Sequence("Orden_Venta_numero_orden_seq"), nullable=True)
 
     @property
     def folio(self) -> str:
