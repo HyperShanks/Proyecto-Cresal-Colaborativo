@@ -146,7 +146,8 @@ void main() {
         scrollable: find.byType(Scrollable).first,
       );
       expect(find.text('Dirección de Envío *'), findsOneWidget);
-      expect(find.text('Comuna Destino'), findsOneWidget);
+      expect(find.text('Región Destino *'), findsOneWidget);
+      expect(find.text('Comuna Destino *'), findsOneWidget);
       expect(find.text('RUT Receptor *'), findsOneWidget);
       expect(find.text('Nombres Receptor *'), findsOneWidget);
       expect(find.text('Teléfono Receptor *'), findsOneWidget);

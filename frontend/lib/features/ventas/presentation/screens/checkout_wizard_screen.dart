@@ -12,6 +12,7 @@ import '../../controllers/checkout_wizard_controller.dart';
 import '../../services/ordenes_service.dart';
 import '../../services/ordenes_sync_notifier.dart';
 import '../widgets/modal_backorder_form.dart';
+import '../../../../core/constants/chile_geografia.dart';
 
 /// Pantalla Principal del Checkout Wizard por 5 Pasos Secuenciales (SPEC-HU-05)
 /// Integra Carrito Híbrido, Micro-CRM con Consumidor Final, Logística (Retiro/Despacho/Traslado) y Abonos.
@@ -45,7 +46,8 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
   final FocusNode _rutFocusNode = FocusNode();
   bool _isSearchingCliente = false;
   bool _esClienteAnonimo = false;
-  String _comunaCliente = 'Viña del Mar';
+  String? _regionCliente;
+  String? _comunaCliente;
 
   // Controladores Paso 3 (Logística & Despacho / Traslado)
   final _direccionController = TextEditingController();
@@ -53,7 +55,8 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
   final _receptorRutController = TextEditingController();
   final _receptorTelefonoController = TextEditingController();
   final _empresaTransporteController = TextEditingController(text: 'Chilexpress');
-  String _comunaDespacho = 'Viña del Mar';
+  String? _regionDespacho;
+  String? _comunaDespacho;
   int _idSucursalDestino = 1; // 1: Viña del Mar, 2: Limache
   int? _userRolId;
   bool get _esVendedorOnline => _userRolId == 7;
@@ -63,18 +66,6 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
   // Controladores Paso 4 (Comercial / Abonos)
   final _montoAbonoController = TextEditingController();
   final _notasGeneralesController = TextEditingController();
-
-  static const List<String> _comunasDisponibles = [
-    'Viña del Mar',
-    'Valparaíso',
-    'Limache',
-    'Quilpué',
-    'Villa Alemana',
-    'Concón',
-    'Quillota',
-    'San Antonio',
-    'Santiago',
-  ];
 
   @override
   void initState() {
@@ -217,8 +208,14 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
             _clienteEmailController.text = res['correo'].toString();
           }
           final com = res['comuna']?.toString();
-          if (com != null && _comunasDisponibles.contains(com)) {
-            _comunaCliente = com;
+          if (com != null && com.isNotEmpty) {
+            final reg = ChileGeografia.obtenerRegionDeComuna(com);
+            if (reg != null) {
+              _regionCliente = reg;
+              _comunaCliente = com;
+            } else {
+              _comunaCliente = com;
+            }
           }
 
           final cliente = ClienteWizardModel(
@@ -285,6 +282,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
         _clienteApellidosController.text = 'Final';
         _clienteTelefonoController.clear();
         _clienteEmailController.clear();
+        _regionCliente = 'Valparaíso';
         _comunaCliente = 'Viña del Mar';
 
         _controller.setCliente(
@@ -304,6 +302,8 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
         _clienteApellidosController.clear();
         _clienteTelefonoController.clear();
         _clienteEmailController.clear();
+        _regionCliente = null;
+        _comunaCliente = null;
         _controller.setCliente(null);
       }
     });
@@ -317,7 +317,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
         receptorNombres: _receptorNombresController.text.trim(),
         receptorRut: _receptorRutController.text.trim(),
         receptorTelefono: _receptorTelefonoController.text.trim(),
-        idComunaDestino: _comunasDisponibles.indexOf(_comunaDespacho) + 1,
+        idComunaDestino: ChileGeografia.obtenerIdComuna(_comunaDespacho),
         comunaNombre: _comunaDespacho,
         empresaTransporte: _empresaTransporteController.text.trim().isNotEmpty
             ? _empresaTransporteController.text.trim()
@@ -949,34 +949,81 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: DropdownButtonFormField<String>(
-                        isExpanded: true,
-                        initialValue: _comunaCliente,
-                        dropdownColor: AppPalette.surface,
+                      child: TextField(
+                        controller: _clienteEmailController,
                         style: AppTypography.body,
-                        decoration: _inputDeco('Comuna', Icons.location_city),
-                        items: _comunasDisponibles.map((c) => DropdownMenuItem(
-                          value: c,
-                          child: Text(c, overflow: TextOverflow.ellipsis),
-                        )).toList(),
-                        onChanged: (val) {
-                          if (val != null) {
-                            setState(() => _comunaCliente = val);
-                            _actualizarClienteLocal();
-                          }
-                        },
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: _inputDeco('Correo Electrónico (Opcional)', Icons.email_outlined),
+                        onChanged: (val) => _actualizarClienteLocal(),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
-
-                TextField(
-                  controller: _clienteEmailController,
-                  style: AppTypography.body,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: _inputDeco('Correo Electrónico (Opcional)', Icons.email_outlined),
-                  onChanged: (val) => _actualizarClienteLocal(),
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        isExpanded: true,
+                        value: _regionCliente,
+                        dropdownColor: AppPalette.surface,
+                        style: AppTypography.body,
+                        decoration: _inputDeco('Región Cliente', Icons.map_outlined),
+                        hint: const Text('Seleccione Región...', overflow: TextOverflow.ellipsis),
+                        items: ChileGeografia.regiones.map((r) => DropdownMenuItem(
+                          value: r,
+                          child: Text(r, overflow: TextOverflow.ellipsis),
+                        )).toList(),
+                        onChanged: (val) {
+                          setState(() {
+                            _regionCliente = val;
+                            _comunaCliente = null;
+                            _actualizarClienteLocal();
+                          });
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        isExpanded: true,
+                        value: _comunaCliente,
+                        dropdownColor: AppPalette.surface,
+                        style: AppTypography.body,
+                        decoration: _inputDeco(
+                          'Comuna Cliente',
+                          Icons.location_city,
+                        ).copyWith(
+                          enabled: _regionCliente != null && _regionCliente!.isNotEmpty,
+                        ),
+                        hint: Text(
+                          _regionCliente != null && _regionCliente!.isNotEmpty
+                              ? 'Seleccione Comuna...'
+                              : 'Seleccione región primero',
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: _regionCliente != null && _regionCliente!.isNotEmpty
+                                ? null
+                                : AppPalette.neutral.withValues(alpha: 0.6),
+                          ),
+                        ),
+                        items: (_regionCliente != null && _regionCliente!.isNotEmpty)
+                            ? ChileGeografia.obtenerComunas(_regionCliente).map((c) => DropdownMenuItem(
+                                value: c,
+                                child: Text(c, overflow: TextOverflow.ellipsis),
+                              )).toList()
+                            : const [],
+                        onChanged: (_regionCliente != null && _regionCliente!.isNotEmpty)
+                            ? (val) {
+                                setState(() {
+                                  _comunaCliente = val;
+                                  _actualizarClienteLocal();
+                                });
+                              }
+                            : null,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -1057,17 +1104,61 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                       onChanged: (val) => setState(() {}),
                     ),
                     const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      isExpanded: true,
-                      initialValue: _comunaDespacho,
-                      dropdownColor: AppPalette.surface,
-                      style: AppTypography.body,
-                      decoration: _inputDeco('Comuna Destino *', Icons.map),
-                      items: _comunasDisponibles.map((c) => DropdownMenuItem(
-                        value: c,
-                        child: Text(c, overflow: TextOverflow.ellipsis),
-                      )).toList(),
-                      onChanged: (val) => setState(() => _comunaDespacho = val ?? 'Viña del Mar'),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            isExpanded: true,
+                            value: _regionDespacho,
+                            dropdownColor: AppPalette.surface,
+                            style: AppTypography.body,
+                            decoration: _inputDeco('Región Destino *', Icons.map_outlined),
+                            hint: const Text('Seleccione Región...', overflow: TextOverflow.ellipsis),
+                            items: ChileGeografia.regiones.map((r) => DropdownMenuItem(
+                              value: r,
+                              child: Text(r, overflow: TextOverflow.ellipsis),
+                            )).toList(),
+                            onChanged: (val) {
+                              setState(() {
+                                _regionDespacho = val;
+                                _comunaDespacho = null;
+                              });
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            isExpanded: true,
+                            value: _comunaDespacho,
+                            dropdownColor: AppPalette.surface,
+                            style: AppTypography.body,
+                            decoration: _inputDeco('Comuna Destino *', Icons.map).copyWith(
+                              enabled: _regionDespacho != null && _regionDespacho!.isNotEmpty,
+                            ),
+                            hint: Text(
+                              _regionDespacho != null && _regionDespacho!.isNotEmpty
+                                  ? 'Seleccione Comuna...'
+                                  : 'Seleccione región primero',
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: _regionDespacho != null && _regionDespacho!.isNotEmpty
+                                    ? null
+                                    : AppPalette.neutral.withValues(alpha: 0.6),
+                              ),
+                            ),
+                            items: (_regionDespacho != null && _regionDespacho!.isNotEmpty)
+                                ? ChileGeografia.obtenerComunas(_regionDespacho).map((c) => DropdownMenuItem(
+                                    value: c,
+                                    child: Text(c, overflow: TextOverflow.ellipsis),
+                                  )).toList()
+                                : const [],
+                            onChanged: (_regionDespacho != null && _regionDespacho!.isNotEmpty)
+                                ? (val) => setState(() => _comunaDespacho = val)
+                                : null,
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 10),
                     TextField(
@@ -1366,9 +1457,11 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
         final rRut = _receptorRutController.text.trim();
         final dir = _direccionController.text.trim();
         final rNom = _receptorNombresController.text.trim();
+        final com = _comunaDespacho?.trim() ?? '';
         puedeAvanzar = dir.isNotEmpty &&
             rNom.isNotEmpty &&
             rRut.isNotEmpty &&
+            com.isNotEmpty &&
             RutValidator.isValid(rRut);
       } else {
         puedeAvanzar = true;

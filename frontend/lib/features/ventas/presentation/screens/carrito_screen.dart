@@ -13,6 +13,7 @@ import '../../services/ordenes_service.dart';
 import '../../services/carrito_service.dart';
 import '../widgets/cart_item_tile.dart';
 import '../widgets/venta_libre_dialog.dart';
+import '../../../../core/constants/chile_geografia.dart';
 
 /// Pantalla Unificada de Carrito de Ventas y Micro-CRM (HU-3.3 + HU-3.4).
 /// Integra el listado reactivo del Carrito Híbrido, formulario de datos de cliente,
@@ -54,8 +55,10 @@ class _CarritoScreenState extends State<CarritoScreen> {
 
   // Variables de Selección y Switches
   bool _esClienteAnonimo = false;
-  String _comunaCliente = 'Viña del Mar';
-  String _comunaDespacho = 'Viña del Mar';
+  String? _regionCliente;
+  String? _comunaCliente;
+  String? _regionDespacho;
+  String? _comunaDespacho;
   String _tipoEntrega = 'Retiro'; // 'Retiro', 'Despacho', 'Traslado'
   int _idSucursalDestino = 1; // 1: Viña del Mar, 2: Limache
   bool get _requiereDespacho => _tipoEntrega != 'Retiro';
@@ -65,18 +68,6 @@ class _CarritoScreenState extends State<CarritoScreen> {
   bool get _esVendedorOnline => _userRolId == 7;
   List<VendedorModel> _vendedoresDisponibles = [];
   String? _idVendedorAsignado; // null => Mesón General (Todos)
-
-  static const List<String> _comunasDisponibles = [
-    'Viña del Mar',
-    'Valparaíso',
-    'Limache',
-    'Quilpué',
-    'Villa Alemana',
-    'Concón',
-    'Quillota',
-    'San Antonio',
-    'Santiago',
-  ];
 
   // Temporizadores para Reserva Concurrente (HU-03)
   Timer? _countdownTimer;
@@ -285,8 +276,14 @@ class _CarritoScreenState extends State<CarritoScreen> {
               _telefonoController.text = cliente['telefono'].toString();
             }
             final comuna = cliente['comuna']?.toString();
-            if (comuna != null && _comunasDisponibles.contains(comuna)) {
-              _comunaCliente = comuna;
+            if (comuna != null && comuna.isNotEmpty) {
+              final reg = ChileGeografia.obtenerRegionDeComuna(comuna);
+              if (reg != null) {
+                _regionCliente = reg;
+                _comunaCliente = comuna;
+              } else {
+                _comunaCliente = comuna;
+              }
             }
           });
 
@@ -330,6 +327,10 @@ class _CarritoScreenState extends State<CarritoScreen> {
     _montoAbonoController.clear();
     setState(() {
       _esClienteAnonimo = false;
+      _regionCliente = null;
+      _comunaCliente = null;
+      _regionDespacho = null;
+      _comunaDespacho = null;
       _tipoEntrega = 'Retiro';
       _idSucursalDestino = 1;
     });
@@ -401,6 +402,8 @@ class _CarritoScreenState extends State<CarritoScreen> {
       _rutController.text = '6.666.666-6';
       _nombresController.text = 'Consumidor';
       _apellidosController.text = 'Final';
+      _regionCliente ??= 'Valparaíso';
+      _comunaCliente ??= 'Viña del Mar';
     }
 
     final formValido = _esClienteAnonimo ? true : (_formKey.currentState?.validate() ?? false);
@@ -411,6 +414,19 @@ class _CarritoScreenState extends State<CarritoScreen> {
           backgroundColor: AppPalette.surface,
           content: Text(
             'Por favor completa todos los campos requeridos (*)',
+            style: TextStyle(color: AppPalette.error),
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (!_esClienteAnonimo && (_comunaCliente == null || _comunaCliente!.trim().isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: AppPalette.surface,
+          content: Text(
+            'Por favor selecciona la Región y Comuna del cliente (*)',
             style: TextStyle(color: AppPalette.error),
           ),
         ),
@@ -448,6 +464,8 @@ class _CarritoScreenState extends State<CarritoScreen> {
       // Validar datos de Despacho si aplica
       if (_tipoEntrega == 'Despacho') {
         if (_direccionDespachoController.text.trim().isEmpty ||
+            _comunaDespacho == null ||
+            _comunaDespacho!.trim().isEmpty ||
             _rutReceptorController.text.trim().isEmpty ||
             _nombresReceptorController.text.trim().isEmpty ||
             _telefonoReceptorController.text.trim().isEmpty) {
@@ -455,7 +473,7 @@ class _CarritoScreenState extends State<CarritoScreen> {
             const SnackBar(
               backgroundColor: AppPalette.surface,
               content: Text(
-                'Por favor completa todos los datos obligatorios del despacho (*)',
+                'Por favor completa todos los datos obligatorios del despacho (incluyendo Comuna) (*)',
                 style: TextStyle(color: AppPalette.error),
               ),
             ),
@@ -471,9 +489,11 @@ class _CarritoScreenState extends State<CarritoScreen> {
 
       Map<String, dynamic>? despachoPayload;
       if (_tipoEntrega == 'Despacho') {
+        final idComuna = ChileGeografia.obtenerIdComuna(_comunaDespacho);
         despachoPayload = {
           'direccion_envio': _direccionDespachoController.text.trim(),
           'comuna_destino': _comunaDespacho,
+          'id_comuna_destino': idComuna,
           'receptor_rut': _rutReceptorController.text.trim(),
           'receptor_nombres': _nombresReceptorController.text.trim(),
           'receptor_telefono': _telefonoReceptorController.text.trim(),
@@ -1060,11 +1080,15 @@ class _CarritoScreenState extends State<CarritoScreen> {
                               _nombresController.text = 'Consumidor';
                               _apellidosController.text = 'Final';
                               _telefonoController.clear();
+                              _regionCliente = 'Valparaíso';
+                              _comunaCliente = 'Viña del Mar';
                             } else {
                               _rutController.clear();
                               _nombresController.clear();
                               _apellidosController.clear();
                               _telefonoController.clear();
+                              _regionCliente = null;
+                              _comunaCliente = null;
                             }
                           });
                         },
@@ -1165,26 +1189,43 @@ class _CarritoScreenState extends State<CarritoScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
+                  _buildTextField(
+                    controller: _telefonoController,
+                    label: 'Teléfono',
+                    hint: '+56 9 1234 5678',
+                    keyboardType: TextInputType.phone,
+                  ),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
                       Expanded(
-                        child: _buildTextField(
-                          controller: _telefonoController,
-                          label: 'Teléfono',
-                          hint: '+56 9 1234 5678',
-                          keyboardType: TextInputType.phone,
+                        child: _buildDropdown(
+                          label: 'Región Cliente *',
+                          value: _regionCliente,
+                          hint: 'Seleccione Región...',
+                          items: ChileGeografia.regiones,
+                          onChanged: (val) {
+                            setState(() {
+                              _regionCliente = val;
+                              _comunaCliente = null;
+                            });
+                          },
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: _buildDropdown(
-                          label: 'Comuna',
+                          label: 'Comuna Cliente *',
                           value: _comunaCliente,
-                          items: _comunasDisponibles,
+                          hint: (_regionCliente != null && _regionCliente!.isNotEmpty)
+                              ? 'Seleccione Comuna...'
+                              : 'Seleccione región primero',
+                          enabled: _regionCliente != null && _regionCliente!.isNotEmpty,
+                          items: (_regionCliente != null && _regionCliente!.isNotEmpty)
+                              ? ChileGeografia.obtenerComunas(_regionCliente)
+                              : const [],
                           onChanged: (val) {
-                            if (val != null) {
-                              setState(() => _comunaCliente = val);
-                            }
+                            setState(() => _comunaCliente = val);
                           },
                         ),
                       ),
@@ -1257,26 +1298,43 @@ class _CarritoScreenState extends State<CarritoScreen> {
                     children: [
                       Expanded(
                         child: _buildDropdown(
-                          label: 'Comuna Destino',
-                          value: _comunaDespacho,
-                          items: _comunasDisponibles,
+                          label: 'Región Destino *',
+                          value: _regionDespacho,
+                          hint: 'Seleccione Región...',
+                          items: ChileGeografia.regiones,
                           onChanged: (val) {
-                            if (val != null) {
-                              setState(() => _comunaDespacho = val);
-                            }
+                            setState(() {
+                              _regionDespacho = val;
+                              _comunaDespacho = null;
+                            });
                           },
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: _buildTextField(
-                          controller: _empresaTransporteController,
-                          label: 'Empresa de Transporte *',
-                          hint: 'Chilexpress / Starken',
-                          isRequired: true,
+                        child: _buildDropdown(
+                          label: 'Comuna Destino *',
+                          value: _comunaDespacho,
+                          hint: (_regionDespacho != null && _regionDespacho!.isNotEmpty)
+                              ? 'Seleccione Comuna...'
+                              : 'Seleccione región primero',
+                          enabled: _regionDespacho != null && _regionDespacho!.isNotEmpty,
+                          items: (_regionDespacho != null && _regionDespacho!.isNotEmpty)
+                              ? ChileGeografia.obtenerComunas(_regionDespacho)
+                              : const [],
+                          onChanged: (val) {
+                            setState(() => _comunaDespacho = val);
+                          },
                         ),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 12),
+                  _buildTextField(
+                    controller: _empresaTransporteController,
+                    label: 'Empresa de Transporte *',
+                    hint: 'Chilexpress / Starken',
+                    isRequired: true,
                   ),
                   const SizedBox(height: 12),
                   Row(
@@ -1625,14 +1683,16 @@ class _CarritoScreenState extends State<CarritoScreen> {
     );
   }
 
-  /// Dropdown Minimalista
+  /// Dropdown Minimalista con soporte para deshabilitado y selección condicional
   Widget _buildDropdown({
     required String label,
-    required String value,
+    required String? value,
     required List<String> items,
     required ValueChanged<String?> onChanged,
     String? hint,
+    bool enabled = true,
   }) {
+    final effectiveValue = items.contains(value) ? value : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1641,28 +1701,37 @@ class _CarritoScreenState extends State<CarritoScreen> {
           style: AppTypography.small.copyWith(
             fontSize: 11,
             fontWeight: FontWeight.bold,
-            color: AppPalette.textSecondary,
+            color: enabled
+                ? AppPalette.textSecondary
+                : AppPalette.textSecondary.withValues(alpha: 0.4),
           ),
         ),
         const SizedBox(height: 4),
         DropdownButtonFormField<String>(
           isExpanded: true,
-          initialValue: items.contains(value) ? value : (hint != null ? null : items.first),
+          value: effectiveValue,
           hint: hint != null
               ? Text(
                   hint,
                   overflow: TextOverflow.ellipsis,
                   style: AppTypography.small.copyWith(
-                    color: AppPalette.neutral,
+                    color: enabled
+                        ? AppPalette.neutral
+                        : AppPalette.neutral.withValues(alpha: 0.4),
                     fontSize: 12,
                   ),
                 )
               : null,
           dropdownColor: AppPalette.surface,
-          style: AppTypography.body.copyWith(fontSize: 13),
+          style: AppTypography.body.copyWith(
+            fontSize: 13,
+            color: enabled ? Colors.white : Colors.white38,
+          ),
           decoration: InputDecoration(
             filled: true,
-            fillColor: AppPalette.background,
+            fillColor: enabled
+                ? AppPalette.background
+                : AppPalette.background.withValues(alpha: 0.4),
             contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8.0),
@@ -1676,18 +1745,26 @@ class _CarritoScreenState extends State<CarritoScreen> {
                 color: Colors.white.withValues(alpha: 0.08),
               ),
             ),
-          ),
-          items: items.map((comuna) {
-            return DropdownMenuItem(
-              value: comuna,
-              child: Text(
-                comuna,
-                style: AppTypography.body.copyWith(fontSize: 13),
-                overflow: TextOverflow.ellipsis,
+            disabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8.0),
+              borderSide: BorderSide(
+                color: Colors.white.withValues(alpha: 0.04),
               ),
-            );
-          }).toList(),
-          onChanged: onChanged,
+            ),
+          ),
+          items: enabled
+              ? items.map((item) {
+                  return DropdownMenuItem(
+                    value: item,
+                    child: Text(
+                      item,
+                      style: AppTypography.body.copyWith(fontSize: 13),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  );
+                }).toList()
+              : const [],
+          onChanged: enabled ? onChanged : null,
         ),
       ],
     );
