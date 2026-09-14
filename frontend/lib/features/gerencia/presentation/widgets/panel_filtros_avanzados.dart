@@ -225,28 +225,31 @@ class PanelFiltrosAvanzados extends StatelessWidget {
       {'value': 'Anulada', 'label': 'Anulada'},
     ];
 
+    final effectiveValue = estados.any((e) => e['value'] == estadoSeleccionado)
+        ? estadoSeleccionado
+        : 'todos';
+
     return Container(
+      height: 32,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
-        color: AppPalette.surfaceLight,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: AppPalette.neutral.withValues(alpha: 0.25),
-        ),
+        border: Border.all(color: AppPalette.borderLight),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
-          value: estadoSeleccionado,
-          isDense: true,
-          style: AppTypography.small.copyWith(
-            fontWeight: FontWeight.w700,
-            fontSize: 12,
-            color: AppPalette.tertiary,
-          ),
+          value: effectiveValue,
+          dropdownColor: Colors.white,
           icon: const Icon(
-            Icons.keyboard_arrow_down_rounded,
-            size: 18,
-            color: AppPalette.tertiary,
+            Icons.expand_more,
+            size: 16,
+            color: Color(0xFF64748B),
+          ),
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF334155),
           ),
           items: estados.map((e) {
             return DropdownMenuItem<String>(
@@ -272,28 +275,31 @@ class PanelFiltrosAvanzados extends StatelessWidget {
       {'value': 'Cheque', 'label': 'Cheque'},
     ];
 
+    final effectiveValue = metodos.any((m) => m['value'] == metodoPagoSeleccionado)
+        ? metodoPagoSeleccionado
+        : 'todos';
+
     return Container(
+      height: 32,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
-        color: AppPalette.surfaceLight,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: AppPalette.neutral.withValues(alpha: 0.25),
-        ),
+        border: Border.all(color: AppPalette.borderLight),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
-          value: metodoPagoSeleccionado,
-          isDense: true,
-          style: AppTypography.small.copyWith(
-            fontWeight: FontWeight.w700,
-            fontSize: 12,
-            color: AppPalette.tertiary,
-          ),
+          value: effectiveValue,
+          dropdownColor: Colors.white,
           icon: const Icon(
-            Icons.keyboard_arrow_down_rounded,
-            size: 18,
-            color: AppPalette.tertiary,
+            Icons.expand_more,
+            size: 16,
+            color: Color(0xFF64748B),
+          ),
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF334155),
           ),
           items: metodos.map((m) {
             return DropdownMenuItem<String>(

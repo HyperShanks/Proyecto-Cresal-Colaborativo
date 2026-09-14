@@ -87,26 +87,26 @@ class _MetodosPagoChartState extends State<MetodosPagoChart> {
                     Text(
                       'RECAUDACIÓN',
                       style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
                         letterSpacing: 0.8,
-                        color: Color(0xFF94A3B8), // Slate 400
+                        color: Color(0xFF64748B),
                       ),
                     ),
                     SizedBox(height: 2),
                     Text(
                       'Medios de Pago',
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: 18,
                         fontWeight: FontWeight.w900,
-                        color: Color(0xFF0F172A), // Slate 900
+                        color: Color(0xFF0F172A),
                       ),
                     ),
-                    SizedBox(height: 2),
+                    SizedBox(height: 4),
                     Text(
                       'Distribución de ingresos por canal transaccional liquidado',
                       style: TextStyle(
-                        fontSize: 11,
+                        fontSize: 12,
                         color: Color(0xFF94A3B8),
                       ),
                       maxLines: 1,
@@ -231,7 +231,7 @@ class _MetodosPagoChartState extends State<MetodosPagoChart> {
                                           .toUpperCase()
                                       : 'TOTAL',
                                   style: const TextStyle(
-                                    fontSize: 9,
+                                    fontSize: 10,
                                     fontWeight: FontWeight.w800,
                                     letterSpacing: 0.5,
                                     color: Color(0xFF94A3B8),
@@ -249,7 +249,7 @@ class _MetodosPagoChartState extends State<MetodosPagoChart> {
                                           ? CurrencyFormatter.formatCLP(totalMonto)
                                           : '$totalCant uds'),
                                   style: const TextStyle(
-                                    fontSize: 11,
+                                    fontSize: 12,
                                     fontWeight: FontWeight.w900,
                                     color: Color(0xFF0F172A),
                                   ),
@@ -320,7 +320,7 @@ class _MetodosPagoChartState extends State<MetodosPagoChart> {
                                             child: Text(
                                               item.metodoPago,
                                               style: TextStyle(
-                                                fontSize: 11,
+                                                fontSize: 12,
                                                 fontWeight: isHovered
                                                     ? FontWeight.w700
                                                     : FontWeight.w500,
@@ -337,7 +337,7 @@ class _MetodosPagoChartState extends State<MetodosPagoChart> {
                                           ? '${pct.toStringAsFixed(0)}%'
                                           : '${item.cantidad} uds',
                                       style: const TextStyle(
-                                        fontSize: 11,
+                                        fontSize: 12,
                                         fontWeight: FontWeight.w900,
                                         color: Color(0xFF0F172A),
                                       ),
@@ -383,7 +383,7 @@ class _MetodosPagoChartState extends State<MetodosPagoChart> {
         child: Text(
           label,
           style: TextStyle(
-            fontSize: 11,
+            fontSize: 12,
             fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
             color: isSelected
                 ? AppPalette.primary

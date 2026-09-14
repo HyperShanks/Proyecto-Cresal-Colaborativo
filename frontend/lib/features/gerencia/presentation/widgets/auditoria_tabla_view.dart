@@ -421,8 +421,8 @@ class AuditoriaTablaView extends StatelessWidget {
                 alignment: Alignment.centerLeft,
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 11,
-                    vertical: 5,
+                    horizontal: 12,
+                    vertical: 6,
                   ),
                   decoration: BoxDecoration(
                     color: estadoStyle.bg,
@@ -444,54 +444,12 @@ class AuditoriaTablaView extends StatelessWidget {
               ),
             ),
 
-            // 10. ACCIONES (Pastilla estilizada interactiva con hover pulido)
+            // 10. ACCIONES (Pastilla estilizada interactiva con hover pulido, idéntica en tamaño y padding a Estado Oficial)
             Expanded(
               flex: 12,
               child: Align(
                 alignment: Alignment.center,
-                child: OutlinedButton.icon(
-                  style: ButtonStyle(
-                    backgroundColor: WidgetStateProperty.resolveWith((states) {
-                      if (states.contains(WidgetState.hovered)) {
-                        return const Color(0xFFE0F2FE); // Azul cielo suave al pasar el mouse
-                      }
-                      return const Color(0xFFF0F9FF); // Fondo claro sutil
-                    }),
-                    foregroundColor: WidgetStateProperty.resolveWith((states) {
-                      if (states.contains(WidgetState.hovered)) {
-                        return const Color(0xFF0369A1); // Azul más vivo en hover
-                      }
-                      return const Color(0xFF0284C7);
-                    }),
-                    side: WidgetStateProperty.resolveWith((states) {
-                      if (states.contains(WidgetState.hovered)) {
-                        return const BorderSide(color: Color(0xFF0284C7), width: 1.2);
-                      }
-                      return const BorderSide(color: Color(0xFFBAE6FD), width: 1.0);
-                    }),
-                    shape: WidgetStateProperty.all(
-                      RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                    padding: WidgetStateProperty.all(
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    ),
-                    minimumSize: WidgetStateProperty.all(const Size(86, 30)),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    elevation: WidgetStateProperty.all(0),
-                  ),
-                  icon: const Icon(
-                    Icons.visibility_outlined,
-                    size: 15,
-                  ),
-                  label: Text(
-                    'Auditar',
-                    style: AppTypography.small.copyWith(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
-                    ),
-                  ),
+                child: _BotonAuditarPastilla(
                   onPressed: () => onVerDetalle(item),
                 ),
               ),
@@ -698,6 +656,82 @@ class AuditoriaTablaView extends StatelessWidget {
             color: const Color(0xFF64748B),
             fontSize: 11.5,
             letterSpacing: 0.5,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Pastilla interactiva de acción "Auditar" con tamaño, padding y bordes
+/// 100% idénticos a los del pill de "Estado Oficial", y centrado óptico entre ícono y texto.
+class _BotonAuditarPastilla extends StatefulWidget {
+  final VoidCallback onPressed;
+
+  const _BotonAuditarPastilla({required this.onPressed});
+
+  @override
+  State<_BotonAuditarPastilla> createState() => _BotonAuditarPastillaState();
+}
+
+class _BotonAuditarPastillaState extends State<_BotonAuditarPastilla> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      cursor: SystemMouseCursors.click,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: widget.onPressed,
+          borderRadius: BorderRadius.circular(16),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 6,
+            ),
+            decoration: BoxDecoration(
+              color: _isHovered
+                  ? const Color(0xFFE0F2FE)
+                  : const Color(0xFFF0F9FF),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: _isHovered
+                    ? const Color(0xFF0284C7)
+                    : const Color(0xFFBAE6FD),
+                width: _isHovered ? 1.2 : 1.0,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.visibility_outlined,
+                  size: 14,
+                  color: _isHovered
+                      ? const Color(0xFF0369A1)
+                      : const Color(0xFF0284C7),
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  'Auditar',
+                  style: AppTypography.small.copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                    height: 1.1,
+                    color: _isHovered
+                        ? const Color(0xFF0369A1)
+                        : const Color(0xFF0284C7),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

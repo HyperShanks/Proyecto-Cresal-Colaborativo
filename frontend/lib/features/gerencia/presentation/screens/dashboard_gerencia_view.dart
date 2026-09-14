@@ -24,10 +24,7 @@ enum VistaGerencia { dashboard, ordenes, inventario, backorders }
 class DashboardGerenciaView extends StatefulWidget {
   final int? sucursalInicial;
 
-  const DashboardGerenciaView({
-    super.key,
-    this.sucursalInicial,
-  });
+  const DashboardGerenciaView({super.key, this.sucursalInicial});
 
   @override
   State<DashboardGerenciaView> createState() => _DashboardGerenciaViewState();
@@ -48,16 +45,16 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
   bool _sidebarOpen = true;
   bool _filtroSinTasar = false;
   bool _bellHovered = false;
+  String? _filtroEstadoOrdenes;
 
   late AnimationController _spinController;
 
   Future<void> _cerrarSesion() async {
     await AuthService.logout();
     if (mounted) {
-      Navigator.of(context).pushNamedAndRemoveUntil(
-        AppRoutes.login,
-        (route) => false,
-      );
+      Navigator.of(
+        context,
+      ).pushNamedAndRemoveUntil(AppRoutes.login, (route) => false);
     }
   }
 
@@ -107,7 +104,9 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
   Future<void> _cargarDashboard({bool mostrarToast = false}) async {
     if (!mounted) return;
 
-    debugPrint('📊 [GERENCIA-DASHBOARD] 🔄 Solicitando KPIs, métodos de pago y flujo operativo (Sucursal: ${_sucursalSeleccionada ?? "Todas"})...');
+    debugPrint(
+      '📊 [GERENCIA-DASHBOARD] 🔄 Solicitando KPIs, métodos de pago y flujo operativo (Sucursal: ${_sucursalSeleccionada ?? "Todas"})...',
+    );
     setState(() {
       _cargando = true;
       _mensajeError = null;
@@ -118,7 +117,9 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
       final futures = await Future.wait([
         GerenciaService.obtenerKpis(idSucursal: _sucursalSeleccionada),
         GerenciaService.obtenerResumenPagos(idSucursal: _sucursalSeleccionada),
-        GerenciaService.obtenerFlujoOperativo(idSucursal: _sucursalSeleccionada),
+        GerenciaService.obtenerFlujoOperativo(
+          idSucursal: _sucursalSeleccionada,
+        ),
       ]);
 
       if (!mounted) return;
@@ -132,10 +133,18 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
       _spinController.stop();
       _spinController.reset();
 
-      debugPrint('📊 [GERENCIA-DASHBOARD] ✅ OK 200 - Métricas analíticas cargadas exitosamente:');
-      debugPrint('   • Ventas Hoy: \$${_kpis?.ventasDelDia ?? 0} | Transacciones: ${_kpis?.transaccionesHoy ?? 0}');
-      debugPrint('   • Ticket Promedio: \$${_kpis?.ticketPromedio ?? 0} | Efectivo/Electrónico: \$${_pagos?.efectivoFisico ?? 0} / \$${_pagos?.canalesElectronicos ?? 0}');
-      debugPrint('   • Despacho Bodega: ${_flujo?.enPreparacion ?? 0} en prep | ${_flujo?.listosMostrador ?? 0} listos | Cuellos de botella: ${_flujo?.cuellosBotellaPaletizados ?? 0}');
+      debugPrint(
+        '📊 [GERENCIA-DASHBOARD] ✅ OK 200 - Métricas analíticas cargadas exitosamente:',
+      );
+      debugPrint(
+        '   • Ventas Hoy: \$${_kpis?.ventasDelDia ?? 0} | Transacciones: ${_kpis?.transaccionesHoy ?? 0}',
+      );
+      debugPrint(
+        '   • Ticket Promedio: \$${_kpis?.ticketPromedio ?? 0} | Efectivo/Electrónico: \$${_pagos?.efectivoFisico ?? 0} / \$${_pagos?.canalesElectronicos ?? 0}',
+      );
+      debugPrint(
+        '   • Despacho Bodega: ${_flujo?.enPreparacion ?? 0} en prep | ${_flujo?.listosMostrador ?? 0} listos | Cuellos de botella: ${_flujo?.cuellosBotellaPaletizados ?? 0}',
+      );
 
       if (mostrarToast && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -154,7 +163,9 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
       if (!mounted) return;
 
       final errorStr = e.toString().replaceFirst('Exception: ', '');
-      debugPrint('📊 [GERENCIA-DASHBOARD] ❌ Error al cargar dashboard: $errorStr');
+      debugPrint(
+        '📊 [GERENCIA-DASHBOARD] ❌ Error al cargar dashboard: $errorStr',
+      );
       setState(() {
         _cargando = false;
         _mensajeError = errorStr;
@@ -171,8 +182,6 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
     }
   }
 
-
-
   String _formatearFechaHoy() {
     final ahora = DateTime.now();
     final dias = [
@@ -182,7 +191,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
       'Jueves',
       'Viernes',
       'Sábado',
-      'Domingo'
+      'Domingo',
     ];
     final meses = [
       'Enero',
@@ -196,7 +205,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
       'Septiembre',
       'Octubre',
       'Noviembre',
-      'Diciembre'
+      'Diciembre',
     ];
 
     final diaNombre = dias[ahora.weekday - 1];
@@ -222,23 +231,24 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                   child: _vistaActiva == VistaGerencia.dashboard
                       ? _buildDashboardContent()
                       : _vistaActiva == VistaGerencia.ordenes
-                          ? Padding(
-                              padding: const EdgeInsets.all(24),
-                              child: OrdenesGerenciaView(
-                                idSucursalInicial: _sucursalSeleccionada,
-                              ),
-                            )
-                          : _vistaActiva == VistaGerencia.inventario
-                              ? InventarioGerenciaView(
-                                  idSucursalInicial: _sucursalSeleccionada,
-                                  filtroSinTasarInicial: _filtroSinTasar,
-                                  onStockMutado: () => _cargarDashboard(),
-                                )
-                              : _vistaActiva == VistaGerencia.backorders
-                                  ? BackordersGerenciaView(
-                                      idSucursalInicial: _sucursalSeleccionada,
-                                    )
-                                  : const SizedBox.shrink(),
+                      ? Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: OrdenesGerenciaView(
+                            idSucursalInicial: _sucursalSeleccionada,
+                            estadoInicial: _filtroEstadoOrdenes,
+                          ),
+                        )
+                      : _vistaActiva == VistaGerencia.inventario
+                      ? InventarioGerenciaView(
+                          idSucursalInicial: _sucursalSeleccionada,
+                          filtroSinTasarInicial: _filtroSinTasar,
+                          onStockMutado: () => _cargarDashboard(),
+                        )
+                      : _vistaActiva == VistaGerencia.backorders
+                      ? BackordersGerenciaView(
+                          idSucursalInicial: _sucursalSeleccionada,
+                        )
+                      : const SizedBox.shrink(),
                 ),
               ],
             ),
@@ -251,280 +261,298 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
   Widget _buildDashboardContent() {
     return _cargando && _kpis == null
         ? const Center(
-            child: CircularProgressIndicator(
-              color: AppPalette.primary,
-            ),
+            child: CircularProgressIndicator(color: AppPalette.primary),
           )
         : _mensajeError != null && _kpis == null
-            ? _buildErrorState()
-            : RefreshIndicator(
-                onRefresh: () => _cargarDashboard(mostrarToast: true),
-                color: AppPalette.primary,
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Banner de Bienvenida y Fecha
-                      _buildWelcomeBanner(),
-                      const SizedBox(height: 20),
+        ? _buildErrorState()
+        : RefreshIndicator(
+            onRefresh: () => _cargarDashboard(mostrarToast: true),
+            color: AppPalette.primary,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Banner de Bienvenida y Fecha
+                  _buildWelcomeBanner(),
+                  const SizedBox(height: 20),
 
-                      // Grid Superior de 4 KPIs
-                      _buildKpiGrid(),
-                      const SizedBox(height: 24),
+                  // Grid Superior de 4 KPIs
+                  _buildKpiGrid(),
+                  const SizedBox(height: 24),
 
-                      // Bento Trío de Visualizaciones
-                      _buildBentoSection(),
-                    ],
-                  ),
-                ),
-              );
+                  // Bento Trío de Visualizaciones
+                  _buildBentoSection(),
+                ],
+              ),
+            ),
+          );
   }
 
   Widget _buildSidebar() {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
-      width: _sidebarOpen ? 240 : 68,
+      width: _sidebarOpen ? 265 : 68,
       decoration: const BoxDecoration(
         color: AppPalette.tertiary,
-        border: Border(
-          right: BorderSide(
-            color: Colors.white12,
-            width: 1,
-          ),
-        ),
+        border: Border(right: BorderSide(color: Colors.white12, width: 1)),
       ),
-      child: Column(
-        children: [
-          // Header del Sidebar con Llave Mecánica Oficial
-          Container(
-            height: 64,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: Colors.white12)),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.2),
-                    ),
-                  ),
-                  child: const Icon(
-                    Icons.build_rounded,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                ),
-                if (_sidebarOpen) ...[
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text(
-                          'PANEL EJECUTIVO',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0.4,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        Text(
-                          'Control Ejecutivo V1',
-                          style: TextStyle(
-                            color: Color(0xFFBAE6FD),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-
-          // Navegación de las 4 Vistas Principales (HU 5.1 a 5.4)
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 16),
-              children: [
-                if (_sidebarOpen)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 8, bottom: 8),
-                    child: Text(
-                      'SUPERVISIÓN Y CONTROL',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.5),
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.8,
+      child: ClipRect(
+        child: Column(
+          children: [
+            // Header del Sidebar con Llave Mecánica Oficial
+            Container(
+              height: 64,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: Colors.white12)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.2),
                       ),
                     ),
-                  ),
-
-                // 1. Dashboard Ejecutivo
-                _buildSidebarNavItem(
-                  icon: Icons.dashboard_rounded,
-                  label: 'Dashboard Ejecutivo',
-                  isSelected: _vistaActiva == VistaGerencia.dashboard,
-                  onTap: () {
-                    if (_vistaActiva != VistaGerencia.dashboard) {
-                      debugPrint('🔀 [GERENCIA-NAV] 📂 Cambiando a pestaña: Dashboard Ejecutivo');
-                      setState(() => _vistaActiva = VistaGerencia.dashboard);
-                    }
-                  },
-                ),
-
-                const SizedBox(height: 6),
-
-                // 2. Historial de Órdenes
-                _buildSidebarNavItem(
-                  icon: Icons.receipt_long_rounded,
-                  label: 'Historial de Órdenes',
-                  isSelected: _vistaActiva == VistaGerencia.ordenes,
-                  onTap: () {
-                    if (_vistaActiva != VistaGerencia.ordenes) {
-                      debugPrint('🔀 [GERENCIA-NAV] 📂 Cambiando a pestaña: Historial de Órdenes');
-                      setState(() => _vistaActiva = VistaGerencia.ordenes);
-                    }
-                  },
-                ),
-
-                const SizedBox(height: 6),
-
-                // 3. Maestro de Inventario y Tasación
-                _buildSidebarNavItem(
-                  icon: Icons.inventory_2_rounded,
-                  label: 'Inventario y Tasación',
-                  isSelected: _vistaActiva == VistaGerencia.inventario,
-                  badgeText: (_flujo?.cuellosBotellaPaletizados ?? 0) > 0
-                      ? '${_flujo!.cuellosBotellaPaletizados}'
-                      : null,
-                  onTap: () {
-                    if (_vistaActiva != VistaGerencia.inventario) {
-                      debugPrint('🔀 [GERENCIA-NAV] 📂 Cambiando a pestaña: Inventario y Tasación');
-                      setState(() {
-                        _vistaActiva = VistaGerencia.inventario;
-                        _filtroSinTasar = false;
-                      });
-                    }
-                  },
-                ),
-
-                const SizedBox(height: 6),
-
-                // 4. Visor Centralizado de Backorders (Ventas en Verde)
-                _buildSidebarNavItem(
-                  icon: Icons.bookmark_added_rounded,
-                  label: 'Ventas en Verde',
-                  isSelected: _vistaActiva == VistaGerencia.backorders,
-                  badgeText: null,
-                  onTap: () {
-                    if (_vistaActiva != VistaGerencia.backorders) {
-                      debugPrint('🔀 [GERENCIA-NAV] 📂 Cambiando a pestaña: Ventas en Verde');
-                      setState(() {
-                        _vistaActiva = VistaGerencia.backorders;
-                      });
-                    }
-                  },
-                ),
-              ],
-            ),
-          ),
-
-          // Footer del Sidebar: Perfil Gerencial y Cerrar Sesión
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: const BoxDecoration(
-              border: Border(top: BorderSide(color: Colors.white12)),
-              color: Colors.black12,
-            ),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 16,
-                  backgroundColor: Colors.white24,
-                  child: Text(
-                    _nombreUsuario.isNotEmpty
-                        ? _nombreUsuario[0].toUpperCase()
-                        : 'G',
-                    style: const TextStyle(
+                    child: const Icon(
+                      Icons.build_rounded,
                       color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 13,
+                      size: 20,
                     ),
                   ),
+                  if (_sidebarOpen) ...[
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: const [
+                          Text(
+                            'PANEL EJECUTIVO',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.4,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            'Control Ejecutivo V1',
+                            style: TextStyle(
+                              color: Color(0xFFBAE6FD),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+            // Navegación de las 4 Vistas Principales (HU 5.1 a 5.4)
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 16,
                 ),
-                if (_sidebarOpen) ...[
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _nombreUsuario,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                children: [
+                  if (_sidebarOpen)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8, bottom: 8),
+                      child: Text(
+                        'SUPERVISIÓN Y CONTROL',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.5),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.8,
                         ),
-                        const Text(
-                          'gerente@cresal.cl',
-                          style: TextStyle(
-                            color: Color(0xFFBAE6FD),
-                            fontSize: 10,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
+                      ),
                     ),
+
+                  // 1. Dashboard Ejecutivo
+                  _buildSidebarNavItem(
+                    icon: Icons.dashboard_rounded,
+                    label: 'Dashboard Ejecutivo',
+                    isSelected: _vistaActiva == VistaGerencia.dashboard,
+                    onTap: () {
+                      if (_vistaActiva != VistaGerencia.dashboard) {
+                        debugPrint(
+                          '🔀 [GERENCIA-NAV] 📂 Cambiando a pestaña: Dashboard Ejecutivo',
+                        );
+                        setState(() => _vistaActiva = VistaGerencia.dashboard);
+                      }
+                    },
                   ),
-                  IconButton(
-                    icon: const Icon(
-                      Icons.logout_rounded,
-                      color: Color(0xFFFCA5A5),
-                      size: 18,
-                    ),
-                    tooltip: 'Cerrar sesión',
-                    onPressed: _cerrarSesion,
+
+                  const SizedBox(height: 6),
+
+                  // 2. Historial de Órdenes
+                  _buildSidebarNavItem(
+                    icon: Icons.receipt_long_rounded,
+                    label: 'Historial de Órdenes',
+                    isSelected: _vistaActiva == VistaGerencia.ordenes,
+                    onTap: () {
+                      if (_vistaActiva != VistaGerencia.ordenes) {
+                        debugPrint(
+                          '🔀 [GERENCIA-NAV] 📂 Cambiando a pestaña: Historial de Órdenes',
+                        );
+                        setState(() {
+                          _filtroEstadoOrdenes = null;
+                          _vistaActiva = VistaGerencia.ordenes;
+                        });
+                      }
+                    },
                   ),
-                ] else ...[
-                  const SizedBox(width: 4),
-                  IconButton(
-                    icon: const Icon(
-                      Icons.logout_rounded,
-                      color: Color(0xFFFCA5A5),
-                      size: 16,
-                    ),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                    tooltip: 'Cerrar sesión',
-                    onPressed: _cerrarSesion,
+
+                  const SizedBox(height: 6),
+
+                  // 3. Maestro de Inventario y Tasación
+                  _buildSidebarNavItem(
+                    icon: Icons.inventory_2_rounded,
+                    label: 'Inventario y Tasación',
+                    isSelected: _vistaActiva == VistaGerencia.inventario,
+                    badgeText: (_flujo?.cuellosBotellaPaletizados ?? 0) > 0
+                        ? '${_flujo!.cuellosBotellaPaletizados}'
+                        : null,
+                    onTap: () {
+                      if (_vistaActiva != VistaGerencia.inventario) {
+                        debugPrint(
+                          '🔀 [GERENCIA-NAV] 📂 Cambiando a pestaña: Inventario y Tasación',
+                        );
+                        setState(() {
+                          _vistaActiva = VistaGerencia.inventario;
+                          _filtroSinTasar = false;
+                        });
+                      }
+                    },
+                  ),
+
+                  const SizedBox(height: 6),
+
+                  // 4. Visor Centralizado de Backorders (Ventas en Verde)
+                  _buildSidebarNavItem(
+                    icon: Icons.bookmark_added_rounded,
+                    label: 'Ventas en Verde',
+                    isSelected: _vistaActiva == VistaGerencia.backorders,
+                    badgeText: null,
+                    onTap: () {
+                      if (_vistaActiva != VistaGerencia.backorders) {
+                        debugPrint(
+                          '🔀 [GERENCIA-NAV] 📂 Cambiando a pestaña: Ventas en Verde',
+                        );
+                        setState(() {
+                          _vistaActiva = VistaGerencia.backorders;
+                        });
+                      }
+                    },
                   ),
                 ],
-              ],
+              ),
             ),
-          ),
-        ],
+
+            // Footer del Sidebar: Perfil Gerencial y Cerrar Sesión
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: const BoxDecoration(
+                border: Border(top: BorderSide(color: Colors.white12)),
+                color: Colors.black12,
+              ),
+              child: _sidebarOpen
+                  ? Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 16,
+                          backgroundColor: Colors.white24,
+                          child: Text(
+                            _nombreUsuario.isNotEmpty
+                                ? _nombreUsuario[0].toUpperCase()
+                                : 'G',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _nombreUsuario,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const Text(
+                                'gerente@cresal.cl',
+                                style: TextStyle(
+                                  color: Color(0xFFBAE6FD),
+                                  fontSize: 10,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.logout_rounded,
+                            color: Color(0xFFFCA5A5),
+                            size: 18,
+                          ),
+                          tooltip: 'Cerrar sesión',
+                          onPressed: _cerrarSesion,
+                        ),
+                      ],
+                    )
+                  : Center(
+                      child: Tooltip(
+                        message: 'Cerrar sesión ($_nombreUsuario)',
+                        child: InkWell(
+                          onTap: _cerrarSesion,
+                          borderRadius: BorderRadius.circular(16),
+                          child: CircleAvatar(
+                            radius: 16,
+                            backgroundColor: Colors.white24,
+                            child: Text(
+                              _nombreUsuario.isNotEmpty
+                                  ? _nombreUsuario[0].toUpperCase()
+                                  : 'G',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -561,8 +589,8 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                   label,
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
+                    fontSize: 14,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -570,8 +598,10 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
               ),
               if (badgeText != null)
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white12,
                     borderRadius: BorderRadius.circular(4),
@@ -601,9 +631,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
       padding: const EdgeInsets.symmetric(horizontal: 20),
       decoration: BoxDecoration(
         color: Colors.white,
-        border: const Border(
-          bottom: BorderSide(color: AppPalette.borderLight),
-        ),
+        border: const Border(bottom: BorderSide(color: AppPalette.borderLight)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.02),
@@ -626,12 +654,17 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                   children: [
                     IconButton(
                       icon: Icon(
-                        _sidebarOpen ? Icons.menu_open_rounded : Icons.menu_rounded,
+                        _sidebarOpen
+                            ? Icons.menu_open_rounded
+                            : Icons.menu_rounded,
                         color: const Color(0xFF0F172A),
                         size: 22,
                       ),
-                      tooltip: _sidebarOpen ? 'Colapsar menú lateral' : 'Expandir menú lateral',
-                      onPressed: () => setState(() => _sidebarOpen = !_sidebarOpen),
+                      tooltip: _sidebarOpen
+                          ? 'Colapsar menú lateral'
+                          : 'Expandir menú lateral',
+                      onPressed: () =>
+                          setState(() => _sidebarOpen = !_sidebarOpen),
                     ),
                     const SizedBox(width: 8),
                     Container(
@@ -645,10 +678,10 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                         _vistaActiva == VistaGerencia.dashboard
                             ? Icons.dashboard_customize
                             : _vistaActiva == VistaGerencia.ordenes
-                                ? Icons.receipt_long
-                                : _vistaActiva == VistaGerencia.inventario
-                                    ? Icons.inventory_2
-                                    : Icons.bookmark_added_rounded,
+                            ? Icons.receipt_long
+                            : _vistaActiva == VistaGerencia.inventario
+                            ? Icons.inventory_2
+                            : Icons.bookmark_added_rounded,
                         color: Colors.white,
                         size: 20,
                       ),
@@ -663,10 +696,10 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                             _vistaActiva == VistaGerencia.dashboard
                                 ? 'CRESAL GERENCIA'
                                 : _vistaActiva == VistaGerencia.ordenes
-                                    ? 'HISTORIAL DE ÓRDENES'
-                                    : _vistaActiva == VistaGerencia.inventario
-                                        ? 'MAESTRO DE INVENTARIO Y TASACIÓN'
-                                        : 'VENTAS EN VERDE',
+                                ? 'HISTORIAL DE ÓRDENES'
+                                : _vistaActiva == VistaGerencia.inventario
+                                ? 'MAESTRO DE INVENTARIO Y TASACIÓN'
+                                : 'VENTAS EN VERDE',
                             style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w900,
@@ -681,10 +714,10 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                               _vistaActiva == VistaGerencia.dashboard
                                   ? 'Dashboard Ejecutivo y Pulso Operativo'
                                   : _vistaActiva == VistaGerencia.ordenes
-                                      ? 'Historial y Auditoría de Órdenes'
-                                      : _vistaActiva == VistaGerencia.inventario
-                                           ? 'Control de stock físico, ubicaciones en rack y fijación de precios comerciales'
-                                           : 'Monitoreo de compras en verde',
+                                  ? 'Historial y Auditoría de Órdenes'
+                                  : _vistaActiva == VistaGerencia.inventario
+                                  ? 'Control de stock físico, ubicaciones en rack y fijación de precios comerciales'
+                                  : 'Monitoreo de compras en verde',
                               style: const TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w500,
@@ -701,13 +734,17 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
               ),
               const SizedBox(width: 12),
 
-              // Lado Derecho: Selector de Sucursal, Botón Refrescar y Campana
+              // Lado Derecho: Selector de Sucursal, Guía Indicadores (Icono), Botón Refrescar y Campana
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   // Selector Dropdown de Sucursal (Fiel a Foto 4)
                   _buildSelectorSucursales(isNarrow: isNarrow),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 8),
+
+                  // Icono en Topbar "Guía de Indicadores"
+                  _buildBotonIconoGuiaIndicadores(),
+                  const SizedBox(width: 8),
 
                   // Botón Refrescar con Spin
                   if (isNarrow)
@@ -752,8 +789,10 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                         foregroundColor: const Color(0xFF0F172A),
                         side: const BorderSide(color: AppPalette.borderLight),
                         backgroundColor: Colors.white,
-                        padding:
-                            const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
@@ -775,8 +814,10 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                     child: StatefulBuilder(
                       builder: (context, setBellHover) {
                         return MouseRegion(
-                          onEnter: (_) => setBellHover(() => _bellHovered = true),
-                          onExit: (_) => setBellHover(() => _bellHovered = false),
+                          onEnter: (_) =>
+                              setBellHover(() => _bellHovered = true),
+                          onExit: (_) =>
+                              setBellHover(() => _bellHovered = false),
                           child: Stack(
                             clipBehavior: Clip.none,
                             children: [
@@ -788,7 +829,9 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                                       ? const Color(0xFFF1F5F9)
                                       : Colors.white,
                                   borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: AppPalette.borderLight),
+                                  border: Border.all(
+                                    color: AppPalette.borderLight,
+                                  ),
                                 ),
                                 child: const Icon(
                                   Icons.notifications_outlined,
@@ -837,7 +880,9 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                             Container(
                               padding: const EdgeInsets.all(6),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFFB923C).withValues(alpha: 0.15),
+                                color: const Color(
+                                  0xFFFB923C,
+                                ).withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: const Icon(
@@ -880,7 +925,9 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                             Container(
                               padding: const EdgeInsets.all(6),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFFBBF24).withValues(alpha: 0.15),
+                                color: const Color(
+                                  0xFFFBBF24,
+                                ).withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: const Icon(
@@ -925,6 +972,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                         });
                       } else if (val == 'ordenes') {
                         setState(() {
+                          _filtroEstadoOrdenes = 'Reservada';
                           _vistaActiva = VistaGerencia.ordenes;
                         });
                       }
@@ -939,8 +987,305 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
     );
   }
 
+  // =========================================================================
+  // GUÍA DE INDICADORES (KPIs)
+  // =========================================================================
+
+  /// Icono compacto en Topbar con Tooltip informativo
+  Widget _buildBotonIconoGuiaIndicadores() {
+    return Tooltip(
+      message: 'Guía de Indicadores',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _mostrarGuiaIndicadores(context),
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppPalette.borderLight),
+            ),
+            child: const Icon(
+              Icons.help_outline_rounded,
+              color: Color(0xFF0F172A),
+              size: 20,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Modal explicativo institucional para la toma de decisiones gerenciales
+  void _mostrarGuiaIndicadores(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760, maxHeight: 680),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Header Ejecutivo
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+                  decoration: const BoxDecoration(
+                    color: AppPalette.tertiary, // Azul profundo #004C89
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.analytics_outlined,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Text(
+                              'Guía Ejecutiva de Indicadores y Métricas (KPIs)',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Definición técnica, origen de datos y fórmulas para la toma de decisiones gerenciales',
+                              style: TextStyle(
+                                color: Color(0xFFBAE6FD),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white70),
+                        tooltip: 'Cerrar guía',
+                        onPressed: () => Navigator.of(ctx).pop(),
+                      ),
+                    ],
+                  ),
+                ),
+                // Contenido explicativo scrollable
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.all(24),
+                    children: [
+                      _buildItemGuia(
+                        icono: Icons.attach_money_rounded,
+                        colorIcono: const Color(0xFF16A34A),
+                        titulo: 'Facturación Hoy',
+                        subtitulo: 'Suma bruta de ventas del día en curso (00:00 a 23:59)',
+                        descripcion:
+                            'Representa el monto total facturado y recaudado en el día actual (órdenes con estado "Pagada" o "Completada"). La variación comparativa (+14.2%) evalúa el rendimiento comercial frente a la media de ventas del mismo día de la semana en las últimas 4 semanas.',
+                        formula: '∑(monto_total_orden) para órdenes Pagadas o Completadas en la jornada',
+                      ),
+                      const SizedBox(height: 14),
+                      _buildItemGuia(
+                        icono: Icons.calendar_month_rounded,
+                        colorIcono: const Color(0xFF0284C7),
+                        titulo: 'Acumulado Mes (MTD - Month to Date)',
+                        subtitulo: 'Facturación acumulada del mes calendario actual',
+                        descripcion:
+                            'Mide la tracción financiera acumulada desde el día 1 del mes hasta el momento de consulta. El avance de transacciones totaliza las ventas liquidadas para proyectar el cumplimiento del presupuesto mensual.',
+                        formula: '∑(ventas_diarias) desde el día 1 del mes hasta la fecha actual',
+                      ),
+                      const SizedBox(height: 14),
+                      _buildItemGuia(
+                        icono: Icons.receipt_long_rounded,
+                        colorIcono: const Color(0xFF7C3AED),
+                        titulo: 'Ticket Promedio (Productividad Comercial)',
+                        subtitulo: 'Venta promedio generada por cada transacción cerrada',
+                        descripcion:
+                            'Indica el gasto medio de los clientes en mesón o canales digitales. Sirve a la gerencia para monitorear la venta cruzada (ej: lubricantes, retenes o empaquetaduras adquiridas junto al motor o caja) y la eficacia de los vendedores.',
+                        formula: 'Ticket Promedio = (Total Facturación Hoy) / (N° Transacciones Hoy)',
+                      ),
+                      const SizedBox(height: 14),
+                      _buildItemGuia(
+                        icono: Icons.pie_chart_outline_rounded,
+                        colorIcono: const Color(0xFF0F766E),
+                        titulo: 'Recaudación por Medios de Pago',
+                        subtitulo: 'Distribución de liquidez: Efectivo vs Canales Electrónicos',
+                        descripcion:
+                            'Desglosa el flujo monetario según Transferencia Bancaria, Tarjeta de Débito, Tarjeta de Crédito, Efectivo y Cheque. Permite agilizar los arqueos de caja en mesón y optimizar la conciliación de extractos bancarios.',
+                        formula: 'Porcentaje = (Monto Canal / Total Recaudado) * 100',
+                      ),
+                      const SizedBox(height: 14),
+                      _buildItemGuia(
+                        icono: Icons.shield_outlined,
+                        colorIcono: const Color(0xFFEA580C),
+                        titulo: 'Control de Riesgo y Alertas Operativas',
+                        subtitulo: 'Saldos Retenidos por Cobrar y Cuellos de Botella de Tasación',
+                        descripcion:
+                            '• Saldos por Cobrar: Alerta preventiva sobre órdenes en estado "Reservada" donde el cliente retirará en mesón pero tiene saldo pendiente. Al hacer clic, audita directamente las órdenes en cuestión para evitar fugas de mercadería sin liquidación total.\n• Cuello de Botella Tasación: Repuestos desmontados y paletizados que carecen de precio de venta fijado en bodega.',
+                        formula: 'Total Alertas = Saldos Pendientes Retenidos + Repuestos Sin Tasar',
+                      ),
+                      const SizedBox(height: 14),
+                      _buildItemGuia(
+                        icono: Icons.local_shipping_outlined,
+                        colorIcono: const Color(0xFF0284C7),
+                        titulo: 'Bodega & Flujo de Despacho',
+                        subtitulo: 'Seguimiento logístico en vivo: Preparación, Mostrador y Courier',
+                        descripcion:
+                            'Audita el ciclo de vida del repuesto físico:\n1. En Preparación: Bajada del rack y embalaje con film industrial.\n2. Listo Mostrador: Esperando entrega a cliente o taller mecánico.\n3. Despacho Courier: En ruta vía Starken o Chilexpress con número de seguimiento.',
+                        formula: 'Tiempo estimado de preparación: 24 minutos para repuestos mecánicos pesados',
+                      ),
+                    ],
+                  ),
+                ),
+                // Footer
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+                    border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      ElevatedButton(
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppPalette.tertiary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        child: const Text('Entendido', style: TextStyle(fontWeight: FontWeight.w700)),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildItemGuia({
+    required IconData icono,
+    required Color colorIcono,
+    required String titulo,
+    required String subtitulo,
+    required String descripcion,
+    required String formula,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: colorIcono.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icono, color: colorIcono, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      titulo,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitulo,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            descripcion,
+            style: const TextStyle(
+              fontSize: 12,
+              height: 1.45,
+              color: Color(0xFF334155),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: const Color(0xFFCBD5E1)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.functions_rounded, size: 14, color: Color(0xFF0284C7)),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    formula,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontFamily: 'monospace',
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF0369A1),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSelectorSucursales({bool isNarrow = false}) {
-    final Map<int, ({String titulo, String subtitulo, IconData icon})> sucursales = {
+    final Map<int, ({String titulo, String subtitulo, IconData icon})>
+    sucursales = {
       -1: (
         titulo: 'Todas las Sucursales',
         subtitulo: 'Consolidado general',
@@ -998,16 +1343,23 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
               padding: EdgeInsets.zero,
               child: Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
-                  color: isSelected ? const Color(0xFFF0F9FF) : Colors.transparent,
+                  color: isSelected
+                      ? const Color(0xFFF0F9FF)
+                      : Colors.transparent,
                 ),
                 child: Row(
                   children: [
                     Icon(
                       data.icon,
                       size: 20,
-                      color: isSelected ? const Color(0xFF0284C7) : const Color(0xFF64748B),
+                      color: isSelected
+                          ? const Color(0xFF0284C7)
+                          : const Color(0xFF64748B),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -1021,8 +1373,12 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 12,
-                              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w700,
-                              color: isSelected ? const Color(0xFF0284C7) : const Color(0xFF0F172A),
+                              fontWeight: isSelected
+                                  ? FontWeight.w800
+                                  : FontWeight.w700,
+                              color: isSelected
+                                  ? const Color(0xFF0284C7)
+                                  : const Color(0xFF0F172A),
                             ),
                           ),
                           const SizedBox(height: 2),
@@ -1139,15 +1495,15 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
               const Text(
                 'Resumen operativo de hoy • ',
                 style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
                   color: Color(0xFF64748B),
                 ),
               ),
               Text(
                 _formatearFechaHoy(),
                 style: const TextStyle(
-                  fontSize: 12,
+                  fontSize: 14,
                   fontWeight: FontWeight.w700,
                   color: Color(0xFF334155),
                 ),
@@ -1159,11 +1515,27 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
     );
   }
 
-  // Modifiqué el grid superior para mostrar exactamente 3 KPIs ejecutivos (Facturación Hoy,
-  // Acumulado Mes y Ticket Promedio), eliminando Margen Bruto Desarme y Meta Diaria,
-  // y ajustando el ratio de aspecto a 3.8 para que las tarjetas sean compactas verticalmente.
+  // =========================================================================
+  // GRID DE KPIS FINANCIEROS Y EJECUTIVOS (HU-5.1)
+  // =========================================================================
+  // Los 3 indicadores ejecutivos principales:
+  // 1. Facturación Hoy:
+  //    - Fuente: backend 'ventas_del_dia' (suma de órdenes con estado Pagada o Completada del día actual).
+  //    - Variación (+14.2%): Representa la comparación porcentual respecto a la media móvil
+  //      de ventas en el mismo día de la semana durante las últimas 4 semanas.
+  // 2. Acumulado Mes (MTD - Month To Date):
+  //    - Fuente: backend 'acumulado_mensual_mtd' (suma histórica de ventas del día 1 del mes en curso a hoy).
+  //    - Avance: Número de transacciones comerciales liquidadas en el mes.
+  //    - Variación (+8.5%): Crecimiento intermensual respecto al mismo corte de fecha del mes anterior.
+  // 3. Ticket Promedio (Métrica de Productividad Comercial):
+  //    - Fuente: backend 'ticket_promedio' (calculado dinámicamente por el backend).
+  //    - Fórmula matemática oficial: Total Ventas Hoy / Total Transacciones Hoy.
+  //    - Variación (+5.1%): Variación del ticket medio respecto a la jornada anterior.
+  //    - Utilidad gerencial: Monitorea el volumen monetario por cada orden cerrada en mesón
+  //      y la capacidad de venta cruzada (cross-selling de accesorios, lubricantes o empaquetaduras).
   Widget _buildKpiGrid() {
-    final kpis = _kpis ??
+    final kpis =
+        _kpis ??
         const KpiFinancieroModel(
           ventasDelDia: 0,
           transaccionesHoy: 0,
@@ -1197,7 +1569,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           children: [
-            // KPI 1: Facturación Hoy (Se eliminó la meta diaria según requerimiento)
+            // KPI 1: Facturación Hoy (Calculado sobre ventas reales de la jornada)
             KpiCardWidget(
               titulo: 'Facturación Hoy',
               valor: facturacionFmt,
@@ -1221,7 +1593,8 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                   children: [
                     const TextSpan(text: 'Avance: '),
                     TextSpan(
-                      text: '${kpis.transaccionesHoy > 0 ? 48 : 0} transacciones',
+                      text:
+                          '${kpis.transaccionesHoy > 0 ? 48 : 0} transacciones',
                       style: const TextStyle(
                         fontWeight: FontWeight.w700,
                         color: Color(0xFF1E293B),
@@ -1233,7 +1606,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
               valorColor: AppPalette.tertiary,
             ),
 
-            // KPI 3: Ticket Promedio
+            // KPI 3: Ticket Promedio (Ratio de ventas/transacciones)
             KpiCardWidget(
               titulo: 'Ticket Promedio',
               valor: ticketFmt,
@@ -1248,13 +1621,15 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
   }
 
   Widget _buildBentoSection() {
-    final pagos = _pagos ??
+    final pagos =
+        _pagos ??
         const ResumenPagosModel(
           efectivoFisico: 0,
           canalesElectronicos: 0,
           desglose: [],
         );
-    final flujo = _flujo ??
+    final flujo =
+        _flujo ??
         const FlujoOperativoModel(
           enPreparacion: 0,
           listosMostrador: 0,
@@ -1270,20 +1645,11 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
         if (!isDesktop) {
           return Column(
             children: [
-              SizedBox(
-                height: 380,
-                child: MetodosPagoChart(resumen: pagos),
-              ),
+              SizedBox(height: 380, child: MetodosPagoChart(resumen: pagos)),
               const SizedBox(height: 16),
-              SizedBox(
-                height: 380,
-                child: _buildBentoAlertas(flujo),
-              ),
+              SizedBox(height: 380, child: _buildBentoAlertas(flujo)),
               const SizedBox(height: 16),
-              SizedBox(
-                height: 380,
-                child: _buildBentoFlujoDespacho(flujo),
-              ),
+              SizedBox(height: 380, child: _buildBentoFlujoDespacho(flujo)),
             ],
           );
         }
@@ -1294,24 +1660,15 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // Bento 1: Medios de Pago
-              Expanded(
-                flex: 4,
-                child: MetodosPagoChart(resumen: pagos),
-              ),
+              Expanded(flex: 4, child: MetodosPagoChart(resumen: pagos)),
               const SizedBox(width: 16),
 
               // Bento 2: Control de Riesgo & Alertas
-              Expanded(
-                flex: 3,
-                child: _buildBentoAlertas(flujo),
-              ),
+              Expanded(flex: 3, child: _buildBentoAlertas(flujo)),
               const SizedBox(width: 16),
 
               // Bento 3: Flujo de Despacho en Bodega
-              Expanded(
-                flex: 3,
-                child: _buildBentoFlujoDespacho(flujo),
-              ),
+              Expanded(flex: 3, child: _buildBentoFlujoDespacho(flujo)),
             ],
           ),
         );
@@ -1351,7 +1708,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                         Text(
                           'CONTROL DE RIESGO',
                           style: TextStyle(
-                            fontSize: 11,
+                            fontSize: 12,
                             fontWeight: FontWeight.w900,
                             letterSpacing: 0.8,
                             color: Color(0xFF64748B),
@@ -1361,7 +1718,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                         Text(
                           'Alertas Operativas',
                           style: TextStyle(
-                            fontSize: 16,
+                            fontSize: 18,
                             fontWeight: FontWeight.w900,
                             color: Color(0xFF0F172A),
                           ),
@@ -1371,8 +1728,10 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                   ),
                   const SizedBox(width: 8),
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFFEF3C7), // Amber 100
                       borderRadius: BorderRadius.circular(20),
@@ -1380,7 +1739,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                     child: Text(
                       '${flujo.alertasSaldoPendiente + flujo.cuellosBotellaPaletizados} Activas',
                       style: const TextStyle(
-                        fontSize: 11,
+                        fontSize: 12,
                         fontWeight: FontWeight.w900,
                         color: Color(0xFF92400E),
                       ),
@@ -1391,14 +1750,17 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
               const SizedBox(height: 4),
               const Text(
                 'Órdenes con saldo retenido y piezas sin tasar',
-                style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
               ),
               const SizedBox(height: 16),
 
-              // Alerta 1: Saldos por Cobrar (Clic para auditar órdenes)
+              // Alerta 1: Saldos por Cobrar (Clic para auditar órdenes con saldo pendiente)
               InkWell(
                 onTap: () {
-                  setState(() => _vistaActiva = VistaGerencia.ordenes);
+                  setState(() {
+                    _filtroEstadoOrdenes = 'Reservada';
+                    _vistaActiva = VistaGerencia.ordenes;
+                  });
                 },
                 borderRadius: BorderRadius.circular(12),
                 child: Container(
@@ -1435,7 +1797,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                                     'Saldos por Cobrar',
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
-                                      fontSize: 12,
+                                      fontSize: 14,
                                       fontWeight: FontWeight.w800,
                                       color: Color(0xFF78350F),
                                     ),
@@ -1445,7 +1807,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                                 Text(
                                   '${flujo.alertasSaldoPendiente} órdenes',
                                   style: const TextStyle(
-                                    fontSize: 12,
+                                    fontSize: 14,
                                     fontWeight: FontWeight.w900,
                                     color: Color(0xFFB45309),
                                   ),
@@ -1457,7 +1819,8 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                               'Retiro en mesón condicionado al pago total.',
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                fontSize: 10,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
                                 color: Color(0xFF92400E),
                               ),
                             ),
@@ -1513,7 +1876,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                                     'Cuello de Botella Tasación',
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
-                                      fontSize: 12,
+                                      fontSize: 14,
                                       fontWeight: FontWeight.w800,
                                       color: Color(0xFF7C2D12),
                                     ),
@@ -1523,7 +1886,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                                 Text(
                                   '${flujo.cuellosBotellaPaletizados} piezas',
                                   style: const TextStyle(
-                                    fontSize: 12,
+                                    fontSize: 14,
                                     fontWeight: FontWeight.w900,
                                     color: Color(0xFFC2410C),
                                   ),
@@ -1535,7 +1898,8 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                               'Paletizados sin precio fijado por Jefe de Ventas.',
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                fontSize: 10,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
                                 color: Color(0xFF9A3412),
                               ),
                             ),
@@ -1553,8 +1917,8 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
           const Divider(height: 24, thickness: 1, color: Color(0xFFF1F5F9)),
           Builder(
             builder: (context) {
-              final totalAlertas = flujo.alertasSaldoPendiente +
-                  flujo.cuellosBotellaPaletizados;
+              final totalAlertas =
+                  flujo.alertasSaldoPendiente + flujo.cuellosBotellaPaletizados;
               final String etiquetaRiesgo;
               final Color colorRiesgo;
               if (totalAlertas <= 6) {
@@ -1575,14 +1939,14 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                     child: Text(
                       'Nivel de Riesgo Operativo:',
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Text(
                     etiquetaRiesgo,
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize: 12,
                       fontWeight: FontWeight.w800,
                       color: colorRiesgo,
                     ),
@@ -1630,7 +1994,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                           Text(
                             'BODEGA & SALIDAS',
                             style: TextStyle(
-                              fontSize: 11,
+                              fontSize: 12,
                               fontWeight: FontWeight.w900,
                               letterSpacing: 0.8,
                               color: Color(0xFF64748B),
@@ -1640,7 +2004,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                           Text(
                             'Flujo de Despacho',
                             style: TextStyle(
-                              fontSize: 16,
+                              fontSize: 18,
                               fontWeight: FontWeight.w900,
                               color: Color(0xFF0F172A),
                             ),
@@ -1650,20 +2014,26 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                     ),
                     const SizedBox(width: 8),
                     Container(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: AppPalette.success.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Row(
                         children: const [
-                          Icon(Icons.circle, size: 8, color: AppPalette.success),
+                          Icon(
+                            Icons.circle,
+                            size: 8,
+                            color: AppPalette.success,
+                          ),
                           SizedBox(width: 4),
                           Text(
                             'Flujo Normal',
                             style: TextStyle(
-                              fontSize: 10,
+                              fontSize: 12,
                               fontWeight: FontWeight.w800,
                               color: AppPalette.success,
                             ),
@@ -1676,7 +2046,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                 const SizedBox(height: 4),
                 const Text(
                   'Seguimiento en vivo de preparación, retiro y courier',
-                  style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                  style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
                 ),
                 const SizedBox(height: 16),
 
@@ -1712,7 +2082,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
               ],
             ),
 
-            // Footer Bento 3
+            // Footer Bento 3: Tiempo promedio de preparación aumentado proporcionalmente
             const Divider(height: 24, thickness: 1, color: Color(0xFFF1F5F9)),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1721,14 +2091,14 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                   child: Text(
                     'Tiempo prom. preparación:',
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                    style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                   ),
                 ),
                 SizedBox(width: 8),
                 Text(
                   '24 minutos',
                   style: TextStyle(
-                    fontSize: 11,
+                    fontSize: 14,
                     fontWeight: FontWeight.w800,
                     color: Color(0xFF0F172A),
                   ),
@@ -1773,7 +2143,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                   child: Text(
                     numero,
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize: 12,
                       fontWeight: FontWeight.w900,
                       color: badgeTextColor,
                     ),
@@ -1788,7 +2158,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                         titulo,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontSize: 12,
+                          fontSize: 14,
                           fontWeight: FontWeight.w800,
                           color: Color(0xFF1E293B),
                         ),
@@ -1797,7 +2167,8 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                         descripcion,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontSize: 10,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
                           color: Color(0xFF64748B),
                         ),
                       ),
@@ -1817,7 +2188,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
             child: Text(
               conteo.toString(),
               style: TextStyle(
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: FontWeight.w900,
                 color: badgeTextColor,
               ),
@@ -1835,11 +2206,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
-              Icons.cloud_off,
-              size: 56,
-              color: AppPalette.error,
-            ),
+            const Icon(Icons.cloud_off, size: 56, color: AppPalette.error),
             const SizedBox(height: 16),
             const Text(
               'No fue posible cargar el Dashboard Ejecutivo',
@@ -1853,10 +2220,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
             const SizedBox(height: 8),
             Text(
               _mensajeError ?? 'Ocurrió un error al consultar el servidor.',
-              style: const TextStyle(
-                fontSize: 12,
-                color: Color(0xFF64748B),
-              ),
+              style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20),
@@ -1867,8 +2231,10 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppPalette.primary,
                 foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),

@@ -184,6 +184,24 @@ class CatalogoItem {
     return nombreCategoria;
   }
 
+  /// Título limpio del vehículo donante sin prefijo redundante de categoría (ej: "DODGE RAM QUAD CAB 4X4 5.9 2008")
+  String get tituloVehiculo {
+    final vehiculoParts = <String>[];
+    if (marca != null && marca!.isNotEmpty) vehiculoParts.add(marca!);
+    if (modelo != null && modelo!.isNotEmpty) vehiculoParts.add(modelo!);
+    if (anio != null) vehiculoParts.add(anio.toString());
+
+    if (vehiculoParts.isNotEmpty) {
+      final joined = vehiculoParts.join(' ');
+      final prefijoCat = '${nombreCategoria.toLowerCase()} - ';
+      if (joined.toLowerCase().startsWith(prefijoCat)) {
+        return joined.substring(prefijoCat.length).trim();
+      }
+      return joined;
+    }
+    return nombreCategoria;
+  }
+
   /// Ubicación física en bodega formateada con el mismo método de las tareas de bodega (separada con punto)
   String get ubicacionFormateada {
     final partes = <String>[];

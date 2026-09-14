@@ -17,10 +17,12 @@ import '../widgets/panel_filtros_avanzados.dart';
 /// tabla densa de órdenes y modal 360° de trazabilidad forense.
 class OrdenesGerenciaView extends StatefulWidget {
   final int? idSucursalInicial;
+  final String? estadoInicial;
 
   const OrdenesGerenciaView({
     super.key,
     this.idSucursalInicial,
+    this.estadoInicial,
   });
 
   @override
@@ -45,6 +47,10 @@ class _OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
   void initState() {
     super.initState();
     _idSucursal = widget.idSucursalInicial;
+    if (widget.estadoInicial != null && widget.estadoInicial!.isNotEmpty) {
+      _estado = widget.estadoInicial!;
+      _periodo = 'todos';
+    }
     _busquedaController = TextEditingController();
     _cargarOrdenes();
   }
@@ -52,11 +58,18 @@ class _OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
   @override
   void didUpdateWidget(covariant OrdenesGerenciaView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    bool shouldReload = false;
     if (oldWidget.idSucursalInicial != widget.idSucursalInicial) {
-      setState(() {
-        _idSucursal = widget.idSucursalInicial;
-        _paginaActual = 1;
-      });
+      _idSucursal = widget.idSucursalInicial;
+      shouldReload = true;
+    }
+    if (oldWidget.estadoInicial != widget.estadoInicial && widget.estadoInicial != null) {
+      _estado = widget.estadoInicial!;
+      _periodo = 'todos';
+      shouldReload = true;
+    }
+    if (shouldReload) {
+      setState(() => _paginaActual = 1);
       _cargarOrdenes();
     }
   }

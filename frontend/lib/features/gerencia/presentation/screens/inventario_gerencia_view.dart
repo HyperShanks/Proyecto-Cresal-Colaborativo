@@ -890,9 +890,9 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                     ),
                     const SizedBox(height: 8),
 
-                    // Título Técnico del Repuesto
+                    // Título Técnico del Repuesto (Vehículo Donante sin categoría redundante)
                     Text(
-                      item.tituloRepuesto,
+                      item.tituloVehiculo,
                       style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
@@ -1336,7 +1336,7 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                                   ? Image.network(
                                       item.imagenes.first,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) => const Icon(
+                                      errorBuilder: (_, _, _) => const Icon(
                                         Icons.directions_car,
                                         size: 20,
                                         color: Color(0xFF94A3B8),
@@ -1403,7 +1403,7 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                               const SizedBox(width: 6),
                               Expanded(
                                 child: Text(
-                                  item.tituloRepuesto,
+                                  item.tituloVehiculo,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
