@@ -538,7 +538,7 @@ def registrar_cobro(
             orden.id_cajera = current_user.id_usuario
             orden.fecha_actualizacion = now_utc
 
-            folio_doc = f"ORD-{str(orden.id_orden).replace('-', '')[:4].upper()}"
+            folio_doc = orden.folio or f"ORD-{str(orden.id_orden).replace('-', '')[:8].upper()}"
             estado_resultado = orden.estado_orden
 
             # Registrar cada método en Transaccion_Pago
@@ -586,8 +586,6 @@ def registrar_cobro(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail="Para saldar el backorder, debe atribuir el SKU del activo físico."
                     )
-                
-                from models import Estado_Activo, Vehiculo_Origen, Detalle_Orden
                 
                 activo = db.query(Activo_Inventariado).filter(Activo_Inventariado.sku_qr_fisico == payload.sku_activo_atribuido).first()
                 if not activo:
