@@ -206,6 +206,7 @@ def ejecutar_migracion():
 
     print(f"[+] Leyendo archivo matriz '{EXCEL_FILE}'...")
     df = pd.read_excel(EXCEL_FILE)
+    df = df.dropna(how='all').reset_index(drop=True)
 
     col_indice = df.columns[0]
     col_anio = None
@@ -265,6 +266,7 @@ def ejecutar_migracion():
         
         BATCH_SIZE = 500
         vehiculos_creados = 0
+        vehiculos_inactivos = 0
         activos_creados = 0
         
         vehiculos_batch = []
@@ -276,13 +278,34 @@ def ejecutar_migracion():
             patente_final = limpiar_patente(row.get("Patente"), patentes_registradas)
             num_ingreso_final = str(row["_numero_ingreso_limpio"])
 
-            marca_raw = str(row.get("Marca")).strip() if pd.notnull(row.get("Marca")) else "DESCONOCIDA"
-            modelo_raw = str(row.get("Modelo")).strip() if pd.notnull(row.get("Modelo")) else "DESCONOCIDO"
+            marca_val = str(row.get("Marca")).strip() if pd.notnull(row.get("Marca")) else ""
+            modelo_val = str(row.get("Modelo")).strip() if pd.notnull(row.get("Modelo")) else ""
             anio_final = procesar_anio(row.get(col_anio)) if col_anio else 2000
             
             numero_motor_raw = str(row.get(col_motor)).strip() if col_motor and pd.notnull(row.get(col_motor)) else "S/A"
             if numero_motor_raw.lower() in ["nan", "none"]:
                 numero_motor_raw = "S/A"
+
+            # Detección de filas sin datos vehiculares mínimos (ej. caso 2170 antiguo)
+            tiene_marca = bool(marca_val) and marca_val.upper() not in ["NAN", "NONE", "DESCONOCIDA", "S/I", "S/A", "SIN DATOS"]
+            tiene_modelo = bool(modelo_val) and modelo_val.upper() not in ["NAN", "NONE", "DESCONOCIDO", "S/I", "S/A", "SIN DATOS"]
+            tiene_patente = patente_final is not None and patente_final != ""
+            tiene_motor = bool(numero_motor_raw) and numero_motor_raw.upper() not in ["S/A", "NAN", "NONE", "S/N", "SIN NUMERO"]
+
+            es_sin_datos = not (tiene_marca or tiene_modelo or tiene_patente or tiene_motor)
+
+            if es_sin_datos:
+                estado_vehiculo = "Inactivo"
+                marca_final = "SIN INFORMACION (HISTORICO)"
+                modelo_final = "S/I"
+                estado_activo = "Inactivo"
+                id_estado_activo = 4  # De Baja / Inactivo
+            else:
+                estado_vehiculo = "Activo"
+                marca_final = marca_val[:100] if tiene_marca else "DESCONOCIDA"
+                modelo_final = modelo_val[:100] if tiene_modelo else "DESCONOCIDO"
+                estado_activo = "Activo"
+                id_estado_activo = 5  # Pendiente de Paletizado / Desarmado
 
             # 1. Vehículo Base
             if num_ingreso_final in vehiculos_existentes:
@@ -294,28 +317,30 @@ def ejecutar_migracion():
                     numero_ingreso=num_ingreso_final,
                     patente=patente_final,
                     vin=None,
-                    marca=marca_raw[:100],
-                    modelo=modelo_raw[:100],
+                    marca=marca_final,
+                    modelo=modelo_final,
                     anio=anio_final,
                     traccion="S/A",
-                    estado="Activo",
+                    estado=estado_vehiculo,
                     fecha_creacion=datetime.now()
                 )
                 vehiculos_batch.append(nuevo_vehiculo)
                 vehiculos_existentes[num_ingreso_final] = id_vehiculo
                 vehiculos_creados += 1
+                if es_sin_datos:
+                    vehiculos_inactivos += 1
 
-            # 2. MOTOR (Categoría 1)
+            # 2. MOTOR (Categoría 1) -> Nomenclatura SKU: MOT-{num_ingreso_final}
             if (id_vehiculo, 1) not in activos_existentes:
                 id_motor = uuid.uuid4()
                 activo_motor = Activo_Inventariado(
                     id_activo=id_motor,
-                    sku_qr_fisico=f"MOT-{num_ingreso_final}-{id_motor.hex[:4].upper()}",
+                    sku_qr_fisico=f"MOT-{num_ingreso_final}",
                     id_categoria=1,
-                    id_estado=5, 
+                    id_estado=id_estado_activo, 
                     id_sucursal_actual=1,
                     id_vehiculo=id_vehiculo,
-                    estado="Activo",
+                    estado=estado_activo,
                     fecha_creacion=datetime.now(),
                     qr_impreso=False,
                     version_lock=1
@@ -333,17 +358,17 @@ def ejecutar_migracion():
                 activos_existentes.add((id_vehiculo, 1))
                 activos_creados += 1
 
-            # 3. CAJA DE CAMBIOS (Categoría 2)
+            # 3. CAJA DE CAMBIOS (Categoría 2) -> Nomenclatura SKU: CAJ-{num_ingreso_final}
             if (id_vehiculo, 2) not in activos_existentes:
                 id_caja = uuid.uuid4()
                 activo_caja = Activo_Inventariado(
                     id_activo=id_caja,
-                    sku_qr_fisico=f"CAJ-{num_ingreso_final}-{id_caja.hex[:4].upper()}",
+                    sku_qr_fisico=f"CAJ-{num_ingreso_final}",
                     id_categoria=2,
-                    id_estado=5,
+                    id_estado=id_estado_activo,
                     id_sucursal_actual=1,
                     id_vehiculo=id_vehiculo,
-                    estado="Activo",
+                    estado=estado_activo,
                     fecha_creacion=datetime.now(),
                     qr_impreso=False,
                     version_lock=1
@@ -378,8 +403,8 @@ def ejecutar_migracion():
                 detalles_caja_batch.clear()
 
         print(f"\n[OK] Migración completada exitosamente.")
-        print(f"     Nuevos Vehículos registrados : {vehiculos_creados}")
-        print(f"     Nuevos Repuestos (Motor/Caja): {activos_creados}")
+        print(f"     Nuevos Vehículos registrados  : {vehiculos_creados} (Activos: {vehiculos_creados - vehiculos_inactivos}, Inactivos/Sin datos: {vehiculos_inactivos})")
+        print(f"     Nuevos Repuestos (Motor/Caja) : {activos_creados}")
 
     except Exception as err:
         db.rollback()
