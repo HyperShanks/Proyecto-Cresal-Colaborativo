@@ -291,7 +291,6 @@ class _CrearTicketScreenState extends State<CrearTicketScreen> {
     final unselectedBg = isDark ? AppPalette.background : AppPalette.surfaceLight;
     final unselectedBorder = isDark ? AppPalette.neutral.withValues(alpha: 0.25) : AppPalette.borderLight;
     final unselectedText = isDark ? AppPalette.textSecondary : AppPalette.textPrimaryLight;
-    final unselectedIcon = isDark ? AppPalette.textSecondary : AppPalette.textSecondaryLight;
 
     return Row(
       children: _prioridades.map((p) {
@@ -319,24 +318,13 @@ class _CrearTicketScreenState extends State<CrearTicketScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          isSelected ? Icons.radio_button_checked_rounded : Icons.radio_button_unchecked_rounded,
-                          size: 15,
-                          color: isSelected ? color : unselectedIcon,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          p,
-                          style: AppTypography.small.copyWith(
-                            color: isSelected ? color : unselectedText,
-                            fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      p,
+                      style: AppTypography.small.copyWith(
+                        color: isSelected ? color : unselectedText,
+                        fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                        fontSize: 13,
+                      ),
                     ),
                   ),
                 ),
