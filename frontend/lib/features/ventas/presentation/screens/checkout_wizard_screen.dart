@@ -352,8 +352,8 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     });
   }
 
-  // ── Emisión Final Transaccional (ACID) ─────────────────────────────────────
-  Future<void> _confirmarYEnviarOrden() async {
+  // ── Sincronización y Emisión Transaccional (ACID) ─────────────────────────
+  void _actualizarDatosDespachoLocal() {
     if (_controller.tipoEntrega == 'Despacho Domicilio' || _controller.tipoEntrega == 'Despacho') {
       final d = DespachoModel(
         direccionEnvio: _direccionController.text.trim(),
@@ -389,11 +389,40 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
       );
       _controller.setDatosDespacho(d);
       _controller.setIdSucursalDestino(_idSucursalDestino);
+    } else {
+      _controller.setDatosDespacho(null);
     }
 
     if (_esVendedorOnline && _idVendedorAsignado != null) {
       _controller.setIdVendedorAsignado(_idVendedorAsignado);
     }
+  }
+
+  void _prellenarDatosDespachoSiAplica() {
+    final cli = _controller.clienteSeleccionado;
+    if (cli != null) {
+      if (_receptorNombresController.text.trim().isEmpty) {
+        _receptorNombresController.text = cli.nombreCompleto;
+      }
+      if (_receptorRutController.text.trim().isEmpty) {
+        _receptorRutController.text = cli.rut;
+      }
+      if (_receptorTelefonoController.text.trim().isEmpty && cli.telefono != null) {
+        _receptorTelefonoController.text = cli.telefono!;
+      }
+      if (_comunaDespacho == null && cli.comuna != null && cli.comuna!.isNotEmpty) {
+        final reg = ChileGeografia.obtenerRegionDeComuna(cli.comuna!);
+        if (reg != null) {
+          _regionDespacho = reg;
+          _comunaDespacho = cli.comuna;
+        }
+      }
+      _actualizarDatosDespachoLocal();
+    }
+  }
+
+  Future<void> _confirmarYEnviarOrden() async {
+    _actualizarDatosDespachoLocal();
 
     final res = await _controller.submitOrder();
     if (!mounted) return;
@@ -1151,6 +1180,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
             builder: (context) {
               final receptorRutText = _receptorRutController.text.trim();
               final bool receptorRutInvalido = receptorRutText.isNotEmpty &&
+                  receptorRutText != '6.666.666-6' &&
                   !RutValidator.isValid(receptorRutText);
               final String? receptorRutError = receptorRutInvalido
                   ? 'RUT inválido. Verifique el número ingresado.'
@@ -1172,7 +1202,10 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                       controller: _direccionController,
                       style: AppTypography.body,
                       decoration: _inputDeco('Dirección de entrega (Calle, Número, Depto) *', Icons.home_outlined),
-                      onChanged: (val) => setState(() {}),
+                      onChanged: (val) {
+                        setState(() {});
+                        _actualizarDatosDespachoLocal();
+                      },
                     ),
                     const SizedBox(height: 10),
                     Row(
@@ -1194,6 +1227,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                                 _regionDespacho = val;
                                 _comunaDespacho = null;
                               });
+                              _actualizarDatosDespachoLocal();
                             },
                           ),
                         ),
@@ -1225,7 +1259,10 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                                   )).toList()
                                 : const [],
                             onChanged: (_regionDespacho != null && _regionDespacho!.isNotEmpty)
-                                ? (val) => setState(() => _comunaDespacho = val)
+                                ? (val) {
+                                    setState(() => _comunaDespacho = val);
+                                    _actualizarDatosDespachoLocal();
+                                  }
                                 : null,
                           ),
                         ),
@@ -1236,6 +1273,10 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                       controller: _empresaTransporteController,
                       style: AppTypography.body,
                       decoration: _inputDeco('Empresa de Transporte *', Icons.local_shipping),
+                      onChanged: (val) {
+                        setState(() {});
+                        _actualizarDatosDespachoLocal();
+                      },
                     ),
                     const SizedBox(height: 10),
                     TextField(
@@ -1248,14 +1289,20 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                         Icons.badge,
                         errorText: receptorRutError,
                       ),
-                      onChanged: (val) => setState(() {}),
+                      onChanged: (val) {
+                        setState(() {});
+                        _actualizarDatosDespachoLocal();
+                      },
                     ),
                     const SizedBox(height: 10),
                     TextField(
                       controller: _receptorNombresController,
                       style: AppTypography.body,
                       decoration: _inputDeco('Nombre Receptor *', Icons.person),
-                      onChanged: (val) => setState(() {}),
+                      onChanged: (val) {
+                        setState(() {});
+                        _actualizarDatosDespachoLocal();
+                      },
                     ),
                     const SizedBox(height: 10),
                     TextField(
@@ -1263,6 +1310,10 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                       keyboardType: TextInputType.phone,
                       style: AppTypography.body,
                       decoration: _inputDeco('Teléfono Receptor *', Icons.phone),
+                      onChanged: (val) {
+                        setState(() {});
+                        _actualizarDatosDespachoLocal();
+                      },
                     ),
                   ],
                 ),
@@ -1292,7 +1343,10 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                     DropdownMenuItem(value: 1, child: Text('Sucursal Viña del Mar', overflow: TextOverflow.ellipsis)),
                     DropdownMenuItem(value: 2, child: Text('Sucursal Limache', overflow: TextOverflow.ellipsis)),
                   ],
-                  onChanged: (val) => setState(() => _idSucursalDestino = val ?? 1),
+                  onChanged: (val) {
+                    setState(() => _idSucursalDestino = val ?? 1);
+                    _actualizarDatosDespachoLocal();
+                  },
                 ),
                 const SizedBox(height: 10),
                 Text(
@@ -1300,9 +1354,19 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                   style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
                 ),
                 const SizedBox(height: 10),
-                TextField(controller: _receptorRutController, style: AppTypography.body, decoration: _inputDeco('RUT quien retira en destino (Opcional)', Icons.badge)),
+                TextField(
+                  controller: _receptorRutController,
+                  style: AppTypography.body,
+                  decoration: _inputDeco('RUT quien retira en destino (Opcional)', Icons.badge),
+                  onChanged: (val) => _actualizarDatosDespachoLocal(),
+                ),
                 const SizedBox(height: 10),
-                TextField(controller: _receptorNombresController, style: AppTypography.body, decoration: _inputDeco('Nombre quien retira (Opcional)', Icons.person)),
+                TextField(
+                  controller: _receptorNombresController,
+                  style: AppTypography.body,
+                  decoration: _inputDeco('Nombre quien retira (Opcional)', Icons.person),
+                  onChanged: (val) => _actualizarDatosDespachoLocal(),
+                ),
               ],
             ),
           ),
@@ -1336,7 +1400,10 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                         ),
                       ),
                     ],
-                    onChanged: (val) => setState(() => _idVendedorAsignado = val),
+                    onChanged: (val) {
+                      setState(() => _idVendedorAsignado = val);
+                      _actualizarDatosDespachoLocal();
+                    },
                   ),
                 ),
               ],
@@ -1355,7 +1422,10 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
         borderRadius: BorderRadius.circular(10),
         child: InkWell(
           borderRadius: BorderRadius.circular(10),
-          onTap: () => _controller.setTipoEntrega(value),
+          onTap: () {
+            _controller.setTipoEntrega(value);
+            _actualizarDatosDespachoLocal();
+          },
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
             decoration: BoxDecoration(
@@ -1530,11 +1600,12 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
         final dir = _direccionController.text.trim();
         final rNom = _receptorNombresController.text.trim();
         final com = _comunaDespacho?.trim() ?? '';
+        final bool rutValido = rRut == '6.666.666-6' || RutValidator.isValid(rRut);
         puedeAvanzar = dir.isNotEmpty &&
             rNom.isNotEmpty &&
             rRut.isNotEmpty &&
             com.isNotEmpty &&
-            RutValidator.isValid(rRut);
+            rutValido;
       } else {
         puedeAvanzar = true;
       }
@@ -1596,6 +1667,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                         } else {
                           _actualizarClienteLocal();
                         }
+                        _prellenarDatosDespachoSiAplica();
+                      } else if (_controller.currentStep == 2) {
+                        _actualizarDatosDespachoLocal();
                       }
                       _controller.nextStep();
                     }

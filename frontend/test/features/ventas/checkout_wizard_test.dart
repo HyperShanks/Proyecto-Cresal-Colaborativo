@@ -312,6 +312,54 @@ void main() {
       expect(find.text('Aceite Motor 1L'), findsOneWidget);
       expect(find.textContaining('Cantidad: 1'), findsOneWidget);
     });
+
+    testWidgets('CheckoutWizardScreen Paso 3 Despacho Domicilio sincroniza datos y avanza a Paso 4 sin error', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: CheckoutWizardScreen(
+            initialInventario: [
+              {'id_activo': 'act-101', 'sku': 'SKU-101', 'descripcion': 'Alternador', 'precio': 120000}
+            ],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Paso 0 -> Paso 1
+      await tester.tap(find.text('Siguiente'));
+      await tester.pumpAndSettle();
+
+      // Consumidor Final
+      await tester.tap(find.byKey(const Key('switch_cliente_anonimo')));
+      await tester.pumpAndSettle();
+
+      // Paso 1 -> Paso 2 (Logística)
+      await tester.tap(find.text('Siguiente'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('3. Modalidad de Entrega y Despacho'), findsOneWidget);
+
+      // Seleccionar Despacho Domicilio
+      await tester.tap(find.text('Despacho Domicilio'));
+      await tester.pumpAndSettle();
+
+      // Ingresar Dirección
+      final dirFinder = find.widgetWithText(TextField, 'Dirección de entrega (Calle, Número, Depto) *');
+      await tester.enterText(dirFinder, 'Av. Libertad 123');
+      await tester.pumpAndSettle();
+
+      // Región y Comuna ya vienen precargadas por Consumidor Final (Valparaíso / Viña del Mar)
+      expect(find.text('Valparaíso'), findsWidgets);
+      expect(find.text('Viña del Mar'), findsWidgets);
+
+      // Avanzar a Paso 3 (Abonos)
+      await tester.tap(find.text('Siguiente'));
+      await tester.pumpAndSettle();
+
+      // No debe mostrar el mensaje de error de despacho y debe estar en el Paso 4
+      expect(find.text('Complete todos los campos obligatorios para el despacho a domicilio.'), findsNothing);
+      expect(find.text('4. Condiciones Comerciales y Abonos'), findsOneWidget);
+    });
   });
 }
 
