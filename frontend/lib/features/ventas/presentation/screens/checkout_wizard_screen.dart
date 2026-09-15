@@ -188,6 +188,11 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
         );
       }
     }
+
+    if (_controller.totalItemsCount > 0 &&
+        _controller.errorMessage == 'Debes agregar al menos un artículo o servicio para proceder.') {
+      _controller.clearErrorMessage();
+    }
   }
 
   void _onControllerUpdate() {

@@ -122,6 +122,21 @@ class CheckoutWizardController extends ChangeNotifier {
   bool validateStep4() => totalAbonos <= totalVenta;
 
   // ── Modificadores de Estado ───────────────────────────────────────────────
+  void clearErrorMessage() {
+    if (_errorMessage != null) {
+      _errorMessage = null;
+      notifyListeners();
+    }
+  }
+
+  bool _limpiarErrorStep1SiAplica() {
+    if (_errorMessage == 'Debes agregar al menos un artículo o servicio para proceder.' && totalItemsCount > 0) {
+      _errorMessage = null;
+      return true;
+    }
+    return false;
+  }
+
   void addItemInventariado({
     required String idActivo,
     required String sku,
@@ -139,7 +154,12 @@ class CheckoutWizardController extends ChangeNotifier {
         'pasillo': pasillo,
         'pallet': pallet,
       });
+      _limpiarErrorStep1SiAplica();
       notifyListeners();
+    } else {
+      if (_limpiarErrorStep1SiAplica()) {
+        notifyListeners();
+      }
     }
   }
 
@@ -150,6 +170,7 @@ class CheckoutWizardController extends ChangeNotifier {
 
   void addItemManual(ItemManualModel item) {
     _itemsManuales.add(item);
+    _limpiarErrorStep1SiAplica();
     notifyListeners();
   }
 
@@ -162,6 +183,7 @@ class CheckoutWizardController extends ChangeNotifier {
 
   void addReservaBackorder(ReservaBackorderModel reserva) {
     _reservas.add(reserva);
+    _limpiarErrorStep1SiAplica();
     notifyListeners();
   }
 
@@ -180,6 +202,9 @@ class CheckoutWizardController extends ChangeNotifier {
 
   void setTipoEntrega(String tipo) {
     _tipoEntrega = tipo;
+    if (_errorMessage == 'Complete todos los campos obligatorios para el despacho a domicilio.' && validateStep3()) {
+      _errorMessage = null;
+    }
     notifyListeners();
   }
 
@@ -195,11 +220,17 @@ class CheckoutWizardController extends ChangeNotifier {
 
   void setDatosDespacho(DespachoModel? despacho) {
     _datosDespacho = despacho;
+    if (_errorMessage == 'Complete todos los campos obligatorios para el despacho a domicilio.' && validateStep3()) {
+      _errorMessage = null;
+    }
     notifyListeners();
   }
 
   void setAbonoAdicional(int abono) {
     _abonoAdicional = abono < 0 ? 0 : abono;
+    if (_errorMessage == 'El monto de abono no puede ser superior al total de la venta.' && validateStep4()) {
+      _errorMessage = null;
+    }
     notifyListeners();
   }
 

@@ -12,6 +12,7 @@ import 'package:frontend/features/ventas/models/catalogo_model.dart';
 import 'package:frontend/features/ventas/models/cart_item_model.dart';
 import 'package:frontend/features/ventas/controllers/cart_controller.dart';
 import 'package:frontend/features/ventas/controllers/checkout_wizard_controller.dart';
+import 'package:frontend/features/ventas/models/checkout_wizard_models.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -163,4 +164,71 @@ void main() {
       expect(item['pallet'], equals('PL-08'));
     });
   });
+
+  group('Corrección 4: Reactividad del mensaje de error en carrito al agregar items', () {
+    late CheckoutWizardController wizardCtrl;
+
+    setUp(() {
+      wizardCtrl = CheckoutWizardController();
+    });
+
+    test('Error al presionar Siguiente sin items desaparece reactivamente al agregar item inventariado', () {
+      // 1. Intentar avanzar con carrito vacío
+      final avanzo = wizardCtrl.nextStep();
+      expect(avanzo, isFalse);
+      expect(wizardCtrl.errorMessage, equals('Debes agregar al menos un artículo o servicio para proceder.'));
+
+      // 2. Agregar un ítem inventariado
+      wizardCtrl.addItemInventariado(
+        idActivo: 'act-20',
+        sku: 'SKU-ALT-20',
+        descripcion: 'Alternador Bosch',
+        precio: 95000,
+      );
+
+      // 3. El mensaje DEBE desaparecer inmediatamente (reactivo) sin requerir otra acción
+      expect(wizardCtrl.errorMessage, isNull);
+      expect(wizardCtrl.totalItemsCount, equals(1));
+    });
+
+    test('Error desaparece reactivamente al agregar item manual', () {
+      final avanzo = wizardCtrl.nextStep();
+      expect(avanzo, isFalse);
+      expect(wizardCtrl.errorMessage, equals('Debes agregar al menos un artículo o servicio para proceder.'));
+
+      wizardCtrl.addItemManual(
+        const ItemManualModel(
+          descripcion: 'Filtro de Aceite Mann',
+          cantidad: 1,
+          precioUnitario: 12000,
+          precioFinal: 12000,
+        ),
+      );
+
+      expect(wizardCtrl.errorMessage, isNull);
+      expect(wizardCtrl.totalItemsCount, equals(1));
+    });
+
+    test('Error desaparece reactivamente al agregar reserva backorder', () {
+      final avanzo = wizardCtrl.nextStep();
+      expect(avanzo, isFalse);
+      expect(wizardCtrl.errorMessage, equals('Debes agregar al menos un artículo o servicio para proceder.'));
+
+      wizardCtrl.addReservaBackorder(
+        const ReservaBackorderModel(
+          idCategoriaRequerida: 1,
+          categoriaNombre: 'Motor',
+          marcaRequerida: 'Nissan',
+          modeloRequerido: 'Navara',
+          anioRequerido: 2018,
+          precioAcordado: 1200000,
+          montoAbonado: 300000,
+        ),
+      );
+
+      expect(wizardCtrl.errorMessage, isNull);
+      expect(wizardCtrl.totalItemsCount, equals(1));
+    });
+  });
 }
+
