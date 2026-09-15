@@ -81,11 +81,11 @@ class EtiquetaData {
     final modelo = (data['modelo'] ?? vehiculo?['modelo'])?.toString() ?? 'Desconocido';
     final anio = (data['anio'] ?? vehiculo?['anio'] as num?)?.toInt() ?? 0;
 
-    final cilindradaRaw = (data['cilindrada'] ?? motor?['cilindrada'])?.toString();
-    final combustibleRaw = (data['combustible'] ?? motor?['combustible'])?.toString();
+    final cilindradaRaw = (data['cilindrada'] ?? motor?['cilindrada'] ?? caja?['cilindrada'])?.toString();
+    final combustibleRaw = (data['combustible'] ?? motor?['combustible'] ?? caja?['combustible'])?.toString();
     final transmisionRaw = (data['transmision'] ?? data['transmision_tipo'] ?? motor?['transmision_tipo'] ?? caja?['transmision_tipo'])?.toString();
     final numeroMotorRaw = (data['numero_motor'] ?? motor?['numero_motor'])?.toString();
-    final traccionRaw = (data['traccion'] ?? data['tipo_traccion'] ?? vehiculo?['traccion'] ?? caja?['traccion'])?.toString();
+    final traccionRaw = (data['traccion'] ?? data['tipo_traccion'] ?? vehiculo?['traccion'] ?? motor?['traccion'] ?? caja?['traccion'])?.toString();
 
     final galpon = (data['galpon'] ?? data['ubicacion_galpon'])?.toString() ?? '';
     final pasillo = (data['pasillo'] ?? data['ubicacion_pasillo'])?.toString() ?? '';

@@ -135,8 +135,24 @@ def _construir_etiqueta_data(
     motor: Optional[Detalle_Motor] = None,
     caja: Optional[Detalle_Caja_Cambio] = None,
 ) -> dict:
+    if vehiculo is None and activo.id_vehiculo:
+        vehiculo = db.query(Vehiculo_Origen).filter(Vehiculo_Origen.id_vehiculo == activo.id_vehiculo).first()
+
     if motor is None:
-        motor = db.query(Detalle_Motor).filter(Detalle_Motor.id_activo == activo.id_activo).first()
+        if activo.id_categoria == 1:
+            motor = db.query(Detalle_Motor).filter(Detalle_Motor.id_activo == activo.id_activo).first()
+        elif activo.id_categoria == 2 and activo.id_vehiculo:
+            # Herencia de especificaciones del activo hermano Motor (SPEC-HU-TAREA-17)
+            motor = (
+                db.query(Detalle_Motor)
+                .join(Activo_Inventariado, Activo_Inventariado.id_activo == Detalle_Motor.id_activo)
+                .filter(
+                    Activo_Inventariado.id_vehiculo == activo.id_vehiculo,
+                    Activo_Inventariado.id_categoria == 1,
+                )
+                .first()
+            )
+
     if caja is None and activo.id_categoria == 2:
         caja = db.query(Detalle_Caja_Cambio).filter(Detalle_Caja_Cambio.id_activo == activo.id_activo).first()
 
@@ -153,10 +169,11 @@ def _construir_etiqueta_data(
         "marca": vehiculo.marca if vehiculo else "Desconocida",
         "modelo": vehiculo.modelo if vehiculo else "Desconocido",
         "anio": vehiculo.anio if vehiculo else 0,
+        "traccion": vehiculo.traccion if vehiculo else None,
         "cilindrada": motor.cilindrada if motor else None,
         "combustible": motor.combustible if motor else None,
         "transmision": transmision_val,
-        "numero_motor": motor.numero_motor if motor else None,
+        "numero_motor": motor.numero_motor if (motor and activo.id_categoria == 1) else None,
         "galpon": activo.ubicacion_galpon or "",
         "pasillo": activo.ubicacion_pasillo or "",
         "pallet": activo.ubicacion_pallet or "",
@@ -495,22 +512,6 @@ def obtener_tareas_pendientes(
             titulo = f"{cat_nombre} - {vehiculo.marca} {vehiculo.modelo}{anio_str}"
         else:
             titulo = f"{cat_nombre} - {activo.sku_qr_fisico}" if activo.sku_qr_fisico else cat_nombre
-
-        etiqueta_data = {
-            "id_activo": str(activo.id_activo),
-            "numero_ingreso": vehiculo.numero_ingreso if vehiculo else "N/A",
-            "marca": vehiculo.marca if vehiculo else "Desconocida",
-            "modelo": vehiculo.modelo if vehiculo else "Desconocido",
-            "anio": vehiculo.anio if vehiculo else 0,
-            "cilindrada": motor.cilindrada if motor else None,
-            "combustible": motor.combustible if motor else None,
-            "transmision": transmision_val,
-            "numero_motor": motor.numero_motor if motor else None,
-            "galpon": activo.ubicacion_galpon or "",
-            "pasillo": activo.ubicacion_pasillo or "",
-            "pallet": activo.ubicacion_pallet or "",
-            "sku_qr_fisico": activo.sku_qr_fisico,
-        }
 
         alertas.append(
             TareaAlertaResponse(

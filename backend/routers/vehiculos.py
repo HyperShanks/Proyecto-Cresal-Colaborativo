@@ -422,6 +422,7 @@ def buscar_vehiculo_por_ingreso(numero_ingreso: str, db: Session = Depends(get_d
             "marca": vehiculo.marca,
             "modelo": vehiculo.modelo,
             "anio": vehiculo.anio,
+            "traccion": vehiculo.traccion,
         },
         "motor": {
             "id_activo": str(activo_motor.id_activo) if activo_motor else None,
@@ -430,11 +431,15 @@ def buscar_vehiculo_por_ingreso(numero_ingreso: str, db: Session = Depends(get_d
             "cilindrada": detalle_motor.cilindrada if detalle_motor else "S/A",
             "combustible": detalle_motor.combustible if detalle_motor else "S/A",
             "transmision_tipo": detalle_motor.transmision_tipo if detalle_motor else "S/A",
+            "traccion": vehiculo.traccion if vehiculo else "S/A",
         },
         "caja_cambios": {
             "id_activo": str(activo_caja.id_activo) if activo_caja else None,
             "id_estado": activo_caja.id_estado if activo_caja else None, # ⚠️ NUEVO
             "transmision_tipo": detalle_caja.transmision_tipo if detalle_caja else "S/A",
+            "cilindrada": detalle_motor.cilindrada if detalle_motor else "S/A",
+            "combustible": detalle_motor.combustible if detalle_motor else "S/A",
+            "traccion": vehiculo.traccion if vehiculo else "S/A",
         }
     }
 
@@ -690,6 +695,21 @@ async def guardar_paletizado(
             ).first()
             if detalle_caja:
                 transmision = detalle_caja.transmision_tipo
+            
+            # Herencia de especificaciones del activo hermano Motor (SPEC-HU-TAREA-17)
+            if activo.id_vehiculo:
+                motor_hermano = (
+                    db.query(models.Detalle_Motor)
+                    .join(models.Activo_Inventariado, models.Activo_Inventariado.id_activo == models.Detalle_Motor.id_activo)
+                    .filter(
+                        models.Activo_Inventariado.id_vehiculo == activo.id_vehiculo,
+                        models.Activo_Inventariado.id_categoria == 1,
+                    )
+                    .first()
+                )
+                if motor_hermano:
+                    cilindrada = motor_hermano.cilindrada
+                    combustible = motor_hermano.combustible
                 
         print(f"🏷️ SKU Generado y enviado a la UI: {activo.sku_qr_fisico}")
         print("="*40 + "\n")
@@ -705,6 +725,7 @@ async def guardar_paletizado(
             "marca": vehiculo.marca if vehiculo else "S/A",
             "modelo": vehiculo.modelo if vehiculo else "S/A",
             "anio": vehiculo.anio if vehiculo else 0,
+            "traccion": vehiculo.traccion if vehiculo else None,
             "galpon": galpon,
             "pasillo": pasillo,
             "pallet": pallet,

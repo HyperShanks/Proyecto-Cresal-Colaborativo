@@ -285,3 +285,29 @@ def test_caja_huerfana_sin_vehiculo_no_rompe(client, setup_herencia_test):
     assert data["cilindrada"] is None
     assert data["combustible"] is None
     assert data["numero_motor"] is None
+
+
+def test_tareas_pendientes_bodega_hereda_atributos_caja(client, setup_herencia_test):
+    """
+    Verifica que en GET /api/v1/bodega/tareas-pendientes, la etiqueta_data de una
+    Caja de Cambios herede cilindrada, combustible y tracción del motor hermano,
+    manteniendo numero_motor en None.
+    """
+    headers = setup_herencia_test["headers"]
+    id_caja = setup_herencia_test["id_caja"]
+
+    response = client.get("/api/v1/bodega/tareas-pendientes?sucursal_id=1", headers=headers)
+    assert response.status_code == 200
+
+    tareas = response.json()
+    tarea_caja = next((t for t in tareas if t.get("id_activo") == id_caja), None)
+    assert tarea_caja is not None, "La tarea de impresión para la caja debe estar presente"
+
+    etiqueta = tarea_caja.get("etiqueta_data")
+    assert etiqueta is not None, "La tarea debe incluir etiqueta_data"
+    assert etiqueta["cilindrada"] == "2.8L"
+    assert etiqueta["combustible"] == "Diesel"
+    assert etiqueta["traccion"] == "4x4"
+    assert etiqueta["transmision"] == "Manual 6V"
+    assert etiqueta["numero_motor"] is None
+

@@ -809,10 +809,30 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
                         'Transmisión: ${_datosMotor['transmision_tipo'] ?? '-'}',
                         style: AppTypography.body,
                       ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Tracción: ${_datosMotor['traccion'] ?? '-'}',
+                        style: AppTypography.body,
+                      ),
                     ] else if (_tipoActivoSeleccionado ==
                         'Caja de Cambios') ...[
                       Text(
                         'Transmisión: ${_datosCaja['transmision_tipo'] ?? '-'}',
+                        style: AppTypography.body,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Cilindrada: ${_datosCaja['cilindrada'] ?? _datosMotor['cilindrada'] ?? '-'}',
+                        style: AppTypography.body,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Combustible: ${_datosCaja['combustible'] ?? _datosMotor['combustible'] ?? '-'}',
+                        style: AppTypography.body,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Tracción: ${_datosCaja['traccion'] ?? _datosMotor['traccion'] ?? '-'}',
                         style: AppTypography.body,
                       ),
                     ],

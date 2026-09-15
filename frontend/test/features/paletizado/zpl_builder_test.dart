@@ -117,4 +117,80 @@ void main() {
       expect(zpl, isNot(contains('AUT^FS')));
     });
   });
+
+  group('EtiquetaData.fromMap - Deserialización y compatibilidad de payloads', () {
+    test('Mapea correctamente payload plano retornado por guardar-paletizado para Caja de Cambios', () {
+      final rawBackend = {
+        "status": "success",
+        "id_activo": "550e8400-e29b-41d4-a716-446655440000",
+        "sku_qr_fisico": "CAJ-8801",
+        "qr_impreso": false,
+        "numero_ingreso": "8801",
+        "marca": "Toyota",
+        "modelo": "Hilux",
+        "anio": 2022,
+        "traccion": "4x4",
+        "galpon": "G1",
+        "pasillo": "P-01",
+        "pallet": "PAL-10",
+        "cilindrada": "2.8L",
+        "combustible": "Diesel",
+        "transmision": "Manual 6V",
+        "numero_motor": null,
+      };
+
+      final etiqueta = EtiquetaData.fromMap(rawBackend);
+
+      expect(etiqueta.idActivo, '550e8400-e29b-41d4-a716-446655440000');
+      expect(etiqueta.skuQrFisico, 'CAJ-8801');
+      expect(etiqueta.numeroIngreso, '8801');
+      expect(etiqueta.marca, 'Toyota');
+      expect(etiqueta.modelo, 'Hilux');
+      expect(etiqueta.anio, 2022);
+      expect(etiqueta.traccion, '4x4');
+      expect(etiqueta.cilindrada, '2.8L');
+      expect(etiqueta.combustible, 'Diesel');
+      expect(etiqueta.transmision, 'Manual 6V');
+      expect(etiqueta.numeroMotor, isNull);
+      expect(etiqueta.galpon, 'G1');
+      expect(etiqueta.pasillo, 'P-01');
+      expect(etiqueta.pallet, 'PAL-10');
+
+      // Comprobar que ZPL generado para esta caja incluye las 7 especificaciones sin N/A
+      final zpl = ZplBuilder.buildEtiquetaActivo(etiqueta);
+      expect(zpl, contains('^FO385,256^A0N,25,25^FDCILINDRADA: 2.8L^FS'));
+      expect(zpl, contains('^FO385,302^A0N,25,25^FDCOMBUSTIBLE: DIESEL^FS'));
+      expect(zpl, contains('^FO385,348^A0N,25,25^FDTRANSMISION: MANUAL 6V^FS'));
+      expect(zpl, contains('^FO385,394^A0N,25,25^FDTRACCION: 4X4^FS'));
+      expect(zpl, contains('^FDCAJAS DE CAMBIO^FS'));
+      expect(zpl, isNot(contains('NRO MOTOR:')));
+    });
+
+    test('Mapea correctamente payload de tareas-pendientes de bodega', () {
+      final rawBodega = {
+        "id_activo": "550e8400-e29b-41d4-a716-446655440001",
+        "numero_ingreso": "8801",
+        "marca": "Toyota",
+        "modelo": "Hilux",
+        "anio": 2022,
+        "traccion": "4x4",
+        "cilindrada": "2.8L",
+        "combustible": "Diesel",
+        "transmision": "Manual 6V",
+        "numero_motor": null,
+        "galpon": "G1",
+        "pasillo": "P-01",
+        "pallet": "PAL-10",
+        "sku_qr_fisico": "CAJ-8801",
+      };
+
+      final etiqueta = EtiquetaData.fromMap(rawBodega);
+
+      expect(etiqueta.cilindrada, '2.8L');
+      expect(etiqueta.combustible, 'Diesel');
+      expect(etiqueta.traccion, '4x4');
+      expect(etiqueta.transmision, 'Manual 6V');
+      expect(etiqueta.numeroMotor, isNull);
+    });
+  });
 }
