@@ -394,7 +394,7 @@ class _VisorImagenCompletaDialogState extends State<VisorImagenCompletaDialog> {
                               child: Image.network(
                                 widget.fotografias[idx],
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Container(
+                                errorBuilder: (context, error, stackTrace) => Container(
                                   color: Colors.white12,
                                   child: const Icon(Icons.broken_image, size: 18, color: Colors.white54),
                                 ),

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../models/tarea_alerta.dart';
 import 'logistica_service.dart';
 import '../../auth/services/auth_service.dart';
+import '../../ventas/services/ordenes_sync_notifier.dart';
 
 /// Servicio de Polling Reactivo de Bodega (SPEC-HU-06):
 /// Controla la carga operativa y actualiza el Badge numérico en tiempo real
@@ -14,7 +15,19 @@ class BodegaPollingService {
   factory BodegaPollingService() => _instance;
   static BodegaPollingService get instance => _instance;
 
-  BodegaPollingService._internal();
+  BodegaPollingService._internal() {
+    _registrarSyncListener();
+  }
+
+  void _registrarSyncListener() {
+    OrdenesSyncNotifier.instance.addListener(_onOrdenesCambiaron);
+  }
+
+  void _onOrdenesCambiaron() {
+    if (!_isPolling) {
+      procesarCiclo();
+    }
+  }
 
   Timer? _pollingTimer;
 

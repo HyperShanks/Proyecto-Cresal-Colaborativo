@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../../../core/constants/api_constants.dart';
+import '../../../core/constants/chile_geografia.dart';
 import '../../auth/services/auth_service.dart';
 import 'ordenes_sync_notifier.dart';
 
@@ -1050,6 +1051,81 @@ class OrdenesService {
     } finally {
       if (client == null) httpClient.close();
     }
+  }
+
+  static Map<String, List<ComunaItemModel>>? _geografiaCache;
+
+  /// Obtiene la lista de regiones y comunas dinámicas desde la Base de Datos.
+  static Future<Map<String, List<ComunaItemModel>>> obtenerGeografia({http.Client? client}) async {
+    if (_geografiaCache != null && _geografiaCache!.isNotEmpty) {
+      return _geografiaCache!;
+    }
+
+    final httpClient = client ?? http.Client();
+    try {
+      final uri = Uri.parse('${ApiConstants.ordenesEndpoint}/comunas');
+      final token = await AuthService.getToken();
+      final headers = {
+        'Content-Type': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
+      final response = await httpClient.get(uri, headers: headers).timeout(
+        const Duration(seconds: 10),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        final regionesJson = data['regiones'] as List<dynamic>? ?? [];
+        final Map<String, List<ComunaItemModel>> resultado = {};
+        final Map<String, int> idMapDinamico = {};
+        final Map<String, List<String>> geoStringMap = {};
+
+        for (final reg in regionesJson) {
+          final nombreReg = reg['nombre_region']?.toString() ?? '';
+          final comunasJson = reg['comunas'] as List<dynamic>? ?? [];
+          final listaComunas = comunasJson
+              .map((c) => ComunaItemModel.fromJson(c as Map<String, dynamic>))
+              .toList();
+          resultado[nombreReg] = listaComunas;
+          geoStringMap[nombreReg] = listaComunas.map((c) => c.nombreComuna).toList();
+          for (final c in listaComunas) {
+            idMapDinamico[c.nombreComuna] = c.idComuna;
+          }
+        }
+
+        ChileGeografia.registrarGeografiaDesdeBD(geoStringMap, idMapDinamico);
+        _geografiaCache = resultado;
+        return resultado;
+      }
+    } catch (e) {
+      debugPrint('⚠️ Error obteniendo geografía de la BD: $e');
+    } finally {
+      if (client == null) httpClient.close();
+    }
+
+    return {};
+  }
+}
+
+/// DTO para una comuna obtenida dinámicamente de la Base de Datos.
+class ComunaItemModel {
+  final int idComuna;
+  final String nombreComuna;
+  final int idRegion;
+
+  const ComunaItemModel({
+    required this.idComuna,
+    required this.nombreComuna,
+    required this.idRegion,
+  });
+
+  factory ComunaItemModel.fromJson(Map<String, dynamic> json) {
+    return ComunaItemModel(
+      idComuna: json['id_comuna'] as int? ?? 1,
+      nombreComuna: json['nombre_comuna']?.toString() ?? '',
+      idRegion: json['id_region'] as int? ?? 1,
+    );
   }
 }
 

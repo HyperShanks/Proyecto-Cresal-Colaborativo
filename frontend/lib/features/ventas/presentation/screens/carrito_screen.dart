@@ -83,7 +83,15 @@ class _CarritoScreenState extends State<CarritoScreen> {
     _rutFocusNode.addListener(_onRutFocusChange);
     CartController.instance.addListener(_onCartChanged);
     _cargarVendedores();
+    _cargarGeografiaDesdeBD();
     _iniciarCountdown();
+  }
+
+  Future<void> _cargarGeografiaDesdeBD() async {
+    try {
+      await OrdenesService.obtenerGeografia(client: widget.httpClient);
+      if (mounted) setState(() {});
+    } catch (_) {}
   }
 
   Future<void> _cargarVendedores() async {
@@ -114,6 +122,9 @@ class _CarritoScreenState extends State<CarritoScreen> {
     } else {
       _countdownTimer?.cancel();
       _heartbeatTimer?.cancel();
+    }
+    if (CartController.instance.items.isEmpty) {
+      _limpiarFormulario();
     }
   }
 
@@ -205,6 +216,7 @@ class _CarritoScreenState extends State<CarritoScreen> {
 
     // Vaciar el carrito y liberar reservas en backend
     CartController.instance.vaciarCarrito(liberarEnBackend: true);
+    _limpiarFormulario();
 
     if (!mounted) return;
 
@@ -370,6 +382,7 @@ class _CarritoScreenState extends State<CarritoScreen> {
 
     if (confirmar == true) {
       CartController.instance.vaciarCarrito(liberarEnBackend: true);
+      _limpiarFormulario();
       CatalogoScreen.refreshNotifier.value++;
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

@@ -13,7 +13,7 @@ from sqlalchemy import or_, and_, func, cast, String, case
 
 from database import get_db
 from models import (
-    Usuario, Cliente, Comuna, Orden_Venta, Detalle_Orden,
+    Usuario, Cliente, Region, Comuna, Orden_Venta, Detalle_Orden,
     Despacho, Activo_Inventariado, Estado_Activo,
     Vehiculo_Origen, Categoria_Activo, Transaccion_Pago,
     Tracking_Logistico, Sucursal, Reservas_Backorder,
@@ -31,6 +31,7 @@ from schemas import (
     CheckoutWizardResponse, ReservaBackorderDTO, DespachoDTO,
     HistorialCajaResponse, HistorialOrdenItemResponse,
     HistorialPagoDetalleDTO, HistorialArticuloDTO, HistorialMovimientoDTO,
+    GeografiaResponseDTO, RegionGeografiaDTO, ComunaItemDTO,
 )
 from core.security import get_current_user, require_auditoria_or_caja_role, require_caja_role
 from core.policies import validar_horario_operativo_ordenes
@@ -40,6 +41,38 @@ router = APIRouter(
     prefix="/api/v1/ordenes",
     tags=["Órdenes de Venta"]
 )
+
+
+@router.get(
+    "/comunas",
+    response_model=GeografiaResponseDTO,
+    summary="Obtener Regiones y Comunas Oficiales desde la BD",
+    description="Retorna el listado completo y jerárquico de regiones y comunas cargadas en la Base de Datos para poblar los selectores de despacho y CRM."
+)
+def obtener_comunas_geografia(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    regiones = db.query(Region).order_by(Region.id_region.asc()).all()
+    resultado = []
+    for r in regiones:
+        comunas_dto = [
+            ComunaItemDTO(
+                id_comuna=c.id_comuna,
+                nombre_comuna=c.nombre_comuna,
+                id_region=c.id_region,
+            )
+            for c in r.comunas
+        ]
+        comunas_dto.sort(key=lambda x: x.nombre_comuna)
+        resultado.append(
+            RegionGeografiaDTO(
+                id_region=r.id_region,
+                nombre_region=r.nombre_region,
+                comunas=comunas_dto,
+            )
+        )
+    return GeografiaResponseDTO(regiones=resultado)
 
 
 @router.post(
@@ -2024,6 +2057,10 @@ def checkout_wizard(
             )
         comuna_id = request.datos_despacho.id_comuna_destino or 1
         comuna = db.query(Comuna).filter(Comuna.id_comuna == comuna_id).first()
+        if not comuna and getattr(request.datos_despacho, "comuna_destino", None):
+            comuna = db.query(Comuna).filter(Comuna.nombre_comuna.ilike(request.datos_despacho.comuna_destino.strip())).first()
+            if comuna:
+                comuna_id = comuna.id_comuna
         if not comuna:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -2123,6 +2160,7 @@ def checkout_wizard(
                 id_orden=orden.id_orden,
                 id_activo=activo.id_activo,
                 descripcion_manual=desc,
+                notas_preparacion=request.instrucciones_bodega,
                 cantidad=1,
                 precio_unitario=activo.precio_referencia or 0,
                 precio_final=activo.precio_referencia or 0,
@@ -2136,7 +2174,7 @@ def checkout_wizard(
             cant_m = int(m.get("cantidad", 1))
             p_unit = int(m.get("precio_unitario", 0))
             p_fin = int(m.get("precio_final", p_unit * cant_m))
-            notas_m = m.get("notas_preparacion")
+            notas_m = m.get("notas_preparacion") or request.instrucciones_bodega
 
             detalle_m = Detalle_Orden(
                 id_detalle=uuid.uuid4(),
@@ -2242,6 +2280,20 @@ def checkout_wizard(
             )
             db.add(despacho_traslado)
             despacho_generado = True
+
+            # Registrar Tracking_Logistico para cada activo inventariado involucrado en el traslado
+            for act_id in (request.items_inventariados or []):
+                act_item = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == act_id).first()
+                if act_item:
+                    tracking = Tracking_Logistico(
+                        id_activo=act_item.id_activo,
+                        id_sucursal_origen=act_item.id_sucursal_actual,
+                        id_sucursal_destino=id_suc_dest,
+                        id_usuario_gestor=current_user.id_usuario,
+                        id_orden=orden.id_orden,
+                        estado_traslado="Pendiente",
+                    )
+                    db.add(tracking)
 
         db.commit()
         db.refresh(orden)

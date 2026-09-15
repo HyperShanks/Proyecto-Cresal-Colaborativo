@@ -78,6 +78,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
 
     _sincronizarDesdeCartController();
     _cargarRolYVendedores();
+    _cargarGeografiaDesdeBD();
 
     // Cargar ítems iniciales directos si se pasan por parámetro
     if (widget.initialInventario != null) {
@@ -100,6 +101,40 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     }
   }
 
+  Future<void> _cargarGeografiaDesdeBD() async {
+    try {
+      await OrdenesService.obtenerGeografia();
+      if (mounted) setState(() {});
+    } catch (_) {}
+  }
+
+  void _limpiarFormularioCompleto() {
+    _rutController.clear();
+    _clienteNombresController.clear();
+    _clienteApellidosController.clear();
+    _clienteTelefonoController.clear();
+    _clienteEmailController.clear();
+    _direccionController.clear();
+    _receptorNombresController.clear();
+    _receptorRutController.clear();
+    _receptorTelefonoController.clear();
+    _empresaTransporteController.text = 'Chilexpress';
+    _montoAbonoController.clear();
+    _notasGeneralesController.clear();
+    if (mounted) {
+      setState(() {
+        _esClienteAnonimo = false;
+        _regionCliente = null;
+        _comunaCliente = null;
+        _regionDespacho = null;
+        _comunaDespacho = null;
+        _idSucursalDestino = 1;
+        _idVendedorAsignado = null;
+      });
+    }
+    _controller.clearAll();
+  }
+
   Future<void> _cargarRolYVendedores() async {
     try {
       final rolId = await AuthService.getIdRol();
@@ -117,6 +152,15 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
 
   void _sincronizarDesdeCartController() {
     final cartItems = CartController.instance.items;
+
+    if (cartItems.isEmpty) {
+      _controller.clearAll();
+      _montoAbonoController.clear();
+      _notasGeneralesController.clear();
+      _controller.setAbonoAdicional(0);
+      _controller.setNotasGenerales('');
+      return;
+    }
 
     // 1. Reconciliar y sincronizar ítems inventariados
     final idsEnCart = cartItems.whereType<InventariadoCartItem>().map((i) => i.id).toSet();
@@ -430,7 +474,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     if (res != null) {
       OrdenesSyncNotifier.instance.notificarCambio();
       CartController.instance.vaciarCarrito();
-      _controller.clearAll();
+      _limpiarFormularioCompleto();
 
       await showDialog(
         context: context,
@@ -467,6 +511,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: AppPalette.primary),
               onPressed: () {
+                _limpiarFormularioCompleto();
                 Navigator.of(ctx).pop();
                 if (widget.onNavigateToCatalogo != null) {
                   widget.onNavigateToCatalogo!();
@@ -511,7 +556,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               tooltip: 'Vaciar Carrito',
               onPressed: () {
                 CartController.instance.vaciarCarrito(liberarEnBackend: true);
-                _controller.clearAll();
+                _limpiarFormularioCompleto();
                 CatalogoScreen.refreshNotifier.value++;
               },
             ),
@@ -1087,7 +1132,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                     Expanded(
                       child: DropdownButtonFormField<String>(
                         isExpanded: true,
-                        value: _comunaCliente,
+                        value: (ChileGeografia.obtenerComunas(_regionCliente).contains(_comunaCliente))
+                            ? _comunaCliente
+                            : null,
                         dropdownColor: AppPalette.surface,
                         style: AppTypography.body,
                         decoration: _inputDeco(
@@ -1235,7 +1282,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                         Expanded(
                           child: DropdownButtonFormField<String>(
                             isExpanded: true,
-                            value: _comunaDespacho,
+                            value: (ChileGeografia.obtenerComunas(_regionDespacho).contains(_comunaDespacho))
+                                ? _comunaDespacho
+                                : null,
                             dropdownColor: AppPalette.surface,
                             style: AppTypography.body,
                             decoration: _inputDeco('Comuna Destino *', Icons.map).copyWith(

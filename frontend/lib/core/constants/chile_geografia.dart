@@ -756,11 +756,36 @@ class ChileGeografia {
 
   /// Obtiene las comunas pertenecientes a una región específica.
   /// Si la región es nula o no se encuentra, retorna una lista vacía.
+  static final Map<String, List<String>> _comunasPorRegionDinamica = {};
+  static final Map<String, int> _comunaIdMapDinamico = {};
+
+  /// Registra la geografía (nombres e IDs) provenientes de la base de datos Supabase / PostgreSQL.
+  static void registrarGeografiaDesdeBD(Map<String, List<String>> geografia, Map<String, int> idMap) {
+    _comunasPorRegionDinamica.addAll(geografia);
+    _comunaIdMapDinamico.addAll(idMap);
+  }
+
+  /// Registra los IDs reales provenientes de la base de datos Supabase / PostgreSQL.
+  static void registrarComunasDesdeBD(Map<String, int> idMap) {
+    _comunaIdMapDinamico.addAll(idMap);
+  }
+
+  /// Obtiene las comunas pertenecientes a una región específica (prioriza datos de la BD).
   static List<String> obtenerComunas(String? region) {
-    if (region == null || !comunasPorRegion.containsKey(region)) {
+    if (region == null || region.trim().isEmpty) return const [];
+    final regTrim = region.trim();
+    if (_comunasPorRegionDinamica.containsKey(regTrim) && _comunasPorRegionDinamica[regTrim]!.isNotEmpty) {
+      return _comunasPorRegionDinamica[regTrim]!;
+    }
+    for (final entry in _comunasPorRegionDinamica.entries) {
+      if (entry.key.toLowerCase() == regTrim.toLowerCase() && entry.value.isNotEmpty) {
+        return entry.value;
+      }
+    }
+    if (!comunasPorRegion.containsKey(regTrim)) {
       return const [];
     }
-    return comunasPorRegion[region]!;
+    return comunasPorRegion[regTrim]!;
   }
 
   /// Retorna la región a la que pertenece una comuna dada.
@@ -768,6 +793,11 @@ class ChileGeografia {
   static String? obtenerRegionDeComuna(String? comuna) {
     if (comuna == null || comuna.trim().isEmpty) return null;
     final cTrim = comuna.trim().toLowerCase();
+    for (final entry in _comunasPorRegionDinamica.entries) {
+      if (entry.value.any((c) => c.toLowerCase() == cTrim)) {
+        return entry.key;
+      }
+    }
     for (final entry in comunasPorRegion.entries) {
       if (entry.value.any((c) => c.toLowerCase() == cTrim)) {
         return entry.key;
@@ -776,9 +806,26 @@ class ChileGeografia {
     return null;
   }
 
-  /// Retorna el id_comuna para la base de datos (fallback a 1: Viña del Mar).
+  /// Retorna el id_comuna para la base de datos (prioriza el ID dinámico de la BD, fallback al mapa o 1).
   static int obtenerIdComuna(String? comuna) {
-    if (comuna == null) return 1;
-    return comunaIdMap[comuna] ?? 1;
+    if (comuna == null || comuna.trim().isEmpty) return 1;
+    final cTrim = comuna.trim();
+    if (_comunaIdMapDinamico.containsKey(cTrim)) {
+      return _comunaIdMapDinamico[cTrim]!;
+    }
+    for (final entry in _comunaIdMapDinamico.entries) {
+      if (entry.key.toLowerCase() == cTrim.toLowerCase()) {
+        return entry.value;
+      }
+    }
+    if (comunaIdMap.containsKey(cTrim)) {
+      return comunaIdMap[cTrim]!;
+    }
+    for (final entry in comunaIdMap.entries) {
+      if (entry.key.toLowerCase() == cTrim.toLowerCase()) {
+        return entry.value;
+      }
+    }
+    return 1;
   }
 }

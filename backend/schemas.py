@@ -1260,3 +1260,28 @@ from schemas.gerencia_schemas import (  # noqa: E402, F401
     BackorderGerenciaListResponse,
     BackorderGerenciaKpisDTO,
 )
+
+
+# ==========================================
+# ESQUEMAS PARA GEOGRAFÍA (REGIONES Y COMUNAS BD)
+# ==========================================
+
+class ComunaItemDTO(BaseModel):
+    id_comuna: int
+    nombre_comuna: str
+    id_region: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RegionGeografiaDTO(BaseModel):
+    id_region: int
+    nombre_region: str
+    comunas: List[ComunaItemDTO]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class GeografiaResponseDTO(BaseModel):
+    regiones: List[RegionGeografiaDTO]
+
