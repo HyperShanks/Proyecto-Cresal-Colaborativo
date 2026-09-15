@@ -268,7 +268,8 @@ def obtener_tareas_pendientes(
             TareaAlertaResponse(
                 id_tarea=f"ORD-{str(detalle.id_detalle)[:8]}",
                 tipo_alerta=tipo,
-                orden_ref=f"ORDEN #{str(orden.id_orden)[:8].upper()}",
+                orden_ref=orden.folio,
+                folio=orden.folio,
                 titulo_pieza=titulo,
                 categoria=cat_nombre,
                 tipo_repuesto=cat_nombre,
@@ -292,58 +293,6 @@ def obtener_tareas_pendientes(
             )
         )
 
-    # ---------------------------------------------------------
-    # PRIORIDAD 1.B: Ítems Manuales / Venta Libre con Preparación
-    # ---------------------------------------------------------
-    detalles_manuales = (
-        db.query(Detalle_Orden, Orden_Venta)
-        .join(Orden_Venta, Detalle_Orden.id_orden == Orden_Venta.id_orden)
-        .filter(
-            Detalle_Orden.id_activo.is_(None),
-            Orden_Venta.id_sucursal == sucursal_id,
-            Detalle_Orden.estado_preparacion != "Listo",
-            Orden_Venta.estado_orden.in_(["Reservada", "Pagada"]),
-        )
-        .all()
-    )
-
-    for detalle_m, orden_m in detalles_manuales:
-        tipo_m = "PREPARACION"
-        if orden_m.monto_pendiente > 0:
-            bloqueo_m = "ESPERANDO PAGO EN CAJA"
-            accion_m = "EN ESPERA"
-        else:
-            bloqueo_m = None
-            accion_m = "PREPARAR ITEM"
-
-        otras_alertas.append(
-            TareaAlertaResponse(
-                id_tarea=f"ORD-{str(detalle_m.id_detalle)[:8]}",
-                tipo_alerta=tipo_m,
-                orden_ref=f"ORDEN #{str(orden_m.id_orden)[:8].upper()}",
-                titulo_pieza=detalle_m.descripcion_manual or "Ítem Manual / Venta Libre",
-                categoria="Venta Libre",
-                tipo_repuesto="Ítem Manual",
-                ubicacion="Mostrador / Taller",
-                ubicacion_pasillo=None,
-                ubicacion_pallet=None,
-                ubicacion_galpon=None,
-                nota_especial=detalle_m.notas_preparacion,
-                estado_bloqueo=bloqueo_m,
-                accion_requerida=accion_m,
-                id_detalle=detalle_m.id_detalle,
-                id_activo=None,
-                id_sucursal_origen=orden_m.id_sucursal,
-                id_sucursal_destino=orden_m.id_sucursal,
-                es_traslado=False,
-                estado_preparacion=detalle_m.estado_preparacion or "Pendiente",
-                id_orden=orden_m.id_orden,
-                sku_qr_fisico=None,
-                qr_impreso=True,
-                etiqueta_data=None,
-            )
-        )
-
     # Consolidar tareas de Barrera (LIBERADA) a 1 única tarea por orden
     for id_ord, items in liberadas_por_orden.items():
         if len(items) == 1:
@@ -355,7 +304,8 @@ def obtener_tareas_pendientes(
                 TareaAlertaResponse(
                     id_tarea=f"ORD-{str(detalle.id_detalle)[:8]}",
                     tipo_alerta="LIBERADA",
-                    orden_ref=f"ORDEN #{str(orden.id_orden)[:8].upper()}",
+                    orden_ref=orden.folio,
+                    folio=orden.folio,
                     titulo_pieza=titulo,
                     categoria=cat_nombre,
                     tipo_repuesto=cat_nombre,
@@ -395,7 +345,8 @@ def obtener_tareas_pendientes(
                 TareaAlertaResponse(
                     id_tarea=f"BARRERA-{str(orden.id_orden)[:8]}",
                     tipo_alerta="LIBERADA",
-                    orden_ref=f"ORDEN #{str(orden.id_orden)[:8].upper()}",
+                    orden_ref=orden.folio,
+                    folio=orden.folio,
                     titulo_pieza=titulo,
                     categoria="Múltiples Repuestos",
                     tipo_repuesto="Múltiples Repuestos",
@@ -450,7 +401,8 @@ def obtener_tareas_pendientes(
             TareaAlertaResponse(
                 id_tarea=f"REING-{str(detalle.id_detalle)[:8]}",
                 tipo_alerta="REINGRESO",
-                orden_ref=f"ORDEN #{str(orden.id_orden)[:8].upper()}",
+                orden_ref=orden.folio,
+                folio=orden.folio,
                 titulo_pieza=titulo,
                 categoria=cat_nombre,
                 tipo_repuesto=cat_nombre,
@@ -769,13 +721,13 @@ def escanear_salida(
     if orden.estado_orden == "Completada":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"La orden #{str(orden.id_orden)[:8].upper()} ya fue entregada anteriormente."
+            detail=f"La orden #{orden.folio} ya fue entregada anteriormente."
         )
 
     if orden.estado_orden != "Pagada" or orden.monto_pendiente > 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"La orden #{str(orden.id_orden)[:8].upper()} no ha sido pagada en su totalidad (Saldo pendiente: ${orden.monto_pendiente})."
+            detail=f"La orden #{orden.folio} no ha sido pagada en su totalidad (Saldo pendiente: ${orden.monto_pendiente})."
         )
 
     # 1. Obtener los activos físicos requeridos por la orden (ignorando ítems misceláneos/venta libre sin activo)
@@ -834,6 +786,11 @@ def escanear_salida(
         orden.estado_orden = "Completada"
         orden.fecha_actualizacion = datetime.now()
 
+        # Marcar automáticamente todas las líneas de detalle como 'Listo' (cierre de ciclo para misceláneos y activos)
+        for d in detalles:
+            d.estado_preparacion = "Listo"
+            d.fecha_preparacion = datetime.now()
+
         # B. Actualizar cada Activo_Inventariado a 'Entregado' (ID 6) y liberar rack
         skus_entregados_nombres = []
         for act in activos_requeridos:
@@ -841,7 +798,7 @@ def escanear_salida(
             act.ubicacion_pasillo = None
             act.ubicacion_pallet = None
             act.ubicacion_galpon = None
-            act.observacion_estado = f"Entregado en barrera por {current_user.nombres} {current_user.apellidos} - Orden #{str(orden.id_orden)[:8].upper()}"
+            act.observacion_estado = f"Entregado en barrera por {current_user.nombres} {current_user.apellidos} - Orden #{orden.folio}"
             act.version_lock = (act.version_lock or 1) + 1
             act.fecha_actualizacion = datetime.now()
             skus_entregados_nombres.append(act.sku_qr_fisico)
@@ -861,7 +818,7 @@ def escanear_salida(
         db.commit()
         db.refresh(orden)
 
-        folio = f"ORD-{str(orden.id_orden)[:8].upper()}"
+        folio = orden.folio
         print(f"✅ [BARRERA] Orden {folio} completada exitosamente. Total piezas entregadas: {len(skus_entregados_nombres)}.")
 
         return EscanearSalidaResponse(
@@ -956,7 +913,7 @@ def obtener_reingresos_pendientes(
 
     resultados = []
     for detalle, orden, activo, vehiculo, categoria in rows:
-        folio = f"ORD-{str(orden.id_orden)[:8].upper()}"
+        folio = orden.folio
 
         cat_nombre = categoria.nombre_categoria if categoria else "Repuesto"
         if vehiculo:
@@ -1010,7 +967,7 @@ def confirmar_reingreso(
     if orden.estado_orden != "Anulada":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"La orden #{str(payload.id_orden_anulada)[:8].upper()} no está en estado 'Anulada' (Estado actual: '{orden.estado_orden}')."
+            detail=f"La orden #{orden.folio} no está en estado 'Anulada' (Estado actual: '{orden.estado_orden}')."
         )
 
     # 2. Validar que el SKU escaneado pertenezca a la orden anulada
@@ -1037,7 +994,7 @@ def confirmar_reingreso(
     if not detalle:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"El repuesto '{sku_busqueda}' no pertenece a la orden anulada #{str(orden.id_orden)[:8].upper()}."
+            detail=f"El repuesto '{sku_busqueda}' no pertenece a la orden anulada #{orden.folio}."
         )
 
     # 3. Validar si ya fue reingresado
@@ -1055,7 +1012,7 @@ def confirmar_reingreso(
             activo.ubicacion_pallet = payload.ubicacion_pallet.strip().upper()
 
         activo.fecha_actualizacion = datetime.now(timezone.utc)
-        activo.observacion_estado = f"Reingreso físico confirmado tras anulación orden #{str(orden.id_orden)[:8].upper()} por {usuario_logeado.nombres} {usuario_logeado.apellidos}"
+        activo.observacion_estado = f"Reingreso físico confirmado tras anulación orden #{orden.folio} por {usuario_logeado.nombres} {usuario_logeado.apellidos}"
 
         # Marcar Detalle_Orden como Reingresado para limpiar de tareas en bodega
         detalle.estado_preparacion = "Reingresado"

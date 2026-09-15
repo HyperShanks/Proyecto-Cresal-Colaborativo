@@ -305,7 +305,7 @@ def test_obtener_tareas_pendientes_incluye_reingresos(client, auth_token_bodegue
     tarea_reingreso = reingresos[0]
     assert tarea_reingreso["accion_requerida"] == "REINGRESAR / PALETIZAR"
     assert tarea_reingreso["sku_qr_fisico"] is not None
-    assert "ORDEN" in tarea_reingreso["orden_ref"]
+    assert "ORD" in tarea_reingreso["orden_ref"]
 
 
 def test_alertas_impresion_excluye_en_desarme_y_cuenta_paletizados(client, db_session, auth_token_bodeguero):

@@ -405,13 +405,14 @@ def test_impacto_en_alertas_bodega_tras_pago(client, db_session, auth_headers_ca
 
     # Encontrar la alerta de esta orden
     alerta_orden_antes = next(
-        (a for a in alertas_antes if f"ORDEN #{str(nueva_orden_id)[:8].upper()}" in (a.get("orden_ref") or "")),
+        (a for a in alertas_antes if str(a.get("id_orden")) == str(nueva_orden_id)),
         None
     )
     assert alerta_orden_antes is not None
     assert alerta_orden_antes["tipo_alerta"] == "PREPARACION"
     assert alerta_orden_antes["estado_bloqueo"] == "ESPERANDO PAGO EN CAJA"
     assert alerta_orden_antes["accion_requerida"] == "EN ESPERA"
+    assert (alerta_orden_antes.get("orden_ref") or "").startswith("ORD-")
 
     # 3. Cajera procesa el pago
     resp_pago = client.post(
@@ -429,13 +430,14 @@ def test_impacto_en_alertas_bodega_tras_pago(client, db_session, auth_headers_ca
     alertas_despues = resp_despues.json()
 
     alerta_orden_despues = next(
-        (a for a in alertas_despues if f"ORDEN #{str(nueva_orden_id)[:8].upper()}" in (a.get("orden_ref") or "")),
+        (a for a in alertas_despues if str(a.get("id_orden")) == str(nueva_orden_id)),
         None
     )
     assert alerta_orden_despues is not None
     assert alerta_orden_despues["tipo_alerta"] == "LIBERADA"
     assert alerta_orden_despues["estado_bloqueo"] is None
     assert alerta_orden_despues["accion_requerida"] == "ESCANEAR EN BARRERA"
+    assert (alerta_orden_despues.get("orden_ref") or "").startswith("ORD-")
     print(f"\n[TEST QA] Tarea en bodega desbloqueada exitosamente: {alerta_orden_despues}")
 
     # Verificar en BD que el activo quedó en estado 3 ('Vendido')

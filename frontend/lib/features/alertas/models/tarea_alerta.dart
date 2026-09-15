@@ -4,6 +4,7 @@ class TareaAlerta {
   final String idTarea;
   final String tipoAlerta; // 'IMPRESION', 'PREPARACION', 'LIBERADA', 'TRASLADO'
   final String? ordenRef;
+  final String? folio;
   final String tituloPieza;
   final String ubicacion;
   final String? notaEspecial;
@@ -30,6 +31,7 @@ class TareaAlerta {
     required this.idTarea,
     required this.tipoAlerta,
     this.ordenRef,
+    this.folio,
     required this.tituloPieza,
     required this.ubicacion,
     this.notaEspecial,
@@ -55,10 +57,12 @@ class TareaAlerta {
 
   factory TareaAlerta.fromJson(Map<String, dynamic> json) {
     final cat = json['categoria']?.toString() ?? json['tipo_repuesto']?.toString();
+    final folioVal = json['folio']?.toString() ?? json['orden_ref']?.toString();
     return TareaAlerta(
       idTarea: json['id_tarea'] ?? '',
       tipoAlerta: json['tipo_alerta'] ?? '',
-      ordenRef: json['orden_ref'],
+      ordenRef: json['orden_ref'] ?? folioVal,
+      folio: folioVal,
       tituloPieza: json['titulo_pieza'] ?? 'Pieza Desconocida',
       ubicacion: json['ubicacion'] ?? 'Ubicación Pendiente',
       notaEspecial: json['nota_especial'],

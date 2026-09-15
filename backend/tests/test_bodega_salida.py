@@ -485,6 +485,25 @@ def test_escanear_salida_con_item_venta_libre_cero_clics(client, db_session, aut
     assert data["estado_orden"] == "Completada"
     assert data["total_entregados"] == 1
     assert sku_fisico in data["activos_entregados"]
+    assert data["folio"].startswith("ORD-")
+
+    # Verificar que el ítem misceláneo/venta libre fue marcado 'Listo' automáticamente sin botón
+    db_chk = TestingSessionLocal()
+    try:
+        det_vl = (
+            db_chk.query(Detalle_Orden)
+            .join(Orden_Venta, Detalle_Orden.id_orden == Orden_Venta.id_orden)
+            .filter(
+                Orden_Venta.qr_transaccional_salida == token,
+                Detalle_Orden.id_activo.is_(None),
+            )
+            .first()
+        )
+        assert det_vl is not None
+        assert det_vl.estado_preparacion == "Listo"
+        assert det_vl.fecha_preparacion is not None
+    finally:
+        db_chk.close()
 
 
 # ==============================================================================

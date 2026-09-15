@@ -418,12 +418,16 @@ class _AuditoriaSalidaScreenState extends State<AuditoriaSalidaScreen>
                               color: AppPalette.secondary,
                             ),
                             const SizedBox(width: 4.0),
-                            Text(
-                              'Entrega en mesón (No requiere QR físico)',
-                              style: AppTypography.small.copyWith(
-                                color: AppPalette.secondary,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 11.0,
+                            Expanded(
+                              child: Text(
+                                'Entrega en mesón (No requiere QR físico)',
+                                style: AppTypography.small.copyWith(
+                                  color: AppPalette.secondary,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 11.0,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ],
@@ -431,6 +435,7 @@ class _AuditoriaSalidaScreenState extends State<AuditoriaSalidaScreen>
                       ],
                     ),
                   ),
+                  const SizedBox(width: 8.0),
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 8.0,
@@ -597,12 +602,16 @@ class _AuditoriaSalidaScreenState extends State<AuditoriaSalidaScreen>
                             color: AppPalette.primary,
                           ),
                           const SizedBox(width: 4.0),
-                          Text(
-                            _formatearUbicacion(item.ubicacion),
-                            style: AppTypography.small.copyWith(
-                              color: AppPalette.primary,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 11.0,
+                          Flexible(
+                            child: Text(
+                              _formatearUbicacion(item.ubicacion),
+                              style: AppTypography.small.copyWith(
+                                color: AppPalette.primary,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 11.0,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
