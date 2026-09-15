@@ -26,10 +26,10 @@ class OrdenesGerenciaView extends StatefulWidget {
   });
 
   @override
-  State<OrdenesGerenciaView> createState() => _OrdenesGerenciaViewState();
+  State<OrdenesGerenciaView> createState() => OrdenesGerenciaViewState();
 }
 
-class _OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
+class OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
   late final TextEditingController _busquedaController;
   Timer? _debounceTimer;
 
@@ -42,6 +42,15 @@ class _OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
   bool _isLoading = false;
   String? _errorMessage;
   HistorialCajaResponseModel? _data;
+
+  /// Permite a vistas contenedoras (como [DashboardGerenciaView]) solicitar una recarga explícita.
+  Future<void> refrescar({int? idSucursal, bool actualizarSucursal = false}) async {
+    if (actualizarSucursal) {
+      _idSucursal = idSucursal;
+    }
+    setState(() => _paginaActual = 1);
+    await _cargarOrdenes(pagina: 1);
+  }
 
   @override
   void initState() {

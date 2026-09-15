@@ -691,8 +691,8 @@ class _BotonAuditarPastillaState extends State<_BotonAuditarPastilla> {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 120),
             padding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 6,
+              horizontal: 8,
+              vertical: 4,
             ),
             decoration: BoxDecoration(
               color: _isHovered
@@ -706,31 +706,34 @@ class _BotonAuditarPastillaState extends State<_BotonAuditarPastilla> {
                 width: _isHovered ? 1.2 : 1.0,
               ),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.visibility_outlined,
-                  size: 14,
-                  color: _isHovered
-                      ? const Color(0xFF0369A1)
-                      : const Color(0xFF0284C7),
-                ),
-                const SizedBox(width: 5),
-                Text(
-                  'Auditar',
-                  style: AppTypography.small.copyWith(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
-                    height: 1.1,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.visibility_outlined,
+                    size: 14,
                     color: _isHovered
                         ? const Color(0xFF0369A1)
                         : const Color(0xFF0284C7),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 4),
+                  Text(
+                    'Auditar',
+                    style: AppTypography.small.copyWith(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                      height: 1.1,
+                      color: _isHovered
+                          ? const Color(0xFF0369A1)
+                          : const Color(0xFF0284C7),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

@@ -6,6 +6,7 @@ import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../controllers/cart_controller.dart';
 import '../../models/cart_item_model.dart';
+import '../screens/catalogo_screen.dart';
 
 /// Tarjeta de ítem individual dentro del Carrito Híbrido (HU-3.3).
 /// Diseñada en Flat Design estricto (sin sombras).
@@ -200,6 +201,7 @@ class _CartItemTileState extends State<CartItemTile> {
                     ),
                     onPressed: () {
                       CartController.instance.eliminarItem(widget.item.id);
+                      CatalogoScreen.refreshNotifier.value++;
                       ScaffoldMessenger.of(context).hideCurrentSnackBar();
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(

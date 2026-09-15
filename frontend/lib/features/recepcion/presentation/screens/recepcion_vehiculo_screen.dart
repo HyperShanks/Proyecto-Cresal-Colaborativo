@@ -377,10 +377,12 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
       return;
     }
 
-    // 2. Abrir automáticamente la cámara para capturar la foto física Poka-Yoke
+    // 2. Abrir automáticamente la cámara para capturar la foto física Poka-Yoke optimizada
     final XFile? foto = await _picker.pickImage(
       source: ImageSource.camera,
-      imageQuality: 80,
+      maxWidth: 1024,
+      maxHeight: 1024,
+      imageQuality: 75,
     );
 
     if (foto == null) {
@@ -460,14 +462,14 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('❌ $feedback (Intento $_ocrFailedAttempts/5)'),
+            content: Text('❌ $feedback (Intento $_ocrFailedAttempts/3)'),
             backgroundColor: AppPalette.error,
             duration: const Duration(seconds: 4),
             behavior: SnackBarBehavior.floating,
           ),
         );
 
-        if (_ocrFailedAttempts >= 5 && mounted) {
+        if (_ocrFailedAttempts >= 3 && mounted) {
           _mostrarModalIngresoManual(context, datosNuevos);
         }
       }

@@ -284,23 +284,23 @@ class CartController extends ChangeNotifier {
   /// Libera todas las reservas inventariadas en el backend y limpia el almacenamiento
   Future<void> liberarYVaciarEnBackend() async {
     final inventariados = _items.where((item) => item.esInventariado).toList();
+    _items.clear();
+    notifyListeners();
+    await guardarEnAlmacenamiento();
     if (inventariados.isNotEmpty) {
       await Future.wait(
         inventariados.map((item) => CarritoService.liberarActivo(item.id)),
       );
     }
-    _items.clear();
-    notifyListeners();
-    await guardarEnAlmacenamiento();
   }
 
-  /// Vacía por completo el carrito
+  /// Vacía por completo el carrito.
+  /// Si [liberarEnBackend] es true, libera todas las reservas temporales de activos inventariados en el backend.
   void vaciarCarrito({bool liberarEnBackend = false}) {
     if (liberarEnBackend) {
-      for (final item in _items) {
-        if (item.esInventariado) {
-          unawaited(CarritoService.liberarActivo(item.id));
-        }
+      final inventariados = _items.where((item) => item.esInventariado).toList();
+      for (final item in inventariados) {
+        unawaited(CarritoService.liberarActivo(item.id));
       }
     }
     _items.clear();

@@ -49,6 +49,13 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
 
   late AnimationController _spinController;
 
+  final GlobalKey<OrdenesGerenciaViewState> _ordenesKey =
+      GlobalKey<OrdenesGerenciaViewState>();
+  final GlobalKey<InventarioGerenciaViewState> _inventarioKey =
+      GlobalKey<InventarioGerenciaViewState>();
+  final GlobalKey<BackordersGerenciaViewState> _backordersKey =
+      GlobalKey<BackordersGerenciaViewState>();
+
   Future<void> _cerrarSesion() async {
     await AuthService.logout();
     if (mounted) {
@@ -182,6 +189,76 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
     }
   }
 
+  /// Refresca la vista actualmente activa (Dashboard, Órdenes, Inventario o Backorders)
+  /// activando la animación de spin en el botón superior y mostrando feedback visual.
+  Future<void> _refrescarVistaActiva({bool mostrarToast = false}) async {
+    if (!mounted) return;
+
+    if (_vistaActiva == VistaGerencia.dashboard) {
+      await _cargarDashboard(mostrarToast: mostrarToast);
+      return;
+    }
+
+    setState(() {
+      _cargando = true;
+      _mensajeError = null;
+    });
+    _spinController.repeat();
+
+    try {
+      String mensajeExito = '';
+      switch (_vistaActiva) {
+        case VistaGerencia.dashboard:
+          break;
+        case VistaGerencia.ordenes:
+          await _ordenesKey.currentState?.refrescar(
+            idSucursal: _sucursalSeleccionada,
+            actualizarSucursal: true,
+          );
+          mensajeExito = 'Historial de órdenes sincronizado exitosamente.';
+          break;
+        case VistaGerencia.inventario:
+          await _inventarioKey.currentState?.refrescar(
+            idSucursal: _sucursalSeleccionada,
+            actualizarSucursal: true,
+          );
+          mensajeExito = 'Inventario y tasación sincronizado exitosamente.';
+          break;
+        case VistaGerencia.backorders:
+          await _backordersKey.currentState?.refrescar(
+            idSucursal: _sucursalSeleccionada,
+            actualizarSucursal: true,
+          );
+          mensajeExito = 'Ventas en verde sincronizado exitosamente.';
+          break;
+      }
+
+      if (mostrarToast && mounted && mensajeExito.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              mensajeExito,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            backgroundColor: AppPalette.success,
+            duration: const Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ [GERENCIA] Error al refrescar vista activa: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _cargando = false;
+        });
+        _spinController.stop();
+        _spinController.reset();
+      }
+    }
+  }
+
   String _formatearFechaHoy() {
     final ahora = DateTime.now();
     final dias = [
@@ -234,18 +311,21 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                       ? Padding(
                           padding: const EdgeInsets.all(24),
                           child: OrdenesGerenciaView(
+                            key: _ordenesKey,
                             idSucursalInicial: _sucursalSeleccionada,
                             estadoInicial: _filtroEstadoOrdenes,
                           ),
                         )
                       : _vistaActiva == VistaGerencia.inventario
                       ? InventarioGerenciaView(
+                          key: _inventarioKey,
                           idSucursalInicial: _sucursalSeleccionada,
                           filtroSinTasarInicial: _filtroSinTasar,
                           onStockMutado: () => _cargarDashboard(),
                         )
                       : _vistaActiva == VistaGerencia.backorders
                       ? BackordersGerenciaView(
+                          key: _backordersKey,
                           idSucursalInicial: _sucursalSeleccionada,
                         )
                       : const SizedBox.shrink(),
@@ -395,6 +475,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                           '🔀 [GERENCIA-NAV] 📂 Cambiando a pestaña: Dashboard Ejecutivo',
                         );
                         setState(() => _vistaActiva = VistaGerencia.dashboard);
+                        _cargarDashboard();
                       }
                     },
                   ),
@@ -751,7 +832,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                     IconButton(
                       onPressed: _cargando
                           ? null
-                          : () => _cargarDashboard(mostrarToast: true),
+                          : () => _refrescarVistaActiva(mostrarToast: true),
                       tooltip: _cargando ? 'Actualizando...' : 'Actualizar',
                       icon: RotationTransition(
                         turns: _spinController,
@@ -773,7 +854,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                     OutlinedButton.icon(
                       onPressed: _cargando
                           ? null
-                          : () => _cargarDashboard(mostrarToast: true),
+                          : () => _refrescarVistaActiva(mostrarToast: true),
                       icon: RotationTransition(
                         turns: _spinController,
                         child: const Icon(Icons.sync, size: 16),
@@ -1325,11 +1406,26 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
         offset: const Offset(0, 42),
         initialValue: idActivo,
         onSelected: (nuevoId) {
+          final idNormalizado = nuevoId == -1 ? null : nuevoId;
+          final sucursalCambio = idNormalizado != _sucursalSeleccionada;
           setState(() {
-            _sucursalSeleccionada = nuevoId == -1 ? null : nuevoId;
+            _sucursalSeleccionada = idNormalizado;
           });
           if (_vistaActiva == VistaGerencia.dashboard) {
             _cargarDashboard();
+          } else if (!sucursalCambio) {
+            // Si el usuario seleccionó la misma sucursal para forzar actualización
+            _refrescarVistaActiva();
+          } else {
+            // Si la sucursal cambió, las vistas hijas actualizan sus datos vía didUpdateWidget.
+            // Activamos la animación de spin del Topbar para feedback visual inmediato y consistente.
+            _spinController.repeat();
+            Future.delayed(const Duration(milliseconds: 700), () {
+              if (mounted) {
+                _spinController.stop();
+                _spinController.reset();
+              }
+            });
           }
         },
         itemBuilder: (context) {
@@ -1645,17 +1741,17 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
         if (!isDesktop) {
           return Column(
             children: [
-              SizedBox(height: 380, child: MetodosPagoChart(resumen: pagos)),
+              SizedBox(height: 400, child: MetodosPagoChart(resumen: pagos)),
               const SizedBox(height: 16),
-              SizedBox(height: 380, child: _buildBentoAlertas(flujo)),
+              SizedBox(height: 400, child: _buildBentoAlertas(flujo)),
               const SizedBox(height: 16),
-              SizedBox(height: 380, child: _buildBentoFlujoDespacho(flujo)),
+              SizedBox(height: 400, child: _buildBentoFlujoDespacho(flujo)),
             ],
           );
         }
 
         return SizedBox(
-          height: 390,
+          height: 410,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -1678,7 +1774,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
 
   Widget _buildBentoAlertas(FlujoOperativoModel flujo) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -1691,16 +1787,18 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
+      child: SingleChildScrollView(
+        physics: const NeverScrollableScrollPhysics(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1914,7 +2012,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
           ),
 
           // Footer Bento 2: Nivel de Riesgo Operativo dinámico según alertas activas
-          const Divider(height: 24, thickness: 1, color: Color(0xFFF1F5F9)),
+          const Divider(height: 16, thickness: 1, color: Color(0xFFF1F5F9)),
           Builder(
             builder: (context) {
               final totalAlertas =
@@ -1956,6 +2054,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
             },
           ),
         ],
+      ),
       ),
     );
   }

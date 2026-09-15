@@ -103,6 +103,8 @@ class CatalogoItemCard extends StatelessWidget {
                                 width: 64,
                                 height: 64,
                                 fit: BoxFit.cover,
+                                cacheWidth: 200,
+                                cacheHeight: 200,
                                 errorBuilder: (ctx, err, stack) => Center(
                                   child: Icon(
                                     iconoPieza,

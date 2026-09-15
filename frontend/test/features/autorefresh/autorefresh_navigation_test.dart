@@ -247,4 +247,52 @@ void main() {
       await tester.pumpAndSettle();
     });
   });
+
+  group('SPEC-HU-TAREA-20: DashboardGerenciaView Tab & Refresh Reactivity', () {
+    testWidgets('Botón Actualizar y cambio de pestañas en DashboardGerenciaView refrescan la vista activa', (tester) async {
+      tester.view.physicalSize = const Size(1400, 1000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          navigatorObservers: [routeObserver],
+          home: const DashboardGerenciaView(),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(find.text('CRESAL GERENCIA'), findsWidgets);
+      expect(find.text('Actualizar'), findsOneWidget);
+
+      // Presionar botón Actualizar en Dashboard
+      await tester.tap(find.text('Actualizar'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Conmutar a pestaña "Historial de Órdenes"
+      await tester.tap(find.text('Historial de Órdenes'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Presionar botón Actualizar en pestaña activa
+      if (find.text('Actualizar').evaluate().isNotEmpty) {
+        await tester.tap(find.text('Actualizar'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+      }
+
+      // Conmutar a pestaña "Inventario y Tasación"
+      await tester.tap(find.text('Inventario y Tasación'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Conmutar de vuelta a "Dashboard Ejecutivo"
+      await tester.tap(find.text('Dashboard Ejecutivo'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+    });
+  });
 }

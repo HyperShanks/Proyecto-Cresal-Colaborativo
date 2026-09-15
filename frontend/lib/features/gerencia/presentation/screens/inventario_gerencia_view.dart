@@ -29,12 +29,22 @@ class InventarioGerenciaView extends StatefulWidget {
   });
 
   @override
-  State<InventarioGerenciaView> createState() => _InventarioGerenciaViewState();
+  State<InventarioGerenciaView> createState() => InventarioGerenciaViewState();
 }
 
-class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
+class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
   late final TextEditingController _busquedaController;
   Timer? _debounceTimer;
+
+  /// Permite a vistas contenedoras (como [DashboardGerenciaView]) solicitar una recarga explícita.
+  Future<void> refrescar({int? idSucursal, bool actualizarSucursal = false}) async {
+    if (actualizarSucursal) {
+      _idSucursal = idSucursal;
+    }
+    setState(() => _paginaActual = 1);
+    await _cargarOpcionesUbicacion();
+    await _cargarInventario(pagina: 1);
+  }
 
   int? _idSucursal;
   bool _soloSinTasar = false;
@@ -1336,6 +1346,8 @@ class _InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                                   ? Image.network(
                                       item.imagenes.first,
                                       fit: BoxFit.cover,
+                                      cacheWidth: 150,
+                                      cacheHeight: 150,
                                       errorBuilder: (_, _, _) => const Icon(
                                         Icons.directions_car,
                                         size: 20,
@@ -1984,6 +1996,8 @@ class _TasacionDialogState extends State<_TasacionDialog> {
                                             ? Image.network(
                                                 widget.item.imagenes.first,
                                                 fit: BoxFit.cover,
+                                                cacheWidth: 200,
+                                                cacheHeight: 200,
                                                 errorBuilder: (context, error, stackTrace) => const Icon(
                                                   Icons.directions_car,
                                                   color: Color(0xFF94A3B8),
@@ -2388,6 +2402,28 @@ class _CardImageZoomState extends State<_CardImageZoom> {
                           fit: BoxFit.cover,
                           width: double.infinity,
                           height: 155,
+                          cacheWidth: 600,
+                          cacheHeight: 400,
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Container(
+                              color: const Color(0xFFF1F5F9),
+                              child: Center(
+                                child: SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    value: loadingProgress.expectedTotalBytes != null
+                                        ? loadingProgress.cumulativeBytesLoaded /
+                                            loadingProgress.expectedTotalBytes!
+                                        : null,
+                                    color: AppPalette.primary.withValues(alpha: 0.6),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
                           errorBuilder: (context, error, stackTrace) =>
                               widget.fallbackBuilder(),
                         ),

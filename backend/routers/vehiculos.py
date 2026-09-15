@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
@@ -260,7 +261,7 @@ def registrar_ingreso_vehiculo_manual(
         id_motor = uuid.uuid4()
         activo_motor = models.Activo_Inventariado(
             id_activo=id_motor,
-            sku_qr_fisico=f"MOT-{nuevo_numero_ingreso}-{uuid.uuid4().hex[:4].upper()}",
+            sku_qr_fisico=f"MOT-{nuevo_numero_ingreso}",
             id_categoria=1,
             id_estado=5,
             id_sucursal_actual=getattr(usuario_logeado, "id_sucursal", 1) or 1,
@@ -284,7 +285,7 @@ def registrar_ingreso_vehiculo_manual(
         id_caja = uuid.uuid4()
         activo_caja = models.Activo_Inventariado(
             id_activo=id_caja,
-            sku_qr_fisico=f"CAJ-{nuevo_numero_ingreso}-{uuid.uuid4().hex[:4].upper()}",
+            sku_qr_fisico=f"CAJ-{nuevo_numero_ingreso}",
             id_categoria=2,
             id_estado=5,
             id_sucursal_actual=getattr(usuario_logeado, "id_sucursal", 1) or 1,
@@ -591,29 +592,37 @@ async def guardar_paletizado(
         print(f"ℹ️ Info sobre Bucket: {str(e)}")
         pass
 
+    prefijo = "moto" if tipo_repuesto == "Motor" else "caja"
+
+    # 1. Leemos los buffers binarios de las fotos asíncronamente
+    fotos_data = []
     for i, foto in enumerate(fotos_comerciales):
-        try:
-            prefijo = "moto" if tipo_repuesto == "Motor" else "caja"
-            nombre_archivo_nube = f"{numero_ingreso}/{prefijo}_{numero_ingreso}_comercial_{i+1}.jpg"
-            contenido_imagen = await foto.read()
-            
-            supabase.storage.from_(BUCKET_NAME).upload(
-                path=nombre_archivo_nube, 
-                file=contenido_imagen,
-                file_options={"cache-control": "3600", "content-type": "image/jpeg", "upsert": "true"}
-            )
-            
-            url_publica = supabase.storage.from_(BUCKET_NAME).get_public_url(nombre_archivo_nube)
-            urls_fotos_publicas.append(url_publica)
-            
-            print(f"📸 Foto {i+1} subida exitosamente: {nombre_archivo_nube}")
-            
-        except Exception as e:
-            print(f"❌ ERROR al subir foto {i+1}: {str(e)}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Fallo al subir la fotografía comercial {i+1} a la nube. El guardado ha sido abortado."
-            )
+        contenido = await foto.read()
+        nombre_archivo = f"{numero_ingreso}/{prefijo}_{numero_ingreso}_comercial_{i+1}.jpg"
+        fotos_data.append((i + 1, nombre_archivo, contenido))
+
+    def _subir_foto_sync(idx: int, path_nube: str, contenido: bytes) -> str:
+        supabase.storage.from_(BUCKET_NAME).upload(
+            path=path_nube,
+            file=contenido,
+            file_options={"cache-control": "3600", "content-type": "image/jpeg", "upsert": "true"}
+        )
+        url = supabase.storage.from_(BUCKET_NAME).get_public_url(path_nube)
+        print(f"📸 Foto {idx} subida exitosamente: {path_nube}")
+        return url
+
+    # 2. Subida concurrente en hilos paralelos para máxima velocidad
+    try:
+        urls_fotos_publicas = await asyncio.gather(*[
+            asyncio.to_thread(_subir_foto_sync, idx, path_nube, contenido)
+            for idx, path_nube, contenido in fotos_data
+        ])
+    except Exception as e:
+        print(f"❌ ERROR al subir fotos a Supabase: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Fallo al subir las fotografías comerciales a la nube ({str(e)}). El guardado ha sido abortado."
+        )
 
     # ========================================================
     # PASO 3. GUARDAR EN POSTGRESQL CON TRANSACCIÓN (SQLAlchemy)

@@ -20,12 +20,20 @@ class BackordersGerenciaView extends StatefulWidget {
   const BackordersGerenciaView({super.key, this.idSucursalInicial});
 
   @override
-  State<BackordersGerenciaView> createState() => _BackordersGerenciaViewState();
+  State<BackordersGerenciaView> createState() => BackordersGerenciaViewState();
 }
 
-class _BackordersGerenciaViewState extends State<BackordersGerenciaView> {
+class BackordersGerenciaViewState extends State<BackordersGerenciaView> {
   late final TextEditingController _busquedaController;
   Timer? _debounceTimer;
+
+  /// Permite a vistas contenedoras (como [DashboardGerenciaView]) solicitar una recarga explícita.
+  Future<void> refrescar({int? idSucursal, bool actualizarSucursal = false}) async {
+    if (actualizarSucursal) {
+      _idSucursal = idSucursal;
+    }
+    await _cargarDatos();
+  }
 
   int? _idSucursal;
   String _filtroEstado = 'todos';

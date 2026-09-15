@@ -81,10 +81,12 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
     }
 
     try {
-      // imageQuality: 70 ayuda a que las fotos no pesen 5MB cada una y saturen tu base de datos
+      // imageQuality: 75 y maxWidth/Height: 1280 optimiza drásticamente el peso (~200KB vs 5MB) para subidas ágiles en datos móviles
       final XFile? foto = await _picker.pickImage(
         source: ImageSource.camera,
-        imageQuality: 70,
+        maxWidth: 1280,
+        maxHeight: 1280,
+        imageQuality: 75,
       );
 
       if (foto != null) {
@@ -134,10 +136,12 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
       return;
     }
 
-    // 2. Abrir cámara para la foto técnica (Poka-Yoke)
+    // 2. Abrir cámara para la foto técnica (Poka-Yoke) optimizada para OCR veloz
     final XFile? fotoOcr = await _picker.pickImage(
       source: ImageSource.camera,
-      imageQuality: 80,
+      maxWidth: 1024,
+      maxHeight: 1024,
+      imageQuality: 75,
     );
     if (fotoOcr == null) {
       return; // Si el usuario cancela la cámara, no hacemos nada
@@ -219,14 +223,14 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'ALERTA: $mensaje (Intento $_ocrFailedAttempts/5)\nTexto detectado: ${resultadoOCR['texto_detectado']}',
+              'ALERTA: $mensaje (Intento $_ocrFailedAttempts/3)\nTexto detectado: ${resultadoOCR['texto_detectado']}',
             ),
             backgroundColor: AppPalette.error,
             duration: const Duration(seconds: 4),
           ),
         );
 
-        if (_ocrFailedAttempts >= 5 && mounted) {
+        if (_ocrFailedAttempts >= 3 && mounted) {
           _mostrarModalIngresoManual();
         }
       }

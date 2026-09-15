@@ -144,6 +144,16 @@ def test_registro_ingreso_vehiculo_manual_fallback(client, auth_headers):
     assert data["marca"] == "Chevrolet"
     assert data["numero_ingreso"] == "9999"
 
+    db = TestingSessionLocal()
+    try:
+        activos = db.query(models.Activo_Inventariado).filter(
+            models.Activo_Inventariado.id_vehiculo == uuid.UUID(data["id_vehiculo"])
+        ).all()
+        skus = {a.sku_qr_fisico for a in activos}
+        assert skus == {"MOT-9999", "CAJ-9999"}
+    finally:
+        db.close()
+
 
 def test_obtener_pendientes_paletizado_solo_desarme(client, auth_headers):
     """

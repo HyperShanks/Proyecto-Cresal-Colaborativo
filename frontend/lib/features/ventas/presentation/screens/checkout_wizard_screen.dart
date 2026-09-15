@@ -13,6 +13,7 @@ import '../../services/ordenes_service.dart';
 import '../../services/ordenes_sync_notifier.dart';
 import '../widgets/modal_backorder_form.dart';
 import '../../../../core/constants/chile_geografia.dart';
+import 'catalogo_screen.dart';
 
 /// Pantalla Principal del Checkout Wizard por 5 Pasos Secuenciales (SPEC-HU-05)
 /// Integra Carrito Híbrido, Micro-CRM con Consumidor Final, Logística (Retiro/Despacho/Traslado) y Abonos.
@@ -438,8 +439,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               icon: const Icon(Icons.delete_sweep_outlined, color: AppPalette.error),
               tooltip: 'Vaciar Carrito',
               onPressed: () {
-                CartController.instance.vaciarCarrito();
+                CartController.instance.vaciarCarrito(liberarEnBackend: true);
                 _controller.clearAll();
+                CatalogoScreen.refreshNotifier.value++;
               },
             ),
         ],
@@ -685,6 +687,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                         onPressed: () {
                           _controller.removeItemInventariado(item['id_activo']);
                           CartController.instance.eliminarItem(item['id_activo']);
+                          CatalogoScreen.refreshNotifier.value++;
                         },
                       ),
                     ],

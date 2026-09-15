@@ -14,6 +14,7 @@ import '../../services/carrito_service.dart';
 import '../widgets/cart_item_tile.dart';
 import '../widgets/venta_libre_dialog.dart';
 import '../../../../core/constants/chile_geografia.dart';
+import 'catalogo_screen.dart';
 
 /// Pantalla Unificada de Carrito de Ventas y Micro-CRM (HU-3.3 + HU-3.4).
 /// Integra el listado reactivo del Carrito Híbrido, formulario de datos de cliente,
@@ -367,7 +368,8 @@ class _CarritoScreenState extends State<CarritoScreen> {
     );
 
     if (confirmar == true) {
-      CartController.instance.vaciarCarrito();
+      CartController.instance.vaciarCarrito(liberarEnBackend: true);
+      CatalogoScreen.refreshNotifier.value++;
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
