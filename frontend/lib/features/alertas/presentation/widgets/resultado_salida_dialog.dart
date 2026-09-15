@@ -5,7 +5,7 @@ import '../../../../core/theme/tokens/app_typography.dart';
 import '../../services/logistica_service.dart';
 
 /// Diálogo modal centrado de confirmación tras validar el Dual-Scan en Barrera de Salida (HU-3.6).
-/// Presenta los repuestos liberados, el folio comercial y un botón con temporizador de 3 segundos.
+/// Presenta los repuestos liberados, el folio comercial y un botón con temporizador de 5 segundos.
 class ResultadoSalidaDialog extends StatefulWidget {
   final EscanearSalidaResponseModel resultado;
   final VerificarQrSalidaResponseModel? ordenVerificada;
@@ -23,7 +23,7 @@ class ResultadoSalidaDialog extends StatefulWidget {
 }
 
 class _ResultadoSalidaDialogState extends State<ResultadoSalidaDialog> {
-  int _segundosRestantes = 3;
+  int _segundosRestantes = 5;
   Timer? _countdownTimer;
 
   @override
@@ -128,7 +128,11 @@ class _ResultadoSalidaDialogState extends State<ResultadoSalidaDialog> {
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.person_outline, size: 16, color: AppPalette.textSecondary),
+                        const Icon(
+                          Icons.person_outline,
+                          size: 16,
+                          color: AppPalette.textSecondary,
+                        ),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
@@ -146,7 +150,11 @@ class _ResultadoSalidaDialogState extends State<ResultadoSalidaDialog> {
                     const SizedBox(height: 6),
                     Row(
                       children: [
-                        const Icon(Icons.badge_outlined, size: 16, color: AppPalette.textSecondary),
+                        const Icon(
+                          Icons.badge_outlined,
+                          size: 16,
+                          color: AppPalette.textSecondary,
+                        ),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
@@ -177,7 +185,11 @@ class _ResultadoSalidaDialogState extends State<ResultadoSalidaDialog> {
                           padding: const EdgeInsets.only(bottom: 6),
                           child: Row(
                             children: [
-                              const Icon(Icons.verified, size: 14, color: AppPalette.success),
+                              const Icon(
+                                Icons.verified,
+                                size: 14,
+                                color: AppPalette.success,
+                              ),
                               const SizedBox(width: 6),
                               Expanded(
                                 child: Text(
@@ -193,9 +205,14 @@ class _ResultadoSalidaDialogState extends State<ResultadoSalidaDialog> {
                               const SizedBox(width: 6),
                               if (it.skuQrFisico != null)
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF00A3FF).withValues(alpha: 0.15),
+                                    color: const Color(
+                                      0xFF00A3FF,
+                                    ).withValues(alpha: 0.15),
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: Text(
@@ -217,7 +234,11 @@ class _ResultadoSalidaDialogState extends State<ResultadoSalidaDialog> {
                           padding: const EdgeInsets.only(bottom: 4),
                           child: Row(
                             children: [
-                              const Icon(Icons.verified, size: 14, color: AppPalette.success),
+                              const Icon(
+                                Icons.verified,
+                                size: 14,
+                                color: AppPalette.success,
+                              ),
                               const SizedBox(width: 6),
                               Text(
                                 sku,

@@ -85,8 +85,8 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
           sku: item['sku']?.toString() ?? item['sku_qr_fisico']?.toString() ?? 'SKU-00',
           descripcion: item['descripcion']?.toString() ?? 'Repuesto',
           precio: int.tryParse(item['precio']?.toString() ?? '0') ?? 0,
-          pasillo: item['pasillo']?.toString(),
-          pallet: item['pallet']?.toString(),
+          pasillo: item['pasillo']?.toString() ?? item['ubicacion_pasillo']?.toString(),
+          pallet: item['pallet']?.toString() ?? item['ubicacion_pallet']?.toString(),
         );
       }
     }
@@ -115,41 +115,77 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
 
   void _sincronizarDesdeCartController() {
     final cartItems = CartController.instance.items;
-    for (final item in cartItems) {
-      if (item is InventariadoCartItem) {
-        _controller.addItemInventariado(
-          idActivo: item.id,
-          sku: item.sku,
-          descripcion: item.titulo,
-          precio: item.precioFinal,
+
+    // 1. Reconciliar y sincronizar ítems inventariados
+    final idsEnCart = cartItems.whereType<InventariadoCartItem>().map((i) => i.id).toSet();
+    final aEliminarInventario = _controller.itemsInventariados
+        .where((i) => !idsEnCart.contains(i['id_activo']))
+        .map((i) => i['id_activo'].toString())
+        .toList();
+    for (final id in aEliminarInventario) {
+      _controller.removeItemInventariado(id);
+    }
+    for (final item in cartItems.whereType<InventariadoCartItem>()) {
+      _controller.addItemInventariado(
+        idActivo: item.id,
+        sku: item.sku,
+        descripcion: item.titulo,
+        precio: item.precioFinal,
+        pasillo: item.catalogoItem.ubicacionPasillo,
+        pallet: item.catalogoItem.ubicacionPallet,
+      );
+    }
+
+    // 2. Reconciliar y sincronizar ítems manuales / misceláneos
+    final manualesEnCart = cartItems.whereType<VentaLibreCartItem>().toList();
+    for (int i = _controller.itemsManuales.length - 1; i >= 0; i--) {
+      final m = _controller.itemsManuales[i];
+      final sigueEnCart = manualesEnCart.any(
+        (c) => c.descripcion == m.descripcion && c.monto == m.precioUnitario,
+      );
+      if (!sigueEnCart) {
+        _controller.removeItemManual(i);
+      }
+    }
+    for (final item in manualesEnCart) {
+      if (!_controller.itemsManuales.any((m) => m.descripcion == item.descripcion && m.precioUnitario == item.monto)) {
+        _controller.addItemManual(
+          ItemManualModel(
+            descripcion: item.descripcion,
+            cantidad: item.cantidad,
+            precioUnitario: item.monto,
+            precioFinal: item.subtotal,
+            notasPreparacion: item.observacion,
+          ),
         );
-      } else if (item is VentaLibreCartItem) {
-        if (!_controller.itemsManuales.any((m) => m.descripcion == item.descripcion && m.precioUnitario == item.monto)) {
-          _controller.addItemManual(
-            ItemManualModel(
-              descripcion: item.descripcion,
-              cantidad: item.cantidad,
-              precioUnitario: item.monto,
-              precioFinal: item.subtotal,
-              notasPreparacion: item.observacion,
-            ),
-          );
-        }
-      } else if (item is ReservaBackorderCartItem) {
-        if (!_controller.reservas.any((r) => r.marcaRequerida == item.marca && r.modeloRequerido == item.modelo && r.idCategoriaRequerida == item.idCategoria)) {
-          _controller.addReservaBackorder(
-            ReservaBackorderModel(
-              idCategoriaRequerida: item.idCategoria,
-              categoriaNombre: item.categoriaNombre,
-              marcaRequerida: item.marca,
-              modeloRequerido: item.modelo,
-              anioRequerido: item.anio,
-              precioAcordado: item.precioAcordado,
-              montoAbonado: item.montoAbonado,
-              notasPreparacion: item.notas,
-            ),
-          );
-        }
+      }
+    }
+
+    // 3. Reconciliar y sincronizar reservas backorder
+    final reservasEnCart = cartItems.whereType<ReservaBackorderCartItem>().toList();
+    for (int i = _controller.reservas.length - 1; i >= 0; i--) {
+      final r = _controller.reservas[i];
+      final sigueEnCart = reservasEnCart.any(
+        (c) => c.idCategoria == r.idCategoriaRequerida && c.marca == r.marcaRequerida && c.modelo == r.modeloRequerido,
+      );
+      if (!sigueEnCart) {
+        _controller.removeReservaBackorder(i);
+      }
+    }
+    for (final item in reservasEnCart) {
+      if (!_controller.reservas.any((r) => r.marcaRequerida == item.marca && r.modeloRequerido == item.modelo && r.idCategoriaRequerida == item.idCategoria)) {
+        _controller.addReservaBackorder(
+          ReservaBackorderModel(
+            idCategoriaRequerida: item.idCategoria,
+            categoriaNombre: item.categoriaNombre,
+            marcaRequerida: item.marca,
+            modeloRequerido: item.modelo,
+            anioRequerido: item.anio,
+            precioAcordado: item.precioAcordado,
+            montoAbonado: item.montoAbonado,
+            notasPreparacion: item.notas,
+          ),
+        );
       }
     }
   }
@@ -675,7 +711,10 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                 child: ListTile(
                   leading: const Icon(Icons.inventory_2_outlined, color: AppPalette.primary),
                   title: Text(item['descripcion'] ?? 'Repuesto', style: AppTypography.body.copyWith(fontWeight: FontWeight.w600)),
-                  subtitle: Text('SKU: ${item['sku']} • Pasillo: ${item['pasillo'] ?? 'S/P'}', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
+                  subtitle: Text(
+                    'SKU: ${item['sku']} • Pasillo: ${item['pasillo'] ?? 'S/P'}${item['pallet'] != null && item['pallet'].toString().isNotEmpty && item['pallet'] != 'S/P' ? " • Pallet: ${item['pallet']}" : ""}',
+                    style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
+                  ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -711,7 +750,19 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                   subtitle: Text('Precio: \$${r.precioAcordado} • Abono: \$${r.montoAbonado}', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
                   trailing: IconButton(
                     icon: const Icon(Icons.delete_outline, color: AppPalette.error, size: 20),
-                    onPressed: () => _controller.removeReservaBackorder(idx),
+                    onPressed: () {
+                      final r = _controller.reservas[idx];
+                      _controller.removeReservaBackorder(idx);
+                      final cartIdx = CartController.instance.items.indexWhere(
+                        (item) => item is ReservaBackorderCartItem &&
+                            item.idCategoria == r.idCategoriaRequerida &&
+                            item.marca == r.marcaRequerida &&
+                            item.modelo == r.modeloRequerido,
+                      );
+                      if (cartIdx != -1) {
+                        CartController.instance.eliminarItem(CartController.instance.items[cartIdx].id);
+                      }
+                    },
                   ),
                 ),
               );
@@ -738,7 +789,18 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                       Text('\$${m.precioFinal}', style: AppTypography.body.copyWith(fontWeight: FontWeight.bold)),
                       IconButton(
                         icon: const Icon(Icons.delete_outline, color: AppPalette.error, size: 20),
-                        onPressed: () => _controller.removeItemManual(idx),
+                        onPressed: () {
+                          final m = _controller.itemsManuales[idx];
+                          _controller.removeItemManual(idx);
+                          final cartIdx = CartController.instance.items.indexWhere(
+                            (item) => item is VentaLibreCartItem &&
+                                item.descripcion == m.descripcion &&
+                                item.precioUnitario == m.precioUnitario,
+                          );
+                          if (cartIdx != -1) {
+                            CartController.instance.eliminarItem(CartController.instance.items[cartIdx].id);
+                          }
+                        },
                       ),
                     ],
                   ),

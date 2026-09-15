@@ -164,17 +164,15 @@ def test_inventario_filtro_reservados(client, setup_filtros_inventario_test):
         assert item["sku"] == "SKU-FILT-RES-02"
 
 
-def test_inventario_filtro_vendidos(client, setup_filtros_inventario_test):
-    """Verifica que ?estado=Vendidos filtre solo activos en estado Vendido."""
+def test_inventario_filtro_vendidos_excluido_de_bodega(client, setup_filtros_inventario_test):
+    """Verifica que el estado Vendidos esté excluido del inventario operativo de bodega."""
     headers = setup_filtros_inventario_test["headers"]
     response = client.get("/api/v1/inventario/buscar?q=SKU-FILT&estado=Vendidos", headers=headers)
 
     assert response.status_code == 200
     data = response.json()
-    assert len(data) >= 1
-    for item in data:
-        assert item["estado"].upper() == "VENDIDO"
-        assert item["sku"] == "SKU-FILT-VEND-03"
+    # Las piezas vendidas no forman parte del stock operativo de bodega
+    assert len(data) == 0
 
 
 def test_inventario_filtro_paletizados(client, setup_filtros_inventario_test):
@@ -191,7 +189,7 @@ def test_inventario_filtro_paletizados(client, setup_filtros_inventario_test):
 
 
 def test_inventario_filtro_todos(client, setup_filtros_inventario_test):
-    """Verifica que ?estado=Todos incluya repuestos de los distintos estados operativos."""
+    """Verifica que ?estado=Todos incluya repuestos físicos en bodega (Disponibles, Reservados, Paletizados) y excluya Vendidos."""
     headers = setup_filtros_inventario_test["headers"]
     response = client.get("/api/v1/inventario/buscar?q=SKU-FILT&estado=Todos", headers=headers)
 
@@ -200,8 +198,8 @@ def test_inventario_filtro_todos(client, setup_filtros_inventario_test):
     skus_encontrados = {item["sku"] for item in data}
     assert "SKU-FILT-DISP-01" in skus_encontrados
     assert "SKU-FILT-RES-02" in skus_encontrados
-    assert "SKU-FILT-VEND-03" in skus_encontrados
     assert "SKU-FILT-PAL-04" in skus_encontrados
+    assert "SKU-FILT-VEND-03" not in skus_encontrados
 
 
 def test_inventario_campos_galpon_y_ubicacion(client, setup_filtros_inventario_test):

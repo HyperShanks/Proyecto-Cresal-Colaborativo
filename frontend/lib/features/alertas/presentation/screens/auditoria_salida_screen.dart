@@ -241,7 +241,7 @@ class _AuditoriaSalidaScreenState extends State<AuditoriaSalidaScreen>
         _isProcessing = false;
       });
 
-      // Despliegue de Diálogo Modal Pop-up centrado con temporizador de 3s
+      // Despliegue de Diálogo Modal Pop-up centrado con temporizador de 5s
       showDialog<void>(
         context: context,
         barrierDismissible: false,

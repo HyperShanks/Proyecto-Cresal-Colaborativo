@@ -82,7 +82,7 @@ void main() {
       expect(find.text('CAJ-1001'), findsOneWidget);
 
       // Botón con temporizador
-      expect(find.text('FINALIZAR ENTREGA (3s)'), findsOneWidget);
+      expect(find.text('FINALIZAR ENTREGA (5s)'), findsOneWidget);
 
       // Tap en el botón finaliza inmediatamente
       await tester.tap(find.byType(ElevatedButton));
@@ -90,7 +90,7 @@ void main() {
       expect(finalizado, isTrue);
     });
 
-    testWidgets('Temporizador de 3 segundos descuenta y ejecuta onFinalizar automáticamente', (tester) async {
+    testWidgets('Temporizador de 5 segundos descuenta y ejecuta onFinalizar automáticamente', (tester) async {
       bool finalizado = false;
 
       await tester.pumpWidget(
@@ -105,7 +105,17 @@ void main() {
         ),
       );
 
+      expect(find.text('FINALIZAR ENTREGA (5s)'), findsOneWidget);
+
+      // Avanza 1 segundo -> 4s
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('FINALIZAR ENTREGA (4s)'), findsOneWidget);
+      expect(finalizado, isFalse);
+
+      // Avanza 1 segundo -> 3s
+      await tester.pump(const Duration(seconds: 1));
       expect(find.text('FINALIZAR ENTREGA (3s)'), findsOneWidget);
+      expect(finalizado, isFalse);
 
       // Avanza 1 segundo -> 2s
       await tester.pump(const Duration(seconds: 1));

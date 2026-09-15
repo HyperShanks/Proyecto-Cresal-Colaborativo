@@ -51,7 +51,6 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
     'Todos',
     'Disponibles',
     'Reservados',
-    'Vendidos',
     'Paletizados',
   ];
 

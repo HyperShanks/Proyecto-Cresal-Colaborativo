@@ -873,6 +873,7 @@ class ActivoPendientePrecioResponse(BaseModel):
     nombre_categoria: str
     id_sucursal_actual: int
     nombre_sucursal: str
+    ubicacion_galpon: Optional[str] = None
     ubicacion_pasillo: Optional[str] = None
     ubicacion_pallet: Optional[str] = None
     id_vehiculo: Optional[UUID] = None

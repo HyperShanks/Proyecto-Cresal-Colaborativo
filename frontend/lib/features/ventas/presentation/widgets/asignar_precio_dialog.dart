@@ -167,7 +167,7 @@ class _AsignarPrecioDialogState extends State<AsignarPrecioDialog> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        widget.activo.tituloRepuesto,
+                        widget.activo.tituloVehiculo,
                         style: AppTypography.body.copyWith(
                           fontWeight: FontWeight.bold,
                           fontSize: 14.0,
@@ -307,15 +307,13 @@ class _AsignarPrecioDialogState extends State<AsignarPrecioDialog> {
                 child: OutlinedButton(
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppPalette.textSecondary,
+                    disabledForegroundColor: AppPalette.textSecondary.withValues(alpha: 0.5),
                     side: const BorderSide(color: Colors.white24),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     padding: const EdgeInsets.symmetric(horizontal: 10),
                   ),
                   onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
-                  child: const FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text('Cancelar', style: TextStyle(fontWeight: FontWeight.w600)),
-                  ),
+                  child: const Text('Cancelar', style: TextStyle(fontWeight: FontWeight.w600)),
                 ),
               ),
             ),
