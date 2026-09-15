@@ -1077,7 +1077,7 @@ class _ModalExitoContentState extends State<_ModalExitoContent> {
         final reintentar = await DialogoFallaImpresora.mostrar(
           context,
           PrinterCommunicationException(
-            'Error inesperado de conexión con la impresora térmica: $e',
+            'Error inesperado de comunicación con la impresora térmica.',
             e,
           ),
         );

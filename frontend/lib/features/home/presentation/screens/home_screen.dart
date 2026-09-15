@@ -159,11 +159,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppPalette.background,
-      appBar: _buildAppBar(),
-      drawer: _buildDrawer(context),
-      body: _buildBody(context),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        FocusScope.of(context).unfocus();
+        _paletizadoFocusNode.unfocus();
+      },
+      child: Scaffold(
+        onDrawerChanged: (isOpened) {
+          FocusScope.of(context).unfocus();
+          _paletizadoFocusNode.unfocus();
+        },
+        backgroundColor: AppPalette.background,
+        appBar: _buildAppBar(),
+        drawer: _buildDrawer(context),
+        body: _buildBody(context),
+      ),
     );
   }
 
@@ -179,7 +190,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       leading: Builder(
         builder: (context) => IconButton(
           icon: const Icon(Icons.menu, color: AppPalette.textPrimary),
-          onPressed: () => Scaffold.of(context).openDrawer(),
+          onPressed: () {
+            FocusScope.of(context).unfocus();
+            _paletizadoFocusNode.unfocus();
+            Scaffold.of(context).openDrawer();
+          },
           tooltip: 'Menú',
         ),
       ),
@@ -314,44 +329,52 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         label,
         style: AppTypography.button.copyWith(fontSize: 14, letterSpacing: 1.0),
       ),
-      onTap: onTap,
+      onTap: () {
+        _paletizadoFocusNode.unfocus();
+        onTap();
+      },
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
     );
   }
 
   Widget _buildBody(BuildContext context) {
-    return SingleChildScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildOperativeHeader(),
-          const SizedBox(height: 20),
-          _buildHeroAlertaCard(context),
-          const SizedBox(height: 24),
-          Text(
-            'ACCIONES FRECUENTES',
-            style: AppTypography.cardTitle.copyWith(
-              fontSize: 12,
-              color: AppPalette.textSecondary,
-              letterSpacing: 1.1,
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: SingleChildScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildOperativeHeader(),
+            const SizedBox(height: 20),
+            _buildHeroAlertaCard(context),
+            const SizedBox(height: 24),
+            Text(
+              'ACCIONES FRECUENTES',
+              style: AppTypography.cardTitle.copyWith(
+                fontSize: 12,
+                color: AppPalette.textSecondary,
+                letterSpacing: 1.1,
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          _buildFrequentActionsGrid(context),
-          const SizedBox(height: 24),
-          Text(
-            'OPERACIÓN DE PALETIZADO',
-            style: AppTypography.cardTitle.copyWith(
-              fontSize: 12,
-              color: AppPalette.textSecondary,
-              letterSpacing: 1.1,
+            const SizedBox(height: 12),
+            _buildFrequentActionsGrid(context),
+            const SizedBox(height: 24),
+            Text(
+              'OPERACIÓN DE PALETIZADO',
+              style: AppTypography.cardTitle.copyWith(
+                fontSize: 12,
+                color: AppPalette.textSecondary,
+                letterSpacing: 1.1,
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          _buildPaletizadoDirectoCard(context),
-        ],
+            const SizedBox(height: 12),
+            _buildPaletizadoDirectoCard(context),
+          ],
+        ),
       ),
     );
   }
@@ -445,6 +468,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               clipBehavior: Clip.antiAlias,
               child: InkWell(
                 onTap: () async {
+                  _paletizadoFocusNode.unfocus();
                   await Navigator.pushNamed(context, '/alertas');
                   _cargarConteoTareas();
                 },
@@ -573,6 +597,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     setState(() => _isSearchingPaletizado = false);
 
     if (resultado.exitoso) {
+      _paletizadoFocusNode.unfocus();
       _paletizadoIngresoController.clear();
       Navigator.pushNamed(context, '/paletizado', arguments: folio);
     } else {
@@ -661,7 +686,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 const SizedBox(width: 12),
                 Expanded(
                   child: InkWell(
-                    onTap: () => Navigator.pushNamed(context, '/paletizado'),
+                    onTap: () {
+                      _paletizadoFocusNode.unfocus();
+                      Navigator.pushNamed(context, '/paletizado');
+                    },
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -687,7 +715,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ),
                 ),
                 InkWell(
-                  onTap: () => Navigator.pushNamed(context, '/paletizado'),
+                  onTap: () {
+                    _paletizadoFocusNode.unfocus();
+                    Navigator.pushNamed(context, '/paletizado');
+                  },
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 6,
@@ -712,6 +743,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 key: const Key('input_numero_ingreso_home'),
                 controller: _paletizadoIngresoController,
                 focusNode: _paletizadoFocusNode,
+                onTapOutside: (_) {
+                  _paletizadoFocusNode.unfocus();
+                },
                 keyboardType: TextInputType.number,
                 textInputAction: TextInputAction.search,
                 style: const TextStyle(
@@ -808,7 +842,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       borderRadius: BorderRadius.circular(14),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: onTap,
+        onTap: () {
+          _paletizadoFocusNode.unfocus();
+          onTap();
+        },
         child: Container(
           height: 160,
           padding: const EdgeInsets.all(16),

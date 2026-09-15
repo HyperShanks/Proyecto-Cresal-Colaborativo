@@ -65,7 +65,7 @@ class PrintService {
       throw PrinterTimeoutException(
         ip,
         port,
-        'No se pudo establecer conexión TCP con la impresora térmica.',
+        'No se pudo conectar con la impresora Honeywell PC42E-T. Verifique que esté encendida y conectada al router.',
         e,
       );
     } on TimeoutException catch (e) {
@@ -73,13 +73,13 @@ class PrintService {
       throw PrinterTimeoutException(
         ip,
         port,
-        'Tiempo de espera agotado (${timeoutConexion.inSeconds}s). Impresora apagada o fuera de red.',
+        'Tiempo de espera agotado al conectar con la impresora térmica Honeywell PC42E-T.',
         e,
       );
     } catch (e) {
       debugPrint('📌 [PRINT_SERVICE] ❌ Error inesperado al abrir socket TCP -> $e');
       throw PrinterCommunicationException(
-        'Error inesperado al conectar con la impresora',
+        'Error inesperado al conectar con la impresora térmica.',
         e,
       );
     }
@@ -255,10 +255,13 @@ class PrintService {
         throw PrinterTimeoutException(
           printerIp,
           printerPort,
-          'No se pudo conectar con la impresora en $printerIp:$printerPort. Verifique que esté encendida.',
+          'No se pudo conectar con la impresora Honeywell PC42E-T. Verifique que esté encendida y conectada al router.',
         );
       } else {
-        throw PrinterCommunicationException('Error de comunicación con la impresora: ${e.message}');
+        throw PrinterCommunicationException(
+          'Error de comunicación con la impresora térmica.',
+          e,
+        );
       }
     }
 
@@ -294,10 +297,13 @@ class PrintService {
         throw PrinterTimeoutException(
           printerIp,
           printerPort,
-          'Tiempo de espera agotado al transmitir datos a la impresora.',
+          'Tiempo de espera agotado al transmitir datos a la impresora térmica.',
         );
       } else {
-        throw PrinterCommunicationException('Error al enviar etiqueta a la impresora: ${e.message}');
+        throw PrinterCommunicationException(
+          'Error al enviar la etiqueta a la impresora térmica.',
+          e,
+        );
       }
     }
   }
