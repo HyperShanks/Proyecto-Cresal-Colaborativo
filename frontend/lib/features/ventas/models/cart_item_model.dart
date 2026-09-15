@@ -219,7 +219,7 @@ class ReservaBackorderCartItem extends CartItem {
   String get titulo => '[COMPRA EN VERDE] $categoriaNombre - $marca $modelo ${anio != null ? "($anio)" : ""}';
 
   @override
-  String get subtitulo => 'Precio Acordado: \$$_montoFormateado(precioAcordado) | Abono: \$$_montoFormateado(montoAbonado)';
+  String get subtitulo => 'Precio Acordado: \$${_montoFormateado(precioAcordado)} | Abono: \$${_montoFormateado(montoAbonado)}';
 
   static String _montoFormateado(int monto) {
     return monto.toString().replaceAllMapped(

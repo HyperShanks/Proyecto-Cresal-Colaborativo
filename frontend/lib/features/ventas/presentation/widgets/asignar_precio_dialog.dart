@@ -1,10 +1,10 @@
 // lib/features/ventas/presentation/widgets/asignar_precio_dialog.dart
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../core/utils/currency_formatter.dart';
 import '../../models/pendiente_precio_model.dart';
 import '../../services/inventario_service.dart';
 import '../screens/catalogo_screen.dart';
@@ -220,8 +220,7 @@ class _AsignarPrecioDialogState extends State<AsignarPrecioDialog> {
                 keyboardType: TextInputType.number,
                 autofocus: true,
                 inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  _MilesTextInputFormatter(),
+                  MilesTextInputFormatter(),
                 ],
                 style: AppTypography.title.copyWith(
                   fontSize: 20.0,
@@ -355,33 +354,6 @@ class _AsignarPrecioDialogState extends State<AsignarPrecioDialog> {
           ],
         ),
       ],
-    );
-  }
-}
-
-/// Formateador de miles automático para CLP (ej. 100000 -> 100.000)
-class _MilesTextInputFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
-    if (newValue.text.isEmpty) return newValue;
-
-    final digitsOnly = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
-    if (digitsOnly.isEmpty) return const TextEditingValue();
-
-    final buffer = StringBuffer();
-    int count = 0;
-    for (int i = digitsOnly.length - 1; i >= 0; i--) {
-      buffer.write(digitsOnly[i]);
-      count++;
-      if (count % 3 == 0 && i > 0) {
-        buffer.write('.');
-      }
-    }
-    final formatted = buffer.toString().split('').reversed.join('');
-
-    return TextEditingValue(
-      text: formatted,
-      selection: TextSelection.collapsed(offset: formatted.length),
     );
   }
 }

@@ -714,3 +714,171 @@ def test_registrar_cobro_orden_sin_activos_mantiene_qr_nulo(client, db_session):
         assert orden_db.qr_transaccional_salida is None
     finally:
         db.close()
+
+
+def test_flujo_completo_backorder_dos_pagos_abono_y_liquidacion_con_atribucion(client, db_session):
+    """
+    Verifica el flujo integral de cobro de un Backorder en dos fases:
+    1. Primer pago (Abono): No requiere ni exige SKU (el activo físico aún no existe).
+       Se registra el abono, reserva pasa a 'Confirmada' y se sincroniza Orden_Venta vinculada.
+    2. Segundo pago (Liquidación final): Exige obligatoriamente el SKU del activo físico que ya arribó.
+       Saldar la orden marca la reserva 'Completada', el activo como 'Vendido', la Orden_Venta como 'Pagada'
+       y emite el código QR transaccional de salida.
+    """
+    user_caja = db_session["caja_user"]
+    headers = get_auth_header(user_caja)
+
+    db = TestingSessionLocal()
+    try:
+        id_orden = uuid.uuid4()
+        id_reserva = uuid.uuid4()
+        id_activo = uuid.uuid4()
+        cliente = db.query(Cliente).first()
+
+        # Activo que llegará a bodega más adelante
+        activo_arribado = Activo_Inventariado(
+            id_activo=id_activo,
+            sku_qr_fisico="MOT-TEST-9999",
+            id_categoria=1,
+            id_estado=1, # Disponible
+            id_sucursal_actual=1,
+            precio_referencia=1000000,
+        )
+        db.add(activo_arribado)
+
+        orden = Orden_Venta(
+            id_orden=id_orden,
+            id_cliente=cliente.id_cliente,
+            id_vendedor=db_session["vendedor_user"].id_usuario,
+            id_sucursal=1,
+            estado_orden="Reservada",
+            total_venta=1000000,
+            monto_pendiente=1000000,
+            abono_requerido=200000,
+        )
+        db.add(orden)
+        db.flush()
+
+        reserva = Reservas_Backorder(
+            id_reserva=id_reserva,
+            id_cliente=cliente.id_cliente,
+            id_vendedor=db_session["vendedor_user"].id_usuario,
+            id_orden=id_orden,
+            id_sucursal_registro=1,
+            id_categoria_requerida=1,
+            marca_requerida="Nissan",
+            modelo_requerido="Qashqai",
+            anio_requerido=2020,
+            precio_acordado=1000000,
+            monto_abonado=0,
+            abono_requerido=200000,
+            estado_reserva="Pendiente",
+            fecha_creacion=datetime.now(timezone.utc),
+        )
+        db.add(reserva)
+
+        detalle = Detalle_Orden(
+            id_orden=id_orden,
+            id_activo=None,
+            descripcion_manual="[RESERVA EN VERDE] Motor Nissan Qashqai",
+            cantidad=1,
+            precio_unitario=1000000,
+            precio_final=1000000,
+            estado_preparacion="Pendiente",
+        )
+        db.add(detalle)
+        db.commit()
+    finally:
+        db.close()
+
+    # ── FASE 1: PRIMER PAGO (ABONO INICIAL) ──────────────────────────────────
+    payload_abono = {
+        "tipo_operacion": "BACKORDER",
+        "id_documento": str(id_reserva),
+        "modalidad": "ABONO",
+        "monto_declarado": 200000,
+        "sku_activo_atribuido": None,  # En el abono inicial NO hay activo físico aún
+        "pagos": [
+            {"metodo": "Efectivo", "monto": 200000}
+        ]
+    }
+
+    resp_abono = client.post("/api/v1/caja/cobros/registrar", json=payload_abono, headers=headers)
+    assert resp_abono.status_code == 200, f"Error en abono: {resp_abono.text}"
+    data_abono = resp_abono.json()
+    assert data_abono["success"] is True
+    assert data_abono["monto_cobrado"] == 200000
+    assert data_abono["nuevo_saldo_pendiente"] == 800000
+    assert data_abono["estado_actualizado"] == "Confirmada"
+    assert data_abono["qr_generado"] is None  # Sin QR de salida en abono
+
+    # Verificar estado en BD tras Fase 1
+    db = TestingSessionLocal()
+    try:
+        res_db = db.query(Reservas_Backorder).filter(Reservas_Backorder.id_reserva == id_reserva).first()
+        assert res_db.monto_abonado == 200000
+        assert res_db.estado_reserva == "Confirmada"
+
+        ord_db = db.query(Orden_Venta).filter(Orden_Venta.id_orden == id_orden).first()
+        assert ord_db.monto_pendiente == 800000
+        assert ord_db.estado_orden == "Reservada"
+    finally:
+        db.close()
+
+    # ── FASE 2: INTENTO DE SALDAR SIN SKU FÍSICO (DEBE FALLAR 400) ───────────
+    payload_sin_sku = {
+        "tipo_operacion": "BACKORDER",
+        "id_documento": str(id_reserva),
+        "modalidad": "LIQUIDACION",
+        "monto_declarado": 800000,
+        "sku_activo_atribuido": None,
+        "pagos": [
+            {"metodo": "Debito", "monto": 800000}
+        ]
+    }
+
+    resp_falla = client.post("/api/v1/caja/cobros/registrar", json=payload_sin_sku, headers=headers)
+    assert resp_falla.status_code == 400
+    assert "Para saldar el backorder, debe atribuir el SKU" in resp_falla.json()["detail"]
+
+    # ── FASE 3: SEGUNDO PAGO (LIQUIDACIÓN FINAL CON ATRIBUCIÓN DE SKU) ────────
+    payload_liquidacion = {
+        "tipo_operacion": "BACKORDER",
+        "id_documento": str(id_reserva),
+        "modalidad": "LIQUIDACION",
+        "monto_declarado": 800000,
+        "sku_activo_atribuido": "MOT-TEST-9999",
+        "forzar_atribucion": True,  # Coincidencia con sobreescritura si no tiene vehículo asociado
+        "pagos": [
+            {"metodo": "Debito", "monto": 800000}
+        ]
+    }
+
+    resp_liq = client.post("/api/v1/caja/cobros/registrar", json=payload_liquidacion, headers=headers)
+    assert resp_liq.status_code == 200, f"Error en liquidación: {resp_liq.text}"
+    data_liq = resp_liq.json()
+    assert data_liq["success"] is True
+    assert data_liq["monto_cobrado"] == 800000
+    assert data_liq["nuevo_saldo_pendiente"] == 0
+    assert data_liq["estado_actualizado"] == "Completada"
+    assert data_liq["qr_generado"] is not None
+    assert data_liq["qr_generado"].startswith("TX-QR-")
+
+    # Verificar estado en BD tras Fase 3
+    db = TestingSessionLocal()
+    try:
+        res_db2 = db.query(Reservas_Backorder).filter(Reservas_Backorder.id_reserva == id_reserva).first()
+        assert res_db2.monto_abonado == 1000000
+        assert res_db2.estado_reserva == "Completada"
+        assert res_db2.id_activo_asignado == id_activo
+
+        ord_db2 = db.query(Orden_Venta).filter(Orden_Venta.id_orden == id_orden).first()
+        assert ord_db2.estado_orden == "Pagada"
+        assert ord_db2.monto_pendiente == 0
+        assert ord_db2.qr_transaccional_salida == data_liq["qr_generado"]
+
+        activo_db = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == id_activo).first()
+        assert activo_db.id_estado == 3  # Vendido
+    finally:
+        db.close()
+

@@ -112,6 +112,12 @@ def obtener_cobros_pendientes(
     # 1. CONSULTAR ÓRDENES DE VENTA PENDIENTES DE PAGO
     # ─────────────────────────────────────────────────────────────────────────
     if tipo_filtro in ["TODOS", "VENTA"]:
+        # Excluir órdenes que corresponden a reservas backorder para evitar duplicidad en caja
+        subq_backorders = (
+            db.query(Reservas_Backorder.id_orden)
+            .filter(Reservas_Backorder.id_orden.isnot(None))
+        )
+
         ordenes_query = (
             db.query(Orden_Venta, Cliente, Usuario)
             .join(Cliente, Orden_Venta.id_cliente == Cliente.id_cliente)
@@ -119,6 +125,7 @@ def obtener_cobros_pendientes(
             .filter(Orden_Venta.id_sucursal == sucursal_id)
             .filter(Orden_Venta.estado_orden.in_(["Reservada", "Pendiente"]))
             .filter(Orden_Venta.monto_pendiente > 0)
+            .filter(~Orden_Venta.id_orden.in_(subq_backorders))
         ).all()
 
         for orden, cliente, vendedor in ordenes_query:
@@ -617,47 +624,91 @@ def registrar_cobro(
                 reserva.estado_reserva = "Completada"
 
                 qr_hash = f"TX-QR-{uuid.uuid4()}"
-                nueva_orden = Orden_Venta(
-                    id_cliente=reserva.id_cliente,
-                    id_vendedor=reserva.id_vendedor,
-                    id_cajera=current_user.id_usuario,
-                    id_sucursal=reserva.id_sucursal_registro,
-                    estado_orden="Pagada",
-                    qr_transaccional_salida=qr_hash,
-                    total_venta=reserva.precio_acordado,
-                    monto_pendiente=0,
-                    abono_requerido=0,
-                    fecha_creacion=now_utc,
-                    fecha_actualizacion=now_utc,
-                )
-                db.add(nueva_orden)
-                db.flush()
 
-                reserva.id_orden = nueva_orden.id_orden
+                orden_existente = None
+                if reserva.id_orden:
+                    orden_existente = db.query(Orden_Venta).filter(Orden_Venta.id_orden == reserva.id_orden).first()
 
-                detalle = Detalle_Orden(
-                    id_orden=nueva_orden.id_orden,
-                    id_activo=activo.id_activo,
-                    descripcion_manual=f"[BACKORDER] {reserva.marca_requerida} {reserva.modelo_requerido}",
-                    notas_preparacion="Entregado en caja por backorder",
-                    cantidad=1,
-                    precio_unitario=reserva.precio_acordado,
-                    precio_final=reserva.precio_acordado,
-                    estado_preparacion="Listo",
-                )
-                db.add(detalle)
-                db.flush()
-                
-                db.query(Transaccion_Pago).filter(Transaccion_Pago.id_reserva == reserva.id_reserva).update({"id_orden": nueva_orden.id_orden})
-                
-                folio_doc = f"ORD-{str(nueva_orden.id_orden).replace('-', '')[:4].upper()}"
+                if orden_existente:
+                    orden_existente.estado_orden = "Pagada"
+                    orden_existente.monto_pendiente = 0
+                    orden_existente.qr_transaccional_salida = qr_hash
+                    orden_existente.id_cajera = current_user.id_usuario
+                    orden_existente.fecha_actualizacion = now_utc
+                    orden_operativa = orden_existente
+
+                    # Asociar activo al detalle backorder de la orden
+                    detalles_bo = db.query(Detalle_Orden).filter(
+                        Detalle_Orden.id_orden == orden_existente.id_orden,
+                        Detalle_Orden.id_activo.is_(None)
+                    ).all()
+                    if detalles_bo:
+                        det_target = detalles_bo[0]
+                        det_target.id_activo = activo.id_activo
+                        det_target.estado_preparacion = "Listo"
+                        det_target.descripcion_manual = f"[BACKORDER ASIGNADO] {activo.sku_qr_fisico} - {reserva.marca_requerida} {reserva.modelo_requerido}"
+                    else:
+                        detalle = Detalle_Orden(
+                            id_orden=orden_existente.id_orden,
+                            id_activo=activo.id_activo,
+                            descripcion_manual=f"[BACKORDER] {reserva.marca_requerida} {reserva.modelo_requerido}",
+                            notas_preparacion="Entregado en caja por backorder",
+                            cantidad=1,
+                            precio_unitario=reserva.precio_acordado,
+                            precio_final=reserva.precio_acordado,
+                            estado_preparacion="Listo",
+                        )
+                        db.add(detalle)
+                else:
+                    nueva_orden = Orden_Venta(
+                        id_cliente=reserva.id_cliente,
+                        id_vendedor=reserva.id_vendedor,
+                        id_cajera=current_user.id_usuario,
+                        id_sucursal=reserva.id_sucursal_registro,
+                        estado_orden="Pagada",
+                        qr_transaccional_salida=qr_hash,
+                        total_venta=reserva.precio_acordado,
+                        monto_pendiente=0,
+                        abono_requerido=0,
+                        fecha_creacion=now_utc,
+                        fecha_actualizacion=now_utc,
+                    )
+                    db.add(nueva_orden)
+                    db.flush()
+                    reserva.id_orden = nueva_orden.id_orden
+                    orden_operativa = nueva_orden
+
+                    detalle = Detalle_Orden(
+                        id_orden=nueva_orden.id_orden,
+                        id_activo=activo.id_activo,
+                        descripcion_manual=f"[BACKORDER] {reserva.marca_requerida} {reserva.modelo_requerido}",
+                        notas_preparacion="Entregado en caja por backorder",
+                        cantidad=1,
+                        precio_unitario=reserva.precio_acordado,
+                        precio_final=reserva.precio_acordado,
+                        estado_preparacion="Listo",
+                    )
+                    db.add(detalle)
+                    db.flush()
+
+                db.query(Transaccion_Pago).filter(Transaccion_Pago.id_reserva == reserva.id_reserva).update({"id_orden": orden_operativa.id_orden})
+
+                folio_doc = orden_operativa.folio or f"ORD-{str(orden_operativa.id_orden).replace('-', '')[:4].upper()}"
                 estado_resultado = "Completada"
-                target_id_orden = nueva_orden.id_orden
+                target_id_orden = orden_operativa.id_orden
             else:
                 reserva.estado_reserva = "Confirmada"
                 qr_hash = None
                 folio_doc = f"RES-{str(reserva.id_reserva).replace('-', '')[:4].upper()}"
                 estado_resultado = reserva.estado_reserva
+
+                if reserva.id_orden:
+                    orden_vinculada = db.query(Orden_Venta).filter(Orden_Venta.id_orden == reserva.id_orden).first()
+                    if orden_vinculada:
+                        orden_vinculada.monto_pendiente = max(0, orden_vinculada.total_venta - reserva.monto_abonado)
+                        orden_vinculada.id_cajera = current_user.id_usuario
+                        orden_vinculada.fecha_actualizacion = now_utc
+                        target_id_orden = orden_vinculada.id_orden
 
             # Registrar cada método en Transaccion_Pago
             for pago_item in payload.pagos:

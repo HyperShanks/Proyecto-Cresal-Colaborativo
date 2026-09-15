@@ -49,6 +49,23 @@ class MockCajaService implements ICajaService {
   }
 
   @override
+  Future<ValidarActivoBackorderResponseModel> validarActivoBackorder(
+    ValidarActivoBackorderRequestModel request,
+  ) async {
+    return ValidarActivoBackorderResponseModel(
+      coincide: true,
+      discrepancias: [],
+      mensaje: 'Activo válido',
+      activoDetalle: ActivoDetalleBackorderModel(
+        sku: request.skuActivo,
+        marca: 'Hyundai',
+        modelo: 'Tucson',
+        anio: 2022,
+      ),
+    );
+  }
+
+  @override
   Future<HistorialCajaResponseModel> obtenerHistorialCaja({
     required int sucursalId,
     String periodo = 'HOY',
@@ -412,5 +429,74 @@ void main() {
     expect(find.textContaining('Patente'), findsNothing);
     expect(find.textContaining('Galpón'), findsNothing);
     expect(find.textContaining('Pallet'), findsNothing);
+  });
+
+  testWidgets('Flujo Backorder 1er Pago (Abono Inicial): no exige atribución de SKU y habilita procesamiento',
+      (tester) async {
+    setDesktopViewport(tester);
+
+    final backorderInicial = CobroPendienteModel(
+      idReferencia: 'res-inicial-001',
+      folioDocumento: 'RES-1001',
+      tipoOperacion: 'BACKORDER',
+      estadoDocumento: 'Pendiente',
+      clienteNombre: 'Rodrigo Perez',
+      clienteRut: '15.234.567-8',
+      vendedorNombre: 'Juaquin Leiva',
+      fechaEmision: DateTime.now(),
+      fechaEmisionFormateada: '15/09/2026',
+      horaEmisionFormateada: '10:00',
+      totalOperacion: 800000,
+      abonoPrevio: 0,
+      montoACobrar: 200000, // Abono acordado
+      articulos: [],
+      especificacionesBackorder: BackorderEspecificacionesModel(
+        marca: 'Nissan',
+        modelo: 'Qashqai',
+        anio: 2020,
+        categoria: 'Motor',
+        cilindrada: '2.0',
+        combustible: 'Gasolina',
+        transito: 'En Tránsito Marítimo',
+      ),
+    );
+
+    provider.seleccionarOrden(backorderInicial);
+
+    // 1. Debe inicializarse automáticamente en modalidad ABONO con el monto a cobrar acordado
+    expect(provider.modalidad, equals('ABONO'));
+    expect(provider.montoDeclarado, equals(200000));
+
+    await tester.pumpWidget(createTestWidget(PanelDetalleCobro(provider: provider)));
+    await tester.pumpAndSettle();
+
+    // 2. La sección de atribución de SKU NO debe aparecer (el activo aún no existe)
+    expect(find.text('ATRIBUCIÓN DE ACTIVO FÍSICO'), findsNothing);
+
+    // 3. Banner explicativo del abono inicial de reserva
+    expect(find.textContaining('Abono Inicial de Reserva: El activo solicitado aún no arriba al inventario'), findsOneWidget);
+
+    // 4. El botón de confirmación de cobro debe estar habilitado sin pedir SKU
+    expect(find.text('CONFIRMAR Y PROCESAR COBRO'), findsOneWidget);
+    final boton = tester.widget<ElevatedButton>(find.byType(ElevatedButton));
+    expect(boton.onPressed, isNotNull);
+  });
+
+  testWidgets('Flujo Backorder 2do Pago (Liquidación Final): sí exige atribución de SKU físico',
+      (tester) async {
+    setDesktopViewport(tester);
+
+    // sampleBackorder tiene abonoPrevio: 900.000 y montoACobrar: 300.000
+    provider.seleccionarOrden(sampleBackorder);
+
+    // 1. Debe inicializarse en LIQUIDACION
+    expect(provider.modalidad, equals('LIQUIDACION'));
+
+    await tester.pumpWidget(createTestWidget(PanelDetalleCobro(provider: provider)));
+    await tester.pumpAndSettle();
+
+    // 2. La sección de atribución de SKU SÍ debe aparecer
+    expect(find.text('ATRIBUCIÓN DE ACTIVO FÍSICO'), findsOneWidget);
+    expect(find.textContaining('Ingresa el SKU del repuesto físico'), findsOneWidget);
   });
 }

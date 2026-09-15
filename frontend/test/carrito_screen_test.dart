@@ -184,7 +184,7 @@ void main() {
       expect(find.text('\$520.000'), findsNWidgets(2)); // Subtotal + Total
 
       // Modificar el precio en el TextField in-line
-      final precioField = find.widgetWithText(TextField, '520000');
+      final precioField = find.widgetWithText(TextField, '520.000');
       expect(precioField, findsOneWidget);
 
       await tester.enterText(precioField, '450000');

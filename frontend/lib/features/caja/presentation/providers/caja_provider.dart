@@ -187,7 +187,8 @@ class CajaProvider extends ChangeNotifier {
     _ordenSeleccionada = orden;
     _ultimoResultadoCobro = null;
     if (orden != null) {
-      _modalidad = 'LIQUIDACION';
+      final esBackorderInicial = orden.esBackorder && (orden.abonoPrevio == 0);
+      _modalidad = esBackorderInicial ? 'ABONO' : 'LIQUIDACION';
       _modalidadPago = 'UNICO';
       _montoDeclarado = orden.montoACobrar;
       _pagosDivididos = [
@@ -209,17 +210,30 @@ class CajaProvider extends ChangeNotifier {
   void setModalidad(String nuevaModalidad) {
     final modNorm = nuevaModalidad.toUpperCase();
     if (_modalidad == modNorm) return;
+
+    // Si es un backorder en etapa de abono inicial (sin abono previo), no permitir cambiar a Liquidación
+    // ya que el activo físico aún no existe ni ha ingresado a inventario.
+    if (_ordenSeleccionada?.esBackorder == true &&
+        _ordenSeleccionada?.abonoPrevio == 0 &&
+        modNorm == 'LIQUIDACION') {
+      return;
+    }
+
     _modalidad = modNorm;
 
     if (_ordenSeleccionada != null) {
       if (_modalidad == 'LIQUIDACION') {
         _montoDeclarado = _ordenSeleccionada!.montoACobrar;
       } else if (_modalidad == 'ABONO') {
-        // En abono, si el monto declarado supera el saldo pendiente o es <= 0, sugerir 50%
+        // En abono, si el monto declarado supera el saldo pendiente o es <= 0, sugerir monto a cobrar o 50%
         if (_montoDeclarado >= _ordenSeleccionada!.montoACobrar || _montoDeclarado <= 0) {
-          _montoDeclarado = (_ordenSeleccionada!.montoACobrar * 0.5).round();
-          if (_montoDeclarado <= 0) {
+          if (_ordenSeleccionada!.esBackorder && _ordenSeleccionada!.abonoPrevio == 0) {
             _montoDeclarado = _ordenSeleccionada!.montoACobrar;
+          } else {
+            _montoDeclarado = (_ordenSeleccionada!.montoACobrar * 0.5).round();
+            if (_montoDeclarado <= 0) {
+              _montoDeclarado = _ordenSeleccionada!.montoACobrar;
+            }
           }
         }
       }

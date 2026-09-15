@@ -245,7 +245,9 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
   Widget _buildPanelContent(BuildContext context, CobroPendienteModel orden) {
     final isVenta = orden.esVenta;
     final esAbono = widget.provider.modalidad == 'ABONO';
-    final requiereAtribucion = !isVenta && !esAbono;
+    // La atribución de SKU físico solo se exige en el 2do pago (liquidación final) de un Backorder.
+    // En el 1er pago (abono inicial, abonoPrevio == 0), el activo físico aún no existe en inventario.
+    final requiereAtribucion = orden.esBackorder && orden.abonoPrevio > 0 && widget.provider.modalidad == 'LIQUIDACION';
 
     return Container(
       color: AppPalette.backgroundLight,
@@ -751,6 +753,8 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
   }
 
   Widget _buildModalidadSection(CobroPendienteModel orden, bool esAbono) {
+    final esBackorderInicial = orden.esBackorder && orden.abonoPrevio == 0;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -776,41 +780,46 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
               // Botón Liquidación Total
               Expanded(
                 child: InkWell(
-                  onTap: () {
-                    widget.provider.setModalidad('LIQUIDACION');
-                    _sincronizarControllers();
-                  },
+                  onTap: esBackorderInicial
+                      ? null
+                      : () {
+                          widget.provider.setModalidad('LIQUIDACION');
+                          _sincronizarControllers();
+                        },
                   borderRadius: BorderRadius.circular(10),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: !esAbono
-                          ? AppPalette.tertiary.withValues(alpha: 0.08)
-                          : AppPalette.backgroundLight,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: !esAbono ? AppPalette.tertiary : AppPalette.borderLight,
-                        width: !esAbono ? 2 : 1,
+                  child: Opacity(
+                    opacity: esBackorderInicial ? 0.45 : 1.0,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: !esAbono && !esBackorderInicial
+                            ? AppPalette.tertiary.withValues(alpha: 0.08)
+                            : AppPalette.backgroundLight,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: !esAbono && !esBackorderInicial ? AppPalette.tertiary : AppPalette.borderLight,
+                          width: !esAbono && !esBackorderInicial ? 2 : 1,
+                        ),
                       ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.check_circle_outline_rounded,
-                          size: 18,
-                          color: !esAbono ? AppPalette.tertiary : AppPalette.textSecondaryLight,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Liquidación Total',
-                          style: AppTypography.button.copyWith(
-                            color: !esAbono ? AppPalette.tertiary : AppPalette.textSecondaryLight,
-                            fontWeight: !esAbono ? FontWeight.w800 : FontWeight.w600,
-                            fontSize: 13,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.check_circle_outline_rounded,
+                            size: 18,
+                            color: !esAbono && !esBackorderInicial ? AppPalette.tertiary : AppPalette.textSecondaryLight,
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 8),
+                          Text(
+                            'Liquidación Total',
+                            style: AppTypography.button.copyWith(
+                              color: !esAbono && !esBackorderInicial ? AppPalette.tertiary : AppPalette.textSecondaryLight,
+                              fontWeight: !esAbono && !esBackorderInicial ? FontWeight.w800 : FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -846,7 +855,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          'Abono Personalizado',
+                          esBackorderInicial ? 'Abono Inicial' : 'Abono Personalizado',
                           style: AppTypography.button.copyWith(
                             color: esAbono ? AppPalette.tertiary : AppPalette.textSecondaryLight,
                             fontWeight: esAbono ? FontWeight.w800 : FontWeight.w600,
@@ -861,8 +870,38 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
             ],
           ),
 
-          // Banner Ámbar de Advertencia si es Abono (CA-02 / ST-F03)
-          if (esAbono) ...[
+          // Banner informativo si es Backorder Inicial (sin activo físico aún)
+          if (esBackorderInicial) ...[
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppPalette.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppPalette.primary.withValues(alpha: 0.3), width: 1),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.info_outline_rounded,
+                    color: AppPalette.primary,
+                    size: 22,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Abono Inicial de Reserva: El activo solicitado aún no arriba al inventario. No se requiere código QR ni SKU físico en esta fase.',
+                      style: AppTypography.small.copyWith(
+                        color: AppPalette.primary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ] else if (esAbono) ...[
             const SizedBox(height: 14),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -1563,7 +1602,8 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
     final bool montoExcedido = montoDeclarado > maxPermitido;
     final bool montoInvalido = montoDeclarado <= 0;
     
-    final requiereAtribucion = !orden.esVenta && widget.provider.modalidad != 'ABONO';
+    // La atribución de SKU solo bloquea el cobro en la liquidación final (2do pago) de un Backorder.
+    final requiereAtribucion = orden.esBackorder && orden.abonoPrevio > 0 && widget.provider.modalidad == 'LIQUIDACION';
     final validacion = widget.provider.validacionActivo;
     final activoAtribuido = widget.provider.skuActivoAtribuido != null && (validacion?.coincide == true || widget.provider.forzarAtribucion);
     final validacionBloqueada = requiereAtribucion && !activoAtribuido;

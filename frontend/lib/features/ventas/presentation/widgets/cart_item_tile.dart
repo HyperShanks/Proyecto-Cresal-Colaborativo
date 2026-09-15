@@ -1,9 +1,9 @@
 // lib/features/ventas/presentation/widgets/cart_item_tile.dart
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../core/utils/currency_formatter.dart';
 import '../../controllers/cart_controller.dart';
 import '../../models/cart_item_model.dart';
 import '../screens/catalogo_screen.dart';
@@ -31,7 +31,7 @@ class _CartItemTileState extends State<CartItemTile> {
   void initState() {
     super.initState();
     _precioController = TextEditingController(
-      text: widget.item.precioUnitario.toString(),
+      text: CurrencyFormatter.formatNumber(widget.item.precioUnitario),
     );
     _precioFocusNode.addListener(_onFocusChange);
   }
@@ -41,7 +41,8 @@ class _CartItemTileState extends State<CartItemTile> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.item.precioUnitario != widget.item.precioUnitario &&
         !_precioFocusNode.hasFocus) {
-      _precioController.text = widget.item.precioUnitario.toString();
+      _precioController.text =
+          CurrencyFormatter.formatNumber(widget.item.precioUnitario);
     }
   }
 
@@ -60,13 +61,14 @@ class _CartItemTileState extends State<CartItemTile> {
   }
 
   void _guardarPrecio() {
-    final limpio = _precioController.text.replaceAll(RegExp(r'[^\d]'), '');
-    final nuevoPrecio = int.tryParse(limpio) ?? 0;
+    final nuevoPrecio = CurrencyFormatter.parse(_precioController.text);
 
     if (nuevoPrecio >= 0 && nuevoPrecio != widget.item.precioUnitario) {
       CartController.instance.actualizarPrecio(widget.item.id, nuevoPrecio);
+      _precioController.text = CurrencyFormatter.formatNumber(nuevoPrecio);
     } else {
-      _precioController.text = widget.item.precioUnitario.toString();
+      _precioController.text =
+          CurrencyFormatter.formatNumber(widget.item.precioUnitario);
     }
   }
 
@@ -283,7 +285,7 @@ class _CartItemTileState extends State<CartItemTile> {
                           controller: _precioController,
                           focusNode: _precioFocusNode,
                           keyboardType: TextInputType.number,
-                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                          inputFormatters: [MilesTextInputFormatter()],
                           textAlignVertical: TextAlignVertical.center,
                           style: AppTypography.body.copyWith(
                             color: AppPalette.secondary,

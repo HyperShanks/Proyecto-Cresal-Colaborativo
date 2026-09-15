@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../core/utils/currency_formatter.dart';
 import '../../models/checkout_wizard_models.dart';
 
 /// Modal dialog interactivo para configurar una Reserva por Encargo (Compra en Verde / Backorder) (SPEC-HU-05)
@@ -65,8 +66,8 @@ class _ModalBackorderFormState extends State<ModalBackorderForm> {
   void _guardarReserva() {
     if (!_formKey.currentState!.validate()) return;
 
-    final precio = int.tryParse(_precioController.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
-    final abono = int.tryParse(_abonoController.text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+    final precio = CurrencyFormatter.parse(_precioController.text);
+    final abono = CurrencyFormatter.parse(_abonoController.text);
     final anio = int.tryParse(_anioController.text.trim());
 
     if (abono > precio) {
@@ -354,12 +355,12 @@ class _ModalBackorderFormState extends State<ModalBackorderForm> {
                           TextFormField(
                             controller: _precioController,
                             keyboardType: TextInputType.number,
-                            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                            inputFormatters: [MilesTextInputFormatter()],
                             style: AppTypography.body.copyWith(fontWeight: FontWeight.bold),
-                            decoration: _inputDecoration('Ej: 450000'),
+                            decoration: _inputDecoration('Ej: 450.000'),
                             validator: (val) {
                               if (val == null || val.trim().isEmpty) return 'Requerido';
-                              final n = int.tryParse(val.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+                              final n = CurrencyFormatter.parse(val);
                               if (n <= 0) return 'Mayor a 0';
                               return null;
                             },
@@ -385,12 +386,12 @@ class _ModalBackorderFormState extends State<ModalBackorderForm> {
                           TextFormField(
                             controller: _abonoController,
                             keyboardType: TextInputType.number,
-                            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                            inputFormatters: [MilesTextInputFormatter()],
                             style: AppTypography.body.copyWith(fontWeight: FontWeight.bold),
-                            decoration: _inputDecoration('Ej: 100000'),
+                            decoration: _inputDecoration('Ej: 100.000'),
                             validator: (val) {
                               if (val == null || val.trim().isEmpty) return null;
-                              final n = int.tryParse(val.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+                              final n = CurrencyFormatter.parse(val);
                               if (n < 0) return 'Inválido';
                               return null;
                             },

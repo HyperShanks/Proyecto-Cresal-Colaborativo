@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../core/utils/currency_formatter.dart';
 import '../../../../core/utils/rut_formatter.dart';
 import '../../../../core/utils/rut_validator.dart';
 import '../../../auth/services/auth_service.dart';
@@ -486,7 +487,7 @@ class _CarritoScreenState extends State<CarritoScreen> {
 
       int? abonoNum;
       if (_tipoEntrega == 'Retiro' && _montoAbonoController.text.trim().isNotEmpty) {
-        abonoNum = int.tryParse(_montoAbonoController.text.trim());
+        abonoNum = CurrencyFormatter.parse(_montoAbonoController.text.trim());
       }
 
       Map<String, dynamic>? despachoPayload;
@@ -1284,8 +1285,9 @@ class _CarritoScreenState extends State<CarritoScreen> {
                   _buildTextField(
                     controller: _montoAbonoController,
                     label: 'Monto de Abono / Anticipo (Opcional)',
-                    hint: 'Ej: 50000 (Dejar vacío si liquidará el 100% en caja)',
+                    hint: 'Ej: 50.000 (Dejar vacío si liquidará el 100% en caja)',
                     keyboardType: TextInputType.number,
+                    inputFormatters: [MilesTextInputFormatter()],
                   ),
                 ] else if (_tipoEntrega == 'Despacho') ...[
                   const Divider(color: Colors.white10, height: 16),

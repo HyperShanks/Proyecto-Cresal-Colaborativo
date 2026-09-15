@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../core/utils/currency_formatter.dart';
 import '../../../../core/utils/rut_formatter.dart';
 import '../../../../core/utils/rut_validator.dart';
 import '../../../auth/services/auth_service.dart';
@@ -380,8 +381,8 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
             children: [
               Text('Folio: ${res.folioDisplay}', style: AppTypography.small.copyWith(color: AppPalette.secondary, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              Text('Total Venta: \$${res.totalVenta}', style: AppTypography.body.copyWith(fontWeight: FontWeight.bold)),
-              Text('Monto Pendiente en Caja: \$${res.montoPendiente}', style: AppTypography.body.copyWith(color: AppPalette.secondary)),
+              Text('Total Venta: ${CurrencyFormatter.formatCLP(res.totalVenta)}', style: AppTypography.body.copyWith(fontWeight: FontWeight.bold)),
+              Text('Monto Pendiente en Caja: ${CurrencyFormatter.formatCLP(res.montoPendiente)}', style: AppTypography.body.copyWith(color: AppPalette.secondary)),
               if (res.reservasGeneradas > 0) ...[
                 const SizedBox(height: 6),
                 Text('• ${res.reservasGeneradas} venta(s) en verde generadas por encargo.', style: AppTypography.small.copyWith(color: AppPalette.success)),
@@ -580,7 +581,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            Text('${_controller.totalItemsCount} artículos (\$${_controller.totalVenta})', style: AppTypography.small.copyWith(color: AppPalette.secondary, fontWeight: FontWeight.bold)),
+            Text('${_controller.totalItemsCount} artículos (${CurrencyFormatter.formatCLP(_controller.totalVenta)})', style: AppTypography.small.copyWith(color: AppPalette.secondary, fontWeight: FontWeight.bold)),
           ],
         ),
         const SizedBox(height: 14),
@@ -681,7 +682,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('\$${item['precio']}', style: AppTypography.body.copyWith(fontWeight: FontWeight.bold, color: AppPalette.primary)),
+                      Text(CurrencyFormatter.formatCLP(item['precio'] is int ? item['precio'] : int.tryParse(item['precio']?.toString() ?? '0') ?? 0), style: AppTypography.body.copyWith(fontWeight: FontWeight.bold, color: AppPalette.primary)),
                       IconButton(
                         icon: const Icon(Icons.delete_outline, color: AppPalette.error, size: 20),
                         onPressed: () {
@@ -711,7 +712,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                 child: ListTile(
                   leading: const Icon(Icons.bookmark_added_rounded, color: AppPalette.secondary),
                   title: Text('${r.categoriaNombre} - ${r.marcaRequerida} ${r.modeloRequerido}', style: AppTypography.body.copyWith(fontWeight: FontWeight.w600)),
-                  subtitle: Text('Precio: \$${r.precioAcordado} • Abono: \$${r.montoAbonado}', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
+                  subtitle: Text('Precio: ${CurrencyFormatter.formatCLP(r.precioAcordado)} • Abono: ${CurrencyFormatter.formatCLP(r.montoAbonado)}', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
                   trailing: IconButton(
                     icon: const Icon(Icons.delete_outline, color: AppPalette.error, size: 20),
                     onPressed: () => _controller.removeReservaBackorder(idx),
@@ -734,11 +735,11 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                 child: ListTile(
                   leading: const Icon(Icons.edit_note, color: Colors.white70),
                   title: Text(m.descripcion, style: AppTypography.body.copyWith(fontWeight: FontWeight.w600)),
-                  subtitle: Text('Cantidad: ${m.cantidad} • Unit: \$${m.precioUnitario}', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
+                  subtitle: Text('Cantidad: ${m.cantidad} • Unit: ${CurrencyFormatter.formatCLP(m.precioUnitario)}', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('\$${m.precioFinal}', style: AppTypography.body.copyWith(fontWeight: FontWeight.bold)),
+                      Text(CurrencyFormatter.formatCLP(m.precioFinal), style: AppTypography.body.copyWith(fontWeight: FontWeight.bold)),
                       IconButton(
                         icon: const Icon(Icons.delete_outline, color: AppPalette.error, size: 20),
                         onPressed: () => _controller.removeItemManual(idx),
@@ -1320,14 +1321,14 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
           decoration: BoxDecoration(color: AppPalette.surface, borderRadius: BorderRadius.circular(12)),
           child: Column(
             children: [
-              _buildResumenRow('Subtotal Repuestos Inventario:', '\$${_controller.subtotalInventario}'),
-              _buildResumenRow('Subtotal Ítems Manuales:', '\$${_controller.subtotalManuales}'),
-              _buildResumenRow('Subtotal Ventas en Verde:', '\$${_controller.subtotalReservas}'),
+              _buildResumenRow('Subtotal Repuestos Inventario:', CurrencyFormatter.formatCLP(_controller.subtotalInventario)),
+              _buildResumenRow('Subtotal Ítems Manuales:', CurrencyFormatter.formatCLP(_controller.subtotalManuales)),
+              _buildResumenRow('Subtotal Ventas en Verde:', CurrencyFormatter.formatCLP(_controller.subtotalReservas)),
               const Divider(color: Colors.white24, height: 20),
-              _buildResumenRow('TOTAL DE LA VENTA:', '\$${_controller.totalVenta}', isBold: true, color: AppPalette.primary),
+              _buildResumenRow('TOTAL DE LA VENTA:', CurrencyFormatter.formatCLP(_controller.totalVenta), isBold: true, color: AppPalette.primary),
               const SizedBox(height: 8),
-              _buildResumenRow('Total Abonos Acordados:', '\$${_controller.totalAbonos}', color: AppPalette.success),
-              _buildResumenRow('Saldo Pendiente a Cobrar en Caja:', '\$${_controller.montoPendiente}', isBold: true, color: AppPalette.secondary),
+              _buildResumenRow('Total Abonos Acordados:', CurrencyFormatter.formatCLP(_controller.totalAbonos), color: AppPalette.success),
+              _buildResumenRow('Saldo Pendiente a Cobrar en Caja:', CurrencyFormatter.formatCLP(_controller.montoPendiente), isBold: true, color: AppPalette.secondary),
             ],
           ),
         ),
@@ -1345,10 +1346,11 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               TextField(
                 controller: _montoAbonoController,
                 keyboardType: TextInputType.number,
+                inputFormatters: [MilesTextInputFormatter()],
                 style: AppTypography.body,
-                decoration: _inputDeco('Ej: 50000 (Dejar vacío o 0 para pagar total en caja)', Icons.payments_outlined),
+                decoration: _inputDeco('Ej: 50.000 (Dejar vacío o 0 para pagar total en caja)', Icons.payments_outlined),
                 onChanged: (val) {
-                  final ab = int.tryParse(val.trim()) ?? 0;
+                  final ab = CurrencyFormatter.parse(val);
                   _controller.setAbonoAdicional(ab);
                 },
               ),
@@ -1356,7 +1358,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               Text(
                 _controller.totalAbonos == 0
                     ? 'ℹ️ El cliente liquidará el 100% de la orden en Caja.'
-                    : 'ℹ️ El cliente abonará \$${_controller.totalAbonos} y quedará un saldo de \$${_controller.montoPendiente} en Caja.',
+                    : 'ℹ️ El cliente abonará ${CurrencyFormatter.formatCLP(_controller.totalAbonos)} y quedará un saldo de ${CurrencyFormatter.formatCLP(_controller.montoPendiente)} en Caja.',
                 style: AppTypography.small.copyWith(color: AppPalette.secondary, fontSize: 12),
               ),
             ],
@@ -1406,9 +1408,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               Text('DETALLE COMERCIAL', style: AppTypography.small.copyWith(color: AppPalette.secondary, fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),
               Text('• Total Artículos: ${_controller.totalItemsCount}', style: AppTypography.body),
-              Text('• Total Venta: \$${_controller.totalVenta}', style: AppTypography.body.copyWith(fontWeight: FontWeight.bold, color: AppPalette.primary)),
-              Text('• Abono Acordado: \$${_controller.totalAbonos}', style: AppTypography.body.copyWith(color: AppPalette.success)),
-              Text('• Saldo a Pagar en Caja: \$${_controller.montoPendiente}', style: AppTypography.body.copyWith(fontWeight: FontWeight.bold, color: AppPalette.secondary)),
+              Text('• Total Venta: ${CurrencyFormatter.formatCLP(_controller.totalVenta)}', style: AppTypography.body.copyWith(fontWeight: FontWeight.bold, color: AppPalette.primary)),
+              Text('• Abono Acordado: ${CurrencyFormatter.formatCLP(_controller.totalAbonos)}', style: AppTypography.body.copyWith(color: AppPalette.success)),
+              Text('• Saldo a Pagar en Caja: ${CurrencyFormatter.formatCLP(_controller.montoPendiente)}', style: AppTypography.body.copyWith(fontWeight: FontWeight.bold, color: AppPalette.secondary)),
             ],
           ),
         ),
@@ -1555,7 +1557,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
             const SizedBox(height: 10),
             TextField(controller: cantCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], style: AppTypography.body, decoration: _inputDeco('Cantidad', Icons.numbers)),
             const SizedBox(height: 10),
-            TextField(controller: precioCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], style: AppTypography.body, decoration: _inputDeco('Precio Unitario (\$)', Icons.attach_money)),
+            TextField(controller: precioCtrl, keyboardType: TextInputType.number, inputFormatters: [MilesTextInputFormatter()], style: AppTypography.body, decoration: _inputDeco('Precio Unitario (\$)', Icons.attach_money)),
           ],
         ),
         actions: [
@@ -1566,7 +1568,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               final desc = descCtrl.text.trim();
               final cantParsed = int.tryParse(cantCtrl.text.trim());
               final cant = (cantParsed != null && cantParsed > 0) ? cantParsed : 1;
-              final precio = int.tryParse(precioCtrl.text.trim()) ?? 0;
+              final precio = CurrencyFormatter.parse(precioCtrl.text.trim());
               if (desc.isNotEmpty && precio > 0) {
                 _controller.addItemManual(ItemManualModel(descripcion: desc, cantidad: cant, precioUnitario: precio, precioFinal: precio * cant));
                 CartController.instance.agregarVentaLibre(descripcion: desc, monto: precio, cantidad: cant);

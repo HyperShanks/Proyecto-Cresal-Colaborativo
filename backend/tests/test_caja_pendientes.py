@@ -516,3 +516,77 @@ def test_acceso_sin_token_retorna_401(client):
     """
     response = client.get("/api/v1/caja/pendientes?sucursal_id=1")
     assert response.status_code in [401, 403]
+
+
+def test_no_duplicidad_orden_backorder_en_caja(client, db_session):
+    """
+    Verifica que cuando un cliente realiza una reserva backorder (que genera una Orden_Venta y
+    una Reservas_Backorder vinculada), en Caja NO se duplique la orden en tipo=TODOS.
+    Solo debe aparecer 1 registro con tipo_operacion == 'BACKORDER' (RES-XXXX), y no una orden normal (ORD-XXXX).
+    """
+    db = TestingSessionLocal()
+    try:
+        user_caja = db_session["caja_vina"]
+        token_caja = create_access_token(
+            data={"sub": str(user_caja.id_usuario), "id_rol": 3, "id_sucursal": 1}
+        )
+        headers = {"Authorization": f"Bearer {token_caja}"}
+
+        # Crear una orden con backorder vinculado
+        id_orden = uuid.uuid4()
+        id_reserva = uuid.uuid4()
+        cliente = db.query(Cliente).first()
+
+        orden = Orden_Venta(
+            id_orden=id_orden,
+            id_cliente=cliente.id_cliente,
+            id_vendedor=db_session["vendedor_vina"].id_usuario,
+            id_sucursal=1,
+            estado_orden="Reservada",
+            total_venta=850000,
+            monto_pendiente=850000,
+            abono_requerido=250000,
+        )
+        db.add(orden)
+        db.flush()
+
+        reserva = Reservas_Backorder(
+            id_reserva=id_reserva,
+            id_cliente=cliente.id_cliente,
+            id_vendedor=db_session["vendedor_vina"].id_usuario,
+            id_orden=id_orden,
+            id_sucursal_registro=1,
+            id_categoria_requerida=1,
+            marca_requerida="Subaru",
+            modelo_requerido="WRX STI",
+            anio_requerido=2021,
+            precio_acordado=850000,
+            monto_abonado=0,
+            abono_requerido=250000,
+            estado_reserva="Pendiente",
+            fecha_creacion=datetime.now(timezone.utc),
+        )
+        db.add(reserva)
+        db.commit()
+
+        # Consultar la bandeja de cobros pendientes en Caja con filtro TODOS
+        resp = client.get("/api/v1/caja/pendientes?sucursal_id=1&tipo=TODOS", headers=headers)
+        assert resp.status_code == 200
+        items = resp.json()["items"]
+
+        # Filtrar los ítems que corresponden a este id_orden o id_reserva
+        items_orden = [it for it in items if it["id_referencia"] == str(id_orden)]
+        items_reserva = [it for it in items if it["id_referencia"] == str(id_reserva)]
+
+        # 1. La Orden_Venta vinculada a la reserva NO debe aparecer como VENTA duplicada
+        assert len(items_orden) == 0, "La Orden_Venta no debe duplicarse como VENTA en caja si tiene una reserva backorder asociada"
+
+        # 2. La reserva SÍ debe aparecer como BACKORDER única
+        assert len(items_reserva) == 1, "Debe aparecer exactamente una reserva backorder"
+        assert items_reserva[0]["tipo_operacion"] == "BACKORDER"
+        assert items_reserva[0]["total_operacion"] == 850000
+        assert items_reserva[0]["monto_a_cobrar"] == 250000
+        assert items_reserva[0]["abono_previo"] == 0
+    finally:
+        db.close()
+
