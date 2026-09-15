@@ -49,6 +49,17 @@ class MockCajaService implements ICajaService {
   }
 
   @override
+  Future<ValidarActivoBackorderResponseModel> validarActivoBackorder(
+    ValidarActivoBackorderRequestModel request,
+  ) async {
+    return ValidarActivoBackorderResponseModel(
+      coincide: true,
+      discrepancias: [],
+      mensaje: 'Activo validado exitosamente',
+    );
+  }
+
+  @override
   Future<HistorialCajaResponseModel> obtenerHistorialCaja({
     required int sucursalId,
     String periodo = 'HOY',
@@ -192,7 +203,7 @@ void main() {
     expect(find.text('Tucson 2.0 CRDi Turbo Diesel'), findsOneWidget);
   });
 
-  testWidgets('ST-F03 / CA-02: Muestra banner ámbar de advertencia al seleccionar Abono',
+  testWidgets('ST-F03: Renderiza directamente la orden sin selector de modalidad de cobro',
       (tester) async {
     setDesktopViewport(tester);
     provider.seleccionarOrden(sampleVenta);
@@ -200,15 +211,15 @@ void main() {
     await tester.pumpWidget(createTestWidget(PanelDetalleCobro(provider: provider)));
     await tester.pumpAndSettle();
 
-    // Cambiar a Abono
-    await tester.tap(find.text('Abono Personalizado'));
-    await tester.pumpAndSettle();
+    // No debe existir selector de modalidad ni abono personalizado
+    expect(find.text('MODALIDAD DE COBRO'), findsNothing);
+    expect(find.text('Abono Personalizado'), findsNothing);
+    expect(find.text('Liquidación Total'), findsNothing);
 
-    expect(
-      find.text('Este pago registrará un abono y mantendrá la orden retenida sin emitir código QR de salida.'),
-      findsOneWidget,
-    );
-    expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
+    // Muestra la tarjeta financiera con los montos oficiales
+    expect(find.text('TOTAL VENTA'), findsOneWidget);
+    expect(find.text('ABONOS PREVIOS'), findsOneWidget);
+    expect(find.text('SALDO A COBRAR'), findsOneWidget);
   });
 
   testWidgets('ST-F05: Cuadratura exacta habilita botón de confirmación en verde',

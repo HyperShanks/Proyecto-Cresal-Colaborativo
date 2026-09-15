@@ -7,6 +7,7 @@ import '../../../../core/theme/tokens/app_typography.dart';
 import '../../../../core/widgets/custom_error_snackbar.dart';
 import '../../models/tarea_alerta.dart';
 import '../../services/logistica_service.dart';
+import '../widgets/resultado_salida_dialog.dart';
 
 /// Pantalla operativa para el Bodeguero: Escaneo y Handshake de Auditoría de Salida (HU-3.6).
 /// Implementa la regla 'Cero-Clics' con Flujo Guiado (1. QR Vendedor -> 2. Pieza Física),
@@ -187,7 +188,26 @@ class _AuditoriaSalidaScreenState extends State<AuditoriaSalidaScreen>
       );
     });
 
-    _ejecutarDualScanMatch();
+    final totalRequeridos = _ordenVerificada?.itemsRequeridos.length ?? 1;
+    if (_skusEscaneados.length >= totalRequeridos) {
+      _ejecutarDualScanMatch();
+    } else {
+      HapticFeedback.mediumImpact();
+      final itemsEsperados = _ordenVerificada?.itemsRequeridos ?? [];
+      final proxItem = itemsEsperados.firstWhere(
+        (it) => !_skusEscaneados.contains(it.skuQrFisico?.toUpperCase()),
+        orElse: () => itemsEsperados.first,
+      );
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '✅ Pieza verificada (${_skusEscaneados.length}/$totalRequeridos). Escanee ahora: ${proxItem.titulo} (${proxItem.skuQrFisico ?? ""})',
+          ),
+          backgroundColor: AppPalette.success,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
   }
 
   /// Ejecuta la llamada transaccional atómica al backend sin intervención manual
@@ -221,12 +241,21 @@ class _AuditoriaSalidaScreenState extends State<AuditoriaSalidaScreen>
         _isProcessing = false;
       });
 
-      // Retorno automático tras 5.0s para que el operario visualice la confirmación
-      Future.delayed(const Duration(milliseconds: 5000), () {
-        if (mounted) {
-          Navigator.of(context).pop(true);
-        }
-      });
+      // Despliegue de Diálogo Modal Pop-up centrado con temporizador de 3s
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogCtx) => ResultadoSalidaDialog(
+          resultado: response,
+          ordenVerificada: _ordenVerificada,
+          onFinalizar: () {
+            Navigator.of(dialogCtx).pop();
+            if (mounted) {
+              Navigator.of(context).pop(true);
+            }
+          },
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
 
@@ -255,7 +284,7 @@ class _AuditoriaSalidaScreenState extends State<AuditoriaSalidaScreen>
 
       setState(() {
         _isProcessing = false;
-        _skusEscaneados.clear();
+        // Preserva _skusEscaneados para no perder el progreso del bodeguero ante errores de red o reintentos
       });
 
       CustomErrorSnackbar.mostrar(
@@ -330,27 +359,34 @@ class _AuditoriaSalidaScreenState extends State<AuditoriaSalidaScreen>
   Widget build(BuildContext context) {
     final tienePieza = _skusEscaneados.isNotEmpty;
     final tieneToken = _qrTransaccionalSalida != null;
+    final totalRequeridos = _ordenVerificada?.itemsRequeridos.length ?? 1;
+    final todosEscaneados = _skusEscaneados.length >= totalRequeridos && totalRequeridos > 0;
 
     Widget? customBodyPaso2;
-    if (tieneToken &&
-        !tienePieza &&
-        (_ordenVerificada?.itemsRequeridos.isNotEmpty ?? false)) {
+    if (tieneToken && (_ordenVerificada?.itemsRequeridos.isNotEmpty ?? false)) {
       customBodyPaso2 = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: _ordenVerificada!.itemsRequeridos.map((item) {
           final sinImprimir = !item.qrImpreso;
+          final isEscaneado = item.skuQrFisico != null &&
+              _skusEscaneados.contains(item.skuQrFisico!.toUpperCase());
           return Container(
             margin: const EdgeInsets.only(bottom: 8.0),
             padding: const EdgeInsets.all(10.0),
             decoration: BoxDecoration(
-              color: sinImprimir
-                  ? AppPalette.error.withValues(alpha: 0.08)
-                  : AppPalette.background,
+              color: isEscaneado
+                  ? AppPalette.success.withValues(alpha: 0.12)
+                  : (sinImprimir
+                      ? AppPalette.error.withValues(alpha: 0.08)
+                      : AppPalette.background),
               borderRadius: BorderRadius.circular(8.0),
               border: Border.all(
-                color: sinImprimir
-                    ? AppPalette.error.withValues(alpha: 0.5)
-                    : Colors.white12,
+                color: isEscaneado
+                    ? AppPalette.success
+                    : (sinImprimir
+                        ? AppPalette.error.withValues(alpha: 0.5)
+                        : Colors.white12),
+                width: isEscaneado ? 1.5 : 1.0,
               ),
             ),
             child: Column(
@@ -376,7 +412,9 @@ class _AuditoriaSalidaScreenState extends State<AuditoriaSalidaScreen>
                             Text(
                               'SKU: ${item.skuQrFisico}',
                               style: AppTypography.small.copyWith(
-                                color: const Color(0xFF00A3FF),
+                                color: isEscaneado
+                                    ? AppPalette.success
+                                    : const Color(0xFF00A3FF),
                                 fontWeight: FontWeight.w600,
                                 fontSize: 11.0,
                               ),
@@ -385,7 +423,41 @@ class _AuditoriaSalidaScreenState extends State<AuditoriaSalidaScreen>
                         ],
                       ),
                     ),
-                    if (sinImprimir)
+                    if (isEscaneado)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8.0,
+                          vertical: 3.0,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppPalette.success.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(4.0),
+                          border: Border.all(
+                            color: AppPalette.success,
+                            width: 1.0,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.check_circle_rounded,
+                              size: 13.0,
+                              color: AppPalette.success,
+                            ),
+                            const SizedBox(width: 4.0),
+                            Text(
+                              'VERIFICADO',
+                              style: AppTypography.small.copyWith(
+                                color: AppPalette.success,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 10.0,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else if (sinImprimir)
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 6.0,
@@ -447,7 +519,7 @@ class _AuditoriaSalidaScreenState extends State<AuditoriaSalidaScreen>
                     ),
                   ],
                 ),
-                if (sinImprimir && item.etiquetaData != null) ...[
+                if (!isEscaneado && sinImprimir && item.etiquetaData != null) ...[
                   const SizedBox(height: 10.0),
                   SizedBox(
                     width: double.infinity,
@@ -581,16 +653,22 @@ class _AuditoriaSalidaScreenState extends State<AuditoriaSalidaScreen>
 
                 // ── Tarjeta 2: Escaneo de Pieza Física (Paso 2) ────────────────
                 _buildScanCard(
-                  titulo: tienePieza
-                      ? '2. Pieza Física Validada'
-                      : '2. Escanee QR de la Pieza Física',
-                  subtitulo: tienePieza
-                      ? 'Repuesto verificado correctamente'
-                      : 'Escanee primero el QR del vendedor para cargar los datos de la pieza',
+                  titulo: todosEscaneados
+                      ? '2. Todos los Repuestos Validados (${_skusEscaneados.length}/$totalRequeridos)'
+                      : (_skusEscaneados.isNotEmpty
+                            ? '2. Escaneando Repuestos (${_skusEscaneados.length}/$totalRequeridos)'
+                            : '2. Escanee QR de la Pieza Física'),
+                  subtitulo: !tieneToken
+                      ? 'Escanee primero el QR del vendedor para cargar los datos de la orden'
+                      : (todosEscaneados
+                            ? 'Todos los repuestos verificados correctamente'
+                            : (_skusEscaneados.isNotEmpty
+                                  ? 'Faltan ${totalRequeridos - _skusEscaneados.length} repuesto(s) por escanear'
+                                  : 'Apunte el escáner a cualquiera de las piezas requeridas')),
                   icono: Icons.precision_manufacturing_outlined,
-                  isCompleted: tienePieza,
-                  isActive: tieneToken && !tienePieza,
-                  chips: tienePieza ? _skusEscaneados : const [],
+                  isCompleted: todosEscaneados,
+                  isActive: tieneToken && !todosEscaneados,
+                  chips: _skusEscaneados,
                   customBody: customBodyPaso2,
                 ),
 
@@ -601,10 +679,8 @@ class _AuditoriaSalidaScreenState extends State<AuditoriaSalidaScreen>
 
                 const SizedBox(height: 16.0),
 
-                // ── Banner de Éxito / Feedback Dinámico ────────────────────────
-                if (_resultadoExitoso != null) ...[
-                  _buildSuccessBanner(_resultadoExitoso!),
-                ] else if (_isProcessing || _isVerificandoOrden) ...[
+                // ── Feedback de Carga ─────────────────────────────────────────
+                if (_isProcessing || _isVerificandoOrden) ...[
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16.0),

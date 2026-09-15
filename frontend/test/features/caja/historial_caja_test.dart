@@ -38,6 +38,17 @@ class MockCajaHistorialService implements ICajaService {
   }
 
   @override
+  Future<ValidarActivoBackorderResponseModel> validarActivoBackorder(
+    ValidarActivoBackorderRequestModel request,
+  ) async {
+    return ValidarActivoBackorderResponseModel(
+      coincide: true,
+      discrepancias: [],
+      mensaje: 'Activo validado exitosamente',
+    );
+  }
+
+  @override
   Future<HistorialCajaResponseModel> obtenerHistorialCaja({
     required int sucursalId,
     String periodo = 'HOY',

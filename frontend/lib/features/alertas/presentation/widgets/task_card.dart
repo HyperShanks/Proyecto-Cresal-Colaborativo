@@ -915,29 +915,33 @@ class _TaskCardState extends State<TaskCard> {
                 runSpacing: 4,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF00A3FF).withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: const Color(0xFF00A3FF).withValues(alpha: 0.4)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.qr_code, size: 12, color: Color(0xFF00A3FF)),
-                        const SizedBox(width: 4),
-                        Text(
-                          tarea.skuQrFisico!,
-                          style: const TextStyle(
-                            color: Color(0xFF00A3FF),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 11,
+                  ...tarea.skuQrFisico!.split(',').map((s) {
+                    final skuLimpio = s.trim();
+                    if (skuLimpio.isEmpty) return const SizedBox.shrink();
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00A3FF).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: const Color(0xFF00A3FF).withValues(alpha: 0.4)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.qr_code, size: 12, color: Color(0xFF00A3FF)),
+                          const SizedBox(width: 4),
+                          Text(
+                            skuLimpio,
+                            style: const TextStyle(
+                              color: Color(0xFF00A3FF),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 11,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
+                        ],
+                      ),
+                    );
+                  }),
                   if (tarea.qrImpreso == false) ...[
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),

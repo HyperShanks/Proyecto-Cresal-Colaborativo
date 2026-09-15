@@ -1025,7 +1025,9 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
       context: context,
       builder: (ctx) {
         return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           backgroundColor: Colors.white,
           surfaceTintColor: Colors.white,
           child: ConstrainedBox(
@@ -1035,10 +1037,15 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
               children: [
                 // Header Ejecutivo
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 18,
+                  ),
                   decoration: const BoxDecoration(
                     color: AppPalette.tertiary, // Azul profundo #004C89
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(20),
+                    ),
                   ),
                   child: Row(
                     children: [
@@ -1096,70 +1103,87 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                         icono: Icons.attach_money_rounded,
                         colorIcono: const Color(0xFF16A34A),
                         titulo: 'Facturación Hoy',
-                        subtitulo: 'Suma bruta de ventas del día en curso (00:00 a 23:59)',
+                        subtitulo:
+                            'Suma bruta de ventas del día en curso (00:00 a 23:59)',
                         descripcion:
-                            'Representa el monto total facturado y recaudado en el día actual (órdenes con estado "Pagada" o "Completada"). La variación comparativa (+14.2%) evalúa el rendimiento comercial frente a la media de ventas del mismo día de la semana en las últimas 4 semanas.',
-                        formula: '∑(monto_total_orden) para órdenes Pagadas o Completadas en la jornada',
+                            'Representa el monto total facturado y liquidado en el día actual en tiempo real (suma de transacciones con estado "Procesado" para órdenes no anuladas). Se actualiza de manera reactiva ante cada cobro en mesón o transferencia bancaria.',
+                        formula:
+                            '∑(monto_pago) para pagos Procesados en la jornada',
                       ),
                       const SizedBox(height: 14),
                       _buildItemGuia(
                         icono: Icons.calendar_month_rounded,
                         colorIcono: const Color(0xFF0284C7),
                         titulo: 'Acumulado Mes (MTD - Month to Date)',
-                        subtitulo: 'Facturación acumulada del mes calendario actual',
+                        subtitulo:
+                            'Facturación acumulada del mes calendario actual',
                         descripcion:
                             'Mide la tracción financiera acumulada desde el día 1 del mes hasta el momento de consulta. El avance de transacciones totaliza las ventas liquidadas para proyectar el cumplimiento del presupuesto mensual.',
-                        formula: '∑(ventas_diarias) desde el día 1 del mes hasta la fecha actual',
+                        formula:
+                            '∑(ventas_diarias) desde el día 1 del mes hasta la fecha actual',
                       ),
                       const SizedBox(height: 14),
                       _buildItemGuia(
                         icono: Icons.receipt_long_rounded,
                         colorIcono: const Color(0xFF7C3AED),
                         titulo: 'Ticket Promedio (Productividad Comercial)',
-                        subtitulo: 'Venta promedio generada por cada transacción cerrada',
+                        subtitulo:
+                            'Venta promedio generada por cada transacción cerrada',
                         descripcion:
                             'Indica el gasto medio de los clientes en mesón o canales digitales. Sirve a la gerencia para monitorear la venta cruzada (ej: lubricantes, retenes o empaquetaduras adquiridas junto al motor o caja) y la eficacia de los vendedores.',
-                        formula: 'Ticket Promedio = (Total Facturación Hoy) / (N° Transacciones Hoy)',
+                        formula:
+                            'Ticket Promedio = (Total Facturación Hoy) / (N° Transacciones Hoy)',
                       ),
                       const SizedBox(height: 14),
                       _buildItemGuia(
                         icono: Icons.pie_chart_outline_rounded,
                         colorIcono: const Color(0xFF0F766E),
                         titulo: 'Recaudación por Medios de Pago',
-                        subtitulo: 'Distribución de liquidez: Efectivo vs Canales Electrónicos',
+                        subtitulo:
+                            'Distribución de liquidez: Efectivo vs Canales Electrónicos',
                         descripcion:
                             'Desglosa el flujo monetario según Transferencia Bancaria, Tarjeta de Débito, Tarjeta de Crédito, Efectivo y Cheque. Permite agilizar los arqueos de caja en mesón y optimizar la conciliación de extractos bancarios.',
-                        formula: 'Porcentaje = (Monto Canal / Total Recaudado) * 100',
+                        formula:
+                            'Porcentaje = (Monto Canal / Total Recaudado) * 100',
                       ),
                       const SizedBox(height: 14),
                       _buildItemGuia(
                         icono: Icons.shield_outlined,
                         colorIcono: const Color(0xFFEA580C),
                         titulo: 'Control de Riesgo y Alertas Operativas',
-                        subtitulo: 'Saldos Retenidos por Cobrar y Cuellos de Botella de Tasación',
+                        subtitulo:
+                            'Saldos Retenidos por Cobrar y Cuellos de Botella de Tasación',
                         descripcion:
                             '• Saldos por Cobrar: Alerta preventiva sobre órdenes en estado "Reservada" donde el cliente retirará en mesón pero tiene saldo pendiente. Al hacer clic, audita directamente las órdenes en cuestión para evitar fugas de mercadería sin liquidación total.\n• Cuello de Botella Tasación: Repuestos desmontados y paletizados que carecen de precio de venta fijado en bodega.',
-                        formula: 'Total Alertas = Saldos Pendientes Retenidos + Repuestos Sin Tasar',
+                        formula:
+                            'Total Alertas = Saldos Pendientes Retenidos + Repuestos Sin Tasar',
                       ),
                       const SizedBox(height: 14),
                       _buildItemGuia(
                         icono: Icons.local_shipping_outlined,
                         colorIcono: const Color(0xFF0284C7),
                         titulo: 'Bodega & Flujo de Despacho',
-                        subtitulo: 'Seguimiento logístico en vivo: Preparación, Mostrador y Courier',
+                        subtitulo:
+                            'Seguimiento logístico en vivo: Preparación, Mostrador y Courier',
                         descripcion:
-                            'Audita el ciclo de vida del repuesto físico:\n1. En Preparación: Bajada del rack y embalaje con film industrial.\n2. Listo Mostrador: Esperando entrega a cliente o taller mecánico.\n3. Despacho Courier: En ruta vía Starken o Chilexpress con número de seguimiento.',
-                        formula: 'Tiempo estimado de preparación: 24 minutos para repuestos mecánicos pesados',
+                            'Audita el ciclo de vida del repuesto físico en bodega:\n1. En Preparación: Bajada del rack y embalaje con film industrial.\n2. Listo Mostrador: Esperando entrega a cliente o taller mecánico.\n3. Despacho Courier: En ruta vía Starken o Chilexpress con número de seguimiento.',
+                        formula:
+                            'Total en flujo = Piezas en rack + Listas en mostrador + Despachos courier',
                       ),
                     ],
                   ),
                 ),
                 // Footer
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 14,
+                  ),
                   decoration: const BoxDecoration(
                     color: Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+                    borderRadius: BorderRadius.vertical(
+                      bottom: Radius.circular(20),
+                    ),
                     border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
                   ),
                   child: Row(
@@ -1170,10 +1194,18 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppPalette.tertiary,
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 12,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
-                        child: const Text('Entendido', style: TextStyle(fontWeight: FontWeight.w700)),
+                        child: const Text(
+                          'Entendido',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
                       ),
                     ],
                   ),
@@ -1262,7 +1294,11 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.functions_rounded, size: 14, color: Color(0xFF0284C7)),
+                const Icon(
+                  Icons.functions_rounded,
+                  size: 14,
+                  color: Color(0xFF0284C7),
+                ),
                 const SizedBox(width: 6),
                 Flexible(
                   child: Text(
@@ -1520,19 +1556,13 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
   // =========================================================================
   // Los 3 indicadores ejecutivos principales:
   // 1. Facturación Hoy:
-  //    - Fuente: backend 'ventas_del_dia' (suma de órdenes con estado Pagada o Completada del día actual).
-  //    - Variación (+14.2%): Representa la comparación porcentual respecto a la media móvil
-  //      de ventas en el mismo día de la semana durante las últimas 4 semanas.
+  //    - Fuente: backend 'ventas_del_dia' (suma real de pagos con estado Procesado del día actual).
+  //    - Muestra la facturación neta liquidada y el conteo verídico de transacciones hoy.
   // 2. Acumulado Mes (MTD - Month To Date):
-  //    - Fuente: backend 'acumulado_mensual_mtd' (suma histórica de ventas del día 1 del mes en curso a hoy).
-  //    - Avance: Número de transacciones comerciales liquidadas en el mes.
-  //    - Variación (+8.5%): Crecimiento intermensual respecto al mismo corte de fecha del mes anterior.
+  //    - Fuente: backend 'acumulado_mensual_mtd' (suma histórica de pagos desde el día 1 del mes en curso a hoy).
   // 3. Ticket Promedio (Métrica de Productividad Comercial):
-  //    - Fuente: backend 'ticket_promedio' (calculado dinámicamente por el backend).
-  //    - Fórmula matemática oficial: Total Ventas Hoy / Total Transacciones Hoy.
-  //    - Variación (+5.1%): Variación del ticket medio respecto a la jornada anterior.
-  //    - Utilidad gerencial: Monitorea el volumen monetario por cada orden cerrada en mesón
-  //      y la capacidad de venta cruzada (cross-selling de accesorios, lubricantes o empaquetaduras).
+  //    - Fuente: backend 'ticket_promedio' (calculado dinámicamente: Ventas Hoy / Transacciones Hoy).
+  //    - Utilidad gerencial: Monitorea el volumen monetario por cada orden cerrada en mesón.
   Widget _buildKpiGrid() {
     final kpis =
         _kpis ??
@@ -1573,46 +1603,23 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
             KpiCardWidget(
               titulo: 'Facturación Hoy',
               valor: facturacionFmt,
-              badgeTexto: '+14.2%',
-              badgeColor: AppPalette.success,
+              subtitulo:
+                  '${kpis.transaccionesHoy} ${kpis.transaccionesHoy == 1 ? "orden liquidada" : "órdenes liquidadas"} hoy',
             ),
 
             // KPI 2: Acumulado Mes (MTD)
             KpiCardWidget(
               titulo: 'Acumulado Mes (MTD)',
               valor: mtdFmt,
-              badgeTexto: '+8.5%',
-              badgeColor: AppPalette.success,
-              subtituloWidget: RichText(
-                text: TextSpan(
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF64748B),
-                  ),
-                  children: [
-                    const TextSpan(text: 'Avance: '),
-                    TextSpan(
-                      text:
-                          '${kpis.transaccionesHoy > 0 ? 48 : 0} transacciones',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF1E293B),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              subtitulo: 'Consolidado mensual acumulado',
               valorColor: AppPalette.tertiary,
             ),
 
-            // KPI 3: Ticket Promedio (Ratio de ventas/transacciones)
+            // KPI 3: Ticket Promedio (Ratio real de ventas/transacciones)
             KpiCardWidget(
               titulo: 'Ticket Promedio',
               valor: ticketFmt,
-              badgeTexto: '+5.1%',
-              badgeColor: const Color(0xFF0284C7),
-              subtitulo: 'Promedio por orden de mesón',
+              subtitulo: 'Promedio por orden de mesón del día',
             ),
           ],
         );
@@ -2082,28 +2089,39 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
               ],
             ),
 
-            // Footer Bento 3: Tiempo promedio de preparación aumentado proporcionalmente
+            // Footer Bento 3: Total consolidado en flujo logístico (métrica real calculada de la BD)
             const Divider(height: 24, thickness: 1, color: Color(0xFFF1F5F9)),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: const [
-                Expanded(
-                  child: Text(
-                    'Tiempo prom. preparación:',
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                  ),
-                ),
-                SizedBox(width: 8),
-                Text(
-                  '24 minutos',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF0F172A),
-                  ),
-                ),
-              ],
+            Builder(
+              builder: (context) {
+                final totalEnFlujo =
+                    flujo.enPreparacion +
+                    flujo.listosMostrador +
+                    flujo.enviadosCourier;
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Total en flujo logístico:',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '$totalEnFlujo ${totalEnFlujo == 1 ? "pieza" : "piezas"}',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
           ],
         ),
