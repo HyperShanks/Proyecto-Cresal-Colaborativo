@@ -122,6 +122,18 @@ class _AuditoriaSalidaScreenState extends State<AuditoriaSalidaScreen>
     }
   }
 
+  /// Total de repuestos físicos inventariados que requieren validación por QR en barrera
+  int get _totalActivosRequeridos {
+    if (_ordenVerificada == null) return 1;
+    final activos = _ordenVerificada!.itemsRequeridos
+        .where((it) => it.esInventariado)
+        .toList();
+    if (activos.isNotEmpty) return activos.length;
+    return _ordenVerificada!.totalItemsFisicos > 0
+        ? _ordenVerificada!.totalItemsFisicos
+        : 1;
+  }
+
   /// Paso 2: Valida que la pieza física pertenezca a la orden ya cargada
   void _procesarSkuFisico(String sku) {
     if (_qrTransaccionalSalida == null) {
@@ -135,10 +147,14 @@ class _AuditoriaSalidaScreenState extends State<AuditoriaSalidaScreen>
       return;
     }
 
-    final itemsEsperados = _ordenVerificada?.itemsRequeridos ?? [];
-    if (itemsEsperados.isNotEmpty) {
+    // Solo se exigen y validan repuestos inventariados (activos físicos)
+    final itemsInventariados = (_ordenVerificada?.itemsRequeridos ?? [])
+        .where((it) => it.esInventariado)
+        .toList();
+
+    if (itemsInventariados.isNotEmpty) {
       ItemSalidaInfoModel? itemCoincidente;
-      for (final it in itemsEsperados) {
+      for (final it in itemsInventariados) {
         if (it.skuQrFisico != null && it.skuQrFisico!.toUpperCase() == sku) {
           itemCoincidente = it;
           break;
@@ -147,7 +163,7 @@ class _AuditoriaSalidaScreenState extends State<AuditoriaSalidaScreen>
 
       if (itemCoincidente == null) {
         HapticFeedback.heavyImpact();
-        final primer = itemsEsperados.first;
+        final primer = itemsInventariados.first;
         final detalleEsperado = primer.skuQrFisico != null
             ? '\nDebe entregar: ${primer.titulo} (${primer.skuQrFisico}) en ${primer.ubicacion}.'
             : '';
@@ -188,15 +204,14 @@ class _AuditoriaSalidaScreenState extends State<AuditoriaSalidaScreen>
       );
     });
 
-    final totalRequeridos = _ordenVerificada?.itemsRequeridos.length ?? 1;
+    final totalRequeridos = _totalActivosRequeridos;
     if (_skusEscaneados.length >= totalRequeridos) {
       _ejecutarDualScanMatch();
     } else {
       HapticFeedback.mediumImpact();
-      final itemsEsperados = _ordenVerificada?.itemsRequeridos ?? [];
-      final proxItem = itemsEsperados.firstWhere(
+      final proxItem = itemsInventariados.firstWhere(
         (it) => !_skusEscaneados.contains(it.skuQrFisico?.toUpperCase()),
-        orElse: () => itemsEsperados.first,
+        orElse: () => itemsInventariados.first,
       );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -359,7 +374,7 @@ class _AuditoriaSalidaScreenState extends State<AuditoriaSalidaScreen>
   Widget build(BuildContext context) {
     final tienePieza = _skusEscaneados.isNotEmpty;
     final tieneToken = _qrTransaccionalSalida != null;
-    final totalRequeridos = _ordenVerificada?.itemsRequeridos.length ?? 1;
+    final totalRequeridos = _totalActivosRequeridos;
     final todosEscaneados = _skusEscaneados.length >= totalRequeridos && totalRequeridos > 0;
 
     Widget? customBodyPaso2;
@@ -367,6 +382,82 @@ class _AuditoriaSalidaScreenState extends State<AuditoriaSalidaScreen>
       customBodyPaso2 = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: _ordenVerificada!.itemsRequeridos.map((item) {
+          if (!item.esInventariado) {
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8.0),
+              padding: const EdgeInsets.all(10.0),
+              decoration: BoxDecoration(
+                color: AppPalette.secondary.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(8.0),
+                border: Border.all(
+                  color: AppPalette.secondary.withValues(alpha: 0.3),
+                  width: 1.0,
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _formatearNombreRepuesto(item.titulo),
+                          style: AppTypography.small.copyWith(
+                            color: AppPalette.textPrimary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12.5,
+                          ),
+                        ),
+                        const SizedBox(height: 3.0),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.storefront_outlined,
+                              size: 13.0,
+                              color: AppPalette.secondary,
+                            ),
+                            const SizedBox(width: 4.0),
+                            Text(
+                              'Entrega en mesón (No requiere QR físico)',
+                              style: AppTypography.small.copyWith(
+                                color: AppPalette.secondary,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 11.0,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8.0,
+                      vertical: 3.0,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppPalette.secondary.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(4.0),
+                      border: Border.all(
+                        color: AppPalette.secondary.withValues(alpha: 0.5),
+                        width: 1.0,
+                      ),
+                    ),
+                    child: Text(
+                      'MISCELÁNEO',
+                      style: AppTypography.small.copyWith(
+                        color: AppPalette.secondary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 10.0,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+
           final sinImprimir = !item.qrImpreso;
           final isEscaneado = item.skuQrFisico != null &&
               _skusEscaneados.contains(item.skuQrFisico!.toUpperCase());
@@ -641,7 +732,7 @@ class _AuditoriaSalidaScreenState extends State<AuditoriaSalidaScreen>
                   subtitulo: _isVerificandoOrden
                       ? 'Consultando orden en el sistema...'
                       : (tieneToken
-                            ? 'Orden validada • ${_ordenVerificada?.totalItemsFisicos ?? 1} repuesto(s) a despachar'
+                            ? 'Orden validada • $totalRequeridos repuesto(s) físico(s) a despachar'
                             : 'Apunta a la pantalla del vendedor'),
                   icono: Icons.qr_code_2_rounded,
                   isCompleted: tieneToken,
@@ -654,17 +745,17 @@ class _AuditoriaSalidaScreenState extends State<AuditoriaSalidaScreen>
                 // ── Tarjeta 2: Escaneo de Pieza Física (Paso 2) ────────────────
                 _buildScanCard(
                   titulo: todosEscaneados
-                      ? '2. Todos los Repuestos Validados (${_skusEscaneados.length}/$totalRequeridos)'
+                      ? '2. Todos los Repuestos Físicos Validados (${_skusEscaneados.length}/$totalRequeridos)'
                       : (_skusEscaneados.isNotEmpty
-                            ? '2. Escaneando Repuestos (${_skusEscaneados.length}/$totalRequeridos)'
+                            ? '2. Escaneando Repuestos Físicos (${_skusEscaneados.length}/$totalRequeridos)'
                             : '2. Escanee QR de la Pieza Física'),
                   subtitulo: !tieneToken
                       ? 'Escanee primero el QR del vendedor para cargar los datos de la orden'
                       : (todosEscaneados
-                            ? 'Todos los repuestos verificados correctamente'
+                            ? 'Todos los repuestos físicos verificados correctamente'
                             : (_skusEscaneados.isNotEmpty
-                                  ? 'Faltan ${totalRequeridos - _skusEscaneados.length} repuesto(s) por escanear'
-                                  : 'Apunte el escáner a cualquiera de las piezas requeridas')),
+                                  ? 'Faltan ${totalRequeridos - _skusEscaneados.length} repuesto(s) físico(s) por escanear'
+                                  : 'Apunte el escáner a cualquiera de las piezas físicas requeridas')),
                   icono: Icons.precision_manufacturing_outlined,
                   isCompleted: todosEscaneados,
                   isActive: tieneToken && !todosEscaneados,

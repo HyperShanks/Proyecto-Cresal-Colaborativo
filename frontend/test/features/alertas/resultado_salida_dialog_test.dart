@@ -131,5 +131,61 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
       expect(finalizado, isTrue);
     });
+
+    testWidgets('Muestra badge [MESÓN] para ítems no inventariados (misceláneos)', (tester) async {
+      final verificadaConMiscelaneo = VerificarQrSalidaResponseModel(
+        idOrden: 'ord-mix-uuid',
+        folio: 'ORDEN #1025',
+        estadoOrden: 'Pagada',
+        totalVenta: 800000,
+        montoPendiente: 0,
+        idSucursal: 1,
+        clienteNombre: 'Juan Pérez',
+        clienteRut: '12.345.678-9',
+        itemsRequeridos: [
+          ItemSalidaInfoModel(
+            idDetalle: 'det-01',
+            idActivo: 'act-01',
+            titulo: 'Motor - Nissan Sentra',
+            skuQrFisico: 'MOT-1000',
+            ubicacion: 'Galpón 1 - Pasillo 03',
+            qrImpreso: true,
+            esInventariado: true,
+            cantidad: 1,
+            precioFinal: 750000,
+          ),
+          ItemSalidaInfoModel(
+            idDetalle: 'det-02',
+            idActivo: null,
+            titulo: 'Líquido Refrigerante (5L)',
+            skuQrFisico: null,
+            ubicacion: 'Mostrador',
+            qrImpreso: true,
+            esInventariado: false,
+            cantidad: 1,
+            precioFinal: 50000,
+          ),
+        ],
+        totalItemsFisicos: 1,
+        qrTransaccionalSalida: 'TX-QR-1025',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ResultadoSalidaDialog(
+              resultado: sampleResponse,
+              ordenVerificada: verificadaConMiscelaneo,
+              onFinalizar: () {},
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Motor - Nissan Sentra'), findsOneWidget);
+      expect(find.text('MOT-1000'), findsOneWidget);
+      expect(find.text('Líquido Refrigerante (5L)'), findsOneWidget);
+      expect(find.text('MESÓN'), findsOneWidget);
+    });
   });
 }

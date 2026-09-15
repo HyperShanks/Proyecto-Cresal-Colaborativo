@@ -181,14 +181,15 @@ class _ResultadoSalidaDialogState extends State<ResultadoSalidaDialog> {
                     const SizedBox(height: 8),
                     if (items.isNotEmpty) ...[
                       ...items.map((it) {
+                        final esFisico = it.esInventariado;
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 6),
                           child: Row(
                             children: [
-                              const Icon(
-                                Icons.verified,
+                              Icon(
+                                esFisico ? Icons.verified : Icons.storefront_outlined,
                                 size: 14,
-                                color: AppPalette.success,
+                                color: esFisico ? AppPalette.success : AppPalette.secondary,
                               ),
                               const SizedBox(width: 6),
                               Expanded(
@@ -203,7 +204,7 @@ class _ResultadoSalidaDialogState extends State<ResultadoSalidaDialog> {
                                 ),
                               ),
                               const SizedBox(width: 6),
-                              if (it.skuQrFisico != null)
+                              if (esFisico && it.skuQrFisico != null)
                                 Container(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 6,
@@ -220,6 +221,25 @@ class _ResultadoSalidaDialogState extends State<ResultadoSalidaDialog> {
                                     style: const TextStyle(
                                       color: Color(0xFF00A3FF),
                                       fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                )
+                              else if (!esFisico)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppPalette.secondary.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Text(
+                                    'MESÓN',
+                                    style: TextStyle(
+                                      color: AppPalette.secondary,
+                                      fontSize: 10,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
