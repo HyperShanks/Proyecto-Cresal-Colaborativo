@@ -161,3 +161,51 @@ class FlujoOperativoModel {
     };
   }
 }
+
+/// Modelo de Sucursal para el selector dinámico del módulo de Gerencia.
+class SucursalGerenciaModel {
+  final int idSucursal;
+  final String nombreSucursal;
+  final bool esCasaMatriz;
+
+  const SucursalGerenciaModel({
+    required this.idSucursal,
+    required this.nombreSucursal,
+    this.esCasaMatriz = false,
+  });
+
+  factory SucursalGerenciaModel.fromJson(Map<String, dynamic> json) {
+    return SucursalGerenciaModel(
+      idSucursal: (json['id_sucursal'] as num?)?.toInt() ?? 0,
+      nombreSucursal: json['nombre_sucursal']?.toString() ?? '',
+      esCasaMatriz: json['es_casa_matriz'] as bool? ?? false,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id_sucursal': idSucursal,
+      'nombre_sucursal': nombreSucursal,
+      'es_casa_matriz': esCasaMatriz,
+    };
+  }
+
+  /// Título limpio para el selector respetando la identidad de Casa Matriz
+  String get tituloDisplay {
+    if (esCasaMatriz) {
+      if (nombreSucursal.toLowerCase().contains('matriz')) {
+        return nombreSucursal;
+      }
+      return '$nombreSucursal (Casa Matriz)';
+    }
+    return nombreSucursal;
+  }
+
+  /// Subtítulo descriptivo simple sin calles ni exclusividades erróneas
+  String get subtituloDisplay {
+    if (esCasaMatriz) {
+      return 'Casa Matriz';
+    }
+    return 'Sucursal';
+  }
+}

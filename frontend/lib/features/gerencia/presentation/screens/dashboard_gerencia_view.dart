@@ -56,6 +56,19 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
   final GlobalKey<BackordersGerenciaViewState> _backordersKey =
       GlobalKey<BackordersGerenciaViewState>();
 
+  List<SucursalGerenciaModel> _listaSucursales = const [
+    SucursalGerenciaModel(
+      idSucursal: 1,
+      nombreSucursal: 'Viña del Mar',
+      esCasaMatriz: true,
+    ),
+    SucursalGerenciaModel(
+      idSucursal: 2,
+      nombreSucursal: 'Limache',
+      esCasaMatriz: false,
+    ),
+  ];
+
   Future<void> _cerrarSesion() async {
     await AuthService.logout();
     if (mounted) {
@@ -99,12 +112,28 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
     super.dispose();
   }
 
+  Future<void> _cargarSucursales() async {
+    try {
+      final sucursales = await GerenciaService.obtenerSucursales();
+      if (mounted && sucursales.isNotEmpty) {
+        setState(() {
+          _listaSucursales = sucursales;
+        });
+      }
+    } catch (e) {
+      debugPrint('⚠️ [GERENCIA] Error cargando sucursales dinámicas: $e');
+    }
+  }
+
   Future<void> _cargarDatosIniciales() async {
     final nombre = await AuthService.getNombreUsuario();
     if (mounted && nombre != null && nombre.trim().isNotEmpty) {
       setState(() => _nombreUsuario = nombre);
     }
-    await _cargarDashboard();
+    await Future.wait([
+      _cargarSucursales(),
+      _cargarDashboard(),
+    ]);
   }
 
   /// Cargo simultáneamente los 3 endpoints analíticos aplicando guardas de montaje.
@@ -1408,17 +1437,17 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
         subtitulo: 'Consolidado general',
         icon: Icons.domain_rounded,
       ),
-      1: (
-        titulo: 'Sucursal 1: Casa Matriz (Viña)',
-        subtitulo: 'Viña del Mar (Mesón & Ventas)',
-        icon: Icons.storefront_rounded,
-      ),
-      2: (
-        titulo: 'Sucursal 2: Patio Desarme (Limache)',
-        subtitulo: 'Limache (Desarme & Bodega)',
-        icon: Icons.warehouse_rounded,
-      ),
     };
+
+    for (final suc in _listaSucursales) {
+      sucursales[suc.idSucursal] = (
+        titulo: suc.tituloDisplay,
+        subtitulo: suc.subtituloDisplay,
+        icon: suc.esCasaMatriz
+            ? Icons.storefront_rounded
+            : Icons.warehouse_rounded,
+      );
+    }
 
     final idActivo = _sucursalSeleccionada ?? -1;
     final actual = sucursales[idActivo] ?? sucursales[-1]!;
@@ -1443,25 +1472,13 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
         initialValue: idActivo,
         onSelected: (nuevoId) {
           final idNormalizado = nuevoId == -1 ? null : nuevoId;
-          final sucursalCambio = idNormalizado != _sucursalSeleccionada;
           setState(() {
             _sucursalSeleccionada = idNormalizado;
           });
           if (_vistaActiva == VistaGerencia.dashboard) {
             _cargarDashboard();
-          } else if (!sucursalCambio) {
-            // Si el usuario seleccionó la misma sucursal para forzar actualización
-            _refrescarVistaActiva();
           } else {
-            // Si la sucursal cambió, las vistas hijas actualizan sus datos vía didUpdateWidget.
-            // Activamos la animación de spin del Topbar para feedback visual inmediato y consistente.
-            _spinController.repeat();
-            Future.delayed(const Duration(milliseconds: 700), () {
-              if (mounted) {
-                _spinController.stop();
-                _spinController.reset();
-              }
-            });
+            _refrescarVistaActiva();
           }
         },
         itemBuilder: (context) {

@@ -1259,6 +1259,7 @@ from schemas.gerencia_schemas import (  # noqa: E402, F401
     BackorderGerenciaItemDTO,
     BackorderGerenciaListResponse,
     BackorderGerenciaKpisDTO,
+    SucursalGerenciaDTO,
 )
 
 

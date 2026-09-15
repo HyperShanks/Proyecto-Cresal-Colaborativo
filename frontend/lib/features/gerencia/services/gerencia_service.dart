@@ -409,5 +409,41 @@ class GerenciaService {
       );
     }
   }
+
+  /// Consulta el listado dinámico de sucursales activas en la base de datos (Supabase).
+  static Future<List<SucursalGerenciaModel>> obtenerSucursales() async {
+    try {
+      final uri = Uri.parse('${ApiConstants.gerenciaEndpoint}/sucursales');
+      final response = await ApiService.get(uri);
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data =
+            jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
+        return data
+            .map(
+              (item) => SucursalGerenciaModel.fromJson(
+                item as Map<String, dynamic>,
+              ),
+            )
+            .toList();
+      }
+    } catch (e) {
+      // Ignoramos silenciosamente y recurrimos al fallback resiliente
+    }
+
+    // Fallback defensivo con las sucursales registradas en Supabase
+    return const [
+      SucursalGerenciaModel(
+        idSucursal: 1,
+        nombreSucursal: 'Viña del Mar',
+        esCasaMatriz: true,
+      ),
+      SucursalGerenciaModel(
+        idSucursal: 2,
+        nombreSucursal: 'Limache',
+        esCasaMatriz: false,
+      ),
+    ];
+  }
 }
 

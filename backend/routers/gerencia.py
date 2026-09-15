@@ -35,6 +35,7 @@ from schemas import (
     BackorderGerenciaItemDTO,
     BackorderGerenciaListResponse,
     BackorderGerenciaKpisDTO,
+    SucursalGerenciaDTO,
 )
 
 # Inicializo el router con el prefijo /api/v1/gerencia y tag para Swagger
@@ -77,6 +78,40 @@ def calcular_limites_temporales_chile():
     )
 
     return inicio_hoy_utc, fin_hoy_utc, inicio_mes_utc
+
+
+@router.get(
+    "/sucursales",
+    response_model=List[SucursalGerenciaDTO],
+    summary="Listado de Sucursales Activas para Gerencia",
+    description="Retorna las sucursales existentes en el sistema para alternar el filtro multi-sucursal.",
+)
+def obtener_sucursales_gerencia(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_gerencia_role),
+):
+    """
+    Retorna el catálogo dinámico de sucursales activas en la BD, identificando Casa Matriz.
+    """
+    sucursales = (
+        db.query(Sucursal)
+        .filter(Sucursal.estado == "Activo")
+        .order_by(Sucursal.id_sucursal)
+        .all()
+    )
+    resultado = []
+    for suc in sucursales:
+        nombre = suc.nombre_sucursal or f"Sucursal {suc.id_sucursal}"
+        # Identificar si es casa matriz por id_sucursal == 1 o por coincidencia en el nombre
+        es_matriz = (suc.id_sucursal == 1) or ("matriz" in nombre.lower())
+        resultado.append(
+            SucursalGerenciaDTO(
+                id_sucursal=suc.id_sucursal,
+                nombre_sucursal=nombre,
+                es_casa_matriz=es_matriz,
+            )
+        )
+    return resultado
 
 
 @router.get(

@@ -167,3 +167,12 @@ class BackorderGerenciaKpisDTO(BaseModel):
     total_recaudado_senas: int = Field(default=0, description="Total histórico de señas recaudadas")
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class SucursalGerenciaDTO(BaseModel):
+    """DTO para listado de sucursales activas en módulo de Gerencia."""
+    id_sucursal: int = Field(description="ID único de la sucursal en base de datos")
+    nombre_sucursal: str = Field(description="Nombre oficial de la sucursal")
+    es_casa_matriz: bool = Field(default=False, description="Indica si corresponde a la Casa Matriz de Cresal")
+
+    model_config = ConfigDict(from_attributes=True)
