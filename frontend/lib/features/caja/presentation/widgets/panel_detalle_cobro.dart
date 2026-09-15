@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../core/utils/currency_formatter.dart';
 import '../../models/cobro_pendiente_model.dart';
 import '../../models/cobro_model.dart';
 import '../providers/caja_provider.dart';
@@ -77,7 +78,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
 
       for (int i = 0; i < pagos.length; i++) {
         final ctrl = TextEditingController(
-          text: pagos[i].monto > 0 ? pagos[i].monto.toString() : '',
+          text: pagos[i].monto > 0 ? CurrencyFormatter.formatNumber(pagos[i].monto) : '',
         );
         _montoControllers.add(ctrl);
       }
@@ -87,10 +88,10 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
     } else {
       // Actualizar valores de controladores si difieren del provider
       for (int i = 0; i < pagos.length && i < _montoControllers.length; i++) {
-        final currentTextVal = int.tryParse(_montoControllers[i].text) ?? 0;
+        final currentTextVal = CurrencyFormatter.parse(_montoControllers[i].text);
         if (currentTextVal != pagos[i].monto) {
           _montoControllers[i].text =
-              pagos[i].monto > 0 ? pagos[i].monto.toString() : '';
+              pagos[i].monto > 0 ? CurrencyFormatter.formatNumber(pagos[i].monto) : '';
         }
       }
     }
@@ -1078,7 +1079,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                       child: TextField(
                         controller: ctrl,
                         keyboardType: TextInputType.number,
-                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        inputFormatters: [MilesTextInputFormatter()],
                         style: AppTypography.body.copyWith(
                           color: AppPalette.textPrimaryLight,
                           fontWeight: FontWeight.w700,
@@ -1110,7 +1111,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                           ),
                         ),
                         onChanged: (val) {
-                          final valInt = int.tryParse(val) ?? 0;
+                          final valInt = CurrencyFormatter.parse(val);
                           widget.provider.actualizarMontoMetodo(idx, valInt);
                         },
                       ),

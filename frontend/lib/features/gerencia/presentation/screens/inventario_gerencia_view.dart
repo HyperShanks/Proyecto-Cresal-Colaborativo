@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../core/utils/currency_formatter.dart';
 import '../../../ventas/models/catalogo_model.dart';
 import '../../../inventario/services/inventario_service.dart';
 import '../../services/gerencia_service.dart';
@@ -1816,7 +1817,7 @@ class _TasacionDialogState extends State<_TasacionDialog> {
     final bool tienePrecio = widget.item.precioReferencia != null && widget.item.precioReferencia! > 0;
     _esEdicion = tienePrecio;
     _precioOriginal = tienePrecio ? widget.item.precioReferencia! : 0;
-    final valorInicial = tienePrecio ? _precioOriginal.toString() : '';
+    final valorInicial = tienePrecio ? CurrencyFormatter.formatNumber(_precioOriginal) : '';
     _precioController = TextEditingController(text: valorInicial);
     _precioController.addListener(() {
       if (mounted) setState(() {});
@@ -1830,8 +1831,7 @@ class _TasacionDialogState extends State<_TasacionDialog> {
   }
 
   int _extraerMontoLimpio(String texto) {
-    final clean = texto.replaceAll(RegExp(r'[^0-9]'), '');
-    return int.tryParse(clean) ?? 0;
+    return CurrencyFormatter.parse(texto);
   }
 
   Future<void> _guardarTasacion() async {
@@ -2153,7 +2153,7 @@ class _TasacionDialogState extends State<_TasacionDialog> {
                         controller: _precioController,
                         keyboardType: TextInputType.number,
                         inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
+                          MilesTextInputFormatter(),
                         ],
                         style: const TextStyle(
                           fontSize: 16,
@@ -2177,7 +2177,7 @@ class _TasacionDialogState extends State<_TasacionDialog> {
                             ),
                           ),
                           prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
-                          hintText: 'Ej: 1200000',
+                          hintText: 'Ej: 1.200.000',
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
                             borderSide: const BorderSide(
