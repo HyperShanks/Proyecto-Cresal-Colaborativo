@@ -9,6 +9,7 @@
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../domain/models/etiqueta_data.dart';
+import '../../services/zpl_builder.dart';
 
 class EtiquetaTermicaWidget extends StatelessWidget {
   final EtiquetaData data;
@@ -124,19 +125,19 @@ class EtiquetaTermicaWidget extends StatelessWidget {
           ),
 
           // ── 3. PANEL IZQUIERDO: CÓDIGO QR, SKU Y UBICACIÓN ──
-          // Código QR Factor 8 centrado (^FO100,120^BQN,2,8)
+          // Código QR Factor 8 centrado (^FO100,120^BQN,2,8 con nivel Q)
           Positioned(
             left: 90,
             top: 115,
             width: 200,
             height: 200,
             child: QrImageView(
-              data: data.skuQrFisico,
+              data: ZplBuilder.sanitize(data.skuQrFisico),
               version: QrVersions.auto,
               size: 200,
               padding: EdgeInsets.zero,
               backgroundColor: Colors.white,
-              errorCorrectionLevel: QrErrorCorrectLevel.M,
+              errorCorrectionLevel: QrErrorCorrectLevel.Q,
             ),
           ),
 
@@ -148,7 +149,7 @@ class EtiquetaTermicaWidget extends StatelessWidget {
             child: FittedBox(
               fit: BoxFit.scaleDown,
               child: Text(
-                data.skuQrFisico,
+                ZplBuilder.sanitize(data.skuQrFisico),
                 style: const TextStyle(
                   color: Colors.black,
                   fontSize: 26,
@@ -173,7 +174,7 @@ class EtiquetaTermicaWidget extends StatelessWidget {
               child: FittedBox(
                 fit: BoxFit.scaleDown,
                 child: Text(
-                  _formatearUbicacion(data),
+                  ZplBuilder.formatearUbicacion(data),
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 18,
@@ -186,33 +187,48 @@ class EtiquetaTermicaWidget extends StatelessWidget {
           ),
 
           // ── 4. PANEL DERECHO: 7 CARACTERÍSTICAS TÉCNICAS UNIFORMES (^A0N,25,25) ──
-          // Se renderizan sin íconos artificiales, exactamente como el texto térmico monocromático
-          _buildFilaZpl(top: 118, label: 'MARCA', valor: data.marca),
-          _buildFilaZpl(top: 164, label: 'MODELO', valor: data.modelo),
+          // Utiliza los mismos límites seguros de caracteres (maxLength) que ZplBuilder
+          _buildFilaZpl(
+            top: 118,
+            label: 'MARCA',
+            valor: data.marca,
+            maxLength: 20,
+          ),
+          _buildFilaZpl(
+            top: 164,
+            label: 'MODELO',
+            valor: data.modelo,
+            maxLength: 20,
+          ),
           _buildFilaZpl(
             top: 210,
             label: 'AÑO',
             valor: data.anio > 0 ? data.anio.toString() : 'N/A',
+            maxLength: 4,
           ),
           _buildFilaZpl(
             top: 256,
             label: 'CILINDRADA',
-            valor: data.cilindrada ?? 'N/A',
+            valor: data.cilindrada,
+            maxLength: 14,
           ),
           _buildFilaZpl(
             top: 302,
             label: 'COMBUSTIBLE',
-            valor: data.combustible ?? 'N/A',
+            valor: data.combustible,
+            maxLength: 14,
           ),
           _buildFilaZpl(
             top: 348,
             label: 'TRANSMISION',
-            valor: data.transmision ?? 'N/A',
+            valor: data.transmision,
+            maxLength: 14,
           ),
           _buildFilaZpl(
             top: 394,
             label: 'TRACCION',
-            valor: data.traccion ?? 'N/A',
+            valor: data.traccion,
+            maxLength: 15,
           ),
 
           // ── 5. FOOTER: NRO MOTOR Y NRO INGRESO ──
@@ -226,7 +242,7 @@ class EtiquetaTermicaWidget extends StatelessWidget {
                 fit: BoxFit.scaleDown,
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  'NRO MOTOR: ${(data.numeroMotor != null && data.numeroMotor!.isNotEmpty) ? data.numeroMotor!.toUpperCase() : 'N/A'}',
+                  'NRO MOTOR: ${ZplBuilder.sanitize(data.numeroMotor, maxLength: 16)}',
                   style: const TextStyle(
                     color: Colors.black,
                     fontSize: 24,
@@ -244,7 +260,7 @@ class EtiquetaTermicaWidget extends StatelessWidget {
                 fit: BoxFit.scaleDown,
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  'NRO INGRESO: ${data.numeroIngreso.toUpperCase()}',
+                  'NRO INGRESO: ${ZplBuilder.sanitize(data.numeroIngreso, maxLength: 14)}',
                   style: const TextStyle(
                     color: Colors.black,
                     fontSize: 24,
@@ -264,7 +280,7 @@ class EtiquetaTermicaWidget extends StatelessWidget {
                 fit: BoxFit.scaleDown,
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  'NRO INGRESO: ${data.numeroIngreso.toUpperCase()}',
+                  'NRO INGRESO: ${ZplBuilder.sanitize(data.numeroIngreso, maxLength: 14)}',
                   style: const TextStyle(
                     color: Colors.black,
                     fontSize: 32,
@@ -284,9 +300,10 @@ class EtiquetaTermicaWidget extends StatelessWidget {
   Widget _buildFilaZpl({
     required double top,
     required String label,
-    required String valor,
+    required String? valor,
+    int? maxLength,
   }) {
-    final valorLimpio = valor.trim().isEmpty ? 'N/A' : valor.trim().toUpperCase();
+    final valorLimpio = ZplBuilder.sanitize(valor, maxLength: maxLength);
     return Positioned(
       left: 385,
       top: top,
@@ -320,19 +337,5 @@ class EtiquetaTermicaWidget extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  String _formatearUbicacion(EtiquetaData data) {
-    final partes = <String>[];
-    if (data.galpon.trim().isNotEmpty && data.galpon.trim() != 'S/G') {
-      partes.add('GAL: ${data.galpon.trim()}');
-    }
-    if (data.pasillo.trim().isNotEmpty && data.pasillo.trim() != 'S/P') {
-      partes.add('PAS: ${data.pasillo.trim()}');
-    }
-    if (data.pallet.trim().isNotEmpty && data.pallet.trim() != 'S/P') {
-      partes.add('PAL: ${data.pallet.trim()}');
-    }
-    return partes.isNotEmpty ? partes.join(' | ') : 'SIN UBICACION';
   }
 }
