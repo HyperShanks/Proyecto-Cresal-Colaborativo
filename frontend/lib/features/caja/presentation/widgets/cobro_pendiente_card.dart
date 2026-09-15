@@ -264,7 +264,11 @@ class CobroPendienteCard extends StatelessWidget {
                         children: [
                           Text(
                             isVenta
-                                ? (orden.abonoPrevio > 0 ? 'Saldo a Pagar:' : 'Total a Pagar:')
+                                ? (orden.abonoPrevio > 0
+                                    ? 'Saldo a Pagar:'
+                                    : (orden.montoACobrar < orden.totalOperacion
+                                        ? 'Abono Acordado:'
+                                        : 'Total a Pagar:'))
                                 : 'Abono Inicial:',
                             style: AppTypography.small.copyWith(
                               color: AppPalette.textSecondaryLight,

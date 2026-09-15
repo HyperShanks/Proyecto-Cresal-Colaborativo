@@ -8,6 +8,7 @@ class ActivoPendientePrecioModel {
   final String nombreCategoria;
   final int idSucursalActual;
   final String nombreSucursal;
+  final String? ubicacionGalpon;
   final String? ubicacionPasillo;
   final String? ubicacionPallet;
   final String? idVehiculo;
@@ -31,6 +32,7 @@ class ActivoPendientePrecioModel {
     required this.nombreCategoria,
     required this.idSucursalActual,
     required this.nombreSucursal,
+    this.ubicacionGalpon,
     this.ubicacionPasillo,
     this.ubicacionPallet,
     this.idVehiculo,
@@ -81,6 +83,7 @@ class ActivoPendientePrecioModel {
       nombreCategoria: json['nombre_categoria']?.toString() ?? 'Repuesto',
       idSucursalActual: (json['id_sucursal_actual'] as num?)?.toInt() ?? 0,
       nombreSucursal: json['nombre_sucursal']?.toString() ?? 'Casa Matriz',
+      ubicacionGalpon: json['ubicacion_galpon']?.toString(),
       ubicacionPasillo: json['ubicacion_pasillo']?.toString(),
       ubicacionPallet: json['ubicacion_pallet']?.toString(),
       idVehiculo: json['id_vehiculo']?.toString(),
@@ -101,11 +104,43 @@ class ActivoPendientePrecioModel {
 
   // ── Getters Utilitarios para la UI ──────────────────────────────────────────
 
-  /// Retorna la ubicación en pasillo y pallet formateada (ej. "P-03 • PL-10")
+  /// Retorna el título limpio del vehículo donante sin prefijo redundante de categoría
+  /// para evitar repetir "Motor" o "Caja de cambios" cuando ya existe el badge/icono.
+  String get tituloVehiculo {
+    final parts = [marca, modelo, anio?.toString()].where((p) => p != null && p.isNotEmpty).toList();
+    if (parts.isNotEmpty) {
+      final joined = parts.join(' ');
+      final prefijoCat = '${nombreCategoria.toLowerCase()} - ';
+      if (joined.toLowerCase().startsWith(prefijoCat)) {
+        return joined.substring(prefijoCat.length).trim();
+      }
+      return joined;
+    }
+    final prefijo = '$nombreCategoria - ';
+    if (tituloRepuesto.toLowerCase().startsWith(prefijo.toLowerCase())) {
+      return tituloRepuesto.substring(prefijo.length).trim();
+    }
+    return tituloRepuesto;
+  }
+
+  /// Retorna la ubicación física en bodega formateada (ej. "Galpón 1 • Pasillo 3 • Pallet 10")
   String get ubicacionDisplay {
-    final pasillo = (ubicacionPasillo != null && ubicacionPasillo!.isNotEmpty) ? ubicacionPasillo! : 'S/P';
-    final pallet = (ubicacionPallet != null && ubicacionPallet!.isNotEmpty) ? ubicacionPallet! : 'S/P';
-    return '$pasillo • $pallet';
+    final partes = <String>[];
+    final galpon = (ubicacionGalpon ?? '').trim();
+    if (galpon.isNotEmpty && galpon != 'S/G') {
+      partes.add(galpon.toLowerCase().startsWith('galpón') || galpon.toLowerCase().startsWith('galpon')
+          ? galpon
+          : 'Galpón: $galpon');
+    }
+    final pasillo = (ubicacionPasillo ?? '').trim();
+    final pasilloVal = pasillo.isNotEmpty ? pasillo : 'S/P';
+    partes.add(pasilloVal.toLowerCase().startsWith('pasillo') ? pasilloVal : 'Pasillo: $pasilloVal');
+
+    final pallet = (ubicacionPallet ?? '').trim();
+    final palletVal = pallet.isNotEmpty ? pallet : 'S/P';
+    partes.add(palletVal.toLowerCase().startsWith('pallet') ? palletVal : 'Pallet: $palletVal');
+
+    return partes.join(' • ');
   }
 
   /// Retorna la información del vehículo de origen formateada (ej. "Hyundai Accent 2020")

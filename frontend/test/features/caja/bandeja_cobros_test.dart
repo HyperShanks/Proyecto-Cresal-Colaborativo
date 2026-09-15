@@ -67,7 +67,7 @@ class MockCajaService implements ICajaService {
     return ValidarActivoBackorderResponseModel(
       coincide: true,
       discrepancias: [],
-      mensaje: 'Activo válido',
+      mensaje: 'Activo validado exitosamente',
     );
   }
 

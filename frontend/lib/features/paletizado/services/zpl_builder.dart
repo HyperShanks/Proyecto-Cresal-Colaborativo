@@ -11,13 +11,46 @@ import '../domain/models/etiqueta_data.dart';
 
 /// Constructor de tramas ZPL (Zebra Programming Language) para activos automotrices.
 class ZplBuilder {
-  /// Limpia y sanitiza cadenas de texto para evitar inyecciones o colisiones con comandos ZPL.
-  static String _sanitize(String? input, {String defaultValue = 'N/A'}) {
+  /// Limpia y sanitiza cadenas de texto para evitar inyecciones ZPL, normaliza a mayúsculas
+  /// y recorta a una longitud máxima segura para evitar desbordamientos visuales e impresos.
+  static String sanitize(
+    String? input, {
+    String defaultValue = 'N/A',
+    int? maxLength,
+  }) {
     if (input == null || input.trim().isEmpty) {
       return defaultValue;
     }
-    // Reemplaza caracteres de control ZPL (^ y ~) por espacios o guiones
-    return input.replaceAll('^', '').replaceAll('~', '').trim();
+    // Reemplaza caracteres de control ZPL (^ y ~), recorta y normaliza a mayúsculas
+    var clean = input
+        .replaceAll('^', '')
+        .replaceAll('~', '')
+        .trim()
+        .toUpperCase();
+    if (maxLength != null && clean.length > maxLength) {
+      clean = clean.substring(0, maxLength).trim();
+    }
+    return clean.isEmpty ? defaultValue : clean;
+  }
+
+  /// Formatea la pastilla de ubicación física de forma idéntica para ZPL y Preview.
+  static String formatearUbicacion(EtiquetaData data) {
+    final partesUbicacion = <String>[];
+    if (data.galpon.trim().isNotEmpty &&
+        data.galpon.trim().toUpperCase() != 'S/G') {
+      partesUbicacion.add('GAL: ${data.galpon.trim().toUpperCase()}');
+    }
+    if (data.pasillo.trim().isNotEmpty &&
+        data.pasillo.trim().toUpperCase() != 'S/P') {
+      partesUbicacion.add('PAS: ${data.pasillo.trim().toUpperCase()}');
+    }
+    if (data.pallet.trim().isNotEmpty &&
+        data.pallet.trim().toUpperCase() != 'S/P') {
+      partesUbicacion.add('PAL: ${data.pallet.trim().toUpperCase()}');
+    }
+    return partesUbicacion.isNotEmpty
+        ? partesUbicacion.join(' | ')
+        : 'SIN UBICACION';
   }
 
   /// Construye la trama ZPL final para el activo [data].
@@ -61,7 +94,7 @@ class ZplBuilder {
     sb.writeln('^FO500,40^A0N,28,28^FR^FB260,1,0,C^FD$badgeTexto^FS');
 
     // ── 4. Bloque Izquierdo: Código QR Factor 8 ──
-    final skuLimpio = _sanitize(data.skuQrFisico);
+    final skuLimpio = sanitize(data.skuQrFisico);
     sb.writeln('^FO100,120^BQN,2,8^FDQA,$skuLimpio^FS');
 
     // Texto SKU debajo del QR (centrado)
@@ -69,29 +102,18 @@ class ZplBuilder {
 
     // Pastilla negra de Ubicación (centrada)
     sb.writeln('^FO35,384^GB310,50,50^FS');
-    final partesUbicacion = <String>[];
-    if (data.galpon.trim().isNotEmpty && data.galpon.trim() != 'S/G') {
-      partesUbicacion.add('GAL: ${data.galpon.trim()}');
-    }
-    if (data.pasillo.trim().isNotEmpty && data.pasillo.trim() != 'S/P') {
-      partesUbicacion.add('PAS: ${data.pasillo.trim()}');
-    }
-    if (data.pallet.trim().isNotEmpty && data.pallet.trim() != 'S/P') {
-      partesUbicacion.add('PAL: ${data.pallet.trim()}');
-    }
-    final ubicacion = partesUbicacion.isNotEmpty
-        ? partesUbicacion.join(' | ')
-        : 'SIN UBICACION';
+    final ubicacion = formatearUbicacion(data);
     sb.writeln('^FO35,398^A0N,20,20^FR^FB310,1,0,C^FD$ubicacion^FS');
 
     // ── 5. Bloque Derecho: 7 Características Técnicas Compartidas ──
-    final marca = _sanitize(data.marca);
-    final modelo = _sanitize(data.modelo);
+    // Se aplica maxLength seguro para evitar desbordes sobre el borde derecho (X=780)
+    final marca = sanitize(data.marca, maxLength: 20);
+    final modelo = sanitize(data.modelo, maxLength: 20);
     final anio = data.anio > 0 ? data.anio.toString() : 'N/A';
-    final cilindrada = _sanitize(data.cilindrada);
-    final combustible = _sanitize(data.combustible);
-    final transmision = _sanitize(data.transmision);
-    final traccion = _sanitize(data.traccion);
+    final cilindrada = sanitize(data.cilindrada, maxLength: 14);
+    final combustible = sanitize(data.combustible, maxLength: 14);
+    final transmision = sanitize(data.transmision, maxLength: 14);
+    final traccion = sanitize(data.traccion, maxLength: 15);
 
     // Ambas tarjetas manejan exactamente las mismas 7 filas técnicas uniformes.
     // Todas las características usan tamaño tipográfico homogéneo ^A0N,25,25.
@@ -104,10 +126,10 @@ class ZplBuilder {
     sb.writeln('^FO385,394^A0N,25,25^FDTRACCION: $traccion^FS');
 
     // ── 6. Footer: NRO MOTOR y NRO INGRESO iniciando a la izquierda (Left) ──
-    final nroIngreso = _sanitize(data.numeroIngreso);
+    final nroIngreso = sanitize(data.numeroIngreso, maxLength: 14);
 
     if (isMotor) {
-      final nroMotor = _sanitize(data.numeroMotor);
+      final nroMotor = sanitize(data.numeroMotor, maxLength: 16);
       sb.writeln('^FO35,485^A0N,24,24^FDNRO MOTOR: $nroMotor^FS');
       sb.writeln('^FO430,485^A0N,24,24^FDNRO INGRESO: $nroIngreso^FS');
     } else {

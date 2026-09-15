@@ -201,6 +201,9 @@ def obtener_tareas_pendientes(
         .all()
     )
 
+    liberadas_por_orden = {}
+    otras_alertas = []
+
     for detalle, orden, activo, vehiculo in detalles_orden:
         # Detectar si requiere traslado entre sucursales mediante Tracking_Logistico o discrepancia de sucursal
         tracking = db.query(Tracking_Logistico).filter(
@@ -235,13 +238,16 @@ def obtener_tareas_pendientes(
                 bloqueo = None
                 accion = "ESCANEAR EN BARRERA"
 
+        if tipo == "LIBERADA":
+            liberadas_por_orden.setdefault(orden.id_orden, []).append((detalle, orden, activo, vehiculo))
+            continue
+
         cat_nombre = "Motor" if activo.id_categoria == 1 else ("Caja de Cambios" if activo.id_categoria == 2 else "Repuesto")
         titulo = f"{cat_nombre} - {vehiculo.marca} {vehiculo.modelo}" if vehiculo else cat_nombre
-
         etiqueta_data = _construir_etiqueta_data(db, activo, vehiculo)
         qr_impreso = bool(activo.qr_impreso)
 
-        alertas.append(
+        otras_alertas.append(
             TareaAlertaResponse(
                 id_tarea=f"ORD-{str(detalle.id_detalle)[:8]}",
                 tipo_alerta=tipo,
@@ -268,6 +274,83 @@ def obtener_tareas_pendientes(
                 etiqueta_data=etiqueta_data,
             )
         )
+
+    # Consolidar tareas de Barrera (LIBERADA) a 1 única tarea por orden
+    for id_ord, items in liberadas_por_orden.items():
+        if len(items) == 1:
+            detalle, orden, activo, vehiculo = items[0]
+            cat_nombre = "Motor" if activo.id_categoria == 1 else ("Caja de Cambios" if activo.id_categoria == 2 else "Repuesto")
+            titulo = f"{cat_nombre} - {vehiculo.marca} {vehiculo.modelo}" if vehiculo else cat_nombre
+            etiqueta_data = _construir_etiqueta_data(db, activo, vehiculo)
+            alertas.append(
+                TareaAlertaResponse(
+                    id_tarea=f"ORD-{str(detalle.id_detalle)[:8]}",
+                    tipo_alerta="LIBERADA",
+                    orden_ref=f"ORDEN #{str(orden.id_orden)[:8].upper()}",
+                    titulo_pieza=titulo,
+                    categoria=cat_nombre,
+                    tipo_repuesto=cat_nombre,
+                    ubicacion=f"{activo.ubicacion_pasillo or 'S/P'} - {activo.ubicacion_pallet or 'S/P'}",
+                    ubicacion_pasillo=activo.ubicacion_pasillo,
+                    ubicacion_pallet=activo.ubicacion_pallet,
+                    ubicacion_galpon=activo.ubicacion_galpon,
+                    nota_especial=detalle.notas_preparacion,
+                    estado_bloqueo=None,
+                    accion_requerida="ESCANEAR EN BARRERA",
+                    id_detalle=detalle.id_detalle,
+                    id_activo=activo.id_activo,
+                    id_sucursal_origen=activo.id_sucursal_actual,
+                    id_sucursal_destino=orden.id_sucursal,
+                    es_traslado=False,
+                    estado_preparacion=detalle.estado_preparacion or "Listo",
+                    id_orden=orden.id_orden,
+                    sku_qr_fisico=activo.sku_qr_fisico,
+                    qr_impreso=bool(activo.qr_impreso),
+                    etiqueta_data=etiqueta_data,
+                )
+            )
+        else:
+            # Orden consolidada con múltiples repuestos (ej: Motor + Caja de Cambios)
+            primer_detalle, orden, primer_activo, primer_vehiculo = items[0]
+            categorias = [("Motor" if a.id_categoria == 1 else ("Caja de Cambios" if a.id_categoria == 2 else "Repuesto")) for _, _, a, _ in items]
+            vehiculos_nombres = [f"{v.marca} {v.modelo}".strip() for _, _, _, v in items if v]
+            vehiculo_str = vehiculos_nombres[0] if vehiculos_nombres else "Vehículo"
+            cats_str = " + ".join(dict.fromkeys(categorias))
+            titulo = f"{vehiculo_str} ({cats_str})"
+
+            skus = [a.sku_qr_fisico for _, _, a, _ in items if a.sku_qr_fisico]
+            ubicaciones = [f"{a.sku_qr_fisico}: {a.ubicacion_pasillo or 'S/P'}-{a.ubicacion_pallet or 'S/P'}" for _, _, a, _ in items]
+            todos_impresos = all([bool(a.qr_impreso) for _, _, a, _ in items])
+
+            alertas.append(
+                TareaAlertaResponse(
+                    id_tarea=f"BARRERA-{str(orden.id_orden)[:8]}",
+                    tipo_alerta="LIBERADA",
+                    orden_ref=f"ORDEN #{str(orden.id_orden)[:8].upper()}",
+                    titulo_pieza=titulo,
+                    categoria="Múltiples Repuestos",
+                    tipo_repuesto="Múltiples Repuestos",
+                    ubicacion=" • ".join(ubicaciones),
+                    ubicacion_pasillo=primer_activo.ubicacion_pasillo,
+                    ubicacion_pallet=primer_activo.ubicacion_pallet,
+                    ubicacion_galpon=primer_activo.ubicacion_galpon,
+                    nota_especial=f"Orden consolidada con {len(items)} repuestos listos para salida conjunta.",
+                    estado_bloqueo=None,
+                    accion_requerida=f"ESCANEAR EN BARRERA ({len(items)} PIEZAS)",
+                    id_detalle=primer_detalle.id_detalle,
+                    id_activo=primer_activo.id_activo,
+                    id_sucursal_origen=primer_activo.id_sucursal_actual,
+                    id_sucursal_destino=orden.id_sucursal,
+                    es_traslado=False,
+                    estado_preparacion="Listo",
+                    id_orden=orden.id_orden,
+                    sku_qr_fisico=", ".join(skus),
+                    qr_impreso=todos_impresos,
+                    etiqueta_data=_construir_etiqueta_data(db, primer_activo, primer_vehiculo),
+                )
+            )
+
+    alertas.extend(otras_alertas)
 
     # ---------------------------------------------------------
     # PRIORIDAD 2: Reingresos de Logística Inversa (Órdenes Anuladas)

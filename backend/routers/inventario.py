@@ -188,13 +188,6 @@ def buscar_inventario(
                     func.lower(Estado_Activo.nombre_estado) == "reservado",
                 )
             )
-        elif est_clean in ["VENDIDOS", "VENDIDO"]:
-            query = query.filter(
-                or_(
-                    Activo_Inventariado.id_estado == 3,
-                    func.lower(Estado_Activo.nombre_estado) == "vendido",
-                )
-            )
         elif est_clean in ["PALETIZADOS", "PALETIZADO"]:
             query = query.filter(
                 func.lower(Estado_Activo.nombre_estado) == "paletizado"
@@ -202,15 +195,18 @@ def buscar_inventario(
         elif est_clean in ["TODOS", "TODO"]:
             query = query.filter(
                 or_(
-                    Activo_Inventariado.id_estado.in_([1, 2, 3]),
+                    Activo_Inventariado.id_estado.in_([1, 2]),
                     func.lower(Estado_Activo.nombre_estado) == "paletizado",
                 )
             )
+        else:
+            # Los estados no operativos en bodega (ej. VENDIDO/DESPACHADO) no forman parte del stock físico en pasillos
+            query = query.filter(Activo_Inventariado.id_estado == -1)
     else:
-        # Default operativo en bodega: incluye Disponibles, Reservados, Vendidos y Paletizados
+        # Default operativo en bodega: incluye Disponibles, Reservados y Paletizados (excluye Vendidos que ya salieron de bodega)
         query = query.filter(
             or_(
-                Activo_Inventariado.id_estado.in_([1, 2, 3]),
+                Activo_Inventariado.id_estado.in_([1, 2]),
                 func.lower(Estado_Activo.nombre_estado) == "paletizado",
             )
         )
@@ -652,6 +648,7 @@ def obtener_pendientes_precio(
             nombre_categoria=cat.nombre_categoria,
             id_sucursal_actual=suc.id_sucursal,
             nombre_sucursal=suc.nombre_sucursal,
+            ubicacion_galpon=activo.ubicacion_galpon,
             ubicacion_pasillo=activo.ubicacion_pasillo,
             ubicacion_pallet=activo.ubicacion_pallet,
             id_vehiculo=vehiculo.id_vehiculo if vehiculo else None,

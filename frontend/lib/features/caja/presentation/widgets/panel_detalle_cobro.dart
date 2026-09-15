@@ -24,7 +24,6 @@ class PanelDetalleCobro extends StatefulWidget {
 }
 
 class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
-  final TextEditingController _abonoCustomController = TextEditingController();
   final TextEditingController _skuActivoController = TextEditingController();
   final List<TextEditingController> _montoControllers = [];
   String? _lastIdReferencia;
@@ -45,7 +44,6 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
 
   @override
   void dispose() {
-    _abonoCustomController.dispose();
     _skuActivoController.dispose();
     for (final c in _montoControllers) {
       c.dispose();
@@ -84,9 +82,6 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
         _montoControllers.add(ctrl);
       }
 
-      _abonoCustomController.text =
-          widget.provider.montoDeclarado > 0 ? widget.provider.montoDeclarado.toString() : '';
-          
       _skuActivoController.clear();
       _intentosFallidosSku = 0;
     } else {
@@ -244,10 +239,8 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
 
   Widget _buildPanelContent(BuildContext context, CobroPendienteModel orden) {
     final isVenta = orden.esVenta;
-    final esAbono = widget.provider.modalidad == 'ABONO';
-    // La atribución de SKU físico solo se exige en el 2do pago (liquidación final) de un Backorder.
-    // En el 1er pago (abono inicial, abonoPrevio == 0), el activo físico aún no existe en inventario.
-    final requiereAtribucion = orden.esBackorder && orden.abonoPrevio > 0 && widget.provider.modalidad == 'LIQUIDACION';
+    final esLiquidacionTotal = (orden.abonoPrevio + widget.provider.montoDeclarado) >= orden.totalOperacion;
+    final requiereAtribucion = !isVenta && esLiquidacionTotal;
 
     return Container(
       color: AppPalette.backgroundLight,
@@ -269,12 +262,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
 
           const SizedBox(height: 16),
 
-          // ── 4. SELECTOR DE MODALIDAD Y BANNER ÁMBAR (ST-F03 / CA-02) ──
-          _buildModalidadSection(orden, esAbono),
-
-          const SizedBox(height: 16),
-
-          // ── 4.5 SECCIÓN ATRIBUCIÓN DE ACTIVO (BACKORDER FULL PAYMENT) ──
+          // ── 4. SECCIÓN ATRIBUCIÓN DE ACTIVO (BACKORDER FULL PAYMENT) ──
           if (requiereAtribucion) ...[
              _buildBackorderAttributionSection(context, orden),
              const SizedBox(height: 16),
@@ -495,7 +483,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
             width: 1,
             color: Colors.white.withValues(alpha: 0.25),
           ),
-          // Saldo Pendiente Actual
+          // Saldo Pendiente Actual / Abono Acordado
           Expanded(
             child: Padding(
               padding: const EdgeInsets.only(left: 16),
@@ -503,7 +491,11 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'SALDO A COBRAR',
+                    orden.abonoPrevio > 0
+                        ? 'SALDO A COBRAR'
+                        : (orden.montoACobrar < orden.totalOperacion
+                            ? 'ABONO ACORDADO'
+                            : 'TOTAL A COBRAR'),
                     style: AppTypography.small.copyWith(
                       color: Colors.white.withValues(alpha: 0.75),
                       fontSize: 11,
@@ -752,424 +744,6 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
     );
   }
 
-  Widget _buildModalidadSection(CobroPendienteModel orden, bool esAbono) {
-    final esBackorderInicial = orden.esBackorder && orden.abonoPrevio == 0;
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppPalette.surfaceLight,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppPalette.borderLight),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'MODALIDAD DE COBRO',
-            style: AppTypography.title.copyWith(
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-              color: AppPalette.textSecondaryLight,
-              letterSpacing: 0.5,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              // Botón Liquidación Total
-              Expanded(
-                child: InkWell(
-                  onTap: esBackorderInicial
-                      ? null
-                      : () {
-                          widget.provider.setModalidad('LIQUIDACION');
-                          _sincronizarControllers();
-                        },
-                  borderRadius: BorderRadius.circular(10),
-                  child: Opacity(
-                    opacity: esBackorderInicial ? 0.45 : 1.0,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-                      decoration: BoxDecoration(
-                        color: !esAbono && !esBackorderInicial
-                            ? AppPalette.tertiary.withValues(alpha: 0.08)
-                            : AppPalette.backgroundLight,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: !esAbono && !esBackorderInicial ? AppPalette.tertiary : AppPalette.borderLight,
-                          width: !esAbono && !esBackorderInicial ? 2 : 1,
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.check_circle_outline_rounded,
-                            size: 18,
-                            color: !esAbono && !esBackorderInicial ? AppPalette.tertiary : AppPalette.textSecondaryLight,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Liquidación Total',
-                            style: AppTypography.button.copyWith(
-                              color: !esAbono && !esBackorderInicial ? AppPalette.tertiary : AppPalette.textSecondaryLight,
-                              fontWeight: !esAbono && !esBackorderInicial ? FontWeight.w800 : FontWeight.w600,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              // Botón Abono Personalizado
-              Expanded(
-                child: InkWell(
-                  onTap: () {
-                    widget.provider.setModalidad('ABONO');
-                    _sincronizarControllers();
-                  },
-                  borderRadius: BorderRadius.circular(10),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: esAbono
-                          ? AppPalette.tertiary.withValues(alpha: 0.08)
-                          : AppPalette.backgroundLight,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: esAbono ? AppPalette.tertiary : AppPalette.borderLight,
-                        width: esAbono ? 2 : 1,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.edit_note_rounded,
-                          size: 20,
-                          color: esAbono ? AppPalette.tertiary : AppPalette.textSecondaryLight,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          esBackorderInicial ? 'Abono Inicial' : 'Abono Personalizado',
-                          style: AppTypography.button.copyWith(
-                            color: esAbono ? AppPalette.tertiary : AppPalette.textSecondaryLight,
-                            fontWeight: esAbono ? FontWeight.w800 : FontWeight.w600,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          // Banner informativo si es Backorder Inicial (sin activo físico aún)
-          if (esBackorderInicial) ...[
-            const SizedBox(height: 14),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: AppPalette.primary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppPalette.primary.withValues(alpha: 0.3), width: 1),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.info_outline_rounded,
-                    color: AppPalette.primary,
-                    size: 22,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'Abono Inicial de Reserva: El activo solicitado aún no arriba al inventario. No se requiere código QR ni SKU físico en esta fase.',
-                      style: AppTypography.small.copyWith(
-                        color: AppPalette.primary,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ] else if (esAbono) ...[
-            const SizedBox(height: 14),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: AppPalette.warningBg,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppPalette.warningBorder, width: 1),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.warning_amber_rounded,
-                    color: AppPalette.warningText,
-                    size: 22,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'Este pago registrará un abono y mantendrá la orden retenida sin emitir código QR de salida.',
-                      style: AppTypography.small.copyWith(
-                        color: AppPalette.warningText,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Monto Acordado a Abonar (\$ CLP):',
-                  style: AppTypography.small.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: AppPalette.textPrimaryLight,
-                    fontSize: 12,
-                  ),
-                ),
-                Text(
-                  'Máx permitido: ${CobroPendienteCard.formatClp(orden.montoACobrar)}',
-                  style: AppTypography.small.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: (widget.provider.montoDeclarado > orden.montoACobrar || widget.provider.montoDeclarado <= 0)
-                        ? AppPalette.error
-                        : AppPalette.primary,
-                    fontSize: 11,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-
-            // Atajos rápidos de porcentaje sobre el saldo pendiente
-            Row(
-              children: [
-                _buildPresetChip(
-                  label: '25%',
-                  seleccionado: widget.provider.montoDeclarado == (orden.montoACobrar * 0.25).round(),
-                  onTap: () {
-                    final v = (orden.montoACobrar * 0.25).round();
-                    _abonoCustomController.text = v.toString();
-                    widget.provider.setMontoDeclarado(v);
-                    _sincronizarControllers();
-                  },
-                ),
-                const SizedBox(width: 6),
-                _buildPresetChip(
-                  label: '50%',
-                  seleccionado: widget.provider.montoDeclarado == (orden.montoACobrar * 0.50).round(),
-                  onTap: () {
-                    final v = (orden.montoACobrar * 0.50).round();
-                    _abonoCustomController.text = v.toString();
-                    widget.provider.setMontoDeclarado(v);
-                    _sincronizarControllers();
-                  },
-                ),
-                const SizedBox(width: 6),
-                _buildPresetChip(
-                  label: '75%',
-                  seleccionado: widget.provider.montoDeclarado == (orden.montoACobrar * 0.75).round(),
-                  onTap: () {
-                    final v = (orden.montoACobrar * 0.75).round();
-                    _abonoCustomController.text = v.toString();
-                    widget.provider.setMontoDeclarado(v);
-                    _sincronizarControllers();
-                  },
-                ),
-                const SizedBox(width: 6),
-                _buildPresetChip(
-                  label: 'Saldo Total',
-                  seleccionado: widget.provider.montoDeclarado == orden.montoACobrar,
-                  onTap: () {
-                    final v = orden.montoACobrar;
-                    _abonoCustomController.text = v.toString();
-                    widget.provider.setMontoDeclarado(v);
-                    _sincronizarControllers();
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-
-            TextField(
-              controller: _abonoCustomController,
-              keyboardType: TextInputType.number,
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-                LengthLimitingTextInputFormatter(9),
-              ],
-              style: AppTypography.body.copyWith(
-                color: (widget.provider.montoDeclarado > orden.montoACobrar || widget.provider.montoDeclarado <= 0)
-                    ? AppPalette.error
-                    : AppPalette.textPrimaryLight,
-                fontWeight: FontWeight.w700,
-                fontSize: 14,
-              ),
-              decoration: InputDecoration(
-                prefixText: '\$ ',
-                prefixStyle: AppTypography.body.copyWith(
-                  color: (widget.provider.montoDeclarado > orden.montoACobrar || widget.provider.montoDeclarado <= 0)
-                      ? AppPalette.error
-                      : AppPalette.textPrimaryLight,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                ),
-                hintText: 'Ej: ${(orden.montoACobrar * 0.5).round()}',
-                hintStyle: AppTypography.body.copyWith(
-                  color: AppPalette.textSecondaryLight.withValues(alpha: 0.6),
-                  fontSize: 14,
-                ),
-                filled: true,
-                fillColor: (widget.provider.montoDeclarado > orden.montoACobrar || widget.provider.montoDeclarado <= 0)
-                    ? AppPalette.errorBg
-                    : AppPalette.backgroundLight,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(
-                    color: (widget.provider.montoDeclarado > orden.montoACobrar || widget.provider.montoDeclarado <= 0)
-                        ? AppPalette.errorBorder
-                        : AppPalette.borderLight,
-                  ),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(
-                    color: (widget.provider.montoDeclarado > orden.montoACobrar || widget.provider.montoDeclarado <= 0)
-                        ? AppPalette.errorBorder
-                        : AppPalette.borderLight,
-                  ),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(
-                    color: (widget.provider.montoDeclarado > orden.montoACobrar || widget.provider.montoDeclarado <= 0)
-                        ? AppPalette.error
-                        : AppPalette.primary,
-                    width: 2,
-                  ),
-                ),
-                suffixIcon: widget.provider.montoDeclarado > orden.montoACobrar
-                    ? TextButton(
-                        onPressed: () {
-                          _abonoCustomController.text = orden.montoACobrar.toString();
-                          widget.provider.setMontoDeclarado(orden.montoACobrar);
-                          _sincronizarControllers();
-                        },
-                        child: Text(
-                          'Ajustar al máx',
-                          style: AppTypography.small.copyWith(
-                            color: AppPalette.error,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 11,
-                          ),
-                        ),
-                      )
-                    : null,
-              ),
-              onChanged: (val) {
-                final nuevoMonto = int.tryParse(val) ?? 0;
-                widget.provider.setMontoDeclarado(nuevoMonto);
-                _sincronizarControllers();
-              },
-            ),
-
-            if (widget.provider.montoDeclarado > orden.montoACobrar) ...[
-              const SizedBox(height: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: AppPalette.errorBg,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: AppPalette.errorBorder),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.error_outline_rounded, size: 14, color: AppPalette.errorText),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        'El abono no puede superar el saldo pendiente de ${CobroPendienteCard.formatClp(orden.montoACobrar)}.',
-                        style: AppTypography.small.copyWith(
-                          color: AppPalette.errorText,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ] else if (widget.provider.montoDeclarado <= 0) ...[
-              const SizedBox(height: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: AppPalette.errorBg,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: AppPalette.errorBorder),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.error_outline_rounded, size: 14, color: AppPalette.errorText),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        'El abono debe ser estrictamente mayor a \$0.',
-                        style: AppTypography.small.copyWith(
-                          color: AppPalette.errorText,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ] else ...[
-              const SizedBox(height: 6),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Monto mínimo: \$1',
-                    style: AppTypography.small.copyWith(
-                      color: AppPalette.textSecondaryLight,
-                      fontSize: 11,
-                    ),
-                  ),
-                  Text(
-                    'Saldo restante tras abono: ${CobroPendienteCard.formatClp(orden.montoACobrar - widget.provider.montoDeclarado > 0 ? orden.montoACobrar - widget.provider.montoDeclarado : 0)}',
-                    style: AppTypography.small.copyWith(
-                      color: AppPalette.textSecondaryLight,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ],
-        ],
-      ),
-    );
-  }
 
   Widget _buildMetodosPagoSection() {
     final modalidadPago = widget.provider.modalidadPago;
@@ -1602,8 +1176,8 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
     final bool montoExcedido = montoDeclarado > maxPermitido;
     final bool montoInvalido = montoDeclarado <= 0;
     
-    // La atribución de SKU solo bloquea el cobro en la liquidación final (2do pago) de un Backorder.
-    final requiereAtribucion = orden.esBackorder && orden.abonoPrevio > 0 && widget.provider.modalidad == 'LIQUIDACION';
+    final esLiquidacionTotal = (orden.abonoPrevio + widget.provider.montoDeclarado) >= orden.totalOperacion;
+    final requiereAtribucion = !orden.esVenta && esLiquidacionTotal;
     final validacion = widget.provider.validacionActivo;
     final activoAtribuido = widget.provider.skuActivoAtribuido != null && (validacion?.coincide == true || widget.provider.forzarAtribucion);
     final validacionBloqueada = requiereAtribucion && !activoAtribuido;
@@ -1809,34 +1383,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
     );
   }
 
-  Widget _buildPresetChip({
-    required String label,
-    required bool seleccionado,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(6),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: seleccionado ? AppPalette.tertiary : AppPalette.backgroundLight,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color: seleccionado ? AppPalette.tertiary : AppPalette.borderLight,
-          ),
-        ),
-        child: Text(
-          label,
-          style: AppTypography.small.copyWith(
-            color: seleccionado ? Colors.white : AppPalette.textSecondaryLight,
-            fontWeight: FontWeight.w700,
-            fontSize: 11,
-          ),
-        ),
-      ),
-    );
-  }
+
 
   Widget _buildBackorderAttributionSection(BuildContext context, CobroPendienteModel orden) {
     final validacion = widget.provider.validacionActivo;

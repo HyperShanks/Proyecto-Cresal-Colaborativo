@@ -182,7 +182,7 @@ void main() {
       expect(find.text('INVENTARIO DE BODEGA'), findsOneWidget);
     });
 
-    testWidgets('Renderiza los 5 chips de estado operativo en la cabecera', (tester) async {
+    testWidgets('Renderiza los 4 chips de estado operativo en la cabecera (excluyendo Vendidos)', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: BuscadorScreen(),
@@ -192,14 +192,14 @@ void main() {
       expect(find.byKey(const Key('chip_filtro_todos')), findsOneWidget);
       expect(find.byKey(const Key('chip_filtro_disponibles')), findsOneWidget);
       expect(find.byKey(const Key('chip_filtro_reservados')), findsOneWidget);
-      expect(find.byKey(const Key('chip_filtro_vendidos')), findsOneWidget);
       expect(find.byKey(const Key('chip_filtro_paletizados')), findsOneWidget);
+      expect(find.byKey(const Key('chip_filtro_vendidos')), findsNothing);
 
       expect(find.text('Todos'), findsOneWidget);
       expect(find.text('Disponibles'), findsOneWidget);
       expect(find.text('Reservados'), findsOneWidget);
-      expect(find.text('Vendidos'), findsOneWidget);
       expect(find.text('Paletizados'), findsOneWidget);
+      expect(find.text('Vendidos'), findsNothing);
     });
 
     testWidgets('Permite alternar entre chips de filtro de estado cuando está online', (tester) async {
@@ -259,8 +259,8 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        // Tocar chip 'Vendidos' mientras falla la red
-        await tester.tap(find.byKey(const Key('chip_filtro_vendidos')));
+        // Tocar chip 'Reservados' mientras falla la red
+        await tester.tap(find.byKey(const Key('chip_filtro_reservados')));
         await tester.pump();
 
         // Verifica mensaje exacto de SPEC-HU-TAREA-16

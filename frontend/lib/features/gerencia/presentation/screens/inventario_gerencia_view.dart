@@ -2082,7 +2082,7 @@ class _TasacionDialogState extends State<_TasacionDialog> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    widget.item.tituloRepuesto,
+                                    widget.item.tituloVehiculo,
                                     style: const TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.bold,
@@ -2252,6 +2252,9 @@ class _TasacionDialogState extends State<_TasacionDialog> {
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        foregroundColor: const Color(0xFF64748B),
+                        disabledForegroundColor: const Color(0xFF94A3B8),
+                        side: const BorderSide(color: AppPalette.borderLight),
                       ),
                       child: const Text('Cancelar'),
                     ),
