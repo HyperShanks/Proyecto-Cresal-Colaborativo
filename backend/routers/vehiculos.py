@@ -13,29 +13,8 @@ import json # <-- Importante para traducir el texto a JSON
 import models
 from dotenv import load_dotenv # Para cargar el .env
 from typing import List, Optional # Para definir la lista de imágenes en FastAPI
-from supabase import create_client, Client # El cliente de Supabase
-import os
-from dotenv import load_dotenv
 from core.security import get_current_user
-# Cargar variables del .env
-load_dotenv()
-
-# Configuración de Supabase (Paso A)
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
-
-# Inicializamos el cliente. Usamos "try" por si acaso las llaves están mal.
-try:
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        print("⚠️ ADVERTENCIA: No se encontraron SUPABASE_URL o SUPABASE_KEY en el .env. El Storage no funcionará.")
-        supabase: Client = None
-    else:
-        # Aquí está la magia que conecta FastAPI con Supabase
-        supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-        print(f"[OK] Conexion exitosa a Supabase en {SUPABASE_URL}. Cliente de Storage listo.")
-except Exception as e:
-    print(f"[ERROR] al conectar con Supabase: {str(e)}")
-    supabase = None
+from core.storage import supabase
 
 # Instanciamos el enrutador con su prefijo oficial (Sub-tarea A)
 router = APIRouter(
@@ -443,6 +422,109 @@ def buscar_vehiculo_por_ingreso(numero_ingreso: str, db: Session = Depends(get_d
         }
     }
 
+@router.get("/buscar-motor/{numero_motor}")
+def buscar_vehiculo_por_numero_motor(
+    numero_motor: str,
+    db: Session = Depends(get_db),
+    usuario_logeado: models.Usuario = Depends(get_current_user)
+):
+    """
+    Busca los datos de un vehículo y su número de ingreso a partir del número de motor (Detalle_Motor).
+    Permite iniciar el flujo de paletizado cuando el motor físico no tiene rotulado el folio de ingreso.
+    """
+    termino = numero_motor.strip()
+    if not termino:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El número de motor no puede estar vacío."
+        )
+
+    # 1. Búsqueda exacta (case-insensitive)
+    detalle_motor = db.query(models.Detalle_Motor).join(
+        models.Activo_Inventariado,
+        models.Detalle_Motor.id_activo == models.Activo_Inventariado.id_activo
+    ).join(
+        models.Vehiculo_Origen,
+        models.Activo_Inventariado.id_vehiculo == models.Vehiculo_Origen.id_vehiculo
+    ).filter(
+        func.lower(func.trim(models.Detalle_Motor.numero_motor)) == func.lower(termino)
+    ).first()
+
+    # 2. Si no hay coincidencia exacta y el término tiene al menos 4 caracteres, intentar coincidencia parcial
+    if not detalle_motor and len(termino) >= 4:
+        detalle_motor = db.query(models.Detalle_Motor).join(
+            models.Activo_Inventariado,
+            models.Detalle_Motor.id_activo == models.Activo_Inventariado.id_activo
+        ).join(
+            models.Vehiculo_Origen,
+            models.Activo_Inventariado.id_vehiculo == models.Vehiculo_Origen.id_vehiculo
+        ).filter(
+            models.Detalle_Motor.numero_motor.ilike(f"%{termino}%"),
+            ~models.Detalle_Motor.numero_motor.in_(["S/A", "SN", "S/N", "NONE", "NAN", "0"])
+        ).first()
+
+    if not detalle_motor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No se encontró ningún motor registrado con el número '{numero_motor}'"
+        )
+
+    activo_motor = db.query(models.Activo_Inventariado).filter(
+        models.Activo_Inventariado.id_activo == detalle_motor.id_activo
+    ).first()
+
+    vehiculo = db.query(models.Vehiculo_Origen).filter(
+        models.Vehiculo_Origen.id_vehiculo == activo_motor.id_vehiculo
+    ).first() if activo_motor else None
+
+    if not vehiculo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="El motor encontrado no tiene un vehículo de origen asociado."
+        )
+
+    # Buscar activo Caja de Cambios (Categoría 2) para el mismo vehículo
+    activo_caja = db.query(models.Activo_Inventariado).filter(
+        models.Activo_Inventariado.id_vehiculo == vehiculo.id_vehiculo,
+        models.Activo_Inventariado.id_categoria == 2
+    ).first()
+
+    detalle_caja = None
+    if activo_caja:
+        detalle_caja = db.query(models.Detalle_Caja_Cambio).filter(
+            models.Detalle_Caja_Cambio.id_activo == activo_caja.id_activo
+        ).first()
+
+    return {
+        "numero_ingreso": vehiculo.numero_ingreso,
+        "id_vehiculo": str(vehiculo.id_vehiculo),
+        "vehiculo": {
+            "marca": vehiculo.marca,
+            "modelo": vehiculo.modelo,
+            "anio": vehiculo.anio,
+            "traccion": vehiculo.traccion,
+            "numero_ingreso": vehiculo.numero_ingreso,
+            "patente": vehiculo.patente,
+        },
+        "motor": {
+            "id_activo": str(activo_motor.id_activo) if activo_motor else None,
+            "id_estado": activo_motor.id_estado if activo_motor else None,
+            "numero_motor": detalle_motor.numero_motor if detalle_motor else "S/A",
+            "cilindrada": detalle_motor.cilindrada if detalle_motor else "S/A",
+            "combustible": detalle_motor.combustible if detalle_motor else "S/A",
+            "transmision_tipo": detalle_motor.transmision_tipo if detalle_motor else "S/A",
+            "traccion": vehiculo.traccion if vehiculo else "S/A",
+        },
+        "caja_cambios": {
+            "id_activo": str(activo_caja.id_activo) if activo_caja else None,
+            "id_estado": activo_caja.id_estado if activo_caja else None,
+            "transmision_tipo": detalle_caja.transmision_tipo if detalle_caja else "S/A",
+            "cilindrada": detalle_motor.cilindrada if detalle_motor else "S/A",
+            "combustible": detalle_motor.combustible if detalle_motor else "S/A",
+            "traccion": vehiculo.traccion if vehiculo else "S/A",
+        }
+    }
+
 @router.post("/validar-ocr-pieza")
 async def validar_ocr_pieza(
     numero_ingreso: str = Form(...),
@@ -526,6 +608,13 @@ async def guardar_paletizado(
     pasillo: str = Form(...),
     pallet: str = Form(...),
     observaciones: str = Form(None), # Opcional
+
+    # --- Especificaciones Técnicas Editables ---
+    cilindrada: Optional[str] = Form(None),
+    combustible: Optional[str] = Form(None),
+    transmision_tipo: Optional[str] = Form(None),
+    numero_motor: Optional[str] = Form(None),
+    traccion: Optional[str] = Form(None),
     
     # --- Lista de hasta 10 fotos comerciales ---
     fotos_comerciales: List[UploadFile] = File(...),
@@ -659,6 +748,34 @@ async def guardar_paletizado(
                 tipo_archivo="imagen"
             )
             db.add(nueva_multimedia)
+
+        # Actualizar especificaciones técnicas editadas por el usuario
+        if tipo_repuesto == "Motor":
+            dm = db.query(models.Detalle_Motor).filter(models.Detalle_Motor.id_activo == activo.id_activo).first()
+            if not dm:
+                dm = models.Detalle_Motor(id_activo=activo.id_activo)
+                db.add(dm)
+            if cilindrada is not None and cilindrada.strip():
+                dm.cilindrada = cilindrada.strip()
+            if combustible is not None and combustible.strip():
+                dm.combustible = combustible.strip()
+            if transmision_tipo is not None and transmision_tipo.strip():
+                dm.transmision_tipo = transmision_tipo.strip()
+            if numero_motor is not None and numero_motor.strip():
+                dm.numero_motor = numero_motor.strip()
+        elif tipo_repuesto == "Caja de Cambios":
+            dc = db.query(models.Detalle_Caja_Cambio).filter(models.Detalle_Caja_Cambio.id_activo == activo.id_activo).first()
+            if not dc:
+                dc = models.Detalle_Caja_Cambio(id_activo=activo.id_activo)
+                db.add(dc)
+            if transmision_tipo is not None and transmision_tipo.strip():
+                dc.transmision_tipo = transmision_tipo.strip()
+
+        # Actualizar tracción en Vehiculo_Origen si se especificó
+        if traccion is not None and traccion.strip() and activo.id_vehiculo:
+            veh_origen = db.query(models.Vehiculo_Origen).filter(models.Vehiculo_Origen.id_vehiculo == activo.id_vehiculo).first()
+            if veh_origen:
+                veh_origen.traccion = traccion.strip()
             
         # Confirmar la transacción completa (ACID)
         db.commit()

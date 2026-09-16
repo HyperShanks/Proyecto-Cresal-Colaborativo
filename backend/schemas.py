@@ -934,6 +934,9 @@ class EditarActivoRequest(BaseModel):
     observacion_estado: Optional[str] = None
     numero_motor: Optional[str] = None
     cilindrada: Optional[str] = None
+    combustible: Optional[str] = None
+    transmision_tipo: Optional[str] = None
+    traccion: Optional[str] = None
     version_lock_esperado: int
 
 
@@ -949,6 +952,9 @@ class EditarActivoResponse(BaseModel):
     observacion_estado: Optional[str] = None
     numero_motor: Optional[str] = None
     cilindrada: Optional[str] = None
+    combustible: Optional[str] = None
+    transmision_tipo: Optional[str] = None
+    traccion: Optional[str] = None
     version_lock: int
     mensaje: str = "Activo actualizado exitosamente."
 

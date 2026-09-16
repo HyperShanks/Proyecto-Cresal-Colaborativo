@@ -31,8 +31,19 @@ app.add_middleware(
 # ==========================================
 # CONFIGURACIÓN DE IA (Google Cloud Vision)
 # ==========================================
-# Le indicamos a Python la ruta exacta de tu llave criptográfica
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "vision-key.json"
+# Prioridad de credenciales:
+# 1. Variable de entorno ya definida (ej. en Render: GOOGLE_APPLICATION_CREDENTIALS)
+# 2. Secret File de Render montado en /etc/secrets/vision-key.json
+# 3. Archivo local en backend/vision-key.json o vision-key.json en cwd
+if not os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    key_in_script_dir = os.path.join(script_dir, "vision-key.json")
+    if os.path.exists("/etc/secrets/vision-key.json"):
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/etc/secrets/vision-key.json"
+    elif os.path.exists(key_in_script_dir):
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = key_in_script_dir
+    elif os.path.exists("vision-key.json"):
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "vision-key.json"
 
 
 # Un endpoint de prueba para saber que el servidor funciona

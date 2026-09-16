@@ -99,6 +99,34 @@ class PaletizadoService {
     }
   }
 
+  /// Busca un vehículo y su folio a partir del número de serie grabado del motor.
+  Future<Map<String, dynamic>?> buscarVehiculoPorNumeroMotor(
+    String numeroMotor,
+  ) async {
+    try {
+      debugPrint('📌 [PALETIZADO_SERVICE] 🔍 Buscando por N° Motor: $numeroMotor');
+      final motorEncoded = Uri.encodeComponent(numeroMotor.trim());
+      final url = Uri.parse('${ApiConstants.vehiculosEndpoint}/buscar-motor/$motorEncoded');
+      final token = await AuthService.getToken();
+      final headers = {
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      };
+      final response = await http.get(url, headers: headers).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw Exception('Tiempo de espera agotado'),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      }
+      return null;
+    } catch (e) {
+      debugPrint("📌 [PALETIZADO_SERVICE] ❌ Error al buscar por N° Motor: $e");
+      return null;
+    }
+  }
+
   Future<Map<String, dynamic>?> validarOCRPieza(
     String numeroIngreso,
     File imagenPosca,
@@ -138,6 +166,11 @@ class PaletizadoService {
     required String pasillo,
     required String pallet,
     String? observaciones,
+    String? cilindrada,
+    String? combustible,
+    String? transmisionTipo,
+    String? numeroMotor,
+    String? traccion,
     required List<File> fotos,
   }) async {
     try {
@@ -159,6 +192,21 @@ class PaletizadoService {
 
       if (observaciones != null && observaciones.isNotEmpty) {
         request.fields['observaciones'] = observaciones;
+      }
+      if (cilindrada != null && cilindrada.isNotEmpty) {
+        request.fields['cilindrada'] = cilindrada;
+      }
+      if (combustible != null && combustible.isNotEmpty) {
+        request.fields['combustible'] = combustible;
+      }
+      if (transmisionTipo != null && transmisionTipo.isNotEmpty) {
+        request.fields['transmision_tipo'] = transmisionTipo;
+      }
+      if (numeroMotor != null && numeroMotor.isNotEmpty) {
+        request.fields['numero_motor'] = numeroMotor;
+      }
+      if (traccion != null && traccion.isNotEmpty) {
+        request.fields['traccion'] = traccion;
       }
 
       for (var foto in fotos) {

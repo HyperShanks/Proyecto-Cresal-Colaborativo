@@ -105,8 +105,8 @@ class AuthService {
             }),
           )
           .timeout(
-            const Duration(seconds: 10),
-            onTimeout: () => throw Exception('Tiempo de espera agotado'),
+            const Duration(seconds: 45),
+            onTimeout: () => throw Exception('Tiempo de espera agotado al conectar con el servidor.'),
           );
 
       final body = jsonDecode(response.body) as Map<String, dynamic>;
@@ -218,8 +218,8 @@ class AuthService {
             }),
           )
           .timeout(
-            const Duration(seconds: 10),
-            onTimeout: () => throw Exception('Tiempo de espera agotado'),
+            const Duration(seconds: 45),
+            onTimeout: () => throw Exception('Tiempo de espera agotado al verificar PIN.'),
           );
 
       final body = jsonDecode(response.body) as Map<String, dynamic>;

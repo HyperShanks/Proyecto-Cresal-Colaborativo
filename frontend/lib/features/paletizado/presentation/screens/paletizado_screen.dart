@@ -35,6 +35,7 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
 
   bool _isLoading = false;
   bool _vehiculoEncontrado = false;
+  bool _buscarPorNumeroMotor = false;
 
   String _marca = "";
   String _modelo = "";
@@ -52,6 +53,13 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
   final ImagePicker _picker = ImagePicker();
   final List<XFile> _fotosComerciales = [];
 
+  // Controladores y estado para edición de especificaciones técnicas
+  final TextEditingController _cilindradaController = TextEditingController();
+  final TextEditingController _numeroMotorController = TextEditingController();
+  String? _combustibleSeleccionado;
+  String? _transmisionSeleccionada;
+  String? _traccionSeleccionada;
+
   @override
   void initState() {
     super.initState();
@@ -59,6 +67,49 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _inicializarIngreso();
     });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _galponController.dispose();
+    _pasilloController.dispose();
+    _palletController.dispose();
+    _observacionController.dispose();
+    _cilindradaController.dispose();
+    _numeroMotorController.dispose();
+    super.dispose();
+  }
+
+  void _cargarCamposTecnicos() {
+    if (_tipoActivoSeleccionado == 'Motor') {
+      final numMot = (_datosMotor['numero_motor'] ?? '').toString().trim();
+      _numeroMotorController.text = (numMot == 'S/A' || numMot == 'null' || numMot == '-') ? '' : numMot;
+
+      final cil = (_datosMotor['cilindrada'] ?? '').toString().trim();
+      _cilindradaController.text = (cil == 'S/A' || cil == 'null' || cil == '-') ? '' : cil;
+
+      final comb = (_datosMotor['combustible'] ?? '').toString().trim();
+      _combustibleSeleccionado = OpcionesCombustible.lista.contains(comb) ? comb : null;
+
+      final trans = (_datosMotor['transmision_tipo'] ?? '').toString().trim();
+      _transmisionSeleccionada = OpcionesTransmision.lista.contains(trans) ? trans : null;
+
+      final trac = (_datosMotor['traccion'] ?? '').toString().trim();
+      _traccionSeleccionada = OpcionesTraccion.lista.contains(trac) ? trac : null;
+    } else {
+      final trans = (_datosCaja['transmision_tipo'] ?? '').toString().trim();
+      _transmisionSeleccionada = OpcionesTransmision.lista.contains(trans) ? trans : null;
+
+      final trac = (_datosCaja['traccion'] ?? _datosMotor['traccion'] ?? '').toString().trim();
+      _traccionSeleccionada = OpcionesTraccion.lista.contains(trac) ? trac : null;
+
+      final cil = (_datosCaja['cilindrada'] ?? _datosMotor['cilindrada'] ?? '').toString().trim();
+      _cilindradaController.text = (cil == 'S/A' || cil == 'null' || cil == '-') ? '' : cil;
+
+      final comb = (_datosCaja['combustible'] ?? _datosMotor['combustible'] ?? '').toString().trim();
+      _combustibleSeleccionado = OpcionesCombustible.lista.contains(comb) ? comb : null;
+    }
   }
 
   void _inicializarIngreso() {
@@ -189,6 +240,11 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
               pasillo: _pasilloController.text.trim(),
               pallet: _palletController.text.trim(),
               observaciones: _observacionController.text.trim(),
+              cilindrada: _cilindradaController.text.trim(),
+              combustible: _combustibleSeleccionado,
+              transmisionTipo: _transmisionSeleccionada,
+              numeroMotor: _numeroMotorController.text.trim(),
+              traccion: _traccionSeleccionada,
               fotos: fotosArchivos,
             );
 
@@ -240,14 +296,16 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
       _ocrFailedAttempts++;
       setState(() => _isValidatingOCR = false); // Detenemos la carga
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Error de conexión o fallo en servicio OCR.'),
+        SnackBar(
+          content: Text(
+            'Error de conexión o fallo en servicio OCR (Intento $_ocrFailedAttempts/3).',
+          ),
           backgroundColor: AppPalette.error,
         ),
       );
 
-      // Fallo de red / API -> Dispara contingencia manual
-      if (mounted) {
+      // Solo si se alcanzaron los 3 intentos fallidos -> Dispara contingencia manual
+      if (_ocrFailedAttempts >= 3 && mounted) {
         _mostrarModalIngresoManual();
       }
     }
@@ -399,6 +457,11 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
         pasillo: _pasilloController.text.trim(),
         pallet: _palletController.text.trim(),
         observaciones: _observacionController.text.trim(),
+        cilindrada: _cilindradaController.text.trim(),
+        combustible: _combustibleSeleccionado,
+        transmisionTipo: _transmisionSeleccionada,
+        numeroMotor: _numeroMotorController.text.trim(),
+        traccion: _traccionSeleccionada,
         fotos: fotosArchivos,
       );
 
@@ -429,6 +492,11 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
       _pasilloController.clear();
       _palletController.clear();
       _observacionController.clear();
+      _cilindradaController.clear();
+      _numeroMotorController.clear();
+      _combustibleSeleccionado = null;
+      _transmisionSeleccionada = null;
+      _traccionSeleccionada = null;
       _fotosComerciales.clear();
       _tipoActivoSeleccionado = 'Motor';
     });
@@ -453,6 +521,60 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
       enableDrag: false,
       builder: (ctx) => _ModalExitoContent(etiqueta: etiqueta),
     );
+  }
+
+  Future<void> _ejecutarBusqueda() async {
+    if (_buscarPorNumeroMotor) {
+      await _buscarPorMotor();
+    } else {
+      await _buscarVehiculo();
+    }
+  }
+
+  Future<void> _buscarPorMotor() async {
+    final motorTerm = _searchController.text.trim();
+    if (motorTerm.isEmpty) return;
+
+    FocusScope.of(context).unfocus();
+
+    setState(() {
+      _isLoading = true;
+      _vehiculoEncontrado = false;
+    });
+
+    final res = await _paletizadoService.buscarVehiculoPorNumeroMotor(motorTerm);
+
+    if (!mounted) return;
+
+    if (res != null && res['numero_ingreso'] != null) {
+      final numIngreso = res['numero_ingreso'].toString();
+      _searchController.text = numIngreso;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✅ Motor identificado. Corresponde al Folio N° $numIngreso'),
+          backgroundColor: AppPalette.success,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+
+      // Cambiar a modo ingreso y cargar los datos para el flujo normal de paletizado
+      setState(() {
+        _buscarPorNumeroMotor = false;
+      });
+      await _buscarVehiculo();
+    } else {
+      setState(() {
+        _isLoading = false;
+        _vehiculoEncontrado = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ No se encontró ningún vehículo con el N° de Motor "$motorTerm".'),
+          backgroundColor: AppPalette.error,
+        ),
+      );
+    }
   }
 
   Future<void> _buscarVehiculo() async {
@@ -511,6 +633,7 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
 
         _opcionesRepuestos = opcionesDisponibles;
         _tipoActivoSeleccionado = _opcionesRepuestos.isNotEmpty ? _opcionesRepuestos.first : 'Motor';
+        _cargarCamposTecnicos();
       });
     } else {
       // Fallback a buscarVehiculoPorIngreso
@@ -552,6 +675,7 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
           _datosCaja = datosCajaTemp;
           _opcionesRepuestos = opcionesDisponibles;
           _tipoActivoSeleccionado = _opcionesRepuestos.first;
+          _cargarCamposTecnicos();
         });
       } else {
         setState(() {
@@ -585,17 +709,119 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── 1. BUSCADOR ───────────────────────────────────────
+            // ── 1. SELECTOR DE MODO DE BÚSQUEDA ──────────────────
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: AppPalette.surface,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      onTap: () {
+                        if (_buscarPorNumeroMotor) {
+                          setState(() {
+                            _buscarPorNumeroMotor = false;
+                            _searchController.clear();
+                          });
+                        }
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        decoration: BoxDecoration(
+                          color: !_buscarPorNumeroMotor ? AppPalette.primary : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        alignment: Alignment.center,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.tag,
+                              size: 16,
+                              color: !_buscarPorNumeroMotor ? AppPalette.textPrimary : AppPalette.textSecondary,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Por N° Ingreso',
+                              style: AppTypography.button.copyWith(
+                                color: !_buscarPorNumeroMotor ? AppPalette.textPrimary : AppPalette.textSecondary,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: InkWell(
+                      onTap: () {
+                        if (!_buscarPorNumeroMotor) {
+                          setState(() {
+                            _buscarPorNumeroMotor = true;
+                            _searchController.clear();
+                          });
+                        }
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        decoration: BoxDecoration(
+                          color: _buscarPorNumeroMotor ? AppPalette.primary : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        alignment: Alignment.center,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.precision_manufacturing_outlined,
+                              size: 16,
+                              color: _buscarPorNumeroMotor ? AppPalette.textPrimary : AppPalette.textSecondary,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Por N° Motor',
+                              style: AppTypography.button.copyWith(
+                                color: _buscarPorNumeroMotor ? AppPalette.textPrimary : AppPalette.textSecondary,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // ── 2. CAMPO DE BÚSQUEDA ──────────────────────────────
             Row(
               children: [
                 Expanded(
                   child: TextField(
                     controller: _searchController,
-                    decoration: const InputDecoration(
-                      hintText: 'Buscar N° Ingreso...',
-                      prefixIcon: Icon(Icons.search, color: AppPalette.primary),
+                    decoration: InputDecoration(
+                      hintText: _buscarPorNumeroMotor
+                          ? 'Ingresar N° Motor grabado (ej. G4KEAH...)'
+                          : 'Buscar N° Ingreso...',
+                      prefixIcon: Icon(
+                        _buscarPorNumeroMotor
+                            ? Icons.precision_manufacturing_outlined
+                            : Icons.search,
+                        color: AppPalette.primary,
+                      ),
                     ),
-                    onSubmitted: (_) => _buscarVehiculo(),
+                    onSubmitted: (_) => _ejecutarBusqueda(),
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -604,7 +830,7 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
                   height: 55,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(padding: EdgeInsets.zero),
-                    onPressed: _isLoading ? null : _buscarVehiculo,
+                    onPressed: _isLoading ? null : _ejecutarBusqueda,
                     child: _isLoading
                         ? const SizedBox(
                             width: 24,
@@ -686,7 +912,12 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
                       if (_opcionesRepuestos.contains('Motor'))
                         Expanded(
                           child: InkWell(
-                            onTap: () => setState(() => _tipoActivoSeleccionado = 'Motor'),
+                            onTap: () {
+                              setState(() {
+                                _tipoActivoSeleccionado = 'Motor';
+                                _cargarCamposTecnicos();
+                              });
+                            },
                             borderRadius: BorderRadius.circular(8),
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 12),
@@ -727,7 +958,12 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
                         if (_opcionesRepuestos.contains('Motor')) const SizedBox(width: 6),
                         Expanded(
                           child: InkWell(
-                            onTap: () => setState(() => _tipoActivoSeleccionado = 'Caja de Cambios'),
+                            onTap: () {
+                              setState(() {
+                                _tipoActivoSeleccionado = 'Caja de Cambios';
+                                _cargarCamposTecnicos();
+                              });
+                            },
                             borderRadius: BorderRadius.circular(8),
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 12),
@@ -773,68 +1009,107 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: AppPalette.background,
-                  borderRadius: BorderRadius.circular(8),
+                  color: AppPalette.surface,
+                  borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: AppPalette.neutral.withValues(alpha: 0.2),
+                    color: AppPalette.primary.withValues(alpha: 0.3),
                   ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Especificaciones Registradas:',
-                      style: AppTypography.small.copyWith(
-                        color: AppPalette.primary,
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.edit_note, color: AppPalette.primary, size: 22),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Especificaciones Técnicas (Editables)',
+                              style: AppTypography.title.copyWith(
+                                color: AppPalette.primary,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Text(
+                          'Modifica antes de etiquetar',
+                          style: AppTypography.small.copyWith(
+                            color: AppPalette.textSecondary,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 16),
 
                     if (_tipoActivoSeleccionado == 'Motor') ...[
-                      Text(
-                        'N° Motor: ${_datosMotor['numero_motor'] ?? '-'}',
-                        style: AppTypography.body,
+                      _buildTextField(
+                        _numeroMotorController,
+                        'N° Motor grabado',
+                        Icons.precision_manufacturing_outlined,
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Cilindrada: ${_datosMotor['cilindrada'] ?? '-'}',
-                        style: AppTypography.body,
+                      const SizedBox(height: 12),
+                      _buildTextField(
+                        _cilindradaController,
+                        'Cilindrada (ej: 2.0L)',
+                        Icons.speed,
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Combustible: ${_datosMotor['combustible'] ?? '-'}',
-                        style: AppTypography.body,
+                      const SizedBox(height: 12),
+                      _buildDropdownField(
+                        label: 'Combustible',
+                        value: _combustibleSeleccionado,
+                        items: OpcionesCombustible.lista,
+                        icon: Icons.local_gas_station_outlined,
+                        onChanged: (val) => setState(() => _combustibleSeleccionado = val),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Transmisión: ${_datosMotor['transmision_tipo'] ?? '-'}',
-                        style: AppTypography.body,
+                      const SizedBox(height: 12),
+                      _buildDropdownField(
+                        label: 'Transmisión',
+                        value: _transmisionSeleccionada,
+                        items: OpcionesTransmision.lista,
+                        icon: Icons.settings_outlined,
+                        onChanged: (val) => setState(() => _transmisionSeleccionada = val),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Tracción: ${_datosMotor['traccion'] ?? '-'}',
-                        style: AppTypography.body,
+                      const SizedBox(height: 12),
+                      _buildDropdownField(
+                        label: 'Tracción',
+                        value: _traccionSeleccionada,
+                        items: OpcionesTraccion.lista,
+                        icon: Icons.swap_calls_outlined,
+                        onChanged: (val) => setState(() => _traccionSeleccionada = val),
                       ),
-                    ] else if (_tipoActivoSeleccionado ==
-                        'Caja de Cambios') ...[
-                      Text(
-                        'Transmisión: ${_datosCaja['transmision_tipo'] ?? '-'}',
-                        style: AppTypography.body,
+                    ] else if (_tipoActivoSeleccionado == 'Caja de Cambios') ...[
+                      _buildDropdownField(
+                        label: 'Transmisión',
+                        value: _transmisionSeleccionada,
+                        items: OpcionesTransmision.lista,
+                        icon: Icons.settings_outlined,
+                        onChanged: (val) => setState(() => _transmisionSeleccionada = val),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Cilindrada: ${_datosCaja['cilindrada'] ?? _datosMotor['cilindrada'] ?? '-'}',
-                        style: AppTypography.body,
+                      const SizedBox(height: 12),
+                      _buildDropdownField(
+                        label: 'Tracción',
+                        value: _traccionSeleccionada,
+                        items: OpcionesTraccion.lista,
+                        icon: Icons.swap_calls_outlined,
+                        onChanged: (val) => setState(() => _traccionSeleccionada = val),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Combustible: ${_datosCaja['combustible'] ?? _datosMotor['combustible'] ?? '-'}',
-                        style: AppTypography.body,
+                      const SizedBox(height: 12),
+                      _buildTextField(
+                        _cilindradaController,
+                        'Cilindrada (ej: 2.0L)',
+                        Icons.speed,
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Tracción: ${_datosCaja['traccion'] ?? _datosMotor['traccion'] ?? '-'}',
-                        style: AppTypography.body,
+                      const SizedBox(height: 12),
+                      _buildDropdownField(
+                        label: 'Combustible',
+                        value: _combustibleSeleccionado,
+                        items: OpcionesCombustible.lista,
+                        icon: Icons.local_gas_station_outlined,
+                        onChanged: (val) => setState(() => _combustibleSeleccionado = val),
                       ),
                     ],
                   ],
@@ -1057,6 +1332,32 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildDropdownField({
+    required String label,
+    required String? value,
+    required List<String> items,
+    required IconData icon,
+    required ValueChanged<String?> onChanged,
+  }) {
+    final validValue = (value != null && items.contains(value)) ? value : null;
+    return DropdownButtonFormField<String>(
+      initialValue: validValue,
+      dropdownColor: AppPalette.surface,
+      style: const TextStyle(color: AppPalette.textPrimary),
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: AppPalette.primary, size: 20),
+      ),
+      items: items.map((item) {
+        return DropdownMenuItem<String>(
+          value: item,
+          child: Text(item),
+        );
+      }).toList(),
+      onChanged: onChanged,
     );
   }
 

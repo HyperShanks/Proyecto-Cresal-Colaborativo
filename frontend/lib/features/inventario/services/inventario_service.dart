@@ -133,7 +133,7 @@ class InventarioService {
             headers: headers,
             body: jsonEncode(datos),
           )
-          .timeout(const Duration(seconds: 12));
+          .timeout(const Duration(seconds: 35));
 
       Map<String, dynamic> body = {};
       if (response.body.isNotEmpty) {
@@ -144,6 +144,9 @@ class InventarioService {
 
       if (response.statusCode == 200) {
         return body;
+      } else if (response.statusCode == 401) {
+        AuthService.manejarSesionExpirada();
+        throw Exception('Tu sesión ha expirado. Por favor ingresa tu PIN nuevamente.');
       } else if (response.statusCode == 409) {
         final msg = body['message_user'] ??
             body['detail'] ??
@@ -180,6 +183,89 @@ class InventarioService {
       if (client == null) {
         httpClient.close();
       }
+    }
+  }
+
+  /// Sube una o más fotografías comerciales a Supabase Storage vinculadas al activo.
+  static Future<List<String>> subirFotosActivo(
+    String idActivo,
+    List<File> fotos,
+  ) async {
+    try {
+      final uri = Uri.parse('${ApiConstants.inventarioEndpoint}/$idActivo/fotos');
+      final request = http.MultipartRequest('POST', uri);
+      final token = await AuthService.getToken();
+      if (token != null && token.isNotEmpty) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+
+      for (var foto in fotos) {
+        request.files.add(
+          await http.MultipartFile.fromPath('fotos', foto.path),
+        );
+      }
+
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 45));
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        final dynamic rawImgs = body['imagenes'];
+        if (rawImgs is List) {
+          return rawImgs.map((e) => e.toString()).toList();
+        }
+        return [];
+      } else if (response.statusCode == 401) {
+        AuthService.manejarSesionExpirada();
+        throw Exception('Tu sesión ha expirado. Por favor ingresa tu PIN nuevamente.');
+      } else {
+        final body = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        final msg = body['message_user'] ?? body['detail'] ?? 'Error al subir fotografías.';
+        throw Exception(msg);
+      }
+    } catch (e) {
+      if (e.toString().contains('SocketException') || e.toString().contains('TimeoutException')) {
+        throw Exception('Error de conexión al subir fotos. Reintente con mejor señal.');
+      }
+      rethrow;
+    }
+  }
+
+  /// Elimina una fotografía comercial de un activo de inventario (en BD y Supabase Storage).
+  static Future<List<String>> eliminarFotoActivo(
+    String idActivo,
+    String urlStorage,
+  ) async {
+    try {
+      final uri = Uri.parse('${ApiConstants.inventarioEndpoint}/$idActivo/fotos')
+          .replace(queryParameters: {'url': urlStorage});
+      final token = await AuthService.getToken();
+      final headers = {
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
+      final response = await http.delete(uri, headers: headers).timeout(const Duration(seconds: 25));
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        final dynamic rawImgs = body['imagenes'];
+        if (rawImgs is List) {
+          return rawImgs.map((e) => e.toString()).toList();
+        }
+        return [];
+      } else if (response.statusCode == 401) {
+        AuthService.manejarSesionExpirada();
+        throw Exception('Tu sesión ha expirado. Por favor ingresa tu PIN nuevamente.');
+      } else {
+        final body = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        final msg = body['message_user'] ?? body['detail'] ?? 'Error al eliminar fotografía.';
+        throw Exception(msg);
+      }
+    } catch (e) {
+      if (e.toString().contains('SocketException') || e.toString().contains('TimeoutException')) {
+        throw Exception('Error de conexión al eliminar foto. Reintente con mejor señal.');
+      }
+      rethrow;
     }
   }
 }

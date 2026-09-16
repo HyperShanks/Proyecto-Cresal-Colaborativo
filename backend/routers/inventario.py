@@ -1,9 +1,12 @@
+import asyncio
+import uuid
 from datetime import datetime, timezone
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_, case, update
 from typing import Dict, List, Optional
+from core.storage import supabase
 
 from database import get_db
 from models import (
@@ -1162,7 +1165,7 @@ def editar_activo_inventariado(
             detail=f"Solo es posible modificar la ubicación de repuestos en estado 'Disponible' o 'Paletizado'. El artículo actual se encuentra en estado '{nombre_estado or activo_existente.id_estado}'.",
         )
 
-    # 3. Transacción atómica con control de concurrencia optimista (solo ubicación)
+    # 3. Transacción atómica con control de concurrencia optimista (ubicación y especificaciones)
     try:
         update_values = {
             "version_lock": Activo_Inventariado.version_lock + 1,
@@ -1174,6 +1177,8 @@ def editar_activo_inventariado(
             update_values["ubicacion_galpon"] = payload.ubicacion_galpon
         if payload.ubicacion_pallet is not None:
             update_values["ubicacion_pallet"] = payload.ubicacion_pallet
+        if payload.observacion_estado is not None:
+            update_values["observacion_estado"] = payload.observacion_estado
 
         stmt = (
             update(Activo_Inventariado)
@@ -1193,11 +1198,46 @@ def editar_activo_inventariado(
                        "Los datos se actualizarán ahora para que revises los cambios antes de volver a editar.",
             )
 
+        # Actualizar o insertar especificaciones técnicas según la categoría del activo
+        if activo_existente.id_categoria == 1:
+            motor = db.query(Detalle_Motor).filter(Detalle_Motor.id_activo == id_activo).first()
+            if not motor:
+                motor = Detalle_Motor(id_activo=id_activo)
+                db.add(motor)
+            if payload.numero_motor is not None:
+                motor.numero_motor = payload.numero_motor.strip() if payload.numero_motor else None
+            if payload.cilindrada is not None:
+                motor.cilindrada = payload.cilindrada.strip() if payload.cilindrada else None
+            if payload.combustible is not None:
+                motor.combustible = payload.combustible.strip() if payload.combustible else None
+            if payload.transmision_tipo is not None:
+                motor.transmision_tipo = payload.transmision_tipo.strip() if payload.transmision_tipo else None
+        elif activo_existente.id_categoria == 2:
+            caja = db.query(Detalle_Caja_Cambio).filter(Detalle_Caja_Cambio.id_activo == id_activo).first()
+            if not caja:
+                caja = Detalle_Caja_Cambio(id_activo=id_activo)
+                db.add(caja)
+            if payload.transmision_tipo is not None:
+                caja.transmision_tipo = payload.transmision_tipo.strip() if payload.transmision_tipo else None
+
+        # Actualizar tracción en Vehiculo_Origen si se especificó
+        traccion_actualizada = None
+        if activo_existente.id_vehiculo:
+            vehiculo_obj = db.query(Vehiculo_Origen).filter(Vehiculo_Origen.id_vehiculo == activo_existente.id_vehiculo).first()
+            if vehiculo_obj:
+                if payload.traccion is not None:
+                    vehiculo_obj.traccion = payload.traccion.strip() if payload.traccion else None
+                traccion_actualizada = vehiculo_obj.traccion
+
         db.commit()
 
-        # Recargar activo actualizado
+        # Recargar activo y detalles actualizados
         db.refresh(activo_existente)
-        motor = db.query(Detalle_Motor).filter(Detalle_Motor.id_activo == id_activo).first()
+        motor_actual = db.query(Detalle_Motor).filter(Detalle_Motor.id_activo == id_activo).first()
+        caja_actual = db.query(Detalle_Caja_Cambio).filter(Detalle_Caja_Cambio.id_activo == id_activo).first()
+
+        combustible_res = motor_actual.combustible if motor_actual else None
+        transmision_res = (motor_actual.transmision_tipo if motor_actual else None) or (caja_actual.transmision_tipo if caja_actual else None)
 
         return EditarActivoResponse(
             id_activo=activo_existente.id_activo,
@@ -1206,8 +1246,11 @@ def editar_activo_inventariado(
             ubicacion_galpon=activo_existente.ubicacion_galpon,
             ubicacion_pallet=activo_existente.ubicacion_pallet,
             observacion_estado=activo_existente.observacion_estado,
-            numero_motor=motor.numero_motor if motor else None,
-            cilindrada=motor.cilindrada if motor else None,
+            numero_motor=motor_actual.numero_motor if motor_actual else None,
+            cilindrada=motor_actual.cilindrada if motor_actual else None,
+            combustible=combustible_res,
+            transmision_tipo=transmision_res,
+            traccion=traccion_actualizada,
             version_lock=activo_existente.version_lock,
             mensaje="Activo actualizado exitosamente.",
         )
@@ -1221,6 +1264,136 @@ def editar_activo_inventariado(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error transaccional: {str(e)}",
         )
+
+
+@router.post(
+    "/{id_activo}/fotos",
+    summary="Subir nuevas fotos comerciales a un activo",
+    description="Sube fotografías a Supabase Storage y las vincula en Multimedia_Activo.",
+)
+async def subir_fotos_activo(
+    id_activo: UUID,
+    fotos: List[UploadFile] = File(...),
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_bodeguero_or_admin),
+):
+    activo = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == id_activo).first()
+    if not activo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Activo inventariado con ID '{id_activo}' no encontrado.",
+        )
+
+    if not supabase:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="El servicio de almacenamiento Supabase no está configurado en el servidor.",
+        )
+
+    folio = str(activo.id_activo)[:8]
+    if activo.id_vehiculo:
+        vehiculo = db.query(Vehiculo_Origen).filter(Vehiculo_Origen.id_vehiculo == activo.id_vehiculo).first()
+        if vehiculo and vehiculo.numero_ingreso:
+            folio = vehiculo.numero_ingreso
+
+    BUCKET_NAME = "multimedia-activos"
+    try:
+        supabase.storage.create_bucket(BUCKET_NAME, options={"public": True})
+    except Exception:
+        pass
+
+    prefijo = "moto" if activo.id_categoria == 1 else "caja"
+    urls_subidas = []
+
+    for foto in fotos:
+        contenido = await foto.read()
+        ts = int(datetime.now(timezone.utc).timestamp())
+        random_suffix = uuid.uuid4().hex[:6]
+        path_nube = f"{folio}/{prefijo}_{folio}_extra_{ts}_{random_suffix}.jpg"
+
+        def _subir_sync(path_n, data_bytes):
+            supabase.storage.from_(BUCKET_NAME).upload(
+                path=path_n,
+                file=data_bytes,
+                file_options={"cache-control": "3600", "content-type": "image/jpeg", "upsert": "true"}
+            )
+            return supabase.storage.from_(BUCKET_NAME).get_public_url(path_n)
+
+        try:
+            url_publica = await asyncio.to_thread(_subir_sync, path_nube, contenido)
+            urls_subidas.append(url_publica)
+            nueva_media = Multimedia_Activo(
+                id_activo=id_activo,
+                url_storage=url_publica,
+                tipo_archivo="imagen",
+            )
+            db.add(nueva_media)
+        except Exception as e:
+            print(f"❌ Error al subir foto comercial extra: {e}")
+
+    db.commit()
+
+    imagenes_actuales = [
+        m.url_storage for m in db.query(Multimedia_Activo).filter(Multimedia_Activo.id_activo == id_activo).all()
+    ]
+
+    return {
+        "status": "success",
+        "mensaje": f"{len(urls_subidas)} fotografía(s) subida(s) exitosamente.",
+        "imagenes": imagenes_actuales,
+    }
+
+
+@router.delete(
+    "/{id_activo}/fotos",
+    summary="Eliminar una foto comercial de un activo",
+    description="Elimina una fotografía de Multimedia_Activo y del bucket de Supabase Storage.",
+)
+def eliminar_foto_activo(
+    id_activo: UUID,
+    url: str = Query(..., description="URL de almacenamiento de la foto a eliminar"),
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_bodeguero_or_admin),
+):
+    activo = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == id_activo).first()
+    if not activo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Activo inventariado con ID '{id_activo}' no encontrado.",
+        )
+
+    multimedia = db.query(Multimedia_Activo).filter(
+        Multimedia_Activo.id_activo == id_activo,
+        Multimedia_Activo.url_storage == url.strip(),
+    ).first()
+
+    if not multimedia:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Fotografía no encontrada en los registros de este activo.",
+        )
+
+    BUCKET_NAME = "multimedia-activos"
+    if supabase:
+        try:
+            if f"{BUCKET_NAME}/" in url:
+                path_archivo = url.split(f"{BUCKET_NAME}/")[-1]
+                supabase.storage.from_(BUCKET_NAME).remove([path_archivo])
+        except Exception as se:
+            print(f"⚠️ Error al eliminar archivo de Supabase Storage: {se}")
+
+    db.delete(multimedia)
+    db.commit()
+
+    imagenes_actuales = [
+        m.url_storage for m in db.query(Multimedia_Activo).filter(Multimedia_Activo.id_activo == id_activo).all()
+    ]
+
+    return {
+        "status": "success",
+        "mensaje": "Fotografía eliminada exitosamente.",
+        "imagenes": imagenes_actuales,
+    }
 
 
 @router.get("/ingreso/{numero_ingreso}", status_code=200)

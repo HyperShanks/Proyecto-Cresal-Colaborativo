@@ -529,14 +529,16 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
       _ocrFailedAttempts++;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('❌ Error de conexión o fallo en servicio OCR.'),
+          SnackBar(
+            content: Text('❌ Error de conexión o fallo en servicio OCR (Intento $_ocrFailedAttempts/3).'),
             backgroundColor: AppPalette.error,
             behavior: SnackBarBehavior.floating,
           ),
         );
-        // Fallo de red / API de Google Cloud Vision -> Dispara contingencia manual
-        _mostrarModalIngresoManual(context, datosNuevos);
+        // Solo si se alcanzaron los 3 intentos fallidos -> Dispara contingencia manual
+        if (_ocrFailedAttempts >= 3) {
+          _mostrarModalIngresoManual(context, datosNuevos);
+        }
       }
     } finally {
       if (mounted) {

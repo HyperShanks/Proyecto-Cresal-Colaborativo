@@ -36,8 +36,8 @@ class ApiService {
   static final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
       GlobalKey<ScaffoldMessengerState>();
 
-  /// Timeout estándar para todas las peticiones HTTP
-  static const Duration defaultTimeout = Duration(seconds: 12);
+  /// Timeout estándar para todas las peticiones HTTP (resiliente a redes lentas y cold-starts)
+  static const Duration defaultTimeout = Duration(seconds: 35);
 
   /// Callback personalizable para manejar el evento 401 (útil en tests)
   static Future<void> Function()? onUnauthorized;

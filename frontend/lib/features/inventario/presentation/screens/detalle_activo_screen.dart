@@ -1,8 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../../auth/services/auth_service.dart';
 import '../../../paletizado/domain/models/etiqueta_data.dart';
+import '../../services/inventario_service.dart';
 import '../widgets/editar_activo_modal.dart';
 
 class DetalleActivoScreen extends StatefulWidget {
@@ -16,6 +19,8 @@ class DetalleActivoScreen extends StatefulWidget {
 
 class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
   int _currentImageIndex = 0;
+  bool _isUploadingPhoto = false;
+  final ImagePicker _picker = ImagePicker();
 
   // Refleja localmente el estado qr_impreso para actualizar el botón
   // sin tener que recargar toda la pantalla desde el backend.
@@ -90,10 +95,169 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
       if (resultado['cilindrada'] != null) {
         _activo['cilindrada'] = resultado['cilindrada'];
       }
+      if (resultado['combustible'] != null) {
+        _activo['combustible'] = resultado['combustible'];
+      }
+      if (resultado['transmision'] != null) {
+        _activo['transmision'] = resultado['transmision'];
+        _activo['transmision_tipo'] = resultado['transmision'];
+      }
+      if (resultado['traccion'] != null) {
+        _activo['traccion'] = resultado['traccion'];
+      }
       if (resultado['version_lock'] != null) {
         _activo['version_lock'] = resultado['version_lock'];
       }
     });
+  }
+
+  Future<void> _subirNuevaFoto(ImageSource source) async {
+    try {
+      final XFile? picked = await _picker.pickImage(
+        source: source,
+        maxWidth: 1280,
+        maxHeight: 1280,
+        imageQuality: 75,
+      );
+      if (picked == null) return;
+
+      setState(() => _isUploadingPhoto = true);
+      final idActivo = _activo['id_activo']?.toString() ?? '';
+      final updatedImgs = await InventarioService.subirFotosActivo(
+        idActivo,
+        [File(picked.path)],
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _isUploadingPhoto = false;
+        _activo['imagenes'] = updatedImgs;
+        _currentImageIndex = updatedImgs.isNotEmpty ? updatedImgs.length - 1 : 0;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Fotografía agregada exitosamente.'),
+          backgroundColor: AppPalette.success,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isUploadingPhoto = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al subir foto: ${e.toString().replaceAll('Exception: ', '')}'),
+          backgroundColor: AppPalette.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _eliminarFotoActual(String url) async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppPalette.surface,
+        title: Row(
+          children: [
+            const Icon(Icons.delete_forever, color: AppPalette.error, size: 28),
+            const SizedBox(width: 8),
+            Text('Eliminar Fotografía', style: AppTypography.title.copyWith(color: AppPalette.textPrimary)),
+          ],
+        ),
+        content: Text(
+          '¿Estás seguro de que deseas eliminar esta fotografía del activo? Esta acción no se puede deshacer.',
+          style: AppTypography.body.copyWith(color: AppPalette.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('Cancelar', style: AppTypography.button.copyWith(color: AppPalette.neutral)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppPalette.error),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar != true || !mounted) return;
+
+    setState(() => _isUploadingPhoto = true);
+    try {
+      final idActivo = _activo['id_activo']?.toString() ?? '';
+      final updatedImgs = await InventarioService.eliminarFotoActivo(idActivo, url);
+
+      if (!mounted) return;
+      setState(() {
+        _isUploadingPhoto = false;
+        _activo['imagenes'] = updatedImgs;
+        _currentImageIndex = 0;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Fotografía eliminada exitosamente.'),
+          backgroundColor: AppPalette.success,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isUploadingPhoto = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al eliminar foto: ${e.toString().replaceAll('Exception: ', '')}'),
+          backgroundColor: AppPalette.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  void _mostrarOpcionesAgregarFoto() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppPalette.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Agregar Fotografía Comercial',
+                style: AppTypography.title.copyWith(fontSize: 16),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: const Icon(Icons.camera_alt_outlined, color: AppPalette.primary),
+                title: const Text('Tomar Foto con Cámara', style: AppTypography.body),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _subirNuevaFoto(ImageSource.camera);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined, color: AppPalette.primary),
+                title: const Text('Elegir de la Galería', style: AppTypography.body),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _subirNuevaFoto(ImageSource.gallery);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   String _formatearUbicacionHumana() {
@@ -179,8 +343,8 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
           if (_puedeEditar && _esEstadoEditable)
             IconButton(
               key: const Key('btn_editar_activo'),
-              icon: const Icon(Icons.edit_location_alt_outlined, color: AppPalette.primary),
-              tooltip: 'Editar ubicación de activo',
+              icon: const Icon(Icons.edit_note, color: AppPalette.primary, size: 26),
+              tooltip: 'Editar datos y ubicación',
               onPressed: _abrirModalEdicion,
             ),
         ],
@@ -313,7 +477,66 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 24),
+            if (_isUploadingPhoto) ...[
+              const SizedBox(height: 12),
+              const Center(
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: AppPalette.primary),
+                ),
+              ),
+            ],
+            if (_puedeEditar && _esEstadoEditable) ...[
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        key: const Key('btn_agregar_foto_activo'),
+                        onPressed: _isUploadingPhoto ? null : _mostrarOpcionesAgregarFoto,
+                        icon: const Icon(Icons.add_a_photo_outlined, size: 18, color: AppPalette.primary),
+                        label: Text(
+                          'Añadir Foto',
+                          style: AppTypography.button.copyWith(color: AppPalette.primary, fontSize: 13),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: AppPalette.primary),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                    ),
+                    if (imagenesReales.isNotEmpty &&
+                        _currentImageIndex < imagenesReales.length &&
+                        imagenesReales[_currentImageIndex].startsWith('http')) ...[
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          key: const Key('btn_eliminar_foto_activo'),
+                          onPressed: _isUploadingPhoto
+                              ? null
+                              : () => _eliminarFotoActual(imagenesReales[_currentImageIndex]),
+                          icon: const Icon(Icons.delete_outline, size: 18, color: AppPalette.error),
+                          label: Text(
+                            'Eliminar Foto',
+                            style: AppTypography.button.copyWith(color: AppPalette.error, fontSize: 13),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: AppPalette.error),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 20),
 
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
