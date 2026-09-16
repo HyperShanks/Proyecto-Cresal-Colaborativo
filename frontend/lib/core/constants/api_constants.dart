@@ -4,9 +4,10 @@ class ApiConstants {
   // ==========================================
   // SINGLE SOURCE OF TRUTH (URL BASE)
   // ==========================================
-
-  // URL DE PRODUCCIÓN (Render)
+  //URL DE DESARROLLO
   static const String _baseUrl = 'https://cresal-backend-dev.onrender.com/api';
+  // URL DE PRODUCCIÓN (Render)
+  // static const String _baseUrl = 'https://cresal-backend-dev.onrender.com/api';
   // Red local
   //static const String _baseUrl = 'http://127.0.0.1:8000/api';
 
