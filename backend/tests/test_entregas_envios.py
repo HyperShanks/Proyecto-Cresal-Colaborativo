@@ -560,3 +560,71 @@ def test_rechazo_entrega_qr_no_impreso(client, auth_headers):
         db.close()
 
 
+def test_actualizar_estado_despacho_independiente_de_orden(client, auth_headers):
+    """
+    Verifica que PATCH /api/v1/despachos/{id_despacho}/estado actualiza únicamente
+    estado_despacho ('Por Enviar' <-> 'Enviado') sin modificar el estado de la orden
+    ni marcarla como Completada/Entregada.
+    """
+    db = TestingSessionLocal()
+    try:
+        cliente = db.query(models.Cliente).first()
+        vendedor = db.query(models.Usuario).filter(models.Usuario.id_rol == 2).first()
+
+        orden = models.Orden_Venta(
+            id_orden=uuid.uuid4(),
+            id_cliente=cliente.id_cliente,
+            id_vendedor=vendedor.id_usuario,
+            id_sucursal=1,
+            estado_orden="Reservada",
+            total_venta=90000,
+            monto_pendiente=90000,
+        )
+        db.add(orden)
+        db.flush()
+
+        despacho = models.Despacho(
+            id_despacho=uuid.uuid4(),
+            id_orden=orden.id_orden,
+            id_comuna_destino=1,
+            direccion_envio="Av. Siempre Viva 742",
+            receptor_nombres="Homero Simpson",
+            receptor_rut="12.345.678-9",
+            receptor_telefono="+56911223344",
+            empresa_transporte="Chilexpress",
+            estado_despacho="Por Enviar",
+        )
+        db.add(despacho)
+        db.commit()
+
+        # 1. Cambiar a "Enviado"
+        res1 = client.patch(
+            f"/api/v1/despachos/{despacho.id_despacho}/estado",
+            json={"nuevo_estado": "Enviado"},
+            headers=auth_headers,
+        )
+        assert res1.status_code == 200, res1.text
+        data1 = res1.json()
+        assert data1["estado_despacho"] == "Enviado"
+        assert data1["estado_orden"] == "Reservada"  # No cambia
+
+        db.refresh(orden)
+        assert orden.estado_orden == "Reservada"
+
+        # 2. Conmutar de vuelta a "Por Enviar"
+        res2 = client.patch(
+            f"/api/v1/despachos/{despacho.id_despacho}/estado",
+            json={"nuevo_estado": "Por Enviar"},
+            headers=auth_headers,
+        )
+        assert res2.status_code == 200, res2.text
+        data2 = res2.json()
+        assert data2["estado_despacho"] == "Por Enviar"
+        assert data2["estado_orden"] == "Reservada"
+
+        db.refresh(orden)
+        assert orden.estado_orden == "Reservada"
+    finally:
+        db.close()
+
+

@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../../core/widgets/gradient_button.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../core/constants/especificaciones_vehiculo.dart';
 import '../../services/vehiculo_service.dart';
 
 class RecepcionVehiculoScreen extends StatefulWidget {
@@ -33,6 +34,9 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
   final TextEditingController _anoController = TextEditingController();
   final TextEditingController _cilindradaController = TextEditingController();
   final TextEditingController _motorController = TextEditingController();
+  final TextEditingController _traccionOtroController = TextEditingController();
+  final TextEditingController _transmisionOtroController = TextEditingController();
+  final TextEditingController _combustibleOtroController = TextEditingController();
 
   // Variables para la cámara
   final ImagePicker _picker = ImagePicker();
@@ -46,6 +50,20 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
   void initState() {
     super.initState();
     _cargarFolioDesdeBackend();
+  }
+
+  @override
+  void dispose() {
+    _patenteController.dispose();
+    _marcaController.dispose();
+    _modeloController.dispose();
+    _anoController.dispose();
+    _cilindradaController.dispose();
+    _motorController.dispose();
+    _traccionOtroController.dispose();
+    _transmisionOtroController.dispose();
+    _combustibleOtroController.dispose();
+    super.dispose();
   }
 
   Future<void> _cargarFolioDesdeBackend() async {
@@ -242,28 +260,49 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
             _buildDropdown(
               label: 'Tracción',
               value: traccionSeleccionada,
-              items: ['4x2', '4x4', 'AWD'],
+              items: OpcionesTraccion.listaConSeleccionar,
               onChanged: (nuevoValor) =>
                   setState(() => traccionSeleccionada = nuevoValor),
             ),
+            if (traccionSeleccionada == OpcionesTraccion.otro) ...[
+              const SizedBox(height: 8),
+              _buildTextField(
+                controller: _traccionOtroController,
+                label: 'Especifique Tracción',
+              ),
+            ],
             const SizedBox(height: 16),
 
             _buildDropdown(
               label: 'Transmisión',
               value: transmisionSeleccionada,
-              items: ['Mecánica', 'Automática'],
+              items: OpcionesTransmision.listaConSeleccionar,
               onChanged: (nuevoValor) =>
                   setState(() => transmisionSeleccionada = nuevoValor),
             ),
+            if (transmisionSeleccionada == OpcionesTransmision.otro) ...[
+              const SizedBox(height: 8),
+              _buildTextField(
+                controller: _transmisionOtroController,
+                label: 'Especifique Transmisión',
+              ),
+            ],
             const SizedBox(height: 16),
 
             _buildDropdown(
               label: 'Combustible',
               value: combustibleSeleccionado,
-              items: ['Gasolina', 'Diésel', 'Eléctrico', 'Híbrido'],
+              items: OpcionesCombustible.listaConSeleccionar,
               onChanged: (nuevoValor) =>
                   setState(() => combustibleSeleccionado = nuevoValor),
             ),
+            if (combustibleSeleccionado == OpcionesCombustible.otro) ...[
+              const SizedBox(height: 8),
+              _buildTextField(
+                controller: _combustibleOtroController,
+                label: 'Especifique Combustible',
+              ),
+            ],
 
             const SizedBox(height: 24),
 
@@ -394,6 +433,16 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
       _isUploading = true;
     });
 
+    final traccionFinal = (traccionSeleccionada == OpcionesTraccion.otro && _traccionOtroController.text.trim().isNotEmpty)
+        ? _traccionOtroController.text.trim()
+        : (traccionSeleccionada != null && traccionSeleccionada != OpcionesTraccion.seleccionar ? traccionSeleccionada! : "");
+    final transmisionFinal = (transmisionSeleccionada == OpcionesTransmision.otro && _transmisionOtroController.text.trim().isNotEmpty)
+        ? _transmisionOtroController.text.trim()
+        : (transmisionSeleccionada != null && transmisionSeleccionada != OpcionesTransmision.seleccionar ? transmisionSeleccionada! : "");
+    final combustibleFinal = (combustibleSeleccionado == OpcionesCombustible.otro && _combustibleOtroController.text.trim().isNotEmpty)
+        ? _combustibleOtroController.text.trim()
+        : (combustibleSeleccionado != null && combustibleSeleccionado != OpcionesCombustible.seleccionar ? combustibleSeleccionado! : "");
+
     final datosNuevos = {
       "correlativo_ingreso": numeroIngreso,
       "patente": _patenteController.text.trim().toUpperCase(),
@@ -402,9 +451,9 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
       "anio": int.tryParse(_anoController.text.trim()) ?? 2000,
       "cilindrada": _cilindradaController.text.trim(),
       "numero_motor": _motorController.text.trim(),
-      "traccion": traccionSeleccionada ?? "",
-      "transmision": transmisionSeleccionada ?? "",
-      "combustible": combustibleSeleccionado ?? "",
+      "traccion": traccionFinal,
+      "transmision": transmisionFinal,
+      "combustible": combustibleFinal,
       "estado": "EN_PATIO",
     };
 
@@ -435,6 +484,9 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
         _anoController.clear();
         _cilindradaController.clear();
         _motorController.clear();
+        _traccionOtroController.clear();
+        _transmisionOtroController.clear();
+        _combustibleOtroController.clear();
         setState(() {
           traccionSeleccionada = null;
           transmisionSeleccionada = null;
@@ -667,6 +719,9 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
           _anoController.clear();
           _cilindradaController.clear();
           _motorController.clear();
+          _traccionOtroController.clear();
+          _transmisionOtroController.clear();
+          _combustibleOtroController.clear();
           setState(() {
             traccionSeleccionada = null;
             transmisionSeleccionada = null;
@@ -740,7 +795,7 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
         labelText: label,
         labelStyle: AppTypography.small,
       ),
-      initialValue: value,
+      initialValue: value ?? items.first,
       dropdownColor:
           AppPalette.surface, // ⚠️ Evita menús blancos en modo oscuro
       style: AppTypography.body, // ⚠️ Tipografía correcta

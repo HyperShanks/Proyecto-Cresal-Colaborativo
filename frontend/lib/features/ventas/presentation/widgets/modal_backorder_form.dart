@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../../../core/utils/currency_formatter.dart';
+import '../../../../core/constants/especificaciones_vehiculo.dart';
 import '../../models/checkout_wizard_models.dart';
 
 /// Modal dialog interactivo para configurar una Reserva por Encargo (Compra en Verde / Backorder) (SPEC-HU-05)
@@ -35,9 +36,11 @@ class _ModalBackorderFormState extends State<ModalBackorderForm> {
   final _precioController = TextEditingController();
   final _abonoController = TextEditingController();
   final _notasController = TextEditingController();
+  final _combustibleOtroController = TextEditingController();
+  final _transmisionOtroController = TextEditingController();
 
-  String _combustible = 'Bencina';
-  String _transmision = 'Manual';
+  String _combustible = OpcionesCombustible.seleccionar;
+  String _transmision = OpcionesTransmision.seleccionar;
 
   final List<Map<String, dynamic>> _categoriasDisponibles = [
     {'id': 1, 'nombre': 'Motor'},
@@ -60,6 +63,8 @@ class _ModalBackorderFormState extends State<ModalBackorderForm> {
     _precioController.dispose();
     _abonoController.dispose();
     _notasController.dispose();
+    _combustibleOtroController.dispose();
+    _transmisionOtroController.dispose();
     super.dispose();
   }
 
@@ -80,6 +85,13 @@ class _ModalBackorderFormState extends State<ModalBackorderForm> {
       return;
     }
 
+    final combFinal = (_combustible == OpcionesCombustible.otro && _combustibleOtroController.text.trim().isNotEmpty)
+        ? _combustibleOtroController.text.trim()
+        : (_combustible != OpcionesCombustible.seleccionar ? _combustible : null);
+    final transFinal = (_transmision == OpcionesTransmision.otro && _transmisionOtroController.text.trim().isNotEmpty)
+        ? _transmisionOtroController.text.trim()
+        : (_transmision != OpcionesTransmision.seleccionar ? _transmision : null);
+
     final reserva = ReservaBackorderModel(
       idCategoriaRequerida: _selectedCategoriaId,
       categoriaNombre: _selectedCategoriaNombre,
@@ -87,8 +99,8 @@ class _ModalBackorderFormState extends State<ModalBackorderForm> {
       modeloRequerido: _modeloController.text.trim(),
       anioRequerido: anio,
       cilindradaRequerida: _cilindradaController.text.trim().isNotEmpty ? _cilindradaController.text.trim() : null,
-      combustibleRequerido: _combustible,
-      transmisionRequerida: _transmision,
+      combustibleRequerido: combFinal,
+      transmisionRequerida: transFinal,
       precioAcordado: precio,
       montoAbonado: abono,
       notasPreparacion: _notasController.text.trim().isNotEmpty ? _notasController.text.trim() : null,
@@ -272,6 +284,7 @@ class _ModalBackorderFormState extends State<ModalBackorderForm> {
 
                 // Combustible y Transmisión
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
                       child: Column(
@@ -290,14 +303,22 @@ class _ModalBackorderFormState extends State<ModalBackorderForm> {
                             dropdownColor: AppPalette.surface,
                             style: AppTypography.body,
                             decoration: _inputDecoration(''),
-                            items: const [
-                              DropdownMenuItem(value: 'Bencina', child: Text('Bencina', overflow: TextOverflow.ellipsis)),
-                              DropdownMenuItem(value: 'Diésel', child: Text('Diésel', overflow: TextOverflow.ellipsis)),
-                              DropdownMenuItem(value: 'Híbrido', child: Text('Híbrido', overflow: TextOverflow.ellipsis)),
-                              DropdownMenuItem(value: 'Eléctrico', child: Text('Eléctrico', overflow: TextOverflow.ellipsis)),
-                            ],
-                            onChanged: (val) => setState(() => _combustible = val ?? 'Bencina'),
+                            items: OpcionesCombustible.listaConSeleccionar.map((opcion) {
+                              return DropdownMenuItem<String>(
+                                value: opcion,
+                                child: Text(opcion, overflow: TextOverflow.ellipsis),
+                              );
+                            }).toList(),
+                            onChanged: (val) => setState(() => _combustible = val ?? OpcionesCombustible.seleccionar),
                           ),
+                          if (_combustible == OpcionesCombustible.otro) ...[
+                            const SizedBox(height: 6),
+                            TextFormField(
+                              controller: _combustibleOtroController,
+                              style: AppTypography.body,
+                              decoration: _inputDecoration('Especifique combustible'),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -319,14 +340,22 @@ class _ModalBackorderFormState extends State<ModalBackorderForm> {
                             dropdownColor: AppPalette.surface,
                             style: AppTypography.body,
                             decoration: _inputDecoration(''),
-                            items: const [
-                              DropdownMenuItem(value: 'Manual', child: Text('Manual', overflow: TextOverflow.ellipsis)),
-                              DropdownMenuItem(value: 'Automática', child: Text('Automática', overflow: TextOverflow.ellipsis)),
-                              DropdownMenuItem(value: 'CVT', child: Text('CVT', overflow: TextOverflow.ellipsis)),
-                              DropdownMenuItem(value: 'Tiptronic', child: Text('Tiptronic', overflow: TextOverflow.ellipsis)),
-                            ],
-                            onChanged: (val) => setState(() => _transmision = val ?? 'Manual'),
+                            items: OpcionesTransmision.listaConSeleccionar.map((opcion) {
+                              return DropdownMenuItem<String>(
+                                value: opcion,
+                                child: Text(opcion, overflow: TextOverflow.ellipsis),
+                              );
+                            }).toList(),
+                            onChanged: (val) => setState(() => _transmision = val ?? OpcionesTransmision.seleccionar),
                           ),
+                          if (_transmision == OpcionesTransmision.otro) ...[
+                            const SizedBox(height: 6),
+                            TextFormField(
+                              controller: _transmisionOtroController,
+                              style: AppTypography.body,
+                              decoration: _inputDecoration('Especifique transmisión'),
+                            ),
+                          ],
                         ],
                       ),
                     ),

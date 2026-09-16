@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../core/constants/especificaciones_vehiculo.dart';
 
 /// Panel lateral de filtros interactivos para el Catálogo de Repuestos (HU-3.2).
 /// Diseñado con Flat Design estricto, respetando SystemDesignCresal.
@@ -13,12 +14,16 @@ class FiltrosDrawer extends StatelessWidget {
   final int? anio;
   final String? cilindrada;
   final String? transmision;
+  final String? combustible;
+  final String? traccion;
   final ValueChanged<int?> onCategoriaChanged;
   final ValueChanged<int?> onSucursalChanged;
   final ValueChanged<String?> onMarcaChanged;
   final ValueChanged<int?> onAnioChanged;
   final ValueChanged<String?> onCilindradaChanged;
   final ValueChanged<String?> onTransmisionChanged;
+  final ValueChanged<String?>? onCombustibleChanged;
+  final ValueChanged<String?>? onTraccionChanged;
   final VoidCallback onLimpiarFiltros;
 
   const FiltrosDrawer({
@@ -29,12 +34,16 @@ class FiltrosDrawer extends StatelessWidget {
     required this.anio,
     this.cilindrada,
     this.transmision,
+    this.combustible,
+    this.traccion,
     required this.onCategoriaChanged,
     required this.onSucursalChanged,
     required this.onMarcaChanged,
     required this.onAnioChanged,
     required this.onCilindradaChanged,
     required this.onTransmisionChanged,
+    this.onCombustibleChanged,
+    this.onTraccionChanged,
     required this.onLimpiarFiltros,
   });
 
@@ -343,21 +352,87 @@ class FiltrosDrawer extends StatelessWidget {
                           },
                         ),
                         _buildChoiceChip(
-                          label: 'Automática',
-                          isSelected: transmision == 'Automatica' || transmision == 'Automática',
-                          onSelected: (selected) {
-                            onTransmisionChanged(selected ? 'Automatica' : null);
-                          },
-                        ),
-                        _buildChoiceChip(
                           label: 'Mecánica',
                           isSelected: transmision == 'Mecanica' || transmision == 'Mecánica' || transmision == 'Manual',
                           onSelected: (selected) {
-                            onTransmisionChanged(selected ? 'Mecanica' : null);
+                            onTransmisionChanged(selected ? 'Mecánica' : null);
+                          },
+                        ),
+                        _buildChoiceChip(
+                          label: 'Automática',
+                          isSelected: transmision == 'Automatica' || transmision == 'Automática',
+                          onSelected: (selected) {
+                            onTransmisionChanged(selected ? 'Automática' : null);
+                          },
+                        ),
+                        _buildChoiceChip(
+                          label: 'Semiautomática',
+                          isSelected: transmision == 'Semiautomatica' || transmision == 'Semiautomática',
+                          onSelected: (selected) {
+                            onTransmisionChanged(selected ? 'Semiautomática' : null);
+                          },
+                        ),
+                        _buildChoiceChip(
+                          label: 'Otro...',
+                          isSelected: transmision == 'Otro...',
+                          onSelected: (selected) {
+                            onTransmisionChanged(selected ? 'Otro...' : null);
                           },
                         ),
                       ],
                     ),
+                    if (onCombustibleChanged != null) ...[
+                      const SizedBox(height: 24),
+                      _buildSectionHeader('TIPO DE COMBUSTIBLE'),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8.0,
+                        runSpacing: 8.0,
+                        children: OpcionesCombustible.listaFiltros.map((opcion) {
+                          final isTodas = opcion == 'Todos';
+                          final isSelected = isTodas
+                              ? (combustible == null || combustible!.isEmpty)
+                              : combustible == opcion;
+                          return _buildChoiceChip(
+                            label: opcion,
+                            isSelected: isSelected,
+                            onSelected: (selected) {
+                              if (isTodas) {
+                                if (selected) onCombustibleChanged!(null);
+                              } else {
+                                onCombustibleChanged!(selected ? opcion : null);
+                              }
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                    if (onTraccionChanged != null) ...[
+                      const SizedBox(height: 24),
+                      _buildSectionHeader('TIPO DE TRACCIÓN'),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8.0,
+                        runSpacing: 8.0,
+                        children: OpcionesTraccion.listaFiltros.map((opcion) {
+                          final isTodas = opcion == 'Todas';
+                          final isSelected = isTodas
+                              ? (traccion == null || traccion!.isEmpty)
+                              : traccion == opcion;
+                          return _buildChoiceChip(
+                            label: opcion,
+                            isSelected: isSelected,
+                            onSelected: (selected) {
+                              if (isTodas) {
+                                if (selected) onTraccionChanged!(null);
+                              } else {
+                                onTraccionChanged!(selected ? opcion : null);
+                              }
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ],
                   ],
                 ),
               ),

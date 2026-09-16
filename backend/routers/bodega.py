@@ -293,6 +293,59 @@ def obtener_tareas_pendientes(
             )
         )
 
+    # ---------------------------------------------------------
+    # PRIORIDAD 1.B: Ítems Manuales / Venta Libre con Preparación
+    # ---------------------------------------------------------
+    detalles_manuales = (
+        db.query(Detalle_Orden, Orden_Venta)
+        .join(Orden_Venta, Detalle_Orden.id_orden == Orden_Venta.id_orden)
+        .filter(
+            Detalle_Orden.id_activo.is_(None),
+            Orden_Venta.id_sucursal == sucursal_id,
+            Detalle_Orden.estado_preparacion != "Listo",
+            Orden_Venta.estado_orden.in_(["Reservada", "Pagada"]),
+        )
+        .all()
+    )
+
+    for detalle_m, orden_m in detalles_manuales:
+        tipo_m = "PREPARACION"
+        if orden_m.monto_pendiente > 0:
+            bloqueo_m = "ESPERANDO PAGO EN CAJA"
+            accion_m = "EN ESPERA"
+        else:
+            bloqueo_m = None
+            accion_m = "PREPARAR ITEM"
+
+        otras_alertas.append(
+            TareaAlertaResponse(
+                id_tarea=f"ORD-{str(detalle_m.id_detalle)[:8]}",
+                tipo_alerta=tipo_m,
+                orden_ref=orden_m.folio,
+                folio=orden_m.folio,
+                titulo_pieza=detalle_m.descripcion_manual or "Ítem Manual / Venta Libre",
+                categoria="Venta Libre",
+                tipo_repuesto="Ítem Manual",
+                ubicacion="Mostrador / Taller",
+                ubicacion_pasillo=None,
+                ubicacion_pallet=None,
+                ubicacion_galpon=None,
+                nota_especial=detalle_m.notas_preparacion,
+                estado_bloqueo=bloqueo_m,
+                accion_requerida=accion_m,
+                id_detalle=detalle_m.id_detalle,
+                id_activo=None,
+                id_sucursal_origen=orden_m.id_sucursal,
+                id_sucursal_destino=orden_m.id_sucursal,
+                es_traslado=False,
+                estado_preparacion=detalle_m.estado_preparacion or "Pendiente",
+                id_orden=orden_m.id_orden,
+                sku_qr_fisico=None,
+                qr_impreso=True,
+                etiqueta_data=None,
+            )
+        )
+
     # Consolidar tareas de Barrera (LIBERADA) a 1 única tarea por orden
     for id_ord, items in liberadas_por_orden.items():
         if len(items) == 1:

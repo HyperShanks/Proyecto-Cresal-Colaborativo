@@ -312,7 +312,7 @@ void main() {
       expect(find.byType(QrImageView), findsOneWidget);
     });
 
-    testWidgets('Muestra botón de Simular Pago cuando la orden está Reservada', (tester) async {
+    testWidgets('Muestra acciones de gestión cuando la orden está Reservada', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -323,7 +323,7 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      expect(find.text('💳 Simular Pago en Caja (Demo)'), findsOneWidget);
+      expect(find.text('Acciones de Gestión'), findsOneWidget);
       expect(find.text('Editar Instrucciones a Bodega'), findsOneWidget);
       expect(find.text('Deshacer Orden (Liberar Stock)'), findsOneWidget);
       // No debe mostrar botón de QR aún

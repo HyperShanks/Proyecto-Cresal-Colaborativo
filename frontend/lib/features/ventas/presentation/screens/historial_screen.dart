@@ -55,18 +55,30 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
 
     if (widget.initialOrdenes != null) {
       _ordenes = List.from(widget.initialOrdenes!);
-      _ordenes.sort((a, b) {
-        final aComp = a.estadoOrden.toLowerCase() == 'completada' ? 1 : 0;
-        final bComp = b.estadoOrden.toLowerCase() == 'completada' ? 1 : 0;
-        if (aComp != bComp) {
-          return aComp.compareTo(bComp);
-        }
-        return (b.fechaCreacion ?? '').compareTo(a.fechaCreacion ?? '');
-      });
+      _ordenarOrdenes(_ordenes);
       _isLoading = false;
     } else {
       _cargarOrdenes();
     }
+  }
+
+  /// Prioridad de ordenamiento: 0 = Activas/Pendientes, 1 = Completadas, 2 = Anuladas (al final absoluto)
+  static int _prioridadEstado(String estado) {
+    final est = estado.trim().toLowerCase();
+    if (est == 'anulada') return 2;
+    if (est == 'completada' || est == 'entregada') return 1;
+    return 0;
+  }
+
+  void _ordenarOrdenes(List<OrdenHistorialModel> lista) {
+    lista.sort((a, b) {
+      final aPrio = _prioridadEstado(a.estadoOrden);
+      final bPrio = _prioridadEstado(b.estadoOrden);
+      if (aPrio != bPrio) {
+        return aPrio.compareTo(bPrio);
+      }
+      return (b.fechaCreacion ?? '').compareTo(a.fechaCreacion ?? '');
+    });
   }
 
   @override
@@ -118,15 +130,8 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
 
       if (!mounted) return;
 
-      // Ordenar: Completadas al final, las demás al principio (más recientes primero)
-      ordenes.sort((a, b) {
-        final aComp = a.estadoOrden.toLowerCase() == 'completada' ? 1 : 0;
-        final bComp = b.estadoOrden.toLowerCase() == 'completada' ? 1 : 0;
-        if (aComp != bComp) {
-          return aComp.compareTo(bComp);
-        }
-        return (b.fechaCreacion ?? '').compareTo(a.fechaCreacion ?? '');
-      });
+      // Ordenar: Activas al principio, completadas al final y anuladas al final absoluto
+      _ordenarOrdenes(ordenes);
 
       setState(() {
         _ordenes = ordenes;
@@ -599,6 +604,7 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
                                     return OrdenCard(
                                       orden: orden,
                                       onTap: () => _abrirDetalleOrden(orden),
+                                      onEstadoDespachoCambiado: _cargarOrdenes,
                                     );
                                   },
                                 ),

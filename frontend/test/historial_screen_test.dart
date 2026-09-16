@@ -284,6 +284,145 @@ void main() {
       await tester.pump();
       expect(cardTapped, isTrue);
     });
+
+    testWidgets('OrdenCard muestra información completa de despacho y detalle resumido (máx 3 artículos truncados a 20 chars)', (tester) async {
+      final ordenConDespachoYMuchosItems = OrdenHistorialModel(
+        idOrden: 'ord-despacho-test',
+        folio: 'ORD-DESP-777',
+        estadoOrden: 'Pagada',
+        totalVenta: 350000,
+        montoPendiente: 0,
+        totalItems: 4,
+        fechaCreacion: '2026-09-15T10:00:00',
+        cliente: const ClienteOrdenResumenModel(
+          rutCliente: '11.111.111-1',
+          nombres: 'Roberto',
+          apellidos: 'Muñoz',
+          telefono: '+56911111111',
+        ),
+        despacho: const DespachoOrdenResumenModel(
+          idDespacho: 'desp-777',
+          direccionEnvio: 'Calle Los Aromos 555',
+          comunaDestino: 'Villa Alemana',
+          receptorNombres: 'Pedro Pascal',
+          receptorRut: '22.222.222-2',
+          receptorTelefono: '+56922222222',
+          empresaTransporte: 'Chilexpress',
+          estadoDespacho: 'Por Enviar',
+        ),
+        detalles: [
+          DetalleOrdenItemModel(
+            idDetalle: 'd1',
+            titulo: 'Amortiguador Delantero Izquierdo', // 32 caracteres > 20 -> "Amortiguador Delante..."
+            cantidad: 1,
+            precioFinal: 100000,
+            subtotal: 100000,
+            esInventariado: true,
+          ),
+          DetalleOrdenItemModel(
+            idDetalle: 'd2',
+            titulo: 'Filtro Aceite', // 13 caracteres <= 20
+            cantidad: 2,
+            precioFinal: 15000,
+            subtotal: 30000,
+            esInventariado: true,
+          ),
+          DetalleOrdenItemModel(
+            idDetalle: 'd3',
+            titulo: 'Pastillas de Freno Delanteras', // 29 caracteres > 20 -> "Pastillas de Freno D..."
+            cantidad: 1,
+            precioFinal: 45000,
+            subtotal: 45000,
+            esInventariado: true,
+          ),
+          DetalleOrdenItemModel(
+            idDetalle: 'd4',
+            titulo: 'Bujía de Encendido Iridium', // Cuarto artículo: no debe mostrarse, debe salir '...'
+            cantidad: 4,
+            precioFinal: 25000,
+            subtotal: 100000,
+            esInventariado: false,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: OrdenCard(orden: ordenConDespachoYMuchosItems),
+          ),
+        ),
+      );
+
+      // Verificación de Información Completa de Despacho
+      expect(find.text('Datos de Despacho'), findsOneWidget);
+      expect(find.text('Por Enviar'), findsWidgets);
+      expect(find.text('Despacho: Calle Los Aromos 555 • Villa Alemana'), findsOneWidget);
+      expect(find.text('Receptor: Pedro Pascal (22.222.222-2)'), findsOneWidget);
+      expect(find.text('Tel: +56922222222 • Transporte: Chilexpress'), findsOneWidget);
+
+      // Verificación de Detalle Resumido
+      expect(find.text('Detalle Resumido:'), findsOneWidget);
+      // Artículo 1: truncado a 20 chars ("Amortiguador Delante...")
+      expect(find.text('Amortiguador Delante...'), findsOneWidget);
+      // Artículo 2: con cantidad (x2)
+      expect(find.text('Filtro Aceite (x2)'), findsOneWidget);
+      // Artículo 3: truncado a 20 chars ("Pastillas de Freno D...")
+      expect(find.text('Pastillas de Freno D...'), findsOneWidget);
+      // Artículo 4: no se debe mostrar el nombre completo
+      expect(find.text('Bujía de Encendido Iridium'), findsNothing);
+      // Puntos suspensivos presentes
+      expect(find.text('...'), findsOneWidget);
+    });
+
+    testWidgets('Tap en badge de despacho en OrdenCard abre diálogo para cambiar estado sin alterar orden', (tester) async {
+      final ordenDespacho = OrdenHistorialModel(
+        idOrden: 'ord-888',
+        folio: 'ORD-DESP-888',
+        fechaCreacion: '2026-03-30T10:00:00Z',
+        estadoOrden: 'Pagada',
+        totalVenta: 150000,
+        montoPendiente: 0,
+        totalItems: 1,
+        detalles: const [],
+        despacho: const DespachoOrdenResumenModel(
+          idDespacho: 'desp-888',
+          direccionEnvio: 'Av Libertad 100',
+          comunaDestino: 'Viña del Mar',
+          receptorNombres: 'Juan Perez',
+          receptorRut: '11.111.111-1',
+          receptorTelefono: '+56911111111',
+          empresaTransporte: 'Starken',
+          estadoDespacho: 'Por Enviar',
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: OrdenCard(orden: ordenDespacho),
+          ),
+        ),
+      );
+
+      expect(find.text('Por Enviar'), findsOneWidget);
+
+      // Tap en el badge interactivo de despacho
+      await tester.tap(find.text('Por Enviar'));
+      await tester.pumpAndSettle();
+
+      // Debe desplegar diálogo de confirmación
+      expect(find.text('Estado de Despacho'), findsOneWidget);
+      expect(find.textContaining('¿Deseas cambiar el estado de despacho a "Enviado"?'), findsOneWidget);
+      expect(find.textContaining('no altera el estado de la orden (Pagada)'), findsOneWidget);
+      expect(find.text('CAMBIAR A Enviado'), findsOneWidget);
+      expect(find.text('CANCELAR'), findsOneWidget);
+
+      // Cancelar diálogo
+      await tester.tap(find.text('CANCELAR'));
+      await tester.pumpAndSettle();
+      expect(find.text('Estado de Despacho'), findsNothing);
+    });
   });
 
   group('OrdenDetailSheet Widget Tests', () {
@@ -563,7 +702,7 @@ void main() {
   });
 
   group('HistorialScreen Widget Tests', () {
-    testWidgets('Ordena órdenes colocando Completadas al final a través de inicialización y carga', (tester) async {
+    testWidgets('Ordena órdenes colocando Completadas al final y Anuladas aún más al final', (tester) async {
       final ordenCompletada = OrdenHistorialModel(
         idOrden: 'comp-001',
         estadoOrden: 'Completada',
@@ -594,21 +733,41 @@ void main() {
         ),
         detalles: [],
       );
+      final ordenAnulada = OrdenHistorialModel(
+        idOrden: 'anu-003',
+        estadoOrden: 'Anulada',
+        totalVenta: 80000,
+        montoPendiente: 0,
+        qrTransaccionalSalida: 'ORD-ANU-003',
+        fechaCreacion: '2026-08-16T18:00:00',
+        totalItems: 1,
+        cliente: const ClienteOrdenResumenModel(
+          rutCliente: '3-5',
+          nombres: 'Cliente',
+          apellidos: 'Anulado',
+        ),
+        detalles: [],
+      );
 
       await tester.pumpWidget(
         MaterialApp(
           home: HistorialScreen(
-            initialOrdenes: [ordenCompletada, ordenReservada],
+            initialOrdenes: [ordenAnulada, ordenCompletada, ordenReservada],
           ),
         ),
       );
 
       expect(find.text('ORD-COMP-001'), findsOneWidget);
       expect(find.text('ORD-RES-002'), findsOneWidget);
+      expect(find.text('ORD-ANU-003'), findsOneWidget);
 
       final topReservada = tester.getTopLeft(find.text('ORD-RES-002')).dy;
       final topCompletada = tester.getTopLeft(find.text('ORD-COMP-001')).dy;
+      final topAnulada = tester.getTopLeft(find.text('ORD-ANU-003')).dy;
+
+      // Activa (Reservada) antes que Completada, y Completada antes que Anulada (Anulada al final absoluto)
       expect(topReservada, lessThan(topCompletada));
+      expect(topCompletada, lessThan(topAnulada));
     });
     final orden1 = ordenMock; // Carlos González, 18.765.432-1, Motor - Toyota Yaris 2018, ORD-TEST-001
     final orden2 = OrdenHistorialModel(

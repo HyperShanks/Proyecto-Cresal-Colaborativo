@@ -381,6 +381,108 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
     }
   }
 
+  Future<void> _dialogCambiarEstadoDespacho() async {
+    final d = _orden.despacho;
+    if (d == null || d.idDespacho.isEmpty) return;
+
+    final bool esEnviado = d.estadoDespacho.trim().toLowerCase() == 'enviado';
+    final String siguienteEstado = esEnviado ? 'Por Enviar' : 'Enviado';
+
+    final bool? confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppPalette.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.local_shipping_outlined, color: AppPalette.primary, size: 24),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'Estado de Despacho',
+                style: TextStyle(color: AppPalette.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          '¿Deseas cambiar el estado de despacho a "$siguienteEstado"?\n\n'
+          'Nota: Esto solo actualiza el estado logístico del envío y no altera el estado de la orden (${_orden.estadoOrden}). '
+          'La orden continúa su flujo normal hasta su validación en bodega.',
+          style: const TextStyle(color: AppPalette.textSecondary, fontSize: 13.5, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('CANCELAR', style: TextStyle(color: AppPalette.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppPalette.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text('CAMBIAR A $siguienteEstado', style: const TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar == true) {
+      setState(() => _isLoading = true);
+      try {
+        await OrdenesService.actualizarEstadoDespacho(d.idDespacho, siguienteEstado);
+        if (!mounted) return;
+        setState(() {
+          _isLoading = false;
+          _orden = _orden.copyWith(
+            despacho: DespachoOrdenResumenModel(
+              idDespacho: d.idDespacho,
+              direccionEnvio: d.direccionEnvio,
+              receptorNombres: d.receptorNombres,
+              receptorRut: d.receptorRut,
+              receptorTelefono: d.receptorTelefono,
+              empresaTransporte: d.empresaTransporte,
+              costoEnvio: d.costoEnvio,
+              estadoDespacho: siguienteEstado,
+              comunaDestino: d.comunaDestino,
+            ),
+          );
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppPalette.surface,
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: AppPalette.success),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Estado de despacho actualizado a $siguienteEstado.',
+                    style: const TextStyle(color: AppPalette.textPrimary),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppPalette.surface,
+            content: Text(
+              'Error al actualizar despacho: ${e.toString().replaceAll("Exception: ", "")}',
+              style: const TextStyle(color: AppPalette.error),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -558,14 +660,62 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Icon(Icons.local_shipping, size: 16.0, color: AppPalette.secondary),
-                              const SizedBox(width: 6.0),
-                              Text(
-                                'Despacho a Domicilio',
-                                style: AppTypography.small.copyWith(
-                                  color: AppPalette.secondary,
-                                  fontWeight: FontWeight.bold,
+                              Row(
+                                children: [
+                                  const Icon(Icons.local_shipping, size: 16.0, color: AppPalette.secondary),
+                                  const SizedBox(width: 6.0),
+                                  Text(
+                                    'Despacho a Domicilio',
+                                    style: AppTypography.small.copyWith(
+                                      color: AppPalette.secondary,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              InkWell(
+                                borderRadius: BorderRadius.circular(6.0),
+                                onTap: _isLoading ? null : _dialogCambiarEstadoDespacho,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 3.0),
+                                  decoration: BoxDecoration(
+                                    color: (_orden.despacho!.estadoDespacho.toLowerCase() == 'enviado'
+                                            ? AppPalette.success
+                                            : AppPalette.secondary)
+                                        .withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(6.0),
+                                    border: Border.all(
+                                      color: (_orden.despacho!.estadoDespacho.toLowerCase() == 'enviado'
+                                              ? AppPalette.success
+                                              : AppPalette.secondary)
+                                          .withValues(alpha: 0.4),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        _orden.despacho!.estadoDespacho,
+                                        style: TextStyle(
+                                          fontSize: 10.5,
+                                          fontWeight: FontWeight.bold,
+                                          color: _orden.despacho!.estadoDespacho.toLowerCase() == 'enviado'
+                                              ? AppPalette.success
+                                              : AppPalette.secondary,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4.0),
+                                      Icon(
+                                        Icons.sync_alt_rounded,
+                                        size: 13.0,
+                                        color: _orden.despacho!.estadoDespacho.toLowerCase() == 'enviado'
+                                            ? AppPalette.success
+                                            : AppPalette.secondary,
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ],
@@ -575,11 +725,30 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                             'Dirección: ${_orden.despacho!.direccionEnvio}',
                             style: AppTypography.body.copyWith(fontSize: 13.0),
                           ),
+                          if (_orden.despacho!.comunaDestino != null && _orden.despacho!.comunaDestino!.isNotEmpty) ...[
+                            const SizedBox(height: 2.0),
+                            Text(
+                              'Comuna: ${_orden.despacho!.comunaDestino}',
+                              style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
+                            ),
+                          ],
                           const SizedBox(height: 4.0),
                           Text(
                             'Receptor: ${_orden.despacho!.receptorNombres} (${_orden.despacho!.receptorRut})',
                             style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
                           ),
+                          const SizedBox(height: 2.0),
+                          Text(
+                            'Teléfono: ${_orden.despacho!.receptorTelefono}',
+                            style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
+                          ),
+                          if (_orden.despacho!.empresaTransporte != null && _orden.despacho!.empresaTransporte!.isNotEmpty) ...[
+                            const SizedBox(height: 2.0),
+                            Text(
+                              'Transporte: ${_orden.despacho!.empresaTransporte}',
+                              style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
+                            ),
+                          ],
                           const SizedBox(height: 2.0),
                           Text(
                             'Estado Envío: ${_orden.despacho!.estadoDespacho}',

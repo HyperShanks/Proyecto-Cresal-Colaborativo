@@ -3,7 +3,6 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
@@ -12,6 +11,7 @@ import '../../../ventas/models/catalogo_model.dart';
 import '../../../inventario/services/inventario_service.dart';
 import '../../services/gerencia_service.dart';
 import '../../../ventas/presentation/widgets/visor_imagen_completa_dialog.dart';
+import '../../../../core/constants/especificaciones_vehiculo.dart';
 
 enum ModoVistaStock { tarjetas, tabla }
 
@@ -93,8 +93,10 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
       );
       if (!mounted) return;
       setState(() {
-        _galponesDisponibles = opciones['galpones'] ?? [];
-        _pasillosDisponibles = opciones['pasillos'] ?? [];
+        final gList = (opciones['galpones'] ?? <String>[]);
+        _galponesDisponibles = gList.isNotEmpty ? gList : OpcionesUbicacionBodega.galpones;
+        final pList = (opciones['pasillos'] ?? <String>[]);
+        _pasillosDisponibles = pList.isNotEmpty ? pList : OpcionesUbicacionBodega.pasillos;
         _palletsDisponibles = opciones['pallets'] ?? [];
 
         if (_pasillo != 'todas' && !_pasillosDisponibles.contains(_pasillo.toUpperCase())) {
@@ -430,10 +432,11 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                 // 3. Combustible
                 _buildDropdown(
                   value: _combustible,
-                  items: const [
-                    DropdownMenuItem(value: 'todos', child: Text('Combustible: Todos')),
-                    DropdownMenuItem(value: 'Diesel', child: Text('Diesel')),
-                    DropdownMenuItem(value: 'Gasolina', child: Text('Gasolina')),
+                  items: [
+                    const DropdownMenuItem(value: 'todos', child: Text('Combustible: Todos')),
+                    ...OpcionesCombustible.lista.map(
+                      (c) => DropdownMenuItem(value: c, child: Text(c)),
+                    ),
                   ],
                   onChanged: (val) {
                     if (val == null) return;
@@ -444,10 +447,11 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                 // 4. Transmisión
                 _buildDropdown(
                   value: _transmision,
-                  items: const [
-                    DropdownMenuItem(value: 'todas', child: Text('Transmisión: Todas')),
-                    DropdownMenuItem(value: 'Automatica', child: Text('Automática')),
-                    DropdownMenuItem(value: 'Mecanica', child: Text('Mecánica')),
+                  items: [
+                    const DropdownMenuItem(value: 'todas', child: Text('Transmisión: Todas')),
+                    ...OpcionesTransmision.lista.map(
+                      (t) => DropdownMenuItem(value: t, child: Text(t)),
+                    ),
                   ],
                   onChanged: (val) {
                     if (val == null) return;

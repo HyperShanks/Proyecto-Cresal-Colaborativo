@@ -1053,6 +1053,43 @@ class OrdenesService {
     }
   }
 
+  /// Actualiza exclusivamente el estado del despacho ('Por Enviar' o 'Enviado')
+  /// sin alterar el estado de la orden ni liberar activos en bodega.
+  static Future<bool> actualizarEstadoDespacho(
+    String idDespacho,
+    String nuevoEstado, {
+    http.Client? client,
+  }) async {
+    final httpClient = client ?? http.Client();
+    try {
+      final uri =
+          Uri.parse('${ApiConstants.baseUrl}/api/v1/despachos/$idDespacho/estado');
+      final token = await AuthService.getToken();
+      final headers = {
+        'Content-Type': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+      final body = jsonEncode({'nuevo_estado': nuevoEstado});
+
+      final response = await httpClient.patch(uri, headers: headers, body: body).timeout(
+            const Duration(seconds: 10),
+            onTimeout: () => throw Exception('Tiempo de espera agotado.'),
+          );
+
+      if (response.statusCode == 200) {
+        OrdenesSyncNotifier.instance.notificarCambio();
+        return true;
+      } else {
+        final resBody = jsonDecode(utf8.decode(response.bodyBytes));
+        final detail =
+            resBody is Map ? resBody['detail'] : 'Error al actualizar estado del despacho';
+        throw Exception(detail);
+      }
+    } finally {
+      if (client == null) httpClient.close();
+    }
+  }
+
   static Map<String, List<ComunaItemModel>>? _geografiaCache;
 
   /// Obtiene la lista de regiones y comunas dinámicas desde la Base de Datos.

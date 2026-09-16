@@ -27,6 +27,7 @@ from schemas import (
     InstruccionesUpdateResponse, OrdenPagoRequest,
     OrdenPagoResponse, EntregaEnvioItemResponse,
     EntregaConfirmacionResponse, DespachoEnvioResponse,
+    DespachoActualizarEstadoRequest, DespachoActualizarEstadoResponse,
     VendedorResumenResponse, CheckoutWizardRequest,
     CheckoutWizardResponse, ReservaBackorderDTO, DespachoDTO,
     HistorialCajaResponse, HistorialOrdenItemResponse,
@@ -794,7 +795,9 @@ def obtener_mis_ventas(
 
     ordenes = query.order_by(
         case(
+            (func.lower(Orden_Venta.estado_orden) == "anulada", 2),
             (func.lower(Orden_Venta.estado_orden) == "completada", 1),
+            (func.lower(Orden_Venta.estado_orden) == "entregada", 1),
             else_=0,
         ),
         Orden_Venta.fecha_creacion.desc(),
@@ -1379,6 +1382,66 @@ def marcar_despacho_enviado(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error transaccional al marcar despacho como enviado: {str(e)}"
+        )
+
+
+@router.patch(
+    "/despachos/{id_despacho}/estado",
+    response_model=DespachoActualizarEstadoResponse,
+    status_code=200,
+    summary="Actualizar Estado del Despacho (Independiente del estado de la orden)",
+)
+def actualizar_estado_despacho(
+    id_despacho: uuid.UUID,
+    payload: DespachoActualizarEstadoRequest,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """
+    Actualiza exclusivamente el estado logístico del despacho ('Por Enviar' o 'Enviado').
+    REGLA: No altera el estado de la orden (Orden_Venta.estado_orden) ni libera activos en bodega.
+    La barrera de salida sigue siendo la única que completa la orden.
+    """
+    despacho = db.query(Despacho).filter(Despacho.id_despacho == id_despacho).first()
+    if not despacho:
+        raise HTTPException(status_code=404, detail="Registro de despacho no encontrado.")
+
+    orden = db.query(Orden_Venta).filter(Orden_Venta.id_orden == despacho.id_orden).first()
+    if not orden:
+        raise HTTPException(status_code=404, detail="Orden asociada al despacho no encontrada.")
+
+    nuevo_estado = payload.nuevo_estado.strip()
+    if nuevo_estado.lower() in ["enviado", "enviada"]:
+        estado_normalizado = "Enviado"
+    elif nuevo_estado.lower() in ["por enviar", "pendiente", "por_enviar"]:
+        estado_normalizado = "Por Enviar"
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Estado de despacho '{nuevo_estado}' no válido. Opciones permitidas: 'Por Enviar', 'Enviado'."
+        )
+
+    try:
+        despacho.estado_despacho = estado_normalizado
+        despacho.fecha_actualizacion = datetime.now()
+        db.commit()
+        db.refresh(despacho)
+
+        folio = orden.folio
+        return DespachoActualizarEstadoResponse(
+            id_despacho=despacho.id_despacho,
+            id_orden=orden.id_orden,
+            folio=folio,
+            estado_despacho=despacho.estado_despacho,
+            estado_orden=orden.estado_orden,
+            mensaje=f"Estado de despacho actualizado a '{despacho.estado_despacho}'.",
+            fecha_actualizacion=datetime.now().isoformat(),
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error transaccional al actualizar estado de despacho: {str(e)}"
         )
 
 

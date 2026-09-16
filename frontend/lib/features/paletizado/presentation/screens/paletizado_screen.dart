@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../core/constants/especificaciones_vehiculo.dart';
 import '../../services/paletizado_service.dart';
 import '../../services/print_service.dart';
 import '../../domain/exceptions/printer_exceptions.dart';
@@ -844,9 +845,29 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
               const Text('Ubicación Física', style: AppTypography.title),
               const SizedBox(height: 16),
 
-              _buildTextField(_galponController, 'Galpón', Icons.warehouse),
+              _buildDropdownLocationField(
+                label: 'Galpón',
+                value: _galponController.text,
+                items: OpcionesUbicacionBodega.galpones,
+                icon: Icons.warehouse,
+                onChanged: (val) {
+                  setState(() {
+                    _galponController.text = val ?? '';
+                  });
+                },
+              ),
               const SizedBox(height: 16),
-              _buildTextField(_pasilloController, 'Pasillo', Icons.view_column),
+              _buildDropdownLocationField(
+                label: 'Pasillo',
+                value: _pasilloController.text,
+                items: OpcionesUbicacionBodega.pasillos,
+                icon: Icons.view_column,
+                onChanged: (val) {
+                  setState(() {
+                    _pasilloController.text = val ?? '';
+                  });
+                },
+              ),
               const SizedBox(height: 16),
               _buildTextField(_palletController, 'Pallet', Icons.layers),
               const SizedBox(height: 16),
@@ -1036,6 +1057,31 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildDropdownLocationField({
+    required String label,
+    required String? value,
+    required List<String> items,
+    required IconData icon,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return DropdownButtonFormField<String>(
+      initialValue: (value != null && value.isNotEmpty && items.contains(value)) ? value : null,
+      dropdownColor: AppPalette.surface,
+      style: const TextStyle(color: AppPalette.textPrimary),
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: AppPalette.primary, size: 20),
+      ),
+      items: items.map((item) {
+        return DropdownMenuItem<String>(
+          value: item,
+          child: Text(label == 'Galpón' ? 'Galpón $item' : 'Pasillo $item'),
+        );
+      }).toList(),
+      onChanged: onChanged,
     );
   }
 

@@ -787,6 +787,23 @@ class DespachoEnvioResponse(BaseModel):
     fecha_envio: str
 
 
+class DespachoActualizarEstadoRequest(BaseModel):
+    """Payload para actualizar el estado del despacho independientemente del estado de la orden."""
+    nuevo_estado: str = Field(..., description="Nuevo estado del despacho ('Por Enviar' o 'Enviado')")
+
+
+class DespachoActualizarEstadoResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id_despacho: UUID
+    id_orden: UUID
+    folio: str
+    estado_despacho: str
+    estado_orden: str
+    mensaje: str
+    fecha_actualizacion: str
+
+
 class OrdenAnulacionResponse(BaseModel):
     """DTO de respuesta tras anular una orden y liberar stock / generar tareas de reingreso."""
     model_config = ConfigDict(from_attributes=True)

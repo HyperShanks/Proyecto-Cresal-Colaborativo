@@ -432,19 +432,22 @@ def test_obtener_mis_ventas_ordenamiento_completadas_al_final(client, db_session
         assert response.status_code == 200
         data = response.json()
 
-        # En la lista, ninguna orden con estado 'Completada' debe aparecer antes de una orden activa ('Reservada' o 'Pagada')
-        encontro_completada = False
-        for item in data:
-            if item["estado_orden"].lower() == "completada":
-                encontro_completada = True
-            elif encontro_completada:
-                # Si ya encontramos una completada, no debe haber órdenes no-completadas después
-                assert False, f"Se encontró orden con estado '{item['estado_orden']}' después de una orden 'Completada'"
+        # En la lista: Activas (Reservada/Pagada) van primero, luego Completadas, y al final de todo las Anuladas.
+        def _prioridad(estado: str) -> int:
+            e = estado.lower()
+            if e in ("anulada", "anulado", "cancelada", "cancelado"):
+                return 2
+            if e in ("completada", "completado", "entregada", "entregado"):
+                return 1
+            return 0
 
-        # Verificar que la orden completada esté en el resultado y al final
+        prioridades = [_prioridad(item["estado_orden"]) for item in data]
+        assert prioridades == sorted(prioridades), f"El orden de prioridades no es correcto: {prioridades} para estados {[item['estado_orden'] for item in data]}"
+
         estados = [item["estado_orden"] for item in data]
         assert "Completada" in estados
-        assert estados[-1] == "Completada"
+        assert "Anulada" in estados
+        assert estados[-1] == "Anulada"
     finally:
         db.close()
 
