@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/features/alertas/models/tarea_alerta.dart';
 import 'package:frontend/features/alertas/presentation/screens/auditoria_salida_screen.dart';
 import 'package:frontend/features/alertas/presentation/widgets/task_card.dart';
-import 'package:frontend/features/alertas/services/logistica_service.dart';
 import 'package:frontend/features/paletizado/domain/models/etiqueta_data.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;

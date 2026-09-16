@@ -8,8 +8,6 @@ import 'package:frontend/features/alertas/presentation/screens/alertas_screen.da
 import 'package:frontend/features/alertas/services/bodega_polling_service.dart';
 import 'package:frontend/features/caja/presentation/screens/caja_main_screen.dart';
 import 'package:frontend/features/caja/presentation/screens/historial_caja_screen.dart';
-import 'package:frontend/features/caja/presentation/providers/caja_provider.dart';
-import 'package:frontend/features/caja/presentation/providers/historial_caja_provider.dart';
 import 'package:frontend/features/ventas/presentation/screens/ventas_main_screen.dart';
 import 'package:frontend/features/ventas/presentation/screens/catalogo_screen.dart';
 import 'package:frontend/features/ventas/presentation/screens/historial_screen.dart';

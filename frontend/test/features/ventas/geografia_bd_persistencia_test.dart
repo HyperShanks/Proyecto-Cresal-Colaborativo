@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/core/constants/chile_geografia.dart';
-import 'package:frontend/features/ventas/controllers/cart_controller.dart';
 import 'package:frontend/features/ventas/controllers/checkout_wizard_controller.dart';
 
 void main() {

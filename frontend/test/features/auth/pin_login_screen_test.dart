@@ -15,7 +15,7 @@ void main() {
   });
 
   group('PinLoginScreen Widget & UI Tests', () {
-    testWidgets('Muestra datos del usuario enrolado y botones del teclado numérico', (tester) async {
+    testWidgets('Muestra interfaz de PIN sin card de usuario ni opción de desenrolar', (tester) async {
       tester.view.physicalSize = const Size(1366, 1024);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -34,9 +34,10 @@ void main() {
 
       expect(find.text('CRESAL'), findsOneWidget);
       expect(find.text('Ingrese su PIN de Operario'), findsOneWidget);
-      expect(find.text('Carlos Bodeguero'), findsOneWidget);
-      expect(find.text('carlos@cresal.cl'), findsOneWidget);
-      expect(find.text('Desenrolar Terminal'), findsOneWidget);
+      // Card de usuario y desenrolamiento eliminados
+      expect(find.text('Carlos Bodeguero'), findsNothing);
+      expect(find.text('carlos@cresal.cl'), findsNothing);
+      expect(find.text('Desenrolar Terminal'), findsNothing);
 
       // Botones numéricos presentes
       for (int i = 0; i <= 9; i++) {
@@ -62,50 +63,47 @@ void main() {
       expect(find.text('ENROLAMIENTO_VIEW'), findsOneWidget);
     });
 
-    testWidgets('Presionar Desenrolar Terminal abre diálogo de confirmación y purga almacenamiento al confirmar', (tester) async {
+    testWidgets('Error de PIN incorrecto se muestra como SnackBar flotante y no desplaza los botones numéricos', (tester) async {
       tester.view.physicalSize = const Size(1366, 1024);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await const FlutterSecureStorage().write(key: 'access_token', value: 'token-abc');
       await const FlutterSecureStorage().write(key: 'enrolled_user_id', value: 'uuid-1234');
-      await const FlutterSecureStorage().write(key: 'enrolled_user_name', value: 'Carlos Bodeguero');
-      await const FlutterSecureStorage().write(key: 'enrolled_user_email', value: 'carlos@cresal.cl');
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: const PinLoginScreen(),
-          routes: {
-            '/enrolamiento': (context) => const Scaffold(body: Text('ENROLAMIENTO_VIEW')),
-          },
+        const MaterialApp(
+          home: PinLoginScreen(),
         ),
       );
       await tester.pumpAndSettle();
 
-      // Tap en Desenrolar Terminal
-      await tester.ensureVisible(find.text('Desenrolar Terminal'));
-      await tester.tap(find.text('Desenrolar Terminal'));
+      // Guardar posición inicial de botones del teclado numérico
+      final Offset posBoton1Antes = tester.getCenter(find.text('1'));
+      final Offset posBoton5Antes = tester.getCenter(find.text('5'));
+
+      // Verificar que desenrolar terminal no existe
+      expect(find.text('Desenrolar Terminal'), findsNothing);
+
+      // Ingresar 4 dígitos incorrectos
+      await tester.tap(find.text('9'));
+      await tester.pump();
+      await tester.tap(find.text('9'));
+      await tester.pump();
+      await tester.tap(find.text('9'));
+      await tester.pump();
+      await tester.tap(find.text('9'));
       await tester.pumpAndSettle();
 
-      expect(find.text('¿Está seguro de que desea desenrolar este terminal? Se requerirán credenciales corporativas (email y contraseña) para volver a vincularlo.'), findsOneWidget);
+      // Los números del teclado no se han movido en la pantalla
+      final Offset posBoton1Despues = tester.getCenter(find.text('1'));
+      final Offset posBoton5Despues = tester.getCenter(find.text('5'));
+      expect(posBoton1Despues, equals(posBoton1Antes));
+      expect(posBoton5Despues, equals(posBoton5Antes));
 
-      // Cancelar primero
-      await tester.tap(find.text('CANCELAR'));
-      await tester.pumpAndSettle();
-      expect(await AuthService.getEnrolledUserId(), 'uuid-1234');
-
-      // Tap de nuevo y confirmar
-      await tester.tap(find.text('Desenrolar Terminal'));
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('DESENROLAR'));
-      await tester.pumpAndSettle();
-
-      // Verifica redirección a /enrolamiento y borrado de storage
-      expect(find.text('ENROLAMIENTO_VIEW'), findsOneWidget);
-      expect(await AuthService.getEnrolledUserId(), isNull);
-      expect(await AuthService.getToken(), isNull);
+      // Se muestra la notificación flotante de error
+      expect(find.byType(SnackBar), findsOneWidget);
+      expect(find.text('AUTH_ERROR'), findsOneWidget);
     });
 
     testWidgets('Ingreso de dígitos y borrado en teclado numérico', (tester) async {

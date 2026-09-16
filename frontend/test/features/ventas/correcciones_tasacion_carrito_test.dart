@@ -8,8 +8,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/services.dart';
 import 'package:frontend/features/ventas/models/pendiente_precio_model.dart';
-import 'package:frontend/features/ventas/models/catalogo_model.dart';
-import 'package:frontend/features/ventas/models/cart_item_model.dart';
 import 'package:frontend/features/ventas/controllers/cart_controller.dart';
 import 'package:frontend/features/ventas/controllers/checkout_wizard_controller.dart';
 import 'package:frontend/features/ventas/models/checkout_wizard_models.dart';
