@@ -1,9 +1,11 @@
 import os
 import re
+import sys
 import uuid
 from datetime import datetime
 import pandas as pd
 from dotenv import load_dotenv
+from sqlalchemy import text
 
 # Importamos SQLAlchemy Session y los Modelos
 from database import SessionLocal
@@ -20,6 +22,10 @@ PATENTES_GENERICAS = {
     "MOTOR", "SN", "NAN", "NONE", "S/PATENTE", "S/PPU", 
     "SP", "SPP", ""
 }
+
+# ==============================================================================
+# FUNCIONES DE EXTRACCIÓN INTELIGENTE (ESTANDARIZADAS CON EL FRONTEND)
+# ==============================================================================
 
 def limpiar_patente(valor_raw, patentes_registradas):
     if pd.isna(valor_raw):
@@ -39,6 +45,7 @@ def limpiar_patente(valor_raw, patentes_registradas):
         patentes_registradas[limpio] = 1
         return limpio[:10]
 
+
 def procesar_anio(valor_raw):
     try:
         if pd.isna(valor_raw):
@@ -48,22 +55,146 @@ def procesar_anio(valor_raw):
     except (ValueError, TypeError):
         return 2000
 
-def sanitizar_secuencia_ingresos(df, col_indice):
+
+def extraer_cilindrada(modelo_raw, obs_raw=""):
     """
-    Procesa, audita y blinda la columna de N° de Ingreso (Columna A) del Excel.
+    Extrae la cilindrada del vehículo analizando el modelo y observaciones
+    mediante expresiones regulares.
+    Ejemplos: 'SORENTO 2,4' -> '2.4', 'RIO 4 EX 1.4 AUT' -> '1.4', 'GOL 1.6I' -> '1.6', '1600cc' -> '1.6'
+    """
+    texto = f"{modelo_raw or ''} {obs_raw or ''}".strip()
+    if not texto:
+        return "S/A"
+
+    # 1. Patrón decimal estándar con punto o coma (ej: 1.4, 2,4, 1.6L, 1.6I, 2.0i, 3.8 AUT)
+    m_dec = re.search(r'\b([0-9][.,][0-9])(?:[a-zA-Z\s])?\b', texto)
+    if m_dec:
+        return m_dec.group(1).replace(',', '.')
+
+    # 2. Formato centímetros cúbicos (ej: 1600cc, 2000 cc, 2400)
+    m_cc = re.search(r'\b(1[0-9]{3}|2[0-9]{3}|3[0-9]{3})\s*(?:cc)?\b', texto, re.IGNORECASE)
+    if m_cc:
+        cc_val = int(m_cc.group(1))
+        return str(round(cc_val / 1000, 1))
+
+    return "S/A"
+
+
+def extraer_transmision(modelo_raw, obs_raw=""):
+    """
+    Determina si la transmisión es 'Automática' o 'Mecánica'.
+    Estandarizado según OpcionesTransmision del frontend.
+    """
+    texto = f"{modelo_raw or ''} {obs_raw or ''}".upper()
+    if re.search(r'\b(AUT|AUTOMATICA|AUTOMATICO|AT|A/T|CVT|TIPTRONIC|DSG)\b', texto):
+        return "Automática"
+    return "Mecánica"
+
+
+def extraer_combustible(modelo_raw, obs_raw=""):
+    """
+    Determina el combustible: 'Gasolina', 'Diésel' o 'Híbrido'.
+    Estandarizado según OpcionesCombustible del frontend.
+    """
+    texto = f"{modelo_raw or ''} {obs_raw or ''}".upper()
     
-    Reglas estrictas de negocio:
-    1. Solo deben existir números de ingreso autoincrementables/enteros positivos y estrictamente ÚNICOS.
-    2. Si un valor no es numérico (ej. 'x', NaN, vacío) o es un duplicado/anomalía, pero se encuentra
-       en un hueco correlativo resoluble (ej. 1, 2, 3, x, 5 -> x pasa a 4):
-       Se INTERPOLA y se reemplaza por el correlativo exacto.
-    3. Si un valor no es numérico (ej. 'con con', 'con con') y no puede interpolarse sin colisionar
-       (ej. 1, 2, 3, con con, con con, 4, 5 donde ya viene el 4):
-       Se ELIMINA / IGNORA la fila (no se sube a la base de datos).
-    4. Si un número está repetido (ej. 834 repetido, o texto repetido) y no existe un hueco correlativo
-       libre donde reubicarlo:
-       Se ELIMINA / IGNORA la fila duplicada.
+    # 1. Detección de Híbridos
+    if re.search(r'\b(HIBRIDO|HYBRID|PRIUS|HEV|PHEV)\b', texto):
+        return "Híbrido"
+
+    # 2. Nomenclaturas técnicas directas de motores Diésel
+    if re.search(r'\b(DIESEL|PETROLEO|PETROLERO|HDI|CRDI|TDI|D-4D|TD|TURBO DIESEL|CDI|DCI|TDCI|D4HA|4D56|YD25)\b', texto):
+        return "Diésel"
+    
+    # 3. Camionetas / Utilitarios de trabajo en Chile que son históricamente diésel
+    if any(k in texto for k in [
+        'DMAX', 'D-MAX', 'HILUX', 'ACTYON', 'L200', 'L-200', 'NAVARA', 
+        'NP300', 'AMAROK', 'RANGER', 'BT-50', 'BT50', 'TERRANO', 
+        'BOXER', 'DUCATO', 'PORTER', 'CANTER'
+    ]):
+        return "Diésel"
+
+    # 4. Automóviles de pasajeros convencionales
+    return "Gasolina"
+
+
+def extraer_traccion(marca_raw, modelo_raw, obs_raw=""):
     """
+    Determina la tracción estandarizada según OpcionesTraccion del frontend:
+    - '4x4 Permanente (AWD)'
+    - '4x4 Conectable (4WD)'
+    - '4x2 Trasera'
+    - '4x2 Delantera'
+    - 'Otro...'
+    """
+    m_up = str(marca_raw or '').upper()
+    texto = f"{modelo_raw or ''} {obs_raw or ''}".upper()
+
+    # 1. 4x4 Permanente (AWD) - Toda la gama Subaru tradicional o siglas AWD/4Motion/Quattro/4Matic
+    if 'SUBARU' in m_up or re.search(r'\b(AWD|4MOTION|ALL GRIP|QUATTRO|4MATIC|PERMANENTE)\b', texto):
+        return "4x4 Permanente (AWD)"
+
+    # 2. 4x4 Conectable (4WD) - Camionetas y todoterrenos con caja reductora/transferencia
+    if re.search(r'\b(4X4|4WD|CONECTABLE)\b', texto):
+        return "4x4 Conectable (4WD)"
+
+    # 3. 4x2 Trasera - Pickups 4x2, camiones medianos, furgones pesados (H1, Porter, Canter) o BMW/Mercedes sedan
+    if any(k in texto for k in [
+        'DMAX', 'D-MAX', 'HILUX', 'L200', 'L-200', 'NAVARA', 'NP300', 'AMAROK', 
+        'RANGER', 'BT-50', 'TERRANO', 'PORTER', 'H-1', 'H1', 'CANTER', 'NPR', 
+        'NKR', 'D100', 'C-10', 'SILVERADO', 'F150', 'F-150'
+    ]):
+        return "4x2 Trasera"
+    if any(k in m_up for k in ['BMW', 'MERCEDES']) and not any(k in texto for k in ['A-CLASS', 'CLASE A', 'B-CLASS', 'CLASE B']):
+        return "4x2 Trasera"
+
+    # 4. 4x2 Delantera - Automóviles comunes de tracción delantera (FWD)
+    return "4x2 Delantera"
+
+
+def limpiar_numero_motor(motor_raw, obs_raw=""):
+    """
+    Sanitiza el número de motor extrayendo datos válidos.
+    """
+    if pd.notnull(motor_raw):
+        s = str(motor_raw).strip()
+        if s and s.upper() not in ["NAN", "NONE", "SN", "S/N", "S/A", "SIN NUMERO", "SIN DATO", "0"]:
+            return s[:100]
+
+    # Buscar en observaciones si dice "MOTOR: XXX"
+    if pd.notnull(obs_raw):
+        m = re.search(r'MOTOR\s*[:#]?\s*([A-Z0-9\-]+)', str(obs_raw).upper())
+        if m:
+            candidato = m.group(1).strip()
+            if candidato not in ["SN", "S/N", "S/A"]:
+                return candidato[:100]
+
+    return "S/A"
+
+
+def limpiar_marca(marca_raw):
+    """Corrige errores ortográficos y normaliza marcas automotrices comunes."""
+    if not marca_raw or pd.isna(marca_raw):
+        return "DESCONOCIDA"
+    
+    m = str(marca_raw).strip().upper()
+    correcciones = {
+        "VOLSKWAGEN": "VOLKSWAGEN",
+        "SSANYONG": "SSANGYONG",
+        "SSANG YONG": "SSANGYONG",
+        "CHEVROLET ": "CHEVROLET",
+        "MERCEDEZ": "MERCEDES-BENZ",
+        "MERCEDES BENZ": "MERCEDES-BENZ",
+        "GREATWALL": "GREAT WALL",
+    }
+    return correcciones.get(m, m[:100])
+
+
+# ==============================================================================
+# AUDITORÍA Y SECUENCIACIÓN DE NÚMEROS DE INGRESO
+# ==============================================================================
+
+def sanitizar_secuencia_ingresos(df, col_indice):
     total_filas = len(df)
     
     def parse_int_seguro(v):
@@ -81,14 +212,11 @@ def sanitizar_secuencia_ingresos(df, col_indice):
     raw_vals = [df.iloc[i][col_indice] for i in range(total_filas)]
     parsed_vals = [parse_int_seguro(v) for v in raw_vals]
 
-    # Conteo de ocurrencias de cada número para detectar duplicados globales
     conteo_numeros = {}
     for v in parsed_vals:
         if v is not None:
             conteo_numeros[v] = conteo_numeros.get(v, 0) + 1
 
-    # Identificación de anclas confiables:
-    # Si un número aparece repetido, sólo el que esté en orden secuencial se toma como ancla.
     candidatos = [None] * total_filas
     vistos = set()
     ultimo_valido = 0
@@ -99,20 +227,16 @@ def sanitizar_secuencia_ingresos(df, col_indice):
             candidatos[i] = None
         else:
             if v in vistos:
-                # Duplicado: debe ser evaluado para posible interpolación o descarte
                 candidatos[i] = None
             elif v <= ultimo_valido and conteo_numeros[v] > 1:
-                # Duplicado anómalo retrógrado (ej. 1085 en fila 1810 cuando veníamos en 1809)
                 candidatos[i] = None
             elif v <= ultimo_valido:
-                # Retorno de secuencia no explicado
                 candidatos[i] = None
             else:
                 candidatos[i] = v
                 vistos.add(v)
                 ultimo_valido = v
 
-    # Resolución de bloques problemáticos mediante interpolación acotada o descarte
     resolucion = [None] * total_filas
     acciones = {}
 
@@ -135,7 +259,6 @@ def sanitizar_secuencia_ingresos(df, col_indice):
             A = resolucion[i_prev] if i_prev >= 0 else None
             B = candidatos[i_next] if i_next < total_filas else None
 
-            # Condición de hueco exacto: B - A == k + 1
             interpolable = False
             if A is not None and B is not None and B > A and (B - A == k + 1):
                 interpolable = True
@@ -157,11 +280,10 @@ def sanitizar_secuencia_ingresos(df, col_indice):
                     raw_str = str(raw_vals[j])
                     resolucion[j] = None
                     if parsed_vals[j] is None:
-                        acciones[j] = ("IGNORADO", f"No numérico '{raw_str}' descartado por no encajar en correlatividad.")
+                        acciones[j] = ("IGNORADO", f"No numérico '{raw_str}' descartado.")
                     else:
-                        acciones[j] = ("IGNORADO", f"Número '{raw_str}' repetido/fuera de secuencia descartado sin correlatividad libre.")
+                        acciones[j] = ("IGNORADO", f"Número '{raw_str}' descartado sin correlatividad libre.")
 
-    # Construcción de DataFrame depurado y reporte forense
     filas_validas = []
     reporte = {
         "total_original": total_filas,
@@ -177,7 +299,7 @@ def sanitizar_secuencia_ingresos(df, col_indice):
     for idx in range(total_filas):
         val_res = resolucion[idx]
         tipo_acc, detalle = acciones[idx]
-        fila_excel = idx + 2 # Fila considerando encabezado en Fila 1
+        fila_excel = idx + 2
         
         if val_res is not None and val_res not in ingresos_asignados:
             ingresos_asignados.add(val_res)
@@ -198,6 +320,42 @@ def sanitizar_secuencia_ingresos(df, col_indice):
     df_limpio = pd.DataFrame(filas_validas)
     return df_limpio, reporte
 
+
+def limpiar_base_datos(db):
+    """
+    Elimina la ingesta anterior de vehículos de origen y sus repuestos asociados.
+    Respeta estrictamente el orden de dependencias de claves foráneas.
+    """
+    print("\n" + "=" * 76)
+    print(" LIMPIEZA DE INGESTA PREVIA EN BASE DE DATOS")
+    print("=" * 76)
+    try:
+        # 1. Detalle Motor y Caja
+        res_mot = db.execute(text('DELETE FROM "Detalle_Motor";'))
+        res_caj = db.execute(text('DELETE FROM "Detalle_Caja_Cambio";'))
+        print(f"[*] Registros eliminados de Detalle_Motor: {res_mot.rowcount}")
+        print(f"[*] Registros eliminados de Detalle_Caja_Cambio: {res_caj.rowcount}")
+
+        # 2. Activo Inventariado vinculado a vehículos
+        res_act = db.execute(text('DELETE FROM "Activo_Inventariado" WHERE id_vehiculo IS NOT NULL;'))
+        print(f"[*] Registros eliminados de Activo_Inventariado (Motores y Cajas): {res_act.rowcount}")
+
+        # 3. Vehiculos de Origen
+        res_veh = db.execute(text('DELETE FROM "Vehiculo_Origen";'))
+        print(f"[*] Registros eliminados de Vehiculo_Origen: {res_veh.rowcount}")
+
+        db.commit()
+        print("✅ Limpieza completada con éxito. Base de datos lista para nueva ingesta.\n")
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Error al limpiar base de datos: {e}")
+        raise e
+
+
+# ==============================================================================
+# EJECUCIÓN PRINCIPAL DE LA MIGRACIÓN
+# ==============================================================================
+
 def ejecutar_migracion():
     if not os.path.exists(EXCEL_FILE):
         print(f"[!] Error: No se encontró el archivo de matriz '{EXCEL_FILE}'.")
@@ -211,13 +369,26 @@ def ejecutar_migracion():
     col_indice = df.columns[0]
     col_anio = None
     col_motor = None
+    col_obs = None
 
-    for c in df.columns:
+    for i, c in enumerate(df.columns):
         c_str = str(c).lower()
-        if "2017" in c_str or "año" in c_str or "anio" in c_str:
+        if "2017" in c_str or "año" in c_str or "anio" in c_str or (isinstance(c, int) and 1990 <= c <= 2030):
             col_anio = c
-        if "motor" in c_str and "n" in c_str: 
+        if "motor" in c_str:
             col_motor = c
+        if "observ" in c_str:
+            col_obs = c
+
+    # Fallbacks por posición de columnas si no hicieron match por nombre
+    if col_anio is None and len(df.columns) > 7:
+        col_anio = df.columns[7]
+    if col_motor is None and len(df.columns) > 9:
+        col_motor = df.columns[9]
+    if col_obs is None and len(df.columns) > 12:
+        col_obs = df.columns[12]
+
+    print(f"[*] Columnas detectadas: N° Ingreso='{col_indice}', Año='{col_anio}', Motor='{col_motor}', Obs='{col_obs}'")
 
     print("\n" + "=" * 76)
     print(" AUDITORÍA Y DEPURACIÓN DE NÚMEROS DE INGRESO (COLUMNA A)")
@@ -228,22 +399,6 @@ def ejecutar_migracion():
     print(f"[*] Registros numéricos conservados   : {reporte['conservados']}")
     print(f"[*] Registros reparados (huecos 'x')   : {reporte['reparados']}")
     print(f"[*] Registros descartados / eliminados : {reporte['descartados']}")
-    print("=" * 76)
-
-    if reporte["detalles_reparados"]:
-        print(f"\n[i] Detalle de registros reparados por correlatividad ({len(reporte['detalles_reparados'])}):")
-        for fila, detalle in reporte["detalles_reparados"][:15]:
-            print(f"    - Fila {fila}: {detalle}")
-        if len(reporte["detalles_reparados"]) > 15:
-            print(f"    ... y {len(reporte['detalles_reparados']) - 15} correcciones adicionales.")
-
-    if reporte["detalles_descartados"]:
-        print(f"\n[!] Detalle de registros ignorados / eliminados ({len(reporte['detalles_descartados'])}):")
-        for fila, detalle in reporte["detalles_descartados"][:15]:
-            print(f"    - Fila {fila}: {detalle}")
-        if len(reporte["detalles_descartados"]) > 15:
-            print(f"    ... y {len(reporte['detalles_descartados']) - 15} descartes adicionales.")
-
     print("=" * 76 + "\n")
 
     patentes_registradas = {}
@@ -252,6 +407,10 @@ def ejecutar_migracion():
     db = SessionLocal()
     
     try:
+        # Si se especificó el parámetro --limpiar, vaciar ingesta previa automáticamente
+        if "--limpiar" in sys.argv or "--reset" in sys.argv:
+            limpiar_base_datos(db)
+
         print("[+] Cargando estado actual de la base de datos...")
         vehiculos_db = db.query(Vehiculo_Origen.numero_ingreso, Vehiculo_Origen.id_vehiculo).all()
         vehiculos_existentes = {v.numero_ingreso: v.id_vehiculo for v in vehiculos_db}
@@ -262,12 +421,25 @@ def ejecutar_migracion():
         print(f"[+] {len(vehiculos_existentes)} vehículos ya registrados en BD.")
 
         total_a_procesar = len(df_limpio)
-        print(f"[+] Procesando {total_a_procesar} vehículos 100% limpios y validados...")
+        print(f"[+] Procesando {total_a_procesar} vehículos con extracción estandarizada...")
         
         BATCH_SIZE = 500
         vehiculos_creados = 0
         vehiculos_inactivos = 0
         activos_creados = 0
+
+        # Contadores forenses de extracción
+        conteo_cilindradas = 0
+        conteo_motores_reales = 0
+        conteo_automaticas = 0
+        conteo_mecanicas = 0
+        conteo_diesel = 0
+        conteo_gasolina = 0
+        conteo_hibrido = 0
+        conteo_4x2_delantera = 0
+        conteo_4x2_trasera = 0
+        conteo_4x4_conectable = 0
+        conteo_4x4_permanente = 0
         
         vehiculos_batch = []
         activos_batch = []
@@ -280,17 +452,49 @@ def ejecutar_migracion():
 
             marca_val = str(row.get("Marca")).strip() if pd.notnull(row.get("Marca")) else ""
             modelo_val = str(row.get("Modelo")).strip() if pd.notnull(row.get("Modelo")) else ""
+            obs_val = str(row.get(col_obs)).strip() if col_obs and pd.notnull(row.get(col_obs)) else ""
             anio_final = procesar_anio(row.get(col_anio)) if col_anio else 2000
             
-            numero_motor_raw = str(row.get(col_motor)).strip() if col_motor and pd.notnull(row.get(col_motor)) else "S/A"
-            if numero_motor_raw.lower() in ["nan", "none"]:
-                numero_motor_raw = "S/A"
+            # ------------------------------------------------------------------
+            # EXTRACCIÓN AVANZADA ESTANDARIZADA
+            # ------------------------------------------------------------------
+            cilindrada_final = extraer_cilindrada(modelo_val, obs_val)
+            transmision_final = extraer_transmision(modelo_val, obs_val)
+            combustible_final = extraer_combustible(modelo_val, obs_val)
+            traccion_final = extraer_traccion(marca_val, modelo_val, obs_val)
+            numero_motor_final = limpiar_numero_motor(row.get(col_motor) if col_motor else None, obs_val)
 
-            # Detección de filas sin datos vehiculares mínimos (ej. caso 2170 antiguo)
+            # Estadísticas
+            if cilindrada_final != "S/A":
+                conteo_cilindradas += 1
+            if numero_motor_final != "S/A":
+                conteo_motores_reales += 1
+            if transmision_final == "Automática":
+                conteo_automaticas += 1
+            else:
+                conteo_mecanicas += 1
+
+            if combustible_final == "Diésel":
+                conteo_diesel += 1
+            elif combustible_final == "Híbrido":
+                conteo_hibrido += 1
+            else:
+                conteo_gasolina += 1
+
+            if traccion_final == "4x4 Permanente (AWD)":
+                conteo_4x4_permanente += 1
+            elif traccion_final == "4x4 Conectable (4WD)":
+                conteo_4x4_conectable += 1
+            elif traccion_final == "4x2 Trasera":
+                conteo_4x2_trasera += 1
+            else:
+                conteo_4x2_delantera += 1
+
+            # Detección de filas sin datos vehiculares mínimos (ej. registros históricos vacíos)
             tiene_marca = bool(marca_val) and marca_val.upper() not in ["NAN", "NONE", "DESCONOCIDA", "S/I", "S/A", "SIN DATOS"]
             tiene_modelo = bool(modelo_val) and modelo_val.upper() not in ["NAN", "NONE", "DESCONOCIDO", "S/I", "S/A", "SIN DATOS"]
             tiene_patente = patente_final is not None and patente_final != ""
-            tiene_motor = bool(numero_motor_raw) and numero_motor_raw.upper() not in ["S/A", "NAN", "NONE", "S/N", "SIN NUMERO"]
+            tiene_motor = numero_motor_final != "S/A"
 
             es_sin_datos = not (tiene_marca or tiene_modelo or tiene_patente or tiene_motor)
 
@@ -302,12 +506,12 @@ def ejecutar_migracion():
                 id_estado_activo = 4  # De Baja / Inactivo
             else:
                 estado_vehiculo = "Activo"
-                marca_final = marca_val[:100] if tiene_marca else "DESCONOCIDA"
+                marca_final = limpiar_marca(marca_val) if tiene_marca else "DESCONOCIDA"
                 modelo_final = modelo_val[:100] if tiene_modelo else "DESCONOCIDO"
                 estado_activo = "Activo"
                 id_estado_activo = 5  # Pendiente de Paletizado / Desarmado
 
-            # 1. Vehículo Base
+            # 1. Vehículo Base (Vehiculo_Origen)
             if num_ingreso_final in vehiculos_existentes:
                 id_vehiculo = vehiculos_existentes[num_ingreso_final]
             else:
@@ -320,7 +524,7 @@ def ejecutar_migracion():
                     marca=marca_final,
                     modelo=modelo_final,
                     anio=anio_final,
-                    traccion="S/A",
+                    traccion=traccion_final,
                     estado=estado_vehiculo,
                     fecha_creacion=datetime.now()
                 )
@@ -349,10 +553,10 @@ def ejecutar_migracion():
 
                 detalle_motor = Detalle_Motor(
                     id_activo=id_motor,
-                    numero_motor=numero_motor_raw,
-                    cilindrada="S/A",
-                    combustible="S/A",
-                    transmision_tipo="S/A",
+                    numero_motor=numero_motor_final,
+                    cilindrada=cilindrada_final,
+                    combustible=combustible_final,
+                    transmision_tipo=transmision_final,
                 )
                 detalles_motor_batch.append(detalle_motor)
                 activos_existentes.add((id_vehiculo, 1))
@@ -365,7 +569,7 @@ def ejecutar_migracion():
                     id_activo=id_caja,
                     sku_qr_fisico=f"CAJ-{num_ingreso_final}",
                     id_categoria=2,
-                    id_estado=id_estado_activo,
+                    id_estado=id_estado_activo, 
                     id_sucursal_actual=1,
                     id_vehiculo=id_vehiculo,
                     estado=estado_activo,
@@ -377,7 +581,7 @@ def ejecutar_migracion():
 
                 detalle_caja = Detalle_Caja_Cambio(
                     id_activo=id_caja,
-                    transmision_tipo="S/A",
+                    transmision_tipo=transmision_final,
                 )
                 detalles_caja_batch.append(detalle_caja)
                 activos_existentes.add((id_vehiculo, 2))
@@ -395,23 +599,33 @@ def ejecutar_migracion():
                     db.bulk_save_objects(detalles_caja_batch)
                     
                 db.commit()
-                print(f"    -> Progreso: {idx + 1} / {total_a_procesar} procesados (Modo Bulk de alta velocidad)...")
+                print(f"    -> Progreso: {idx + 1} / {total_a_procesar} procesados...")
                 
                 vehiculos_batch.clear()
                 activos_batch.clear()
                 detalles_motor_batch.clear()
                 detalles_caja_batch.clear()
 
-        print(f"\n[OK] Migración completada exitosamente.")
-        print(f"     Nuevos Vehículos registrados  : {vehiculos_creados} (Activos: {vehiculos_creados - vehiculos_inactivos}, Inactivos/Sin datos: {vehiculos_inactivos})")
-        print(f"     Nuevos Repuestos (Motor/Caja) : {activos_creados}")
+        print("\n" + "=" * 76)
+        print(" MIGRACIÓN COMPLETADA EXITOSAMENTE")
+        print("=" * 76)
+        print(f"[*] Nuevos Vehículos registrados       : {vehiculos_creados} (Activos: {vehiculos_creados - vehiculos_inactivos}, Inactivos: {vehiculos_inactivos})")
+        print(f"[*] Nuevos Repuestos (Motor/Caja)      : {activos_creados}")
+        print(f"[*] Cilindradas extraídas              : {conteo_cilindradas}")
+        print(f"[*] N° Motor reales extraídos          : {conteo_motores_reales}")
+        print(f"[*] Transmisión: Mecánica: {conteo_mecanicas} | Automática: {conteo_automaticas}")
+        print(f"[*] Combustible: Gasolina: {conteo_gasolina} | Diésel: {conteo_diesel} | Híbrido: {conteo_hibrido}")
+        print(f"[*] Tracción: 4x2 Delantera: {conteo_4x2_delantera} | 4x2 Trasera: {conteo_4x2_trasera} | 4x4 Conectable (4WD): {conteo_4x4_conectable} | 4x4 Permanente (AWD): {conteo_4x4_permanente}")
+        print("=" * 76)
 
     except Exception as err:
         db.rollback()
         print(f"[!] Error crítico durante la migración: {err}")
         print("    Abortando y revirtiendo la transacción para prevenir inconsistencias.")
+        raise err
     finally:
         db.close()
+
 
 if __name__ == "__main__":
     ejecutar_migracion()
