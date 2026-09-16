@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../../core/widgets/gradient_button.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../core/constants/especificaciones_vehiculo.dart';
 import '../../services/vehiculo_service.dart';
 
 class RecepcionVehiculoScreen extends StatefulWidget {
@@ -33,6 +34,9 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
   final TextEditingController _anoController = TextEditingController();
   final TextEditingController _cilindradaController = TextEditingController();
   final TextEditingController _motorController = TextEditingController();
+  final TextEditingController _traccionOtroController = TextEditingController();
+  final TextEditingController _transmisionOtroController = TextEditingController();
+  final TextEditingController _combustibleOtroController = TextEditingController();
 
   // Variables para la cámara
   final ImagePicker _picker = ImagePicker();
@@ -46,6 +50,20 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
   void initState() {
     super.initState();
     _cargarFolioDesdeBackend();
+  }
+
+  @override
+  void dispose() {
+    _patenteController.dispose();
+    _marcaController.dispose();
+    _modeloController.dispose();
+    _anoController.dispose();
+    _cilindradaController.dispose();
+    _motorController.dispose();
+    _traccionOtroController.dispose();
+    _transmisionOtroController.dispose();
+    _combustibleOtroController.dispose();
+    super.dispose();
   }
 
   Future<void> _cargarFolioDesdeBackend() async {
@@ -78,7 +96,9 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
     // Ejecutar Scraping NATIVO
     final datos = await _vehiculoService.buscarDatosPorPatente(patente);
 
-    if (datos != null && context.mounted) {
+    if (!mounted) return;
+
+    if (datos != null) {
       setState(() {
         _marcaController.text = datos['marca'] ?? '';
         _modeloController.text = datos['modelo'] ?? '';
@@ -92,7 +112,7 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
           backgroundColor: AppPalette.success,
         ),
       );
-    } else if (context.mounted) {
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('❌ No se encontraron datos para esta patente.'),
@@ -101,11 +121,9 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
       );
     }
 
-    if (context.mounted) {
-      setState(() {
-        _isSearchingPatente = false;
-      });
-    }
+    setState(() {
+      _isSearchingPatente = false;
+    });
   }
 
   @override
@@ -151,7 +169,7 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
                   Text(
                     numeroIngreso,
                     style: AppTypography.headline.copyWith(
-                      fontSize: 56,
+                      fontSize: 52,
                       color: AppPalette.textPrimary,
                     ),
                   ),
@@ -242,28 +260,49 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
             _buildDropdown(
               label: 'Tracción',
               value: traccionSeleccionada,
-              items: ['4x2', '4x4', 'AWD'],
+              items: OpcionesTraccion.listaConSeleccionar,
               onChanged: (nuevoValor) =>
                   setState(() => traccionSeleccionada = nuevoValor),
             ),
+            if (traccionSeleccionada == OpcionesTraccion.otro) ...[
+              const SizedBox(height: 8),
+              _buildTextField(
+                controller: _traccionOtroController,
+                label: 'Especifique Tracción',
+              ),
+            ],
             const SizedBox(height: 16),
 
             _buildDropdown(
               label: 'Transmisión',
               value: transmisionSeleccionada,
-              items: ['Mecánica', 'Automática'],
+              items: OpcionesTransmision.listaConSeleccionar,
               onChanged: (nuevoValor) =>
                   setState(() => transmisionSeleccionada = nuevoValor),
             ),
+            if (transmisionSeleccionada == OpcionesTransmision.otro) ...[
+              const SizedBox(height: 8),
+              _buildTextField(
+                controller: _transmisionOtroController,
+                label: 'Especifique Transmisión',
+              ),
+            ],
             const SizedBox(height: 16),
 
             _buildDropdown(
               label: 'Combustible',
               value: combustibleSeleccionado,
-              items: ['Gasolina', 'Diésel', 'Eléctrico', 'Híbrido'],
+              items: OpcionesCombustible.listaConSeleccionar,
               onChanged: (nuevoValor) =>
                   setState(() => combustibleSeleccionado = nuevoValor),
             ),
+            if (combustibleSeleccionado == OpcionesCombustible.otro) ...[
+              const SizedBox(height: 8),
+              _buildTextField(
+                controller: _combustibleOtroController,
+                label: 'Especifique Combustible',
+              ),
+            ],
 
             const SizedBox(height: 24),
 
@@ -275,7 +314,7 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
                 color: AppPalette.surface,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: AppPalette.secondary.withOpacity(0.35),
+                  color: AppPalette.secondary.withValues(alpha: 0.35),
                   width: 1.2,
                 ),
               ),
@@ -377,10 +416,12 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
       return;
     }
 
-    // 2. Abrir automáticamente la cámara para capturar la foto física Poka-Yoke
+    // 2. Abrir automáticamente la cámara para capturar la foto física Poka-Yoke optimizada
     final XFile? foto = await _picker.pickImage(
       source: ImageSource.camera,
-      imageQuality: 80,
+      maxWidth: 1024,
+      maxHeight: 1024,
+      imageQuality: 75,
     );
 
     if (foto == null) {
@@ -392,6 +433,16 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
       _isUploading = true;
     });
 
+    final traccionFinal = (traccionSeleccionada == OpcionesTraccion.otro && _traccionOtroController.text.trim().isNotEmpty)
+        ? _traccionOtroController.text.trim()
+        : (traccionSeleccionada != null && traccionSeleccionada != OpcionesTraccion.seleccionar ? traccionSeleccionada! : "");
+    final transmisionFinal = (transmisionSeleccionada == OpcionesTransmision.otro && _transmisionOtroController.text.trim().isNotEmpty)
+        ? _transmisionOtroController.text.trim()
+        : (transmisionSeleccionada != null && transmisionSeleccionada != OpcionesTransmision.seleccionar ? transmisionSeleccionada! : "");
+    final combustibleFinal = (combustibleSeleccionado == OpcionesCombustible.otro && _combustibleOtroController.text.trim().isNotEmpty)
+        ? _combustibleOtroController.text.trim()
+        : (combustibleSeleccionado != null && combustibleSeleccionado != OpcionesCombustible.seleccionar ? combustibleSeleccionado! : "");
+
     final datosNuevos = {
       "correlativo_ingreso": numeroIngreso,
       "patente": _patenteController.text.trim().toUpperCase(),
@@ -400,9 +451,9 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
       "anio": int.tryParse(_anoController.text.trim()) ?? 2000,
       "cilindrada": _cilindradaController.text.trim(),
       "numero_motor": _motorController.text.trim(),
-      "traccion": traccionSeleccionada ?? "",
-      "transmision": transmisionSeleccionada ?? "",
-      "combustible": combustibleSeleccionado ?? "",
+      "traccion": traccionFinal,
+      "transmision": transmisionFinal,
+      "combustible": combustibleFinal,
       "estado": "EN_PATIO",
     };
 
@@ -433,6 +484,9 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
         _anoController.clear();
         _cilindradaController.clear();
         _motorController.clear();
+        _traccionOtroController.clear();
+        _transmisionOtroController.clear();
+        _combustibleOtroController.clear();
         setState(() {
           traccionSeleccionada = null;
           transmisionSeleccionada = null;
@@ -450,7 +504,8 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
             mensajeError.toLowerCase().contains('foto') ||
             mensajeError.toLowerCase().contains('texto') ||
             mensajeError.toLowerCase().contains('corresponde')) {
-          feedback = 'No se pudo validar el OCR de la pieza. Por favor, reintente con una foto más clara';
+          feedback =
+              'No se pudo validar el OCR de la pieza. Por favor, reintente con una foto más clara';
         } else {
           feedback = mensajeError.isNotEmpty
               ? mensajeError
@@ -459,14 +514,14 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('❌ $feedback (Intento $_ocrFailedAttempts/5)'),
+            content: Text('❌ $feedback (Intento $_ocrFailedAttempts/3)'),
             backgroundColor: AppPalette.error,
             duration: const Duration(seconds: 4),
             behavior: SnackBarBehavior.floating,
           ),
         );
 
-        if (_ocrFailedAttempts >= 5 && mounted) {
+        if (_ocrFailedAttempts >= 3 && mounted) {
           _mostrarModalIngresoManual(context, datosNuevos);
         }
       }
@@ -498,8 +553,9 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
     BuildContext context,
     Map<String, dynamic> datosNuevos,
   ) async {
-    final TextEditingController manualIngresoController =
-        TextEditingController(text: numeroIngreso != "Cargando..." ? numeroIngreso : "");
+    final TextEditingController manualIngresoController = TextEditingController(
+      text: numeroIngreso != "Cargando..." ? numeroIngreso : "",
+    );
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -509,7 +565,11 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            const Icon(Icons.warning_amber_rounded, color: AppPalette.secondary, size: 28),
+            const Icon(
+              Icons.warning_amber_rounded,
+              color: AppPalette.secondary,
+              size: 28,
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
@@ -534,7 +594,10 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
               decoration: const InputDecoration(
                 labelText: 'N° de Ingreso Físico',
                 hintText: 'Ej: 1001',
-                prefixIcon: Icon(Icons.confirmation_number_outlined, color: AppPalette.primary),
+                prefixIcon: Icon(
+                  Icons.confirmation_number_outlined,
+                  color: AppPalette.primary,
+                ),
               ),
             ),
           ],
@@ -545,7 +608,9 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
             onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(
               'Reintentar con Cámara',
-              style: AppTypography.button.copyWith(color: AppPalette.textSecondary),
+              style: AppTypography.button.copyWith(
+                color: AppPalette.textSecondary,
+              ),
             ),
           ),
           ElevatedButton(
@@ -555,7 +620,9 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
                 Navigator.of(ctx).pop(true);
               }
             },
-            style: ElevatedButton.styleFrom(backgroundColor: AppPalette.primary),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppPalette.primary,
+            ),
             child: const Text('Confirmar'),
           ),
         ],
@@ -564,15 +631,15 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
 
     if (confirmed == true && mounted) {
       final numeroManual = manualIngresoController.text.trim();
-      await _mostrarModalDobleConfirmacion(context, datosNuevos, numeroManual);
+      await _mostrarModalDobleConfirmacion(datosNuevos, numeroManual);
     }
   }
 
   Future<void> _mostrarModalDobleConfirmacion(
-    BuildContext context,
     Map<String, dynamic> datosNuevos,
     String numeroManual,
   ) async {
+    if (!mounted) return;
     final doubleConfirmed = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -581,7 +648,11 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            const Icon(Icons.verified_user_outlined, color: AppPalette.primary, size: 28),
+            const Icon(
+              Icons.verified_user_outlined,
+              color: AppPalette.primary,
+              size: 28,
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
@@ -600,13 +671,17 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
             onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(
               'Cancelar',
-              style: AppTypography.button.copyWith(color: AppPalette.textSecondary),
+              style: AppTypography.button.copyWith(
+                color: AppPalette.textSecondary,
+              ),
             ),
           ),
           ElevatedButton(
             key: const Key('btn_aceptar_doble_confirmacion'),
             onPressed: () => Navigator.of(ctx).pop(true),
-            style: ElevatedButton.styleFrom(backgroundColor: AppPalette.success),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppPalette.success,
+            ),
             child: const Text('Aceptar'),
           ),
         ],
@@ -629,7 +704,9 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
         if (res['exito'] == true) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('✅ Vehículo registrado exitosamente con validación manual.'),
+              content: Text(
+                '✅ Vehículo registrado exitosamente con validación manual.',
+              ),
               backgroundColor: AppPalette.success,
               duration: Duration(seconds: 4),
               behavior: SnackBarBehavior.floating,
@@ -642,6 +719,9 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
           _anoController.clear();
           _cilindradaController.clear();
           _motorController.clear();
+          _traccionOtroController.clear();
+          _transmisionOtroController.clear();
+          _combustibleOtroController.clear();
           setState(() {
             traccionSeleccionada = null;
             transmisionSeleccionada = null;
@@ -715,7 +795,7 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
         labelText: label,
         labelStyle: AppTypography.small,
       ),
-      value: value,
+      initialValue: value ?? items.first,
       dropdownColor:
           AppPalette.surface, // ⚠️ Evita menús blancos en modo oscuro
       style: AppTypography.body, // ⚠️ Tipografía correcta

@@ -35,9 +35,13 @@ void main() {
       expect(item.idActivo, '3fa85f64-5717-4562-b3fc-2c963f66afa6');
       expect(item.skuQrFisico, 'SKU-TEST-001');
       expect(item.precioReferencia, 450000);
-      expect(item.precioFormateado, '\$450.000');
-      expect(item.tituloRepuesto, 'Motor - Toyota Yaris 2018');
-      expect(item.ubicacionFormateada, 'P-01 - PL-02');
+      expect(item.ubicacionFormateada, 'Pasillo: P-01 • Pallet: PL-02');
+
+      final itemConGalpon = CatalogoItem.fromJson({
+        ...json,
+        'ubicacion_galpon': 'N',
+      });
+      expect(itemConGalpon.ubicacionFormateada, 'Galpón: N • Pasillo: P-01 • Pallet: PL-02');
     });
   });
 
@@ -229,10 +233,10 @@ void main() {
       await tester.pump();
       expect(find.text('Mis Órdenes de Venta'), findsOneWidget);
 
-      // Cambiar a pestaña Carrito
+      // Cambiar a pestaña Carrito (Checkout Wizard)
       await tester.tap(find.text('Carrito'));
       await tester.pump();
-      expect(find.text('Tu carrito está vacío'), findsOneWidget);
+      expect(find.text('El carrito está actualmente vacío'), findsOneWidget);
     });
 
     testWidgets('Botón de hamburguesa abre el Drawer con TICKET, CONFIGURACIÓN y CERRAR SESIÓN', (tester) async {
@@ -302,7 +306,7 @@ void main() {
       expect(find.text('Gasolina'), findsOneWidget);
       expect(find.text('Manual'), findsOneWidget);
       expect(find.text('4x2'), findsOneWidget);
-      expect(find.text('P-02 - PL-14'), findsOneWidget);
+      expect(find.text('Pasillo: P-02 • Pallet: PL-14'), findsOneWidget);
       expect(find.text('Disponible'), findsOneWidget);
 
       // Verificar Precio y Botón

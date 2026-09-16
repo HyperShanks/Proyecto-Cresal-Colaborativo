@@ -7,7 +7,7 @@ import 'package:http/testing.dart';
 import 'package:frontend/features/ventas/controllers/cart_controller.dart';
 import 'package:frontend/features/ventas/models/catalogo_model.dart';
 import 'package:frontend/features/ventas/presentation/screens/carrito_screen.dart';
-import 'package:frontend/features/ventas/presentation/widgets/cart_item_tile.dart';
+import 'package:frontend/features/ventas/presentation/screens/catalogo_screen.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -147,7 +147,8 @@ void main() {
         scrollable: find.byType(Scrollable).first,
       );
       expect(find.text('Dirección de Envío *'), findsOneWidget);
-      expect(find.text('Comuna Destino'), findsOneWidget);
+      expect(find.text('Región Destino *'), findsOneWidget);
+      expect(find.text('Comuna Destino *'), findsOneWidget);
       expect(find.text('RUT Receptor *'), findsOneWidget);
       expect(find.text('Nombres Receptor *'), findsOneWidget);
       expect(find.text('Teléfono Receptor *'), findsOneWidget);
@@ -183,7 +184,7 @@ void main() {
       expect(find.text('\$520.000'), findsNWidgets(2)); // Subtotal + Total
 
       // Modificar el precio en el TextField in-line
-      final precioField = find.widgetWithText(TextField, '520000');
+      final precioField = find.widgetWithText(TextField, '520.000');
       expect(precioField, findsOneWidget);
 
       await tester.enterText(precioField, '450000');
@@ -404,6 +405,40 @@ void main() {
         scrollable: find.byType(Scrollable).first,
       );
       expect(find.text('Responsable de Entrega/Despacho en Sucursal'), findsOneWidget);
+    });
+
+    testWidgets('Botón de vaciar carrito en AppBar muestra diálogo de confirmación y vacía liberando reservas', (tester) async {
+      final initialRefreshCount = CatalogoScreen.refreshNotifier.value;
+      CartController.instance.agregarInventariado(itemTest1);
+      CartController.instance.agregarVentaLibre(descripcion: 'Aceite 10W40', monto: 15000);
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: CarritoScreen(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(CartController.instance.items.length, 2);
+      expect(find.byIcon(Icons.delete_sweep_outlined), findsOneWidget);
+
+      // 1. Tocar el icono de vaciar carrito
+      await tester.tap(find.byIcon(Icons.delete_sweep_outlined));
+      await tester.pumpAndSettle();
+
+      // Verificar diálogo modal
+      expect(find.text('Vaciar Carrito'), findsOneWidget);
+      expect(find.text('¿Estás seguro de que deseas eliminar todos los productos del carrito?'), findsOneWidget);
+
+      // 2. Presionar "VACIAR"
+      await tester.tap(find.text('VACIAR'));
+      await tester.pumpAndSettle();
+
+      // El carrito debe estar vacío
+      expect(CartController.instance.estaVacio, isTrue);
+      expect(find.text('Tu carrito está vacío'), findsOneWidget);
+      expect(find.text('Carrito vaciado exitosamente'), findsOneWidget);
+      expect(CatalogoScreen.refreshNotifier.value, greaterThan(initialRefreshCount));
     });
   });
 }

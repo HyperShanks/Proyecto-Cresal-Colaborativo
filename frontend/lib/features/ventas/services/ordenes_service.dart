@@ -1,15 +1,19 @@
 // lib/features/ventas/services/ordenes_service.dart
 
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../../../core/constants/api_constants.dart';
+import '../../../core/constants/chile_geografia.dart';
 import '../../auth/services/auth_service.dart';
 import 'ordenes_sync_notifier.dart';
 
 /// DTO de respuesta para la creación y consulta de órdenes de venta.
 class OrdenResponseModel {
   final String idOrden;
+  final int? numeroOrden;
+  final String? folio;
   final String estadoOrden;
   final int totalVenta;
   final int montoPendiente;
@@ -20,6 +24,8 @@ class OrdenResponseModel {
 
   const OrdenResponseModel({
     required this.idOrden,
+    this.numeroOrden,
+    this.folio,
     required this.estadoOrden,
     required this.totalVenta,
     required this.montoPendiente,
@@ -32,6 +38,8 @@ class OrdenResponseModel {
   factory OrdenResponseModel.fromJson(Map<String, dynamic> json) {
     return OrdenResponseModel(
       idOrden: json['id_orden']?.toString() ?? '',
+      numeroOrden: json['numero_orden'] as int?,
+      folio: json['folio']?.toString(),
       estadoOrden: json['estado_orden']?.toString() ?? 'Reservada',
       totalVenta: json['total_venta'] as int? ?? 0,
       montoPendiente: json['monto_pendiente'] as int? ?? 0,
@@ -40,6 +48,19 @@ class OrdenResponseModel {
       fechaCreacion: json['fecha_creacion']?.toString(),
       totalItems: json['total_items'] as int? ?? 0,
     );
+  }
+
+  String get folioDisplay {
+    if (folio != null && folio!.isNotEmpty && !folio!.startsWith('TX-QR-')) {
+      return folio!;
+    }
+    if (numeroOrden != null) {
+      return 'ORD-${numeroOrden.toString().padLeft(4, '0')}';
+    }
+    if (idOrden.length >= 8) {
+      return 'ORD-${idOrden.substring(0, 8).toUpperCase()}';
+    }
+    return 'ORD-$idOrden';
   }
 
   /// Retorna el monto formateado en pesos chilenos (ej: $520.000)
@@ -69,6 +90,8 @@ class OrdenResponseModel {
 /// DTO de respuesta para la confirmación de pago y emisión del QR transaccional (HU-3.6).
 class OrdenPagoResponseModel {
   final String idOrden;
+  final int? numeroOrden;
+  final String? folio;
   final String idPago;
   final String estadoOrden;
   final int totalVenta;
@@ -82,6 +105,8 @@ class OrdenPagoResponseModel {
 
   const OrdenPagoResponseModel({
     required this.idOrden,
+    this.numeroOrden,
+    this.folio,
     required this.idPago,
     required this.estadoOrden,
     required this.totalVenta,
@@ -97,6 +122,8 @@ class OrdenPagoResponseModel {
   factory OrdenPagoResponseModel.fromJson(Map<String, dynamic> json) {
     return OrdenPagoResponseModel(
       idOrden: json['id_orden']?.toString() ?? '',
+      numeroOrden: json['numero_orden'] as int?,
+      folio: json['folio']?.toString(),
       idPago: json['id_pago']?.toString() ?? '',
       estadoOrden: json['estado_orden']?.toString() ?? 'Pagada',
       totalVenta: json['total_venta'] as int? ?? 0,
@@ -108,6 +135,19 @@ class OrdenPagoResponseModel {
       mensaje: json['mensaje']?.toString() ?? 'Pago registrado exitosamente',
       fechaPago: json['fecha_pago']?.toString() ?? '',
     );
+  }
+
+  String get folioDisplay {
+    if (folio != null && folio!.isNotEmpty && !folio!.startsWith('TX-QR-')) {
+      return folio!;
+    }
+    if (numeroOrden != null) {
+      return 'ORD-${numeroOrden.toString().padLeft(4, '0')}';
+    }
+    if (idOrden.length >= 8) {
+      return 'ORD-${idOrden.substring(0, 8).toUpperCase()}';
+    }
+    return 'ORD-$idOrden';
   }
 }
 
@@ -186,6 +226,8 @@ class DespachoOrdenResumenModel {
 class DetalleOrdenItemModel {
   final String idDetalle;
   final String? idActivo;
+  final int? idCategoria;
+  final String? nombreCategoria;
   final String titulo;
   final String? skuQrFisico;
   final String? descripcionManual;
@@ -201,6 +243,8 @@ class DetalleOrdenItemModel {
   DetalleOrdenItemModel({
     required this.idDetalle,
     this.idActivo,
+    this.idCategoria,
+    this.nombreCategoria,
     required this.titulo,
     this.skuQrFisico,
     this.descripcionManual,
@@ -218,6 +262,29 @@ class DetalleOrdenItemModel {
   String get subtotalFormateado => OrdenResponseModel._formatearMonto(subtotal);
   String get tituloDisplay => titulo.isNotEmpty ? titulo : (descripcionManual ?? 'Repuesto Misceláneo');
 
+  bool get esMotorOCaja {
+    final cat = (nombreCategoria ?? '').trim().toLowerCase();
+    if (cat.contains('motor') || cat.contains('caja')) return true;
+    if (idCategoria == 1 || idCategoria == 2) return true;
+    final t = tituloDisplay.toLowerCase();
+    if (t.contains('motor') ||
+        t.contains('caja de cambio') ||
+        t.contains('cajas de cambio') ||
+        t.contains('caja de cambios') ||
+        t.contains('cajas de cambios') ||
+        t.startsWith('caja ') ||
+        t == 'caja' ||
+        t.contains('caja transmision') ||
+        t.contains('caja manual') ||
+        t.contains('caja automatica') ||
+        t.contains('caja automática')) {
+      return true;
+    }
+    return false;
+  }
+
+  String get tipoEntregaLabel => esMotorOCaja ? 'Retiro en Bodega' : 'Entrega en Mesón';
+
   factory DetalleOrdenItemModel.fromJson(Map<String, dynamic> json) {
     final cant = json['cantidad'] as int? ?? 1;
     final pFinal = json['precio_final'] as int? ?? 0;
@@ -226,6 +293,8 @@ class DetalleOrdenItemModel {
     return DetalleOrdenItemModel(
       idDetalle: json['id_detalle']?.toString() ?? '',
       idActivo: json['id_activo']?.toString(),
+      idCategoria: json['id_categoria'] as int?,
+      nombreCategoria: json['nombre_categoria']?.toString(),
       titulo: json['titulo']?.toString() ?? 'Repuesto',
       skuQrFisico: json['sku_qr_fisico']?.toString(),
       descripcionManual: json['descripcion_manual']?.toString(),
@@ -244,6 +313,8 @@ class DetalleOrdenItemModel {
 /// DTO completo de orden de venta para el historial del vendedor (HU-3.5).
 class OrdenHistorialModel {
   final String idOrden;
+  final int? numeroOrden;
+  final String? folio;
   String estadoOrden;
   final int totalVenta;
   final int montoPendiente;
@@ -257,6 +328,8 @@ class OrdenHistorialModel {
 
   OrdenHistorialModel({
     required this.idOrden,
+    this.numeroOrden,
+    this.folio,
     required this.estadoOrden,
     required this.totalVenta,
     required this.montoPendiente,
@@ -270,8 +343,12 @@ class OrdenHistorialModel {
   });
 
   bool get esReservada => estadoOrden.toLowerCase() == 'reservada';
-  bool get esPagada => estadoOrden.toLowerCase() == 'pagada' || estadoOrden.toLowerCase() == 'completada';
+  bool get esPagada => estadoOrden.toLowerCase() == 'pagada';
+  bool get esCompletada => estadoOrden.toLowerCase() == 'completada';
   bool get esAnulada => estadoOrden.toLowerCase() == 'anulada';
+  bool get contieneMotorOCaja => detalles.any((d) => d.esMotorOCaja);
+  bool get contieneMiscelaneos => detalles.any((d) => !d.esMotorOCaja);
+  bool get esMixta => contieneMotorOCaja && contieneMiscelaneos;
 
   /// Indica si la orden cuenta con código QR transaccional emitido para entrega en bodega (HU-3.6).
   bool get tieneQrDisponible =>
@@ -283,6 +360,8 @@ class OrdenHistorialModel {
 
   OrdenHistorialModel copyWith({
     String? idOrden,
+    int? numeroOrden,
+    String? folio,
     String? estadoOrden,
     int? totalVenta,
     int? montoPendiente,
@@ -296,6 +375,8 @@ class OrdenHistorialModel {
   }) {
     return OrdenHistorialModel(
       idOrden: idOrden ?? this.idOrden,
+      numeroOrden: numeroOrden ?? this.numeroOrden,
+      folio: folio ?? this.folio,
       estadoOrden: estadoOrden ?? this.estadoOrden,
       totalVenta: totalVenta ?? this.totalVenta,
       montoPendiente: montoPendiente ?? this.montoPendiente,
@@ -315,6 +396,12 @@ class OrdenHistorialModel {
   String get montoPendienteFormateado => OrdenResponseModel._formatearMonto(montoPendiente);
 
   String get folioDisplay {
+    if (folio != null && folio!.isNotEmpty && !folio!.startsWith('TX-QR-')) {
+      return folio!;
+    }
+    if (numeroOrden != null) {
+      return 'ORD-${numeroOrden.toString().padLeft(4, '0')}';
+    }
     if (qrTransaccionalSalida != null &&
         qrTransaccionalSalida!.startsWith('ORD-')) {
       return qrTransaccionalSalida!;
@@ -363,6 +450,8 @@ class OrdenHistorialModel {
   factory OrdenHistorialModel.fromJson(Map<String, dynamic> json) {
     return OrdenHistorialModel(
       idOrden: json['id_orden']?.toString() ?? '',
+      numeroOrden: json['numero_orden'] as int?,
+      folio: json['folio']?.toString(),
       estadoOrden: json['estado_orden']?.toString() ?? 'Reservada',
       totalVenta: json['total_venta'] as int? ?? 0,
       montoPendiente: json['monto_pendiente'] as int? ?? 0,
@@ -582,9 +671,11 @@ class OrdenesService {
     }
   }
 
-  /// Anula una orden en estado Reservada y libera los repuestos inventariados (HU-3.5).
+  /// Anula una orden en el mesón de ventas, reversando cobros y generando logística inversa (SPEC-HU-TAREA-4).
   static Future<Map<String, dynamic>> anularOrden(
     String idOrden, {
+    String? motivoAnulacion,
+    bool usePost = false,
     http.Client? client,
   }) async {
     final httpClient = client ?? http.Client();
@@ -598,12 +689,24 @@ class OrdenesService {
         if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
       };
 
-      final response = await httpClient
-          .patch(uri, headers: headers)
-          .timeout(
-            const Duration(seconds: 15),
-            onTimeout: () => throw Exception('Tiempo de espera agotado al anular la orden.'),
-          );
+      final body = jsonEncode({
+        if (motivoAnulacion != null && motivoAnulacion.isNotEmpty)
+          'motivo_anulacion': motivoAnulacion,
+      });
+
+      final response = (usePost || motivoAnulacion != null)
+          ? await httpClient
+              .post(uri, headers: headers, body: body)
+              .timeout(
+                const Duration(seconds: 15),
+                onTimeout: () => throw Exception('Tiempo de espera agotado al anular la orden.'),
+              )
+          : await httpClient
+              .patch(uri, headers: headers, body: body)
+              .timeout(
+                const Duration(seconds: 15),
+                onTimeout: () => throw Exception('Tiempo de espera agotado al anular la orden.'),
+              );
 
       dynamic decodedBody;
       try {
@@ -713,8 +816,9 @@ class OrdenesService {
     }
   }
 
-  /// Confirma el pago de una orden y genera el código QR transaccional (HU-3.6).
-  /// Permite especificar método de pago (por defecto 'Efectivo') y monto opcional.
+  /// [DEPRECATED] Endpoint legado de demostración (HU-3.6).
+  /// En el flujo operativo oficial, los pagos deben procesarse exclusivamente a través de [CajaService.registrarCobro].
+  @Deprecated('Los pagos deben ser registrados exclusivamente por el módulo de Caja a través de CajaService.registrarCobro')
   static Future<OrdenPagoResponseModel> pagarOrden(
     String idOrden, {
     String metodoPago = 'Efectivo',
@@ -735,11 +839,11 @@ class OrdenesService {
 
       final payload = {
         'metodo_pago': metodoPago,
-        if (monto != null) 'monto': monto,
+        'monto': ?monto,
         if (observaciones != null && observaciones.isNotEmpty) 'observaciones': observaciones,
       };
 
-      print('💳 [SERVICE] Enviando confirmación de pago para orden ID: $idOrden ($metodoPago)');
+      debugPrint('💳 [SERVICE] Enviando confirmación de pago para orden ID: $idOrden ($metodoPago)');
 
       final response = await httpClient
           .post(
@@ -765,7 +869,7 @@ class OrdenesService {
 
       if (response.statusCode == 200) {
         if (decodedBody is Map<String, dynamic>) {
-          print('✅ [SERVICE] Pago exitoso recibido. QR: ${decodedBody['qr_transaccional_salida']}');
+          debugPrint('✅ [SERVICE] Pago exitoso recibido. QR: ${decodedBody['qr_transaccional_salida']}');
           return OrdenPagoResponseModel.fromJson(decodedBody);
         }
         throw Exception('Respuesta del servidor no válida al procesar el pago.');
@@ -781,7 +885,7 @@ class OrdenesService {
         throw Exception(detail?.toString() ?? 'Error al procesar el pago (${response.statusCode}).');
       }
     } catch (e) {
-      print('💥 [SERVICE] Error en pagarOrden: $e');
+      debugPrint('💥 [SERVICE] Error en pagarOrden: $e');
       if (e is Exception) rethrow;
       throw Exception('Error inesperado al procesar el pago: $e');
     } finally {
@@ -881,7 +985,9 @@ class OrdenesService {
     }
   }
 
-  /// Confirma la entrega presencial de un pedido en tienda (cierre de ciclo).
+  /// [DEPRECATED] Bypass legado para confirmar entregas (SPEC-HU-TAREA-19).
+  /// En el flujo operativo oficial, la entrega presencial se realiza obligatoriamente mediante el Dual-Scan en Barrera de Bodega.
+  @Deprecated('Las entregas deben ser procesadas exclusivamente en la Barrera de Salida de Bodega')
   static Future<bool> confirmarEntregaTienda(
     String idOrden, {
     http.Client? client,
@@ -946,6 +1052,118 @@ class OrdenesService {
       if (client == null) httpClient.close();
     }
   }
+
+  /// Actualiza exclusivamente el estado del despacho ('Por Enviar' o 'Enviado')
+  /// sin alterar el estado de la orden ni liberar activos en bodega.
+  static Future<bool> actualizarEstadoDespacho(
+    String idDespacho,
+    String nuevoEstado, {
+    http.Client? client,
+  }) async {
+    final httpClient = client ?? http.Client();
+    try {
+      final uri =
+          Uri.parse('${ApiConstants.baseUrl}/api/v1/despachos/$idDespacho/estado');
+      final token = await AuthService.getToken();
+      final headers = {
+        'Content-Type': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+      final body = jsonEncode({'nuevo_estado': nuevoEstado});
+
+      final response = await httpClient.patch(uri, headers: headers, body: body).timeout(
+            const Duration(seconds: 10),
+            onTimeout: () => throw Exception('Tiempo de espera agotado.'),
+          );
+
+      if (response.statusCode == 200) {
+        OrdenesSyncNotifier.instance.notificarCambio();
+        return true;
+      } else {
+        final resBody = jsonDecode(utf8.decode(response.bodyBytes));
+        final detail =
+            resBody is Map ? resBody['detail'] : 'Error al actualizar estado del despacho';
+        throw Exception(detail);
+      }
+    } finally {
+      if (client == null) httpClient.close();
+    }
+  }
+
+  static Map<String, List<ComunaItemModel>>? _geografiaCache;
+
+  /// Obtiene la lista de regiones y comunas dinámicas desde la Base de Datos.
+  static Future<Map<String, List<ComunaItemModel>>> obtenerGeografia({http.Client? client}) async {
+    if (_geografiaCache != null && _geografiaCache!.isNotEmpty) {
+      return _geografiaCache!;
+    }
+
+    final httpClient = client ?? http.Client();
+    try {
+      final uri = Uri.parse('${ApiConstants.ordenesEndpoint}/comunas');
+      final token = await AuthService.getToken();
+      final headers = {
+        'Content-Type': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
+      final response = await httpClient.get(uri, headers: headers).timeout(
+        const Duration(seconds: 10),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        final regionesJson = data['regiones'] as List<dynamic>? ?? [];
+        final Map<String, List<ComunaItemModel>> resultado = {};
+        final Map<String, int> idMapDinamico = {};
+        final Map<String, List<String>> geoStringMap = {};
+
+        for (final reg in regionesJson) {
+          final nombreReg = reg['nombre_region']?.toString() ?? '';
+          final comunasJson = reg['comunas'] as List<dynamic>? ?? [];
+          final listaComunas = comunasJson
+              .map((c) => ComunaItemModel.fromJson(c as Map<String, dynamic>))
+              .toList();
+          resultado[nombreReg] = listaComunas;
+          geoStringMap[nombreReg] = listaComunas.map((c) => c.nombreComuna).toList();
+          for (final c in listaComunas) {
+            idMapDinamico[c.nombreComuna] = c.idComuna;
+          }
+        }
+
+        ChileGeografia.registrarGeografiaDesdeBD(geoStringMap, idMapDinamico);
+        _geografiaCache = resultado;
+        return resultado;
+      }
+    } catch (e) {
+      debugPrint('⚠️ Error obteniendo geografía de la BD: $e');
+    } finally {
+      if (client == null) httpClient.close();
+    }
+
+    return {};
+  }
+}
+
+/// DTO para una comuna obtenida dinámicamente de la Base de Datos.
+class ComunaItemModel {
+  final int idComuna;
+  final String nombreComuna;
+  final int idRegion;
+
+  const ComunaItemModel({
+    required this.idComuna,
+    required this.nombreComuna,
+    required this.idRegion,
+  });
+
+  factory ComunaItemModel.fromJson(Map<String, dynamic> json) {
+    return ComunaItemModel(
+      idComuna: json['id_comuna'] as int? ?? 1,
+      nombreComuna: json['nombre_comuna']?.toString() ?? '',
+      idRegion: json['id_region'] as int? ?? 1,
+    );
+  }
 }
 
 /// DTO de resumen de vendedor para asignación.
@@ -978,6 +1196,7 @@ class VendedorModel {
 /// DTO para la vista de Entregas en Tienda y Despachos Externos.
 class EntregaEnvioModel {
   final String idOrden;
+  final int? numeroOrden;
   final String folio;
   final String tipoEntrega; // 'Retiro' o 'Despacho'
   final String estadoOrden;
@@ -998,6 +1217,7 @@ class EntregaEnvioModel {
 
   const EntregaEnvioModel({
     required this.idOrden,
+    this.numeroOrden,
     required this.folio,
     required this.tipoEntrega,
     required this.estadoOrden,
@@ -1019,13 +1239,28 @@ class EntregaEnvioModel {
 
   bool get estaPagada => montoPendiente == 0;
   bool get tieneSaldoPendiente => montoPendiente > 0;
+  bool get esReservada => estadoOrden.toLowerCase() == 'reservada';
+  bool get esPagada => estadoOrden.toLowerCase() == 'pagada';
+  bool get esCompletada => estadoOrden.toLowerCase() == 'completada';
+  bool get esAnulada => estadoOrden.toLowerCase() == 'anulada';
+  bool get contieneMotorOCaja => detalles.any((d) => d.esMotorOCaja);
+  bool get contieneMiscelaneos => detalles.any((d) => !d.esMotorOCaja);
+  bool get esMixta => contieneMotorOCaja && contieneMiscelaneos;
+  bool get tieneQrDisponible =>
+      esPagada &&
+      qrTransaccionalSalida != null &&
+      qrTransaccionalSalida!.trim().isNotEmpty;
   String get totalVentaFormateado => OrdenResponseModel._formatearMonto(totalVenta);
   String get montoPendienteFormateado =>
       OrdenResponseModel._formatearMonto(montoPendiente);
 
   String get folioDisplay {
-    if (folio.isNotEmpty) return folio;
-    if (qrTransaccionalSalida != null && qrTransaccionalSalida!.isNotEmpty) {
+    if (folio.isNotEmpty && !folio.startsWith('TX-QR-')) return folio;
+    if (numeroOrden != null) {
+      return 'ORD-${numeroOrden.toString().padLeft(4, '0')}';
+    }
+    if (qrTransaccionalSalida != null &&
+        qrTransaccionalSalida!.startsWith('ORD-')) {
       return qrTransaccionalSalida!;
     }
     return idOrden.length >= 8
@@ -1091,6 +1326,8 @@ class EntregaEnvioModel {
   OrdenHistorialModel toHistorialModel() {
     return OrdenHistorialModel(
       idOrden: idOrden,
+      numeroOrden: numeroOrden,
+      folio: folioDisplay,
       estadoOrden: estadoOrden,
       totalVenta: totalVenta,
       montoPendiente: montoPendiente,
@@ -1107,6 +1344,7 @@ class EntregaEnvioModel {
   factory EntregaEnvioModel.fromJson(Map<String, dynamic> json) {
     return EntregaEnvioModel(
       idOrden: json['id_orden']?.toString() ?? '',
+      numeroOrden: json['numero_orden'] as int?,
       folio: json['folio']?.toString() ?? '',
       tipoEntrega: json['tipo_entrega']?.toString() ?? 'Retiro',
       estadoOrden: json['estado_orden']?.toString() ?? 'Reservada',

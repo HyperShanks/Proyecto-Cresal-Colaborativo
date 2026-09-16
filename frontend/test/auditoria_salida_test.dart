@@ -169,81 +169,154 @@ void main() {
   // 3. PRUEBAS DE WIDGET: AuditoriaSalidaScreen (HU-3.6)
   // ===========================================================================
   group('AuditoriaSalidaScreen UI & Zero-Click Tests', () {
-    testWidgets('Renderiza estructura inicial con tarjetas de escaneo vacías y retícula', (tester) async {
+    final mockClient = MockClient((request) async {
+      if (request.url.path.contains('verificar-qr-salida')) {
+        return http.Response(
+          jsonEncode({
+            'id_orden': '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+            'folio': 'ORD-3FA85F64',
+            'estado_orden': 'Pagada',
+            'total_venta': 500000,
+            'monto_pendiente': 0,
+            'id_sucursal': 1,
+            'cliente_nombre': 'Roberto Gómez',
+            'cliente_rut': '12.345.678-9',
+            'total_items_fisicos': 1,
+            'qr_transaccional_salida': 'TX-QR-170C311C-ABCD1234EF56',
+            'items_requeridos': [
+              {
+                'id_detalle': 'det-001',
+                'id_activo': 'act-001',
+                'titulo': 'Motor Toyota Yaris',
+                'sku_qr_fisico': 'MOT-TOY-YAR-888',
+                'es_inventariado': true,
+                'ubicacion': 'P-03 - PL-07',
+                'notas_preparacion': 'Revisar correas',
+                'cantidad': 1,
+                'precio_final': 500000,
+              }
+            ]
+          }),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      }
+      if (request.url.path.contains('escanear-salida')) {
+        return http.Response(
+          jsonEncode({
+            'id_orden': '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+            'folio': 'ORD-3FA85F64',
+            'estado_orden': 'Completada',
+            'id_bodeguero': '4b8a34e5-cd9d-4a18-bea2-9f5ee05a22f4',
+            'bodeguero_nombre': 'Martín Bodeguero',
+            'fecha_entrega': '2026-08-15T04:00:00',
+            'activos_entregados': ['MOT-TOY-YAR-888'],
+            'total_entregados': 1,
+            'mensaje': '¡Entrega en barrera autorizada exitosamente!',
+          }),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      }
+      return http.Response('{}', 200);
+    });
+
+    testWidgets('Renderiza estructura inicial con Paso 1 Vendedor y Paso 2 Pieza', (tester) async {
       tester.view.physicalSize = const Size(800, 1400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(
-        const MaterialApp(
-          home: AuditoriaSalidaScreen(tarea: mockTareaLiberada),
+        MaterialApp(
+          home: AuditoriaSalidaScreen(tarea: mockTareaLiberada, httpClient: mockClient),
         ),
       );
 
       await tester.pump();
 
-      // Cabecera y badges
       expect(find.text('AUDITORÍA DE SALIDA'), findsOneWidget);
-      expect(find.text('ESCÁNER ACTIVO'), findsOneWidget);
-      expect(find.text('1. Escanee QR de la Pieza Física'), findsOneWidget);
-      expect(find.text('2. Escanee Ticket Digital (Tablet Vendedor)'), findsOneWidget);
-
-      // Estado inicial: ninguno completo
+      expect(find.text('1. Escanee QR del Vendedor'), findsOneWidget);
+      expect(find.text('2. Escanee QR de la Pieza Física'), findsOneWidget);
+      expect(find.text('Ingreso manual'), findsOneWidget);
       expect(find.text('LISTO'), findsNothing);
-      expect(find.text('MATCH EXITOSO EN BARRERA'), findsNothing);
     });
 
-    testWidgets('Captura de SKU físico actualiza Tarjeta 1 con chip y check', (tester) async {
+    testWidgets('Escanear pieza antes del QR del vendedor muestra aviso de requerimiento de orden', (tester) async {
       tester.view.physicalSize = const Size(800, 1400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(
-        const MaterialApp(
-          home: AuditoriaSalidaScreen(tarea: mockTareaLiberada),
+        MaterialApp(
+          home: AuditoriaSalidaScreen(tarea: mockTareaLiberada, httpClient: mockClient),
         ),
       );
 
       await tester.pump();
 
-      // Ingresar SKU en el simulador
       final textField = find.byType(TextField);
-      expect(textField, findsOneWidget);
-
       await tester.enterText(textField, 'MOT-TOY-YAR-888');
-      await tester.tap(find.text('Capturar'));
+      await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pump();
 
-      // Tarjeta 1 debe marcarse como lista y mostrar el chip
-      expect(find.text('MOT-TOY-YAR-888'), findsOneWidget);
-      expect(find.text('LISTO'), findsOneWidget);
-
-      // Tarjeta 2 debe seguir esperando
-      expect(find.text('Apunta a la pantalla del vendedor (TX-QR-...)'), findsOneWidget);
+      // Debe mostrar advertencia
+      expect(find.textContaining('Por favor, escanee primero el QR del Vendedor'), findsOneWidget);
+      expect(find.text('LISTO'), findsNothing);
     });
 
-    testWidgets('Captura de Token Digital actualiza Tarjeta 2', (tester) async {
+    testWidgets('Flujo guiado: Escanear QR Vendedor carga orden y muestra pieza y ubicación requerida', (tester) async {
       tester.view.physicalSize = const Size(800, 1400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
 
       await tester.pumpWidget(
-        const MaterialApp(
-          home: AuditoriaSalidaScreen(tarea: mockTareaLiberada),
+        MaterialApp(
+          home: AuditoriaSalidaScreen(tarea: mockTareaLiberada, httpClient: mockClient),
         ),
       );
 
       await tester.pump();
 
-      // Ingresar Token del Vendedor
+      // Escanear token del vendedor
       final textField = find.byType(TextField);
       await tester.enterText(textField, 'TX-QR-170C311C-ABCD1234EF56');
-      await tester.tap(find.text('Capturar'));
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Tarjeta 1 marcada como LISTO y muestra folio
+      expect(find.text('1. Ticket del Vendedor: ORD-3FA85F64'), findsOneWidget);
+      expect(find.text('LISTO'), findsOneWidget);
+
+      // Tarjeta 2 debe actualizarse con la pieza y ubicación requeridas
+      expect(find.textContaining('Motor Toyota Yaris'), findsOneWidget);
+      expect(find.textContaining('Pasillo: P-03, Pallet: PL-07'), findsOneWidget);
+    });
+
+    testWidgets('Tapping Ingreso Manual abre diálogo de contingencia limpio', (tester) async {
+      tester.view.physicalSize = const Size(800, 1400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AuditoriaSalidaScreen(tarea: mockTareaLiberada, httpClient: mockClient),
+        ),
+      );
+
       await tester.pump();
 
-      // Tarjeta 2 debe marcarse como lista
-      expect(find.text('TX-QR-170C311C-ABCD1234EF56'), findsOneWidget);
-      expect(find.text('LISTO'), findsOneWidget);
+      await tester.tap(find.text('Ingreso manual'));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Ingreso Manual'), findsOneWidget);
+      expect(find.text('Capturar'), findsOneWidget);
+      expect(find.text('Cancelar'), findsOneWidget);
+
+      await tester.tap(find.text('Cancelar'));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Capturar'), findsNothing);
     });
   });
 }

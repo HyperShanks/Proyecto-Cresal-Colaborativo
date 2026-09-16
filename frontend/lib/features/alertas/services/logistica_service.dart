@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/tarea_alerta.dart';
 import '../../../core/constants/api_constants.dart';
@@ -15,8 +16,10 @@ class ItemSalidaInfoModel {
   final String? notasPreparacion;
   final int cantidad;
   final int precioFinal;
+  bool qrImpreso;
+  final Map<String, dynamic>? etiquetaData;
 
-  const ItemSalidaInfoModel({
+  ItemSalidaInfoModel({
     required this.idDetalle,
     this.idActivo,
     required this.titulo,
@@ -26,6 +29,8 @@ class ItemSalidaInfoModel {
     this.notasPreparacion,
     required this.cantidad,
     required this.precioFinal,
+    this.qrImpreso = true,
+    this.etiquetaData,
   });
 
   factory ItemSalidaInfoModel.fromJson(Map<String, dynamic> json) {
@@ -39,6 +44,10 @@ class ItemSalidaInfoModel {
       notasPreparacion: json['notas_preparacion'],
       cantidad: json['cantidad'] ?? 1,
       precioFinal: json['precio_final'] ?? 0,
+      qrImpreso: json['qr_impreso'] ?? true,
+      etiquetaData: json['etiqueta_data'] != null
+          ? Map<String, dynamic>.from(json['etiqueta_data'])
+          : null,
     );
   }
 }
@@ -182,7 +191,7 @@ class LogisticaService {
         'Content-Type': 'application/json',
       };
 
-      print('🚪 [SERVICE-BODEGA] Verificando QR de salida: $qrTransaccionalSalida');
+      debugPrint('🚪 [SERVICE-BODEGA] Verificando QR de salida: $qrTransaccionalSalida');
 
       final response = await httpClient.post(
         Uri.parse('${ApiConstants.bodegaEndpoint}/verificar-qr-salida'),
@@ -194,12 +203,12 @@ class LogisticaService {
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
-        print('✅ [SERVICE-BODEGA] Inspección de orden exitosa: ${data['folio']}');
+        debugPrint('✅ [SERVICE-BODEGA] Inspección de orden exitosa: ${data['folio']}');
         return VerificarQrSalidaResponseModel.fromJson(data);
       } else {
         final Map<String, dynamic> errorData = jsonDecode(utf8.decode(response.bodyBytes));
         final detail = errorData['detail'] ?? 'Error al verificar QR de salida.';
-        print('⚠️ [SERVICE-BODEGA] Error al verificar QR: $detail');
+        debugPrint('⚠️ [SERVICE-BODEGA] Error al verificar QR: $detail');
         throw Exception(detail);
       }
     } catch (e) {
@@ -227,7 +236,7 @@ class LogisticaService {
         'Content-Type': 'application/json',
       };
 
-      print('🚪 [SERVICE-BODEGA] Enviando Dual-Scan (QR: $qrTransaccionalSalida, SKUs: $skusEscaneados)...');
+      debugPrint('🚪 [SERVICE-BODEGA] Enviando Dual-Scan (QR: $qrTransaccionalSalida, SKUs: $skusEscaneados)...');
 
       final response = await httpClient.post(
         Uri.parse('${ApiConstants.bodegaEndpoint}/escanear-salida'),
@@ -242,12 +251,12 @@ class LogisticaService {
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
-        print('✅ [SERVICE-BODEGA] Match exitoso en barrera para orden: ${data['folio']}');
+        debugPrint('✅ [SERVICE-BODEGA] Match exitoso en barrera para orden: ${data['folio']}');
         return EscanearSalidaResponseModel.fromJson(data);
       } else {
         final Map<String, dynamic> errorData = jsonDecode(utf8.decode(response.bodyBytes));
         final detail = errorData['detail'] ?? 'Error al autorizar salida en barrera.';
-        print('⚠️ [SERVICE-BODEGA] Rechazo en barrera (${response.statusCode}): $detail');
+        debugPrint('⚠️ [SERVICE-BODEGA] Rechazo en barrera (${response.statusCode}): $detail');
         throw Exception(detail);
       }
     } catch (e) {
@@ -281,5 +290,68 @@ class LogisticaService {
     } catch (e) {
       throw Exception('Error al marcar listo: $e');
     }
+  }
+
+  /// Consulta el resumen consolidado de alertas de bodega para el Badge (SPEC-HU-06)
+  static Future<ResumenAlertasModel> obtenerResumenAlertas({int? sucursalId, http.Client? client}) async {
+    final httpClient = client ?? http.Client();
+    try {
+      final token = await AuthService.getToken();
+      final headers = {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      };
+
+      int targetSucursal = sucursalId ?? 1;
+      final uri = Uri.parse('${ApiConstants.bodegaEndpoint}/resumen-alertas?sucursal_id=$targetSucursal');
+
+      final response = await httpClient.get(uri, headers: headers);
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
+        return ResumenAlertasModel.fromJson(data);
+      } else {
+        return ResumenAlertasModel.vacio();
+      }
+    } catch (_) {
+      return ResumenAlertasModel.vacio();
+    } finally {
+      if (client == null) {
+        httpClient.close();
+      }
+    }
+  }
+}
+
+/// DTO de respuesta para el resumen consolidado de alertas de bodega (SPEC-HU-06)
+class ResumenAlertasModel {
+  final int totalTareas;
+  final int desglosePreparacion;
+  final int desgloseEntregas;
+  final int desgloseReingresos;
+
+  const ResumenAlertasModel({
+    required this.totalTareas,
+    required this.desglosePreparacion,
+    required this.desgloseEntregas,
+    required this.desgloseReingresos,
+  });
+
+  factory ResumenAlertasModel.fromJson(Map<String, dynamic> json) {
+    return ResumenAlertasModel(
+      totalTareas: json['total_tareas'] ?? 0,
+      desglosePreparacion: json['desglose_preparacion'] ?? 0,
+      desgloseEntregas: json['desglose_entregas'] ?? 0,
+      desgloseReingresos: json['desglose_reingresos'] ?? 0,
+    );
+  }
+
+  factory ResumenAlertasModel.vacio() {
+    return const ResumenAlertasModel(
+      totalTareas: 0,
+      desglosePreparacion: 0,
+      desgloseEntregas: 0,
+      desgloseReingresos: 0,
+    );
   }
 }

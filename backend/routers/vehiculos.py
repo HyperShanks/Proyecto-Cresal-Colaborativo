@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
@@ -31,9 +32,9 @@ try:
     else:
         # Aquí está la magia que conecta FastAPI con Supabase
         supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-        print(f"✅ Conexión exitosa a Supabase en {SUPABASE_URL}. Cliente de Storage listo.")
+        print(f"[OK] Conexion exitosa a Supabase en {SUPABASE_URL}. Cliente de Storage listo.")
 except Exception as e:
-    print(f"❌ ERROR al conectar con Supabase: {str(e)}")
+    print(f"[ERROR] al conectar con Supabase: {str(e)}")
     supabase = None
 
 # Instanciamos el enrutador con su prefijo oficial (Sub-tarea A)
@@ -260,7 +261,7 @@ def registrar_ingreso_vehiculo_manual(
         id_motor = uuid.uuid4()
         activo_motor = models.Activo_Inventariado(
             id_activo=id_motor,
-            sku_qr_fisico=f"MOT-{nuevo_numero_ingreso}-{uuid.uuid4().hex[:4].upper()}",
+            sku_qr_fisico=f"MOT-{nuevo_numero_ingreso}",
             id_categoria=1,
             id_estado=5,
             id_sucursal_actual=getattr(usuario_logeado, "id_sucursal", 1) or 1,
@@ -284,7 +285,7 @@ def registrar_ingreso_vehiculo_manual(
         id_caja = uuid.uuid4()
         activo_caja = models.Activo_Inventariado(
             id_activo=id_caja,
-            sku_qr_fisico=f"CAJ-{nuevo_numero_ingreso}-{uuid.uuid4().hex[:4].upper()}",
+            sku_qr_fisico=f"CAJ-{nuevo_numero_ingreso}",
             id_categoria=2,
             id_estado=5,
             id_sucursal_actual=getattr(usuario_logeado, "id_sucursal", 1) or 1,
@@ -341,8 +342,8 @@ def obtener_pendientes_paletizado(
         .filter(
             models.Activo_Inventariado.estado == "Activo",
             models.Activo_Inventariado.id_sucursal_actual == suc_target,
+            models.Activo_Inventariado.id_estado == 5,
             or_(
-                models.Activo_Inventariado.id_estado == 5,
                 models.Activo_Inventariado.ubicacion_pasillo == None,
                 models.Activo_Inventariado.ubicacion_pasillo == "",
                 models.Activo_Inventariado.ubicacion_pasillo == "S/P",
@@ -421,6 +422,7 @@ def buscar_vehiculo_por_ingreso(numero_ingreso: str, db: Session = Depends(get_d
             "marca": vehiculo.marca,
             "modelo": vehiculo.modelo,
             "anio": vehiculo.anio,
+            "traccion": vehiculo.traccion,
         },
         "motor": {
             "id_activo": str(activo_motor.id_activo) if activo_motor else None,
@@ -429,11 +431,15 @@ def buscar_vehiculo_por_ingreso(numero_ingreso: str, db: Session = Depends(get_d
             "cilindrada": detalle_motor.cilindrada if detalle_motor else "S/A",
             "combustible": detalle_motor.combustible if detalle_motor else "S/A",
             "transmision_tipo": detalle_motor.transmision_tipo if detalle_motor else "S/A",
+            "traccion": vehiculo.traccion if vehiculo else "S/A",
         },
         "caja_cambios": {
             "id_activo": str(activo_caja.id_activo) if activo_caja else None,
             "id_estado": activo_caja.id_estado if activo_caja else None, # ⚠️ NUEVO
             "transmision_tipo": detalle_caja.transmision_tipo if detalle_caja else "S/A",
+            "cilindrada": detalle_motor.cilindrada if detalle_motor else "S/A",
+            "combustible": detalle_motor.combustible if detalle_motor else "S/A",
+            "traccion": vehiculo.traccion if vehiculo else "S/A",
         }
     }
 
@@ -550,7 +556,35 @@ async def guardar_paletizado(
         raise HTTPException(status_code=400, detail="Máximo 10 fotografías comerciales permitidas.")
 
     # ========================================================
-    # PASO A. SUBIR IMÁGENES A SUPABASE STORAGE
+    # PASO 1. VALIDACIÓN PREVIA EN BASE DE DATOS
+    # ========================================================
+    # 1. Buscar el activo específico (Motor o Caja) usando el Folio
+    query_activo = db.query(models.Activo_Inventariado).join(models.Vehiculo_Origen).filter(
+        models.Vehiculo_Origen.numero_ingreso == numero_ingreso
+    )
+    
+    id_categoria = 1 if tipo_repuesto == "Motor" else 2
+    query_activo = query_activo.filter(models.Activo_Inventariado.id_categoria == id_categoria)
+    
+    activo = query_activo.first()
+    
+    if not activo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No se encontró el activo '{tipo_repuesto}' asociado al folio {numero_ingreso}."
+        )
+
+    # 2. Validar que el activo se encuentre en estado 'Desarme' (ID 5)
+    if activo.id_estado != 5:
+        estado_actual = db.query(models.Estado_Activo).filter(models.Estado_Activo.id_estado == activo.id_estado).first()
+        nombre_estado_actual = estado_actual.nombre_estado if estado_actual else f"Estado {activo.id_estado}"
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"El repuesto '{tipo_repuesto}' del folio {numero_ingreso} no puede ser paletizado porque se encuentra en estado '{nombre_estado_actual}'. Solo se pueden paletizar repuestos en estado 'Desarme'."
+        )
+
+    # ========================================================
+    # PASO 2. SUBIR IMÁGENES A SUPABASE STORAGE
     # ========================================================
     urls_fotos_publicas = []
     
@@ -563,51 +597,43 @@ async def guardar_paletizado(
         print(f"ℹ️ Info sobre Bucket: {str(e)}")
         pass
 
+    prefijo = "moto" if tipo_repuesto == "Motor" else "caja"
+
+    # 1. Leemos los buffers binarios de las fotos asíncronamente
+    fotos_data = []
     for i, foto in enumerate(fotos_comerciales):
-        try:
-            prefijo = "moto" if tipo_repuesto == "Motor" else "caja"
-            nombre_archivo_nube = f"{numero_ingreso}/{prefijo}_{numero_ingreso}_comercial_{i+1}.jpg"
-            contenido_imagen = await foto.read()
-            
-            supabase.storage.from_(BUCKET_NAME).upload(
-                path=nombre_archivo_nube, 
-                file=contenido_imagen,
-                file_options={"cache-control": "3600", "content-type": "image/jpeg"}
-            )
-            
-            url_publica = supabase.storage.from_(BUCKET_NAME).get_public_url(nombre_archivo_nube)
-            urls_fotos_publicas.append(url_publica)
-            
-            print(f"📸 Foto {i+1} subida exitosamente: {nombre_archivo_nube}")
-            
-        except Exception as e:
-            print(f"❌ ERROR al subir foto {i+1}: {str(e)}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Fallo al subir la fotografía comercial {i+1} a la nube. El guardado ha sido abortado."
-            )
+        contenido = await foto.read()
+        nombre_archivo = f"{numero_ingreso}/{prefijo}_{numero_ingreso}_comercial_{i+1}.jpg"
+        fotos_data.append((i + 1, nombre_archivo, contenido))
+
+    def _subir_foto_sync(idx: int, path_nube: str, contenido: bytes) -> str:
+        supabase.storage.from_(BUCKET_NAME).upload(
+            path=path_nube,
+            file=contenido,
+            file_options={"cache-control": "3600", "content-type": "image/jpeg", "upsert": "true"}
+        )
+        url = supabase.storage.from_(BUCKET_NAME).get_public_url(path_nube)
+        print(f"📸 Foto {idx} subida exitosamente: {path_nube}")
+        return url
+
+    # 2. Subida concurrente en hilos paralelos para máxima velocidad
+    try:
+        urls_fotos_publicas = await asyncio.gather(*[
+            asyncio.to_thread(_subir_foto_sync, idx, path_nube, contenido)
+            for idx, path_nube, contenido in fotos_data
+        ])
+    except Exception as e:
+        print(f"❌ ERROR al subir fotos a Supabase: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Fallo al subir las fotografías comerciales a la nube ({str(e)}). El guardado ha sido abortado."
+        )
 
     # ========================================================
-    # PASO B. GUARDAR EN POSTGRESQL CON TRANSACCIÓN (SQLAlchemy)
+    # PASO 3. GUARDAR EN POSTGRESQL CON TRANSACCIÓN (SQLAlchemy)
     # ========================================================
     try:
-        # 1. Buscar el activo específico (Motor o Caja) usando el Folio
-        query_activo = db.query(models.Activo_Inventariado).join(models.Vehiculo_Origen).filter(
-            models.Vehiculo_Origen.numero_ingreso == numero_ingreso
-        )
-        
-        id_categoria = 1 if tipo_repuesto == "Motor" else 2
-        query_activo = query_activo.filter(models.Activo_Inventariado.id_categoria == id_categoria)
-        
-        activo = query_activo.first()
-        
-        if not activo:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"No se encontró el activo '{tipo_repuesto}' asociado al folio {numero_ingreso}."
-            )
-
-        # 2. Actualizar la Ubicación Física y Observaciones (PERSISTENCIA LOGÍSTICA)
+        # Actualizar la Ubicación Física y Observaciones (PERSISTENCIA LOGÍSTICA)
         activo.ubicacion_galpon = galpon
         activo.ubicacion_pasillo = pasillo
         activo.ubicacion_pallet = pallet
@@ -615,11 +641,17 @@ async def guardar_paletizado(
         if hasattr(activo, 'observacion_estado') and observaciones:
             activo.observacion_estado = observaciones
             
-        activo.id_estado = 1
+        estado_paletizado = db.query(models.Estado_Activo).filter(models.Estado_Activo.nombre_estado == "Paletizado").first()
+        if not estado_paletizado:
+            estado_paletizado = models.Estado_Activo(nombre_estado="Paletizado")
+            db.add(estado_paletizado)
+            db.flush()
+            
+        activo.id_estado = estado_paletizado.id_estado
         
         db.flush()
         
-        # 3. Guardar las URLs de las fotos en Multimedia_Activo (PERSISTENCIA COMERCIAL)
+        # Guardar las URLs de las fotos en Multimedia_Activo (PERSISTENCIA COMERCIAL)
         for url in urls_fotos_publicas:
             nueva_multimedia = models.Multimedia_Activo(
                 id_activo=activo.id_activo,
@@ -628,7 +660,7 @@ async def guardar_paletizado(
             )
             db.add(nueva_multimedia)
             
-        # 4. Confirmar la transacción completa (ACID)
+        # Confirmar la transacción completa (ACID)
         db.commit()
         db.refresh(activo)
         
@@ -663,6 +695,21 @@ async def guardar_paletizado(
             ).first()
             if detalle_caja:
                 transmision = detalle_caja.transmision_tipo
+            
+            # Herencia de especificaciones del activo hermano Motor (SPEC-HU-TAREA-17)
+            if activo.id_vehiculo:
+                motor_hermano = (
+                    db.query(models.Detalle_Motor)
+                    .join(models.Activo_Inventariado, models.Activo_Inventariado.id_activo == models.Detalle_Motor.id_activo)
+                    .filter(
+                        models.Activo_Inventariado.id_vehiculo == activo.id_vehiculo,
+                        models.Activo_Inventariado.id_categoria == 1,
+                    )
+                    .first()
+                )
+                if motor_hermano:
+                    cilindrada = motor_hermano.cilindrada
+                    combustible = motor_hermano.combustible
                 
         print(f"🏷️ SKU Generado y enviado a la UI: {activo.sku_qr_fisico}")
         print("="*40 + "\n")
@@ -678,6 +725,7 @@ async def guardar_paletizado(
             "marca": vehiculo.marca if vehiculo else "S/A",
             "modelo": vehiculo.modelo if vehiculo else "S/A",
             "anio": vehiculo.anio if vehiculo else 0,
+            "traccion": vehiculo.traccion if vehiculo else None,
             "galpon": galpon,
             "pasillo": pasillo,
             "pallet": pallet,

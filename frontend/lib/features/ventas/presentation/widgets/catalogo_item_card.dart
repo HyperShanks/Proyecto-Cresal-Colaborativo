@@ -103,6 +103,8 @@ class CatalogoItemCard extends StatelessWidget {
                                 width: 64,
                                 height: 64,
                                 fit: BoxFit.cover,
+                                cacheWidth: 200,
+                                cacheHeight: 200,
                                 errorBuilder: (ctx, err, stack) => Center(
                                   child: Icon(
                                     iconoPieza,
@@ -214,9 +216,12 @@ class CatalogoItemCard extends StatelessWidget {
 
   /// Chip de Disponibilidad
   Widget _buildDisponibilidadChip() {
-    final estado = item.estadoActivo ?? 'Disponible';
-    final bool esDisponible = estado.toLowerCase() == 'disponible';
-    final colorChip = esDisponible ? AppPalette.success : AppPalette.secondary;
+    final bool esReservado = item.esReservado;
+    final estado = esReservado ? 'RESERVADO' : (item.estadoActivo ?? 'Disponible');
+    final bool esDisponible = !esReservado && estado.toLowerCase() == 'disponible';
+    final colorChip = esDisponible
+        ? AppPalette.success
+        : (esReservado ? const Color(0xFFF59E0B) : AppPalette.secondary);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
@@ -307,22 +312,34 @@ class CatalogoItemCard extends StatelessWidget {
     );
   }
 
-  /// Botón de Carrito con área interactiva mínima de 48x48 px
+  /// Botón de Carrito con área interactiva mínima de 48x48 px.
+  /// Se desactiva visualmente si el activo se encuentra bloqueado/reservado.
   Widget _buildCartButton() {
-    return SizedBox(
-      width: 48.0,
-      height: 48.0,
-      child: Material(
-        color: AppPalette.primary,
-        borderRadius: BorderRadius.circular(10.0),
-        child: InkWell(
+    final bool bloqueado = item.esReservado;
+
+    return Tooltip(
+      message: bloqueado
+          ? 'Repuesto reservado temporalmente'
+          : 'Agregar al carrito',
+      child: SizedBox(
+        width: 48.0,
+        height: 48.0,
+        child: Material(
+          color: bloqueado
+              ? AppPalette.neutral.withValues(alpha: 0.25)
+              : AppPalette.primary,
           borderRadius: BorderRadius.circular(10.0),
-          onTap: onAddToCart,
-          child: const Center(
-            child: Icon(
-              Icons.add_shopping_cart,
-              color: AppPalette.textPrimary,
-              size: 22,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(10.0),
+            onTap: bloqueado ? null : onAddToCart,
+            child: Center(
+              child: Icon(
+                bloqueado ? Icons.lock_clock_outlined : Icons.add_shopping_cart,
+                color: bloqueado
+                    ? AppPalette.textSecondary
+                    : AppPalette.textPrimary,
+                size: 22,
+              ),
             ),
           ),
         ),

@@ -96,6 +96,13 @@ void main() {
       expect(ordenPagadaTokenVacio.tieneQrDisponible, isFalse);
     });
 
+    test('OrdenHistorialModel con estado Completada evalúa esCompletada=true, esPagada=false y tieneQrDisponible=false', () {
+      final ordenCompletada = ordenPagadaMock.copyWith(estadoOrden: 'Completada');
+      expect(ordenCompletada.esCompletada, isTrue);
+      expect(ordenCompletada.esPagada, isFalse);
+      expect(ordenCompletada.tieneQrDisponible, isFalse);
+    });
+
     test('OrdenResponseModel.tieneQrDisponible evalúa correctamente', () {
       const respPagada = OrdenResponseModel(
         idOrden: 'ord-01',
@@ -212,6 +219,67 @@ void main() {
 
       expect(find.text('TICKET DE SALIDA'), findsNothing);
     });
+
+    testWidgets('Bloquea visualmente el QR si la orden está Reservada y muestra aviso de pago pendiente', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () => QrTicketDialog.mostrar(context, ordenReservadaMock),
+                child: const Text('Abrir QR Reservada'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Abrir QR Reservada'));
+      await tester.pumpAndSettle();
+
+      // No debe existir QrImageView
+      expect(find.byType(QrImageView), findsNothing);
+      expect(find.text('TICKET BLOQUEADO'), findsOneWidget);
+      expect(find.text('ORDEN RESERVADA - PAGO PENDIENTE'), findsOneWidget);
+      expect(find.text('CÓDIGO QR BLOQUEADO'), findsOneWidget);
+      expect(find.textContaining('Saldo pendiente:'), findsOneWidget);
+      expect(find.text('\$300.000'), findsWidgets);
+
+      // Cerrar con botón cerrar del header
+      await tester.tap(find.byIcon(Icons.close));
+      await tester.pumpAndSettle();
+      expect(find.text('TICKET BLOQUEADO'), findsNothing);
+    });
+
+    testWidgets('Muestra estado Sin Retiro PDA si la orden está Pagada pero no tiene activos inventariados', (tester) async {
+      final ordenServiciosPagada = ordenPagadaMock.copyWith(qrTransaccionalSalida: null);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () => QrTicketDialog.mostrar(context, ordenServiciosPagada),
+                child: const Text('Abrir QR Servicios'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Abrir QR Servicios'));
+      await tester.pumpAndSettle();
+
+      // No debe existir QrImageView
+      expect(find.byType(QrImageView), findsNothing);
+      expect(find.text('COMPROBANTE DE VENTA'), findsOneWidget);
+      expect(find.text('PAGO CONFIRMADO - SIN RETIRO PDA'), findsOneWidget);
+      expect(find.text('SIN RETIRO FÍSICO PDA'), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.close));
+      await tester.pumpAndSettle();
+      expect(find.text('COMPROBANTE DE VENTA'), findsNothing);
+    });
   });
 
   // ===========================================================================
@@ -244,7 +312,7 @@ void main() {
       expect(find.byType(QrImageView), findsOneWidget);
     });
 
-    testWidgets('Muestra botón de Simular Pago cuando la orden está Reservada', (tester) async {
+    testWidgets('Muestra acciones de gestión cuando la orden está Reservada', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -255,11 +323,35 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      expect(find.text('💳 Simular Pago en Caja (Demo)'), findsOneWidget);
+      expect(find.text('Acciones de Gestión'), findsOneWidget);
       expect(find.text('Editar Instrucciones a Bodega'), findsOneWidget);
       expect(find.text('Deshacer Orden (Liberar Stock)'), findsOneWidget);
       // No debe mostrar botón de QR aún
       expect(find.text('MOSTRAR QR DE ENTREGA (BODEGA)'), findsNothing);
+    });
+
+    testWidgets('Muestra badge Completada y confirmación de entrega en barrera de bodega', (tester) async {
+      final ordenCompletada = ordenPagadaMock.copyWith(estadoOrden: 'Completada');
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: OrdenDetailSheet(orden: ordenCompletada),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Completada'), findsOneWidget);
+      expect(find.text('Orden Completada'), findsOneWidget);
+      expect(
+        find.text('Los repuestos fueron validados y entregados exitosamente en barrera de bodega.'),
+        findsOneWidget,
+      );
+      // No debe mostrar botón de QR ni de pago
+      expect(find.text('MOSTRAR QR DE ENTREGA (BODEGA)'), findsNothing);
+      expect(find.text('💳 Simular Pago en Caja (Demo)'), findsNothing);
     });
   });
 
@@ -292,6 +384,23 @@ void main() {
 
       expect(find.byType(QrTicketDialog), findsOneWidget);
       expect(find.text('PAGO CONFIRMADO EN CAJA'), findsOneWidget);
+    });
+
+    testWidgets('Orden con estado Completada muestra badge Completada y oculta botón Ver QR', (tester) async {
+      final ordenCompletada = ordenPagadaMock.copyWith(estadoOrden: 'Completada');
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: OrdenCard(orden: ordenCompletada),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Completada'), findsOneWidget);
+      expect(find.text('Ver QR'), findsNothing);
     });
   });
 }

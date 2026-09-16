@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../core/widgets/cresal_logo.dart';
+import '../../../../core/widgets/custom_error_snackbar.dart';
 import '../../services/auth_service.dart';
+import '../../controllers/login_controller.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PANTALLA DE LOGIN POR PIN INDUSTRIAL
-// Diseñada para operarios con guantes en patio de desarme.
-// Cumple regla W3C: touch targets mínimos de 44px.
+// Diseñada para operarios con guantes en patio de desarme y terminales de caja.
+// Cumple regla W3C: touch targets mínimos de 44px y soporte de teclado físico/numpad.
+// Errores flotantes (SnackBar) para mantener fija la posición de los números.
 // ─────────────────────────────────────────────────────────────────────────────
 class PinLoginScreen extends StatefulWidget {
   const PinLoginScreen({super.key});
@@ -22,7 +27,11 @@ class _PinLoginScreenState extends State<PinLoginScreen>
   String _pin = '';
   bool _isLoading = false;
   String? _errorMessage;
+  AuthErrorType? _lastErrorType;
   int _failedAttempts = 0;
+  final FocusNode _keyboardFocusNode = FocusNode();
+
+  String? _enrolledUserId;
 
   // Animación de sacudida para feedback de error
   late AnimationController _shakeController;
@@ -38,11 +47,29 @@ class _PinLoginScreenState extends State<PinLoginScreen>
     _shakeAnimation = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(parent: _shakeController, curve: Curves.elasticIn),
     );
+
+    _cargarDatosEnrolamiento();
+  }
+
+  Future<void> _cargarDatosEnrolamiento() async {
+    final userId = await AuthService.getEnrolledUserId();
+
+    if (!mounted) return;
+
+    if (userId == null || userId.isEmpty) {
+      Navigator.of(context).pushReplacementNamed('/enrolamiento');
+      return;
+    }
+
+    setState(() {
+      _enrolledUserId = userId;
+    });
   }
 
   @override
   void dispose() {
     _shakeController.dispose();
+    _keyboardFocusNode.dispose();
     super.dispose();
   }
 
@@ -50,9 +77,11 @@ class _PinLoginScreenState extends State<PinLoginScreen>
 
   void _onDigitPressed(String digit) {
     if (_isLoading || _pin.length >= _pinLength) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
     setState(() {
       _pin += digit;
       _errorMessage = null;
+      _lastErrorType = null;
     });
     if (_pin.length == _pinLength) {
       _submitPin();
@@ -66,49 +95,121 @@ class _PinLoginScreenState extends State<PinLoginScreen>
 
   void _onClear() {
     if (_isLoading) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
     setState(() {
       _pin = '';
       _errorMessage = null;
+      _lastErrorType = null;
     });
   }
 
+  void _handleKeyEvent(KeyEvent event) {
+    if (event is! KeyDownEvent) return;
+    final key = event.logicalKey;
+
+    if (key == LogicalKeyboardKey.digit0 || key == LogicalKeyboardKey.numpad0) {
+      _onDigitPressed('0');
+    } else if (key == LogicalKeyboardKey.digit1 || key == LogicalKeyboardKey.numpad1) {
+      _onDigitPressed('1');
+    } else if (key == LogicalKeyboardKey.digit2 || key == LogicalKeyboardKey.numpad2) {
+      _onDigitPressed('2');
+    } else if (key == LogicalKeyboardKey.digit3 || key == LogicalKeyboardKey.numpad3) {
+      _onDigitPressed('3');
+    } else if (key == LogicalKeyboardKey.digit4 || key == LogicalKeyboardKey.numpad4) {
+      _onDigitPressed('4');
+    } else if (key == LogicalKeyboardKey.digit5 || key == LogicalKeyboardKey.numpad5) {
+      _onDigitPressed('5');
+    } else if (key == LogicalKeyboardKey.digit6 || key == LogicalKeyboardKey.numpad6) {
+      _onDigitPressed('6');
+    } else if (key == LogicalKeyboardKey.digit7 || key == LogicalKeyboardKey.numpad7) {
+      _onDigitPressed('7');
+    } else if (key == LogicalKeyboardKey.digit8 || key == LogicalKeyboardKey.numpad8) {
+      _onDigitPressed('8');
+    } else if (key == LogicalKeyboardKey.digit9 || key == LogicalKeyboardKey.numpad9) {
+      _onDigitPressed('9');
+    } else if (key == LogicalKeyboardKey.backspace) {
+      _onBackspace();
+    } else if (key == LogicalKeyboardKey.escape) {
+      _onClear();
+    }
+  }
+
   Future<void> _submitPin() async {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
     setState(() {
       _isLoading = true;
       _errorMessage = null;
+      _lastErrorType = null;
     });
 
-    final result = await AuthService.loginConPin(_pin);
+    final result = await AuthService.loginConPin(_pin, _enrolledUserId);
 
     if (!mounted) return;
 
     if (result.success) {
       _failedAttempts = 0;
-      final esVentas = await AuthService.esModuloVentas();
-      if (!mounted) return;
-      if (esVentas) {
-        Navigator.of(context).pushReplacementNamed('/ventas_main');
-      } else {
-        Navigator.of(context).pushReplacementNamed('/home');
-      }
+      _lastErrorType = null;
+      await LoginController.handlePostLoginNavigation(
+        context,
+        idRol: result.user?.idRol,
+        rol: result.user?.nombreRol,
+      );
     } else {
-      _failedAttempts++;
-      _shakeController.forward(from: 0);
+      if (result.isNetworkError) {
+        // Falla de conexión / Wi-Fi: NO se incrementa el contador de intentos ni se sacude
+        setState(() {
+          _isLoading = false;
+          _pin = '';
+          _lastErrorType = AuthErrorType.network;
+          _errorMessage = result.errorMessage ??
+              'No se pudo conectar con el servidor. Verifique su conexión Wi-Fi o de red corporativa.';
+        });
+        CustomErrorSnackbar.mostrar(
+          context,
+          mensaje: _errorMessage!,
+          codigoError: 'NETWORK_ERROR',
+        );
+      } else if (result.isCredentialsError) {
+        // PIN incorrecto: SÍ incrementa intentos fallidos y sacude
+        _failedAttempts++;
+        _shakeController.forward(from: 0);
 
-      if (_failedAttempts >= 10) {
-        await AuthService.clearToken();
-        setState(() {
-          _isLoading = false;
-          _pin = '';
-          _errorMessage = 'Acceso bloqueado por seguridad tras 10 intentos fallidos.';
-        });
-        _showFatalErrorDialog();
+        if (_failedAttempts >= 10) {
+          await AuthService.clearToken();
+          if (!mounted) return;
+          setState(() {
+            _isLoading = false;
+            _pin = '';
+            _lastErrorType = AuthErrorType.credentials;
+            _errorMessage = 'Acceso bloqueado por seguridad tras 10 intentos fallidos.';
+          });
+          _showFatalErrorDialog();
+        } else {
+          setState(() {
+            _isLoading = false;
+            _pin = '';
+            _lastErrorType = AuthErrorType.credentials;
+            _errorMessage = '${result.errorMessage} (Intento $_failedAttempts de 10)';
+          });
+          CustomErrorSnackbar.mostrar(
+            context,
+            mensaje: _errorMessage!,
+            codigoError: 'AUTH_PIN_INVALID',
+          );
+        }
       } else {
+        // Error de servidor u otro
         setState(() {
           _isLoading = false;
           _pin = '';
-          _errorMessage = '${result.errorMessage} (Intento $_failedAttempts de 10)';
+          _lastErrorType = result.errorType;
+          _errorMessage = result.errorMessage ?? 'Ocurrió un error inesperado al validar el PIN.';
         });
+        CustomErrorSnackbar.mostrar(
+          context,
+          mensaje: _errorMessage!,
+          codigoError: 'AUTH_ERROR',
+        );
       }
     }
   }
@@ -150,23 +251,26 @@ class _PinLoginScreenState extends State<PinLoginScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppPalette.background,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _buildHeader(),
-                const SizedBox(height: 48),
-                _buildPinIndicators(),
-                const SizedBox(height: 20),
-                _buildErrorMessage(),
-                const SizedBox(height: 40),
-                _buildNumericKeypad(),
-              ],
+    return KeyboardListener(
+      focusNode: _keyboardFocusNode,
+      autofocus: true,
+      onKeyEvent: _handleKeyEvent,
+      child: Scaffold(
+        backgroundColor: AppPalette.background,
+        body: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _buildHeader(),
+                  const SizedBox(height: 36),
+                  _buildPinIndicators(),
+                  const SizedBox(height: 36),
+                  _buildNumericKeypad(),
+                ],
+              ),
             ),
           ),
         ),
@@ -180,27 +284,7 @@ class _PinLoginScreenState extends State<PinLoginScreen>
     return Column(
       children: [
         // Emblema de la empresa
-        Container(
-          width: 80,
-          height: 80,
-          decoration: BoxDecoration(
-            color: AppPalette.primary,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: AppPalette.primary.withValues(alpha: 0.4),
-                blurRadius: 20,
-                spreadRadius: 2,
-              ),
-            ],
-          ),
-          child: Center(
-            child: Text(
-              'C',
-              style: AppTypography.headline.copyWith(fontSize: 42),
-            ),
-          ),
-        ),
+        const CresalLogo(size: 84),
         const SizedBox(height: 20),
         Text(
           'CRESAL',
@@ -212,9 +296,7 @@ class _PinLoginScreenState extends State<PinLoginScreen>
           style: AppTypography.small,
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 28),
-        const Divider(color: AppPalette.surface, thickness: 1),
-        const SizedBox(height: 20),
+        const SizedBox(height: 24),
         const Text(
           'Ingrese su PIN de Operario',
           style: AppTypography.title,
@@ -243,7 +325,7 @@ class _PinLoginScreenState extends State<PinLoginScreen>
         mainAxisAlignment: MainAxisAlignment.center,
         children: List.generate(_pinLength, (index) {
           final isFilled = index < _pin.length;
-          final hasError = _errorMessage != null;
+          final hasError = _errorMessage != null && _lastErrorType == AuthErrorType.credentials;
           return AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOut,
@@ -268,9 +350,8 @@ class _PinLoginScreenState extends State<PinLoginScreen>
               boxShadow: isFilled
                   ? [
                       BoxShadow(
-                        color:
-                            (hasError ? AppPalette.error : AppPalette.primary)
-                                .withValues(alpha: 0.5),
+                        color: (hasError ? AppPalette.error : AppPalette.primary)
+                            .withValues(alpha: 0.5),
                         blurRadius: 8,
                         spreadRadius: 1,
                       ),
@@ -280,47 +361,6 @@ class _PinLoginScreenState extends State<PinLoginScreen>
           );
         }),
       ),
-    );
-  }
-
-  // ── Mensaje de error ──────────────────────────────────────────────────────
-
-  Widget _buildErrorMessage() {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 250),
-      child: _errorMessage != null
-          ? Container(
-              key: ValueKey(_errorMessage),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                color: AppPalette.error.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: AppPalette.error.withValues(alpha: 0.4),
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.warning_amber_rounded,
-                    color: AppPalette.error,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      _errorMessage!,
-                      style: AppTypography.small.copyWith(
-                        color: AppPalette.error,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ],
-              ),
-            )
-          : const SizedBox(key: ValueKey('empty'), height: 0),
     );
   }
 

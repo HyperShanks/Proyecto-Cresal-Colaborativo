@@ -127,4 +127,85 @@ def verificar_rol_jefe_ventas(
             detail="Acceso restringido: Se requiere rol de Jefe de Ventas para esta operación."
         )
     return current_user
+
+
+def verificar_rol_tasacion(
+    current_user: Usuario = Depends(get_current_user)
+) -> Usuario:
+    """
+    Valida que el usuario autenticado posea rol de Gerencia (id_rol == 4),
+    Administrador (id_rol == 5) o Jefe de Ventas (id_rol == 6) para fijar o
+    actualizar precios de referencia comercial (HU-3.8 y HU-5.3).
+    """
+    if current_user.id_rol not in [4, 5, 6]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso restringido: Se requieren privilegios de Gerencia, Administración o Jefatura de Ventas para fijar precios."
+        )
+    return current_user
+
+
+def require_caja_role(
+    current_user: Usuario = Depends(get_current_user)
+) -> Usuario:
+    """
+    Valida que el usuario autenticado posea permisos de Caja (id_rol == 3) o Administrador (id_rol == 5).
+    Lanza 403 Forbidden si el rol no está autorizado.
+    """
+    if current_user.id_rol not in [3, 5]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso restringido: Se requieren permisos de Operario de Caja o Administrador."
+        )
+    return current_user
+
+
+def require_bodeguero_or_admin(
+    current_user: Usuario = Depends(get_current_user)
+) -> Usuario:
+    """
+    Valida que el usuario autenticado posea permisos de Bodeguero (id_rol == 1) o Administrador (id_rol == 5).
+    Lanza 403 Forbidden si el rol no está autorizado.
+    """
+    if current_user.id_rol not in [1, 5]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso restringido: Se requieren permisos de Bodeguero o Administrador."
+        )
+    return current_user
+
+
+def require_gerencia_role(
+    current_user: Usuario = Depends(get_current_user)
+) -> Usuario:
+    """
+    Valido que el usuario autenticado posea rol de Gerencia (id_rol == 4) o Administrador (id_rol == 5).
+    Lanzo 403 Forbidden si el rol no está autorizado para acceder al panel gerencial (HU-5.1).
+    """
+    if current_user.id_rol not in [4, 5]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso restringido: Se requieren privilegios gerenciales o de Administrador."
+        )
+    return current_user
+
+
+def require_auditoria_or_caja_role(
+    current_user: Usuario = Depends(get_current_user)
+) -> Usuario:
+    """
+    Valido que el usuario autenticado posea rol de Caja (id_rol == 3),
+    Gerencia General (id_rol == 4) o Administrador (id_rol == 5) para
+    acceder al historial y visor de auditoría de órdenes (HU-5.2).
+    Lanzo 403 Forbidden si el rol no está autorizado.
+    """
+    if current_user.id_rol not in [3, 4, 5]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Acceso restringido: Se requieren permisos de "
+                "Auditoría, Gerencia o Caja."
+            )
+        )
+    return current_user
 

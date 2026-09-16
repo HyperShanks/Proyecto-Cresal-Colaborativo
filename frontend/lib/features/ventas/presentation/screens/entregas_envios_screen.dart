@@ -317,113 +317,7 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen>
     QrTicketDialog.mostrar(context, orden.toHistorialModel());
   }
 
-  Future<void> _confirmarEntrega(EntregaEnvioModel orden) async {
-    final confirmar = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppPalette.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: Row(
-          children: [
-            const Icon(Icons.check_circle_outline, color: AppPalette.success, size: 28),
-            const SizedBox(width: 10),
-            Text('Confirmar Entrega', style: AppTypography.title),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '¿Confirmas la entrega física del pedido ${orden.folioDisplay} al cliente?',
-              style: AppTypography.body,
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppPalette.background,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.white10),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Cliente: ${orden.cliente?.nombres ?? "Consumidor"} ${orden.cliente?.apellidos ?? "Final"}',
-                    style: AppTypography.small.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    'RUT: ${orden.cliente?.rutCliente ?? "S/R"}',
-                    style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
-                  ),
-                  Text(
-                    'Vendedor Creador: ${orden.vendedorNombre ?? "Vendedor Central"}',
-                    style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
-                  ),
-                  Text(
-                    'Responsable Entrega: ${orden.vendedorAsignadoNombre ?? "Mesón General"}',
-                    style: AppTypography.small.copyWith(color: AppPalette.primary),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('CANCELAR', style: TextStyle(color: AppPalette.textSecondary)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppPalette.success,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('CONFIRMAR ENTREGA'),
-          ),
-        ],
-      ),
-    );
 
-    if (confirmar == true) {
-      try {
-        await OrdenesService.confirmarEntregaTienda(orden.idOrden);
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: AppPalette.surface,
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle, color: AppPalette.success),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    '¡Pedido ${orden.folioDisplay} entregado exitosamente!',
-                    style: const TextStyle(color: AppPalette.textPrimary),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-        _cargarDatos();
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: AppPalette.surface,
-            content: Text(
-              'Error al confirmar entrega: ${e.toString().replaceAll("Exception: ", "")}',
-              style: const TextStyle(color: AppPalette.error),
-            ),
-          ),
-        );
-      }
-    }
-  }
 
   Future<void> _marcarDespachoEnviado(EntregaEnvioModel orden) async {
     final idDespacho = orden.despacho?.idDespacho;
@@ -528,6 +422,101 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen>
             backgroundColor: AppPalette.surface,
             content: Text(
               'Error al marcar despacho enviado: ${e.toString().replaceAll("Exception: ", "")}',
+              style: const TextStyle(color: AppPalette.error),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  /// Confirmar entrega en tienda física (mostrador) para órdenes sin motor ni caja
+  Future<void> _confirmarEntregaTienda(EntregaEnvioModel orden) async {
+    if (orden.tieneSaldoPendiente) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppPalette.surface,
+          behavior: SnackBarBehavior.floating,
+          content: Row(
+            children: [
+              const Icon(Icons.lock_clock_rounded, color: AppPalette.warning, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'No se puede entregar: Orden con saldo pendiente de ${orden.montoPendienteFormateado}. Requiere liquidación previa en Caja.',
+                  style: const TextStyle(color: AppPalette.warning),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      return;
+    }
+
+    final bool? confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppPalette.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.check_circle_outline, color: AppPalette.success, size: 24),
+            const SizedBox(width: 8),
+            const Text('Confirmar Entrega', style: TextStyle(color: AppPalette.textPrimary)),
+          ],
+        ),
+        content: Text(
+          '¿Confirmar la entrega del pedido #${orden.folioDisplay} al cliente?\n\nEsta acción marcará la orden como Completada.',
+          style: const TextStyle(color: AppPalette.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('CANCELAR', style: TextStyle(color: AppPalette.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppPalette.success,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('CONFIRMAR ENTREGA', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar == true) {
+      try {
+        await OrdenesService.confirmarEntregaTienda(orden.idOrden);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppPalette.surface,
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: AppPalette.success),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '¡Orden #${orden.folioDisplay} entregada exitosamente!',
+                    style: const TextStyle(color: AppPalette.textPrimary),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+        _cargarDatos();
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppPalette.surface,
+            content: Text(
+              'Error al confirmar entrega: ${e.toString().replaceAll("Exception: ", "")}',
               style: const TextStyle(color: AppPalette.error),
             ),
           ),
@@ -755,11 +744,54 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen>
                                 padding: const EdgeInsets.only(top: 2.0),
                                 child: Text('SKU QR: ${item.skuQrFisico}', style: AppTypography.small.copyWith(color: AppPalette.textSecondary, fontSize: 11)),
                               ),
+                            const SizedBox(height: 4.0),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 2.0),
+                              decoration: BoxDecoration(
+                                color: item.esMotorOCaja
+                                    ? AppPalette.primary.withValues(alpha: 0.12)
+                                    : AppPalette.secondary.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(4.0),
+                                border: Border.all(
+                                  color: item.esMotorOCaja
+                                      ? AppPalette.primary.withValues(alpha: 0.3)
+                                      : AppPalette.secondary.withValues(alpha: 0.3),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    item.esMotorOCaja
+                                        ? Icons.warehouse_outlined
+                                        : Icons.storefront_outlined,
+                                    size: 11.0,
+                                    color: item.esMotorOCaja
+                                        ? AppPalette.primary
+                                        : AppPalette.secondary,
+                                  ),
+                                  const SizedBox(width: 4.0),
+                                  Text(
+                                    item.esMotorOCaja
+                                        ? 'Retiro en Bodega (Barrera)'
+                                        : 'Entrega Inmediata en Mesón',
+                                    style: TextStyle(
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: item.esMotorOCaja
+                                          ? AppPalette.primary
+                                          : AppPalette.secondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                             if (item.notasPreparacion != null && item.notasPreparacion!.isNotEmpty)
                               Padding(
                                 padding: const EdgeInsets.only(top: 2.0),
                                 child: Text('Nota: ${item.notasPreparacion}', style: AppTypography.small.copyWith(color: AppPalette.warning, fontSize: 11)),
                               ),
+                            const SizedBox(height: 4.0),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
@@ -816,61 +848,124 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen>
                       ],
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
+
+                  // Aviso Informativo para Orden Mixta
+                  if (orden.esMixta) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppPalette.secondary.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppPalette.secondary.withValues(alpha: 0.4)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.swap_horiz_rounded, color: AppPalette.secondary, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Orden Mixta: Entrega los repuestos misceláneos al cliente en mostrador. El activo principal (motor/caja) debe retirarse en bodega con el Ticket QR.',
+                              style: AppTypography.small.copyWith(
+                                color: AppPalette.textPrimary,
+                                fontSize: 11.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                  ],
 
                   // Botonera de Acción en Detalle
                   Row(
                     children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppPalette.primary,
-                            side: const BorderSide(color: AppPalette.primary),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                          onPressed: () {
-                            Navigator.of(ctx).pop();
-                            _abrirQrModal(orden);
-                          },
-                          icon: const Icon(Icons.qr_code_2, size: 18),
-                          label: const Text('VER TICKET QR', style: TextStyle(fontWeight: FontWeight.bold)),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      if (orden.tipoEntrega.toLowerCase() == 'retiro')
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: saldoPendiente ? Colors.grey.shade800 : AppPalette.success,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            ),
-                            onPressed: saldoPendiente
-                                ? () {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        backgroundColor: AppPalette.surface,
-                                        content: Text(
-                                          'La orden tiene un saldo pendiente de ${orden.montoPendienteFormateado}. Debe liquidarse en caja antes de entregar.',
-                                          style: const TextStyle(color: AppPalette.warning),
-                                        ),
+                      if (orden.tipoEntrega.toLowerCase() == 'retiro') ...[
+                        if (orden.contieneMotorOCaja) ...[
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: orden.tieneQrDisponible
+                                    ? AppPalette.primary
+                                    : AppPalette.textSecondary,
+                                side: BorderSide(
+                                  color: orden.tieneQrDisponible
+                                      ? AppPalette.primary
+                                      : Colors.white24,
+                                ),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              onPressed: () {
+                                if (!orden.tieneQrDisponible) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      backgroundColor: AppPalette.surface,
+                                      behavior: SnackBarBehavior.floating,
+                                      content: Row(
+                                        children: [
+                                          const Icon(Icons.lock_clock_rounded,
+                                              color: AppPalette.warning, size: 20),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              saldoPendiente
+                                                  ? 'QR bloqueado: Orden con saldo pendiente de ${orden.montoPendienteFormateado}. Requiere confirmación de pago en Caja.'
+                                                  : 'Esta orden no requiere código QR para retiro en bodega.',
+                                              style: const TextStyle(color: AppPalette.warning),
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                    );
-                                  }
-                                : () {
-                                    Navigator.of(ctx).pop();
-                                    _confirmarEntrega(orden);
-                                  },
-                            icon: Icon(saldoPendiente ? Icons.lock_outline : Icons.check_circle_outline, size: 18),
-                            label: Text(
-                              saldoPendiente ? 'PAGO EN CAJA' : 'ENTREGAR',
-                              style: const TextStyle(fontWeight: FontWeight.bold),
+                                    ),
+                                  );
+                                  return;
+                                }
+                                Navigator.of(ctx).pop();
+                                _abrirQrModal(orden);
+                              },
+                              icon: Icon(
+                                orden.tieneQrDisponible ? Icons.qr_code_2 : Icons.lock_outline,
+                                size: 18,
+                              ),
+                              label: Text(
+                                orden.tieneQrDisponible ? 'VER TICKET QR' : 'QR BLOQUEADO',
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
                             ),
                           ),
-                        )
-                      else
+                        ] else ...[
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: saldoPendiente ? AppPalette.surface : AppPalette.success,
+                                foregroundColor: saldoPendiente ? AppPalette.textSecondary : Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  side: BorderSide(
+                                    color: saldoPendiente ? Colors.white12 : AppPalette.success,
+                                  ),
+                                ),
+                              ),
+                              onPressed: () {
+                                Navigator.of(ctx).pop();
+                                _confirmarEntregaTienda(orden);
+                              },
+                              icon: Icon(
+                                saldoPendiente ? Icons.lock_outline : Icons.check_circle_outline,
+                                size: 18,
+                              ),
+                              label: const Text(
+                                'ENTREGADO',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ] else ...[
+                        // Despacho
                         Expanded(
                           child: ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
@@ -887,6 +982,7 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen>
                             label: const Text('MARCAR ENVIADO', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
                           ),
                         ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -1307,15 +1403,59 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen>
               Row(
                 children: [
                   Expanded(
-                    child: Text(
-                      itemsResumen,
-                      style: AppTypography.body.copyWith(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: AppPalette.textPrimary,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            itemsResumen,
+                            style: AppTypography.body.copyWith(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: AppPalette.textPrimary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (orden.esMixta) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppPalette.secondary.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: AppPalette.secondary.withValues(alpha: 0.4)),
+                            ),
+                            child: const Text(
+                              'Mixta',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.bold,
+                                color: AppPalette.secondary,
+                              ),
+                            ),
+                          ),
+                        ] else if (!orden.contieneMotorOCaja) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppPalette.success.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: AppPalette.success.withValues(alpha: 0.3)),
+                            ),
+                            child: const Text(
+                              'Mesón',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.bold,
+                                color: AppPalette.success,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -1349,7 +1489,7 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen>
                           child: const FittedBox(
                             fit: BoxFit.scaleDown,
                             child: Text(
-                              'PAGADO - LISTO',
+                              'PAGADO',
                               style: TextStyle(
                                 color: AppPalette.success,
                                 fontSize: 12,
@@ -1363,79 +1503,154 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen>
               const SizedBox(height: 12),
 
               // Fila 4: Botonera de Acción Rápida y Acceso a Detalle
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  InkWell(
-                    onTap: () => _abrirQrModal(orden),
-                    borderRadius: BorderRadius.circular(8),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+              if (orden.contieneMotorOCaja) ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    InkWell(
+                      onTap: () {
+                        if (!orden.tieneQrDisponible) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              backgroundColor: AppPalette.surface,
+                              behavior: SnackBarBehavior.floating,
+                              content: Row(
+                                children: [
+                                  const Icon(Icons.lock_clock_rounded,
+                                      color: AppPalette.warning, size: 20),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      saldoPendiente
+                                          ? 'QR bloqueado: Orden con saldo pendiente de ${orden.montoPendienteFormateado}. Requiere confirmación de pago en Caja.'
+                                          : 'Esta orden no requiere código QR para retiro en bodega.',
+                                      style: const TextStyle(color: AppPalette.warning),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                          return;
+                        }
+                        _abrirQrModal(orden);
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              orden.tieneQrDisponible ? Icons.qr_code_2 : Icons.lock_outline,
+                              color: orden.tieneQrDisponible ? AppPalette.primary : AppPalette.warning,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              orden.tieneQrDisponible ? 'Ticket QR' : 'QR Bloqueado',
+                              style: AppTypography.body.copyWith(
+                                color: orden.tieneQrDisponible ? AppPalette.primary : AppPalette.warning,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppPalette.surface,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.white12),
+                      ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.qr_code_2, color: AppPalette.primary, size: 22),
+                          Icon(
+                            Icons.qr_code_scanner,
+                            size: 15,
+                            color: orden.esMixta ? AppPalette.secondary : AppPalette.textSecondary,
+                          ),
                           const SizedBox(width: 6),
                           Text(
-                            'Ver Detalle',
-                            style: AppTypography.body.copyWith(
-                              color: AppPalette.textSecondary,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
+                            orden.esMixta ? 'Mixta · Barrera Bodega' : 'Salida en Barrera Bodega',
+                            style: AppTypography.small.copyWith(
+                              color: orden.esMixta ? AppPalette.secondary : AppPalette.textSecondary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
                             ),
                           ),
                         ],
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: SizedBox(
-                      height: 46,
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: saldoPendiente ? AppPalette.surface : AppPalette.success,
-                          foregroundColor: saldoPendiente ? Colors.white70 : Colors.white,
-                          side: saldoPendiente
-                              ? BorderSide(color: Colors.white.withValues(alpha: 0.2), width: 1.2)
-                              : BorderSide.none,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                          elevation: 0,
-                        ),
-                        onPressed: saldoPendiente
-                            ? () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    backgroundColor: AppPalette.surface,
-                                    content: Text(
-                                      'La orden tiene un saldo pendiente de ${orden.montoPendienteFormateado}. Debe ser pagada en caja antes de entregar.',
-                                      style: const TextStyle(color: AppPalette.warning),
-                                    ),
-                                  ),
-                                );
-                              }
-                            : () => _confirmarEntrega(orden),
-                        icon: Icon(
-                          saldoPendiente ? Icons.lock_outline : Icons.check_circle_outline,
-                          size: 20,
-                          color: saldoPendiente ? Colors.white70 : Colors.white,
-                        ),
-                        label: Text(
-                          saldoPendiente ? 'Pago en Caja' : 'Confirmar Entrega',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                            color: saldoPendiente ? Colors.white70 : Colors.white,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                  ],
+                ),
+              ] else ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    InkWell(
+                      onTap: () => _abrirDetalleCompleto(orden),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.receipt_long_outlined, color: AppPalette.textSecondary, size: 18),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Ver Detalle',
+                              style: AppTypography.body.copyWith(
+                                color: AppPalette.textSecondary,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      height: 38,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: saldoPendiente
+                              ? AppPalette.surface
+                              : AppPalette.success,
+                          foregroundColor: saldoPendiente
+                              ? AppPalette.textSecondary
+                              : Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            side: BorderSide(
+                              color: saldoPendiente
+                                  ? Colors.white12
+                                  : AppPalette.success,
+                            ),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        ),
+                        onPressed: () => _confirmarEntregaTienda(orden),
+                        icon: Icon(
+                          saldoPendiente ? Icons.lock_outline : Icons.check_circle_outline,
+                          size: 18,
+                        ),
+                        label: const Text(
+                          'Entregado',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),

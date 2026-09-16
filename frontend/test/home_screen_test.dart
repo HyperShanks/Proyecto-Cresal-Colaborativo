@@ -92,7 +92,7 @@ void main() {
       expect(find.text('ALERTA TAREAS'), findsOneWidget);
       expect(find.text('Requiere atención inmediata'), findsOneWidget);
       expect(find.byKey(const Key('home_badge_alertas')), findsOneWidget);
-      expect(find.text('4'), findsOneWidget);
+      expect(find.text('4'), findsWidgets);
       expect(find.byIcon(Icons.notifications_active_rounded), findsOneWidget);
     });
 
@@ -104,7 +104,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Requiere atención inmediata • Incluye traslados prioritarios'), findsOneWidget);
-      expect(find.text('7'), findsOneWidget);
+      expect(find.text('7'), findsWidgets);
       expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
     });
 

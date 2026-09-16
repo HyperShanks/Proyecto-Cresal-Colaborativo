@@ -1,12 +1,14 @@
 // lib/features/ventas/presentation/widgets/asignar_precio_dialog.dart
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../core/utils/currency_formatter.dart';
 import '../../models/pendiente_precio_model.dart';
 import '../../services/inventario_service.dart';
+import '../screens/catalogo_screen.dart';
+import 'galeria_activo_widget.dart';
 
 /// Diálogo modal interactivo para fijar el precio de referencia de un repuesto (HU-3.8).
 class AsignarPrecioDialog extends StatefulWidget {
@@ -80,6 +82,7 @@ class _AsignarPrecioDialogState extends State<AsignarPrecioDialog> {
       if (!mounted) return;
 
       Navigator.of(context).pop(); // Cierra el diálogo
+      CatalogoScreen.refreshNotifier.value++;
       widget.onPrecioAsignado();
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -142,73 +145,82 @@ class _AsignarPrecioDialogState extends State<AsignarPrecioDialog> {
           ),
         ],
       ),
-      content: SingleChildScrollView(
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Resumen del repuesto
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12.0),
-                decoration: BoxDecoration(
-                  color: AppPalette.background,
-                  borderRadius: BorderRadius.circular(10.0),
-                  border: Border.all(color: Colors.white10),
+      content: SizedBox(
+        width: 480.0,
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Resumen del repuesto
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12.0),
+                  decoration: BoxDecoration(
+                    color: AppPalette.background,
+                    borderRadius: BorderRadius.circular(10.0),
+                    border: Border.all(color: Colors.white10),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.activo.tituloVehiculo,
+                        style: AppTypography.body.copyWith(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14.0,
+                        ),
+                      ),
+                      const SizedBox(height: 4.0),
+                      Text(
+                        'SKU: ${widget.activo.skuQrFisico} • ${widget.activo.fichaVehiculoDisplay}',
+                        style: AppTypography.small.copyWith(
+                          color: AppPalette.secondary,
+                          fontSize: 12.0,
+                        ),
+                      ),
+                      const SizedBox(height: 2.0),
+                      Text(
+                        widget.activo.especificacionesDisplay,
+                        style: AppTypography.small.copyWith(
+                          color: AppPalette.textSecondary,
+                          fontSize: 11.0,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.activo.tituloRepuesto,
-                      style: AppTypography.body.copyWith(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14.0,
-                      ),
-                    ),
-                    const SizedBox(height: 4.0),
-                    Text(
-                      'SKU: ${widget.activo.skuQrFisico} • ${widget.activo.fichaVehiculoDisplay}',
-                      style: AppTypography.small.copyWith(
-                        color: AppPalette.secondary,
-                        fontSize: 12.0,
-                      ),
-                    ),
-                    const SizedBox(height: 2.0),
-                    Text(
-                      widget.activo.especificacionesDisplay,
-                      style: AppTypography.small.copyWith(
-                        color: AppPalette.textSecondary,
-                        fontSize: 11.0,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
 
-              const SizedBox(height: 16.0),
+                const SizedBox(height: 14.0),
 
-              // Campo de entrada de precio
-              Text(
-                'PRECIO DE REFERENCIA (CLP)',
-                style: AppTypography.small.copyWith(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 11.0,
-                  letterSpacing: 0.8,
-                  color: AppPalette.textSecondary,
+                // Galería de Fotografías del Activo (SPEC-HU-TAREA-15)
+                GaleriaActivoWidget(
+                  fotografias: widget.activo.fotografias,
+                  height: 190.0,
                 ),
-              ),
-              const SizedBox(height: 8.0),
+
+                const SizedBox(height: 16.0),
+
+                // Campo de entrada de precio
+                Text(
+                  'PRECIO DE REFERENCIA (CLP)',
+                  style: AppTypography.small.copyWith(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11.0,
+                    letterSpacing: 0.8,
+                    color: AppPalette.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 8.0),
 
               TextFormField(
                 controller: _precioController,
                 keyboardType: TextInputType.number,
                 autofocus: true,
                 inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  _MilesTextInputFormatter(),
+                  MilesTextInputFormatter(),
                 ],
                 style: AppTypography.title.copyWith(
                   fontSize: 20.0,
@@ -282,18 +294,22 @@ class _AsignarPrecioDialogState extends State<AsignarPrecioDialog> {
           ),
         ),
       ),
+    ),
       actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       actions: [
         Row(
           children: [
             Expanded(
+              flex: 2,
               child: SizedBox(
                 height: 48.0,
                 child: OutlinedButton(
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppPalette.textSecondary,
+                    disabledForegroundColor: AppPalette.textSecondary.withValues(alpha: 0.5),
                     side: const BorderSide(color: Colors.white24),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
                   ),
                   onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
                   child: const Text('Cancelar', style: TextStyle(fontWeight: FontWeight.w600)),
@@ -302,7 +318,7 @@ class _AsignarPrecioDialogState extends State<AsignarPrecioDialog> {
             ),
             const SizedBox(width: 12.0),
             Expanded(
-              flex: 2,
+              flex: 3,
               child: SizedBox(
                 height: 48.0,
                 child: ElevatedButton(
@@ -311,6 +327,7 @@ class _AsignarPrecioDialogState extends State<AsignarPrecioDialog> {
                     foregroundColor: AppPalette.textPrimary,
                     elevation: 0,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
                   ),
                   onPressed: _isLoading ? null : _guardarPrecio,
                   child: _isLoading
@@ -322,9 +339,12 @@ class _AsignarPrecioDialogState extends State<AsignarPrecioDialog> {
                             color: AppPalette.textPrimary,
                           ),
                         )
-                      : const Text(
-                          'Confirmar Precio',
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                      : const FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            'Confirmar Precio',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
                         ),
                 ),
               ),
@@ -332,33 +352,6 @@ class _AsignarPrecioDialogState extends State<AsignarPrecioDialog> {
           ],
         ),
       ],
-    );
-  }
-}
-
-/// Formateador de miles automático para CLP (ej. 100000 -> 100.000)
-class _MilesTextInputFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
-    if (newValue.text.isEmpty) return newValue;
-
-    final digitsOnly = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
-    if (digitsOnly.isEmpty) return const TextEditingValue();
-
-    final buffer = StringBuffer();
-    int count = 0;
-    for (int i = digitsOnly.length - 1; i >= 0; i--) {
-      buffer.write(digitsOnly[i]);
-      count++;
-      if (count % 3 == 0 && i > 0) {
-        buffer.write('.');
-      }
-    }
-    final formatted = buffer.toString().split('').reversed.join('');
-
-    return TextEditingValue(
-      text: formatted,
-      selection: TextSelection.collapsed(offset: formatted.length),
     );
   }
 }

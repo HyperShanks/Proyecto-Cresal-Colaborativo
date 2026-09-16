@@ -104,6 +104,7 @@ void main() {
         modelo: 'Corolla',
         anio: 2021,
         transmisionTipo: 'Manual 6 Vel',
+        ubicacionGalpon: 'G1',
         ubicacionPasillo: 'B2',
         ubicacionPallet: 'P-10',
         precioReferencia: 620000,
@@ -122,6 +123,8 @@ void main() {
       expect(find.text('Detalle del Repuesto'), findsOneWidget);
       expect(find.text('SKU: CAJ-COR-002'), findsOneWidget);
       expect(find.text('\$620.000'), findsOneWidget);
+      expect(find.text('Galpón'), findsOneWidget);
+      expect(find.text('G1'), findsOneWidget);
       expect(find.text('Pasillo'), findsOneWidget);
       expect(find.text('B2'), findsOneWidget);
       expect(find.text('Pallet'), findsOneWidget);

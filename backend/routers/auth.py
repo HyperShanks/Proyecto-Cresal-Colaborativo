@@ -1,4 +1,5 @@
 import random
+import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
@@ -6,12 +7,19 @@ from database import get_db
 from models import Usuario, Rol, Sucursal
 from schemas import (
     LoginPINRequest,
+    LoginEmailRequest,
     TokenResponse,
     UsuarioData,
     RegisterUserRequest,
     RegisterUserResponse,
 )
-from core.security import verify_pin, create_access_token, hash_password
+from core.security import (
+    verify_pin,
+    verify_password,
+    create_access_token,
+    hash_password,
+    get_current_user,
+)
 
 router = APIRouter(
     prefix="/api/auth",
@@ -19,22 +27,35 @@ router = APIRouter(
 )
 
 
+
 @router.post(
     "/register",
     response_model=RegisterUserResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Registro de Nuevos Usuarios",
-    description="Crea un nuevo usuario en la base de datos con contraseña cifrada en bcrypt."
+    description="Crea un nuevo usuario en la base de datos con contraseña cifrada en bcrypt. Requiere permisos de Administrador (id_rol == 5)."
 )
-def registrar_usuario(request: RegisterUserRequest, db: Session = Depends(get_db)):
+def registrar_usuario(
+    request: RegisterUserRequest,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
     """
     Registra un usuario en la tabla Usuario:
-    1. Valida unicidad de correo y RUT.
-    2. Valida la existencia del rol asignado.
-    3. Hashea la contraseña en texto plano usando bcrypt.
-    4. Genera o valida el PIN numérico de acceso de 4 dígitos.
-    5. Guarda el nuevo registro con estado 'Activo'.
+    1. Valida permisos de Administrador (id_rol == 5).
+    2. Valida unicidad de correo y RUT.
+    3. Valida la existencia del rol asignado.
+    4. Hashea la contraseña en texto plano usando bcrypt.
+    5. Genera o valida el PIN numérico de acceso de 4 dígitos.
+    6. Guarda el nuevo registro con estado 'Activo'.
     """
+    # 0. Validar permisos de Administrador (Zero Trust RBAC)
+    if current_user.id_rol != 5:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso denegado: Se requiere rol de Administrador para registrar nuevos usuarios."
+        )
+
     # 1. Validar si el email ya existe
     email_limpio = request.email.strip().lower()
     if db.query(Usuario).filter(Usuario.email == email_limpio).first():
@@ -67,7 +88,6 @@ def registrar_usuario(request: RegisterUserRequest, db: Session = Depends(get_db
         if primera_sucursal:
             id_sucursal_final = primera_sucursal.id_sucursal
         else:
-            # Fallback en testing si no hay sucursales creadas
             id_sucursal_final = 1
 
     # 5. Generar o validar PIN de acceso único de 4 dígitos
@@ -103,9 +123,19 @@ def registrar_usuario(request: RegisterUserRequest, db: Session = Depends(get_db
         estado="Activo"
     )
 
-    db.add(nuevo_usuario)
-    db.commit()
-    db.refresh(nuevo_usuario)
+    try:
+        db.add(nuevo_usuario)
+        db.commit()
+        db.refresh(nuevo_usuario)
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error transaccional al registrar usuario: {str(e)}"
+        )
 
     return RegisterUserResponse(
         id_usuario=nuevo_usuario.id_usuario,
@@ -116,6 +146,7 @@ def registrar_usuario(request: RegisterUserRequest, db: Session = Depends(get_db
         id_rol=nuevo_usuario.id_rol,
         nombre_rol=rol.nombre_rol,
         id_sucursal=nuevo_usuario.id_sucursal,
+        nombre_sucursal=nuevo_usuario.nombre_sucursal,
         pin_acceso=nuevo_usuario.pin_acceso,
         estado=nuevo_usuario.estado,
         mensaje="Usuario registrado exitosamente con contraseña encriptada.",
@@ -125,27 +156,37 @@ def registrar_usuario(request: RegisterUserRequest, db: Session = Depends(get_db
 @router.post(
     "/login-pin",
     response_model=TokenResponse,
-    summary="Login por PIN de Operario",
-    description="Autentica a un operario usando su PIN de 4 dígitos asignado. "
+    summary="Login por PIN de Operario Vinculado",
+    description="Autentica a un operario usando su PIN de 4 dígitos y su ID de usuario vinculado. "
                 "Retorna un JWT Bearer Token y los datos públicos del usuario."
 )
 def login_por_pin(request: LoginPINRequest, db: Session = Depends(get_db)):
     """
-    Flujo de autenticación por PIN:
+    Flujo de autenticación por PIN vinculado al usuario:
 
-    1. Busca en la tabla Usuario el registro cuyo pin_acceso coincide con el ingresado.
-    2. Camino Triste: Si no existe o está inactivo → 401 Unauthorized.
-    3. Camino Feliz: Si es válido y activo → Genera JWT y retorna TokenResponse.
+    1. Valida el UUID de id_usuario.
+    2. Busca en la tabla Usuario el registro con (id_usuario == request.id_usuario) AND (pin_acceso == request.pin_acceso).
+    3. Si no existe, no coincide o está inactivo → 401 Unauthorized.
+    4. Si es válido y activo → Genera JWT y retorna TokenResponse.
     """
-    # Consulta: buscar usuario por PIN (cargando relación con Rol y Sucursal)
+    try:
+        user_uuid = uuid.UUID(str(request.id_usuario))
+    except (ValueError, AttributeError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="PIN inválido o usuario inactivo"
+        )
+
+    # Consulta: buscar usuario por ID y PIN (cargando relación con Rol y Sucursal)
     usuario = db.query(Usuario).options(
         joinedload(Usuario.rol),
         joinedload(Usuario.sucursal)
     ).filter(
-        Usuario.pin_acceso == request.pin
+        Usuario.id_usuario == user_uuid,
+        Usuario.pin_acceso == request.pin_acceso
     ).first()
 
-    # Camino Triste: PIN no encontrado
+    # Camino Triste: PIN no coincide o usuario no encontrado
     if not usuario:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -159,8 +200,8 @@ def login_por_pin(request: LoginPINRequest, db: Session = Depends(get_db)):
             detail="PIN inválido o usuario inactivo"
         )
 
-    # Verificación adicional de PIN (comparación explícita)
-    if not verify_pin(request.pin, usuario.pin_acceso):
+    # Verificación adicional de PIN
+    if not verify_pin(request.pin_acceso, usuario.pin_acceso):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="PIN inválido o usuario inactivo"
@@ -182,3 +223,45 @@ def login_por_pin(request: LoginPINRequest, db: Session = Depends(get_db)):
         token_type="bearer",
         usuario=usuario_data
     )
+
+
+@router.post(
+    "/login",
+    response_model=TokenResponse,
+    summary="Login por Email y Contraseña",
+    description="Autentica a un usuario corporativo usando su correo y contraseña. "
+                "Retorna un JWT Bearer Token y los datos públicos del usuario."
+)
+def login_por_email(request: LoginEmailRequest, db: Session = Depends(get_db)):
+    """
+    Autenticación tradicional por correo y contraseña.
+    """
+    usuario = db.query(Usuario).options(
+        joinedload(Usuario.rol),
+        joinedload(Usuario.sucursal)
+    ).filter(
+        Usuario.email == request.email.strip().lower()
+    ).first()
+
+    if not usuario or usuario.estado != "Activo" or not verify_password(request.password, usuario.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciales inválidas o usuario inactivo"
+        )
+
+    access_token = create_access_token(
+        data={"sub": str(usuario.id_usuario)}
+    )
+
+    usuario_data = UsuarioData.model_validate(usuario)
+    if usuario.rol and not usuario_data.nombre_rol:
+        usuario_data.nombre_rol = usuario.rol.nombre_rol
+    if usuario.sucursal and not usuario_data.nombre_sucursal:
+        usuario_data.nombre_sucursal = usuario.sucursal.nombre_sucursal
+
+    return TokenResponse(
+        access_token=access_token,
+        token_type="bearer",
+        usuario=usuario_data
+    )
+

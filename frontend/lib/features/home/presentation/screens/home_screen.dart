@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../routes/app_routes.dart';
 import '../../../auth/services/auth_service.dart';
 import '../../../alertas/services/bodega_polling_service.dart';
+import '../../../paletizado/services/paletizado_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HOME SCREEN — Panel principal de Bodega (Terminal Bodega) protegido por sesión
 // ─────────────────────────────────────────────────────────────────────────────
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final PaletizadoService? paletizadoService;
+  const HomeScreen({super.key, this.paletizadoService});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -21,6 +24,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int? _userSucursalId;
   DateTime? _pausedTime;
 
+  final TextEditingController _paletizadoIngresoController =
+      TextEditingController();
+  final FocusNode _paletizadoFocusNode = FocusNode();
+  bool _isSearchingPaletizado = false;
+
   @override
   void initState() {
     super.initState();
@@ -32,6 +40,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     BodegaPollingService.instance.detenerPolling();
+    _paletizadoIngresoController.dispose();
+    _paletizadoFocusNode.dispose();
     super.dispose();
   }
 
@@ -46,7 +56,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           _pausedTime = null;
           BodegaPollingService.instance.reset();
           AuthService.clearToken();
-          Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+          Navigator.of(
+            context,
+          ).pushNamedAndRemoveUntil('/login', (route) => false);
         } else {
           _pausedTime = null;
           _cargarConteoTareas();
@@ -63,9 +75,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       return;
     }
 
-    final esVentas = await AuthService.esModuloVentas();
-    if (mounted && esVentas) {
-      Navigator.of(context).pushReplacementNamed('/ventas_main');
+    final idRol = await AuthService.getIdRol();
+    if (!mounted) return;
+
+    final targetRoute = AppRoutes.getHomeRouteForRole(idRol);
+    if (targetRoute != AppRoutes.home) {
+      Navigator.of(context).pushReplacementNamed(targetRoute);
       return;
     }
 
@@ -87,44 +102,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _iniciarServicioPolling({int? sucursalId}) async {
     final targetSucursalId = sucursalId ?? await AuthService.getSucursalId();
-    BodegaPollingService.instance.onNotificacion = (titulo, cuerpo) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: AppPalette.surface,
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 4),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-              side: const BorderSide(color: AppPalette.secondary, width: 1.5),
-            ),
-            content: Row(
-              children: [
-                const Icon(Icons.notifications_active, color: AppPalette.secondary, size: 24),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(titulo, style: AppTypography.title.copyWith(fontSize: 14, color: AppPalette.secondary)),
-                      const SizedBox(height: 2),
-                      Text(cuerpo, style: AppTypography.small.copyWith(fontSize: 12, color: AppPalette.textPrimary)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }
-    };
     BodegaPollingService.instance.iniciarPolling(sucursalId: targetSucursalId);
   }
 
   Future<void> _cargarConteoTareas() async {
-    final targetSucursalId = _userSucursalId ?? await AuthService.getSucursalId();
-    await BodegaPollingService.instance.procesarCiclo(sucursalId: targetSucursalId);
+    final targetSucursalId =
+        _userSucursalId ?? await AuthService.getSucursalId();
+    await BodegaPollingService.instance.procesarCiclo(
+      sucursalId: targetSucursalId,
+    );
   }
 
   String _getNombreSaludo() {
@@ -141,15 +127,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         backgroundColor: AppPalette.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         title: const Text('Cerrar sesión', style: AppTypography.title),
-        content: const Text('¿Estás seguro de que deseas cerrar sesión?', style: AppTypography.small),
+        content: const Text(
+          '¿Estás seguro de que deseas cerrar sesión?',
+          style: AppTypography.small,
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('Cancelar', style: AppTypography.button.copyWith(color: AppPalette.neutral)),
+            child: Text(
+              'Cancelar',
+              style: AppTypography.button.copyWith(color: AppPalette.neutral),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text('CERRAR SESIÓN', style: AppTypography.button.copyWith(color: AppPalette.error)),
+            child: Text(
+              'CERRAR SESIÓN',
+              style: AppTypography.button.copyWith(color: AppPalette.error),
+            ),
           ),
         ],
       ),
@@ -164,11 +159,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppPalette.background,
-      appBar: _buildAppBar(),
-      drawer: _buildDrawer(context),
-      body: _buildBody(context),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        FocusScope.of(context).unfocus();
+        _paletizadoFocusNode.unfocus();
+      },
+      child: Scaffold(
+        onDrawerChanged: (isOpened) {
+          FocusScope.of(context).unfocus();
+          _paletizadoFocusNode.unfocus();
+        },
+        backgroundColor: AppPalette.background,
+        appBar: _buildAppBar(),
+        drawer: _buildDrawer(context),
+        body: _buildBody(context),
+      ),
     );
   }
 
@@ -184,7 +190,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       leading: Builder(
         builder: (context) => IconButton(
           icon: const Icon(Icons.menu, color: AppPalette.textPrimary),
-          onPressed: () => Scaffold.of(context).openDrawer(),
+          onPressed: () {
+            FocusScope.of(context).unfocus();
+            _paletizadoFocusNode.unfocus();
+            Scaffold.of(context).openDrawer();
+          },
           tooltip: 'Menú',
         ),
       ),
@@ -192,8 +202,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildDrawer(BuildContext context) {
-    final nombreCompleto = (_userNombre != null && _userNombre!.trim().isNotEmpty) ? _userNombre!.trim() : (_userRol != null && _userRol!.isNotEmpty ? _userRol!.toUpperCase() : 'OPERADOR');
-    final sucursal = (_userSucursal != null && _userSucursal!.trim().isNotEmpty) ? _userSucursal!.trim() : 'Sucursal Central';
+    final nombreCompleto =
+        (_userNombre != null && _userNombre!.trim().isNotEmpty)
+        ? _userNombre!.trim()
+        : (_userRol != null && _userRol!.isNotEmpty
+              ? _userRol!.toUpperCase()
+              : 'OPERADOR');
+    final sucursal = (_userSucursal != null && _userSucursal!.trim().isNotEmpty)
+        ? _userSucursal!.trim()
+        : 'Sucursal Central';
 
     return Drawer(
       backgroundColor: AppPalette.surface,
@@ -204,7 +221,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             padding: const EdgeInsets.fromLTRB(16, 48, 16, 16),
             decoration: const BoxDecoration(
               color: AppPalette.background,
-              border: Border(bottom: BorderSide(color: AppPalette.surface, width: 1)),
+              border: Border(
+                bottom: BorderSide(color: AppPalette.surface, width: 1),
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -212,18 +231,60 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 Container(
                   width: 58,
                   height: 58,
-                  decoration: BoxDecoration(color: AppPalette.primary, borderRadius: BorderRadius.circular(12)),
-                  child: const Icon(Icons.person, color: AppPalette.textPrimary, size: 32),
+                  decoration: BoxDecoration(
+                    color: AppPalette.primary,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.person,
+                    color: AppPalette.textPrimary,
+                    size: 32,
+                  ),
                 ),
                 const SizedBox(height: 12),
-                Text(nombreCompleto, style: AppTypography.title.copyWith(fontSize: 15, letterSpacing: 0.8), maxLines: 1, overflow: TextOverflow.ellipsis),
-                Text(_userRol != null && _userRol!.isNotEmpty ? _userRol!.toUpperCase() : 'OPERADOR DE BODEGA', style: AppTypography.small.copyWith(color: AppPalette.primary, fontWeight: FontWeight.w600, fontSize: 11)),
-                Text(sucursal, style: AppTypography.small.copyWith(color: AppPalette.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text(
+                  nombreCompleto,
+                  style: AppTypography.title.copyWith(
+                    fontSize: 15,
+                    letterSpacing: 0.8,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  _userRol != null && _userRol!.isNotEmpty
+                      ? _userRol!.toUpperCase()
+                      : 'OPERADOR DE BODEGA',
+                  style: AppTypography.small.copyWith(
+                    color: AppPalette.primary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 11,
+                  ),
+                ),
+                Text(
+                  sucursal,
+                  style: AppTypography.small.copyWith(
+                    color: AppPalette.textSecondary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ],
             ),
           ),
-          _buildDrawerItem(icon: Icons.confirmation_number_outlined, label: 'TICKET', onTap: () { Navigator.of(context).pop(); Navigator.of(context).pushNamed('/tickets'); }),
-          _buildDrawerItem(icon: Icons.settings_outlined, label: 'CONFIGURACIÓN', onTap: () => Navigator.of(context).pop()),
+          _buildDrawerItem(
+            icon: Icons.confirmation_number_outlined,
+            label: 'TICKET',
+            onTap: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).pushNamed('/tickets');
+            },
+          ),
+          _buildDrawerItem(
+            icon: Icons.settings_outlined,
+            label: 'CONFIGURACIÓN',
+            onTap: () => Navigator.of(context).pop(),
+          ),
           const Spacer(),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -233,8 +294,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               child: ElevatedButton.icon(
                 onPressed: _logout,
                 icon: const Icon(Icons.logout, size: 20),
-                label: Text('CERRAR SESIÓN', style: AppTypography.button.copyWith(fontSize: 14, letterSpacing: 0.8)),
-                style: ElevatedButton.styleFrom(backgroundColor: AppPalette.error, foregroundColor: AppPalette.textPrimary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), elevation: 0),
+                label: Text(
+                  'CERRAR SESIÓN',
+                  style: AppTypography.button.copyWith(
+                    fontSize: 14,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppPalette.error,
+                  foregroundColor: AppPalette.textPrimary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  elevation: 0,
+                ),
               ),
             ),
           ),
@@ -243,42 +317,74 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildDrawerItem({required IconData icon, required String label, required VoidCallback onTap}) {
+  Widget _buildDrawerItem({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
       leading: Icon(icon, color: AppPalette.primary, size: 22),
-      title: Text(label, style: AppTypography.button.copyWith(fontSize: 14, letterSpacing: 1.0)),
-      onTap: onTap,
+      title: Text(
+        label,
+        style: AppTypography.button.copyWith(fontSize: 14, letterSpacing: 1.0),
+      ),
+      onTap: () {
+        _paletizadoFocusNode.unfocus();
+        onTap();
+      },
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
     );
   }
 
   Widget _buildBody(BuildContext context) {
-    return SingleChildScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildOperativeHeader(),
-          const SizedBox(height: 20),
-          _buildHeroAlertaCard(context),
-          const SizedBox(height: 24),
-          Text('ACCIONES FRECUENTES', style: AppTypography.cardTitle.copyWith(fontSize: 12, color: AppPalette.textSecondary, letterSpacing: 1.1)),
-          const SizedBox(height: 12),
-          _buildFrequentActionsGrid(context),
-          const SizedBox(height: 24),
-          Text('CONSULTA', style: AppTypography.cardTitle.copyWith(fontSize: 12, color: AppPalette.textSecondary, letterSpacing: 1.1)),
-          const SizedBox(height: 12),
-          _buildSearchCard(context),
-        ],
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: SingleChildScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildOperativeHeader(),
+            const SizedBox(height: 20),
+            _buildHeroAlertaCard(context),
+            const SizedBox(height: 24),
+            Text(
+              'ACCIONES FRECUENTES',
+              style: AppTypography.cardTitle.copyWith(
+                fontSize: 12,
+                color: AppPalette.textSecondary,
+                letterSpacing: 1.1,
+              ),
+            ),
+            const SizedBox(height: 12),
+            _buildFrequentActionsGrid(context),
+            const SizedBox(height: 24),
+            Text(
+              'OPERACIÓN DE PALETIZADO',
+              style: AppTypography.cardTitle.copyWith(
+                fontSize: 12,
+                color: AppPalette.textSecondary,
+                letterSpacing: 1.1,
+              ),
+            ),
+            const SizedBox(height: 12),
+            _buildPaletizadoDirectoCard(context),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildOperativeHeader() {
     final saludoNombre = _getNombreSaludo();
-    final sucursalTexto = (_userSucursal != null && _userSucursal!.trim().isNotEmpty) ? _userSucursal!.trim() : 'Sucursal Central';
+    final sucursalTexto =
+        (_userSucursal != null && _userSucursal!.trim().isNotEmpty)
+        ? _userSucursal!.trim()
+        : 'Sucursal Central';
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -286,9 +392,27 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Hola, $saludoNombre 👋', style: AppTypography.headline.copyWith(fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
+              Text(
+                'Hola, $saludoNombre 👋',
+                style: AppTypography.headline.copyWith(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: -0.5,
+                ),
+              ),
               const SizedBox(height: 4),
-              Text('Operador de Bodega', style: AppTypography.small.copyWith(color: AppPalette.textSecondary, fontWeight: FontWeight.w500, fontSize: 13)),
+              Text(
+                (_userRol != null &&
+                        _userRol!.trim().isNotEmpty &&
+                        _userRol != 'Bodeguero')
+                    ? _userRol!.trim()
+                    : 'Operador de Bodega',
+                style: AppTypography.small.copyWith(
+                  color: AppPalette.textSecondary,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 13,
+                ),
+              ),
             ],
           ),
         ),
@@ -297,15 +421,31 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           decoration: BoxDecoration(
             color: AppPalette.surface,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppPalette.primary.withValues(alpha: 0.35), width: 1),
+            border: Border.all(
+              color: AppPalette.primary.withValues(alpha: 0.35),
+              width: 1,
+            ),
           ),
           child: Row(
             children: [
-              const Icon(Icons.location_on_rounded, color: AppPalette.primary, size: 15),
+              const Icon(
+                Icons.location_on_rounded,
+                color: AppPalette.primary,
+                size: 15,
+              ),
               const SizedBox(width: 4),
               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 130),
-                child: Text('📍 $sucursalTexto', style: AppTypography.small.copyWith(color: AppPalette.textPrimary, fontWeight: FontWeight.w600, fontSize: 12), overflow: TextOverflow.ellipsis, maxLines: 1),
+                child: Text(
+                  '📍 $sucursalTexto',
+                  style: AppTypography.small.copyWith(
+                    color: AppPalette.textPrimary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
               ),
             ],
           ),
@@ -328,6 +468,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               clipBehavior: Clip.antiAlias,
               child: InkWell(
                 onTap: () async {
+                  _paletizadoFocusNode.unfocus();
                   await Navigator.pushNamed(context, '/alertas');
                   _cargarConteoTareas();
                 },
@@ -335,10 +476,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: tieneTareas ? AppPalette.secondary : AppPalette.success.withValues(alpha: 0.4),
+                      color: tieneTareas
+                          ? AppPalette.secondary
+                          : AppPalette.success.withValues(alpha: 0.4),
                       width: tieneTareas ? 2.0 : 1.2,
                     ),
-                    color: tieneTareas ? AppPalette.secondary.withValues(alpha: 0.07) : AppPalette.success.withValues(alpha: 0.03),
+                    color: tieneTareas
+                        ? AppPalette.secondary.withValues(alpha: 0.07)
+                        : AppPalette.success.withValues(alpha: 0.03),
                   ),
                   padding: const EdgeInsets.all(18),
                   child: Row(
@@ -347,12 +492,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         width: 52,
                         height: 52,
                         decoration: BoxDecoration(
-                          color: tieneTareas ? AppPalette.secondary.withValues(alpha: 0.18) : AppPalette.success.withValues(alpha: 0.15),
+                          color: tieneTareas
+                              ? AppPalette.secondary.withValues(alpha: 0.18)
+                              : AppPalette.success.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(
-                          tieneTareas ? (tieneTraslados ? Icons.warning_amber_rounded : Icons.notifications_active_rounded) : Icons.check_circle_outline_rounded,
-                          color: tieneTareas ? AppPalette.secondary : AppPalette.success,
+                          tieneTareas
+                              ? (tieneTraslados
+                                    ? Icons.warning_amber_rounded
+                                    : Icons.notifications_active_rounded)
+                              : Icons.check_circle_outline_rounded,
+                          color: tieneTareas
+                              ? AppPalette.secondary
+                              : AppPalette.success,
                           size: 28,
                         ),
                       ),
@@ -362,13 +515,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text('ALERTA TAREAS', style: AppTypography.cardTitle.copyWith(fontSize: 14, letterSpacing: 0.8, color: tieneTareas ? AppPalette.secondary : AppPalette.textPrimary)),
+                            Text(
+                              'ALERTA TAREAS',
+                              style: AppTypography.cardTitle.copyWith(
+                                fontSize: 14,
+                                letterSpacing: 0.8,
+                                color: tieneTareas
+                                    ? AppPalette.secondary
+                                    : AppPalette.textPrimary,
+                              ),
+                            ),
                             const SizedBox(height: 4),
                             Text(
                               tieneTareas
-                                  ? (tieneTraslados ? 'Requiere atención inmediata • Incluye traslados prioritarios' : 'Requiere atención inmediata')
+                                  ? (tieneTraslados
+                                        ? 'Requiere atención inmediata • Incluye traslados prioritarios'
+                                        : 'Requiere atención inmediata')
                                   : 'Sin tareas pendientes en sucursal',
-                              style: AppTypography.small.copyWith(fontSize: 12, color: tieneTareas ? AppPalette.textPrimary : AppPalette.textSecondary),
+                              style: AppTypography.small.copyWith(
+                                fontSize: 12,
+                                color: tieneTareas
+                                    ? AppPalette.textPrimary
+                                    : AppPalette.textSecondary,
+                              ),
                             ),
                           ],
                         ),
@@ -376,19 +545,32 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       if (tieneTareas) ...[
                         Container(
                           key: const Key('home_badge_alertas'),
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
                           decoration: BoxDecoration(
                             color: AppPalette.secondary,
                             borderRadius: BorderRadius.circular(16),
                           ),
                           child: Text(
                             totalPendientes.toString(),
-                            style: const TextStyle(color: AppPalette.background, fontWeight: FontWeight.bold, fontSize: 14),
+                            style: const TextStyle(
+                              color: AppPalette.background,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 6),
                       ],
-                      Icon(Icons.arrow_forward_ios_rounded, color: tieneTareas ? AppPalette.secondary : AppPalette.neutral, size: 16),
+                      Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        color: tieneTareas
+                            ? AppPalette.secondary
+                            : AppPalette.neutral,
+                        size: 16,
+                      ),
                     ],
                   ),
                 ),
@@ -400,14 +582,56 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
+  Future<void> _ejecutarBusquedaPaletizadoDirecto() async {
+    final folio = _paletizadoIngresoController.text.trim();
+    if (folio.isEmpty) {
+      return; // Validación Vacía: no realiza ninguna petición HTTP
+    }
+
+    setState(() => _isSearchingPaletizado = true);
+
+    final service = widget.paletizadoService ?? PaletizadoService();
+    final resultado = await service.consultarIngresoParaPaletizado(folio);
+
+    if (!mounted) return;
+    setState(() => _isSearchingPaletizado = false);
+
+    if (resultado.exitoso) {
+      _paletizadoFocusNode.unfocus();
+      _paletizadoIngresoController.clear();
+      Navigator.pushNamed(context, '/paletizado', arguments: folio);
+    } else {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            resultado.mensajeError ?? 'Error al consultar número de ingreso.',
+          ),
+          backgroundColor: resultado.statusCode == 404
+              ? AppPalette.error
+              : (resultado.statusCode == 400
+                    ? AppPalette.secondary
+                    : AppPalette.error),
+        ),
+      );
+
+      // 1. Activo No Encontrado (404): Mantener foco en input para corrección rápida
+      if (resultado.statusCode == 404) {
+        _paletizadoFocusNode.requestFocus();
+      }
+    }
+  }
+
   Widget _buildFrequentActionsGrid(BuildContext context) {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
           child: _buildActionCard(
             context: context,
             title: 'Recepción de Vehículo',
-            subtitle: 'Requiere OCR: Fotografiar el N° de ingreso físico del vehículo',
+            subtitle:
+                'Requiere OCR: Fotografiar el N° de ingreso físico del vehículo',
             icon: Icons.local_shipping_outlined,
             onTap: () => Navigator.pushNamed(context, '/recepcion'),
           ),
@@ -416,13 +640,193 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         Expanded(
           child: _buildActionCard(
             context: context,
-            title: 'Paletizado de Piezas',
-            subtitle: 'Validación OCR o selección manual del N° de ingreso',
-            icon: Icons.inventory_2_outlined,
-            onTap: () => Navigator.pushNamed(context, '/paletizado'),
+            title: 'Buscador de Inventario',
+            subtitle: 'Consulta rápida por SKU, QR, Pasillo o Modelo',
+            icon: Icons.search_rounded,
+            onTap: () => Navigator.pushNamed(context, '/buscador'),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildPaletizadoDirectoCard(BuildContext context) {
+    return Material(
+      color: AppPalette.surface,
+      borderRadius: BorderRadius.circular(14),
+      clipBehavior: Clip.antiAlias,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: AppPalette.primary.withValues(alpha: 0.25),
+            width: 1.2,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: AppPalette.primary.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.inventory_2_outlined,
+                    color: AppPalette.primary,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: InkWell(
+                    onTap: () {
+                      _paletizadoFocusNode.unfocus();
+                      Navigator.pushNamed(context, '/paletizado');
+                    },
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Paletizado de Piezas',
+                          style: AppTypography.title.copyWith(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Validación OCR o selección manual del N° de ingreso',
+                          style: AppTypography.small.copyWith(
+                            fontSize: 11,
+                            color: AppPalette.textSecondary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                InkWell(
+                  onTap: () {
+                    _paletizadoFocusNode.unfocus();
+                    Navigator.pushNamed(context, '/paletizado');
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 4,
+                    ),
+                    child: Text(
+                      'Manual >',
+                      style: AppTypography.small.copyWith(
+                        color: AppPalette.primary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              height: 40,
+              child: TextField(
+                key: const Key('input_numero_ingreso_home'),
+                controller: _paletizadoIngresoController,
+                focusNode: _paletizadoFocusNode,
+                onTapOutside: (_) {
+                  _paletizadoFocusNode.unfocus();
+                },
+                keyboardType: TextInputType.number,
+                textInputAction: TextInputAction.search,
+                style: const TextStyle(
+                  color: AppPalette.textPrimary,
+                  fontSize: 13,
+                ),
+                decoration: InputDecoration(
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  hintText: 'Búsqueda rápida N° Ingreso',
+                  hintStyle: const TextStyle(
+                    color: AppPalette.textSecondary,
+                    fontSize: 12,
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.tag,
+                    color: AppPalette.primary,
+                    size: 18,
+                  ),
+                  prefixIconConstraints: const BoxConstraints(
+                    minWidth: 36,
+                    minHeight: 36,
+                  ),
+                  suffixIconConstraints: const BoxConstraints(
+                    minWidth: 40,
+                    minHeight: 40,
+                  ),
+                  suffixIcon: _isSearchingPaletizado
+                      ? const Padding(
+                          padding: EdgeInsets.all(10.0),
+                          child: SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppPalette.primary,
+                            ),
+                          ),
+                        )
+                      : IconButton(
+                          key: const Key('btn_buscar_paletizado_home'),
+                          icon: const Icon(
+                            Icons.search,
+                            color: AppPalette.primary,
+                            size: 20,
+                          ),
+                          onPressed: _ejecutarBusquedaPaletizadoDirecto,
+                          tooltip: 'Buscar ingreso',
+                          padding: EdgeInsets.zero,
+                        ),
+                  filled: true,
+                  fillColor: AppPalette.background,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(
+                      color: AppPalette.primary.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(
+                      color: AppPalette.primary.withValues(alpha: 0.2),
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(
+                      color: AppPalette.primary,
+                      width: 1.5,
+                    ),
+                  ),
+                ),
+                onSubmitted: (_) => _ejecutarBusquedaPaletizadoDirecto(),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -438,13 +842,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       borderRadius: BorderRadius.circular(14),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: onTap,
+        onTap: () {
+          _paletizadoFocusNode.unfocus();
+          onTap();
+        },
         child: Container(
           height: 160,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppPalette.primary.withValues(alpha: 0.25), width: 1.2),
+            border: Border.all(
+              color: AppPalette.primary.withValues(alpha: 0.25),
+              width: 1.2,
+            ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -465,64 +875,27 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 children: [
                   Text(
                     title,
-                    style: AppTypography.title.copyWith(fontSize: 14, fontWeight: FontWeight.bold, height: 1.2),
+                    style: AppTypography.title.copyWith(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      height: 1.2,
+                    ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
                   Text(
                     subtitle,
-                    style: AppTypography.small.copyWith(fontSize: 11, color: AppPalette.textSecondary, height: 1.2),
+                    style: AppTypography.small.copyWith(
+                      fontSize: 11,
+                      color: AppPalette.textSecondary,
+                      height: 1.2,
+                    ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSearchCard(BuildContext context) {
-    return Material(
-      color: AppPalette.surface,
-      borderRadius: BorderRadius.circular(14),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => Navigator.pushNamed(context, '/buscador'),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppPalette.primary.withValues(alpha: 0.25), width: 1.2),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: AppPalette.primary.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.search_rounded, color: AppPalette.primary, size: 26),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text('Buscador de Inventario', style: AppTypography.title.copyWith(fontSize: 15, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 4),
-                    Text('Consulta rápida por SKU, QR, Pasillo o Modelo', style: AppTypography.small.copyWith(fontSize: 12, color: AppPalette.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              const Icon(Icons.arrow_forward_ios_rounded, color: AppPalette.primary, size: 16),
             ],
           ),
         ),

@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -6,24 +8,53 @@ import '../../../core/constants/api_constants.dart';
 import '../../../core/theme/tokens/app_palette.dart';
 import '../../../core/services/api_service.dart';
 import '../../alertas/services/bodega_polling_service.dart';
+import '../../ventas/controllers/cart_controller.dart';
+import '../../../core/theme/theme_controller.dart';
+import '../models/auth_user_model.dart';
 
-// Claves de almacenamiento seguro
+// Claves de almacenamiento seguro para sesión
 const String _tokenKey = 'access_token';
 const String _rolKey = 'user_rol';
 const String _idRolKey = 'user_id_rol';
 const String _sucursalKey = 'user_sucursal_id';
 const String _sucursalNombreKey = 'user_sucursal_nombre';
 const String _nombreUsuarioKey = 'user_nombre_completo';
+const String _userModelKey = 'user_model_json';
+
+// Claves de almacenamiento seguro para enrolamiento de terminal
+const String _enrolledUserIdKey = 'enrolled_user_id';
+const String _enrolledUserEmailKey = 'enrolled_user_email';
+const String _enrolledUserNameKey = 'enrolled_user_name';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MODELOS DE RESULTADO (evita mezclar lógica HTTP en la UI)
 // ─────────────────────────────────────────────────────────────────────────────
+enum AuthErrorType {
+  none,
+  network,      // Wi-Fi / Conexión / Servidor inalcanzable
+  credentials,  // Email o contraseña incorrectos, o PIN incorrecto
+  server,       // Falla 500, base de datos u otro error del backend
+}
+
 class AuthResult {
   final bool success;
   final String? errorMessage;
+  final AuthErrorType errorType;
+  final AuthUserModel? user;
 
-  const AuthResult.ok() : success = true, errorMessage = null;
-  const AuthResult.fail(this.errorMessage) : success = false;
+  const AuthResult.ok([this.user])
+      : success = true,
+        errorMessage = null,
+        errorType = AuthErrorType.none;
+
+  const AuthResult.fail(
+    this.errorMessage, {
+    this.errorType = AuthErrorType.server,
+  })  : success = false,
+        user = null;
+
+  bool get isNetworkError => errorType == AuthErrorType.network;
+  bool get isCredentialsError => errorType == AuthErrorType.credentials;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -32,19 +63,46 @@ class AuthResult {
 class AuthService {
   static const _storage = FlutterSecureStorage();
 
-  /// Envía el PIN al backend y persiste el JWT y el rol si la autenticación es exitosa.
-  ///
-  /// Retorna [AuthResult.ok()] si el login fue correcto,
-  /// o [AuthResult.fail(mensaje)] con el detalle del error del servidor.
-  static Future<AuthResult> loginConPin(String pin) async {
+  /// Captura excepciones de red y genera una respuesta limpia sin filtrar IPs ni trazas técnicas.
+  static AuthResult _manejarExcepcionAuth(Object e) {
+    final str = e.toString().toLowerCase();
+    if (e is SocketException ||
+        e is TimeoutException ||
+        e is http.ClientException ||
+        str.contains('socketexception') ||
+        str.contains('clientexception') ||
+        str.contains('connection refused') ||
+        str.contains('failed host lookup') ||
+        str.contains('no address associated') ||
+        str.contains('connection reset') ||
+        str.contains('network') ||
+        str.contains('tiempo de espera') ||
+        str.contains('timeout')) {
+      return const AuthResult.fail(
+        'No se pudo conectar con el servidor. Verifique su conexión Wi-Fi o de red corporativa.',
+        errorType: AuthErrorType.network,
+      );
+    }
+    return const AuthResult.fail(
+      'Ocurrió un problema de comunicación con el servidor. Intente nuevamente.',
+      errorType: AuthErrorType.server,
+    );
+  }
+
+  /// Enrola el terminal vinculándolo al usuario corporativo vía email y contraseña.
+  /// Guarda el JWT de sesión y fija el `enrolled_user_id`, `enrolled_user_email` y `enrolled_user_name`.
+  static Future<AuthResult> enrolarTerminal(String email, String password) async {
     try {
-      final uri = Uri.parse('${ApiConstants.authEndpoint}/login-pin');
+      final uri = Uri.parse('${ApiConstants.authEndpoint}/login');
 
       final response = await http
           .post(
             uri,
             headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'pin': pin}),
+            body: jsonEncode({
+              'email': email.trim().toLowerCase(),
+              'password': password,
+            }),
           )
           .timeout(
             const Duration(seconds: 10),
@@ -55,7 +113,6 @@ class AuthService {
 
       if (response.statusCode == 200) {
         final token = body['access_token'] as String;
-        // Extraemos el rol en formato texto (ej. "Bodeguero", "Vendedor")
         final usuarioMap = body['usuario'] as Map<String, dynamic>?;
         String rolText = usuarioMap?['nombre_rol']?.toString() ??
             usuarioMap?['rol']?['nombre_rol']?.toString() ??
@@ -78,8 +135,23 @@ class AuthService {
             '';
         final nombres = usuarioMap?['nombres']?.toString() ?? '';
         final apellidos = usuarioMap?['apellidos']?.toString() ?? '';
+        final rutUsuario = usuarioMap?['rut_usuario']?.toString() ?? '';
+        final userEmail = usuarioMap?['email']?.toString() ?? email.trim().toLowerCase();
+        final idUsuario = usuarioMap?['id_usuario']?.toString() ?? '';
+        final nombreCompleto = '$nombres $apellidos'.trim();
 
-        // Guardar token, rol, id_rol y sucursal de forma segura en el dispositivo
+        final userModel = AuthUserModel(
+          idUsuario: idUsuario,
+          rutUsuario: rutUsuario,
+          nombres: nombres,
+          apellidos: apellidos,
+          email: userEmail,
+          idRol: idRol ?? 0,
+          nombreRol: rolText,
+          idSucursal: int.tryParse(sucursalId ?? '1') ?? 1,
+        );
+
+        // Guardar token, rol, id_rol, sucursal y modelo de usuario
         await _storage.write(key: _tokenKey, value: token);
         await _storage.write(key: _rolKey, value: rolText);
         if (idRol != null) {
@@ -91,33 +163,215 @@ class AuthService {
         if (sucursalNombre.isNotEmpty) {
           await _storage.write(key: _sucursalNombreKey, value: sucursalNombre);
         }
-        if (nombres.isNotEmpty) {
-          await _storage.write(
-            key: _nombreUsuarioKey,
-            value: '$nombres $apellidos'.trim(),
-          );
+        if (nombreCompleto.isNotEmpty) {
+          await _storage.write(key: _nombreUsuarioKey, value: nombreCompleto);
         }
-        return const AuthResult.ok();
+        await _storage.write(key: _userModelKey, value: jsonEncode(userModel.toJson()));
+
+        // Guardar datos de enrolamiento del terminal
+        if (idUsuario.isNotEmpty) {
+          await _storage.write(key: _enrolledUserIdKey, value: idUsuario);
+        }
+        if (userEmail.isNotEmpty) {
+          await _storage.write(key: _enrolledUserEmailKey, value: userEmail);
+        }
+        if (nombreCompleto.isNotEmpty) {
+          await _storage.write(key: _enrolledUserNameKey, value: nombreCompleto);
+        }
+
+        unawaited(CartController.instance.cargarDesdeAlmacenamiento());
+        return AuthResult.ok(userModel);
       }
 
-      // Camino triste: el backend retornó un error (401, 422, etc.)
-      final detail = body['detail'] ?? 'Error desconocido del servidor';
-      return AuthResult.fail(detail.toString());
-    } on Exception catch (e) {
-      return AuthResult.fail(e.toString().replaceFirst('Exception: ', ''));
+      if (response.statusCode == 401) {
+        return const AuthResult.fail(
+          'Credenciales inválidas, verifica tu correo o contraseña.',
+          errorType: AuthErrorType.credentials,
+        );
+      }
+
+      final detail = body['message_user'] ?? body['detail'] ?? 'Error del servidor al enrolar terminal.';
+      return AuthResult.fail(detail.toString(), errorType: AuthErrorType.server);
+    } on Object catch (e) {
+      return _manejarExcepcionAuth(e);
     }
+  }
+
+  /// Envía el PIN junto al ID del usuario previamente enrolado al backend.
+  /// Persiste el nuevo JWT de sesión y los datos del usuario si la autenticación es exitosa.
+  static Future<AuthResult> loginConPin(String pin, [String? idUsuarioEnrolado]) async {
+    try {
+      final targetUserId = idUsuarioEnrolado ?? await getEnrolledUserId();
+      if (targetUserId == null || targetUserId.isEmpty) {
+        return const AuthResult.fail('Terminal no enrolada, contacte a su administrador.');
+      }
+
+      final uri = Uri.parse('${ApiConstants.authEndpoint}/login-pin');
+
+      final response = await http
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'pin_acceso': pin,
+              'id_usuario': targetUserId,
+            }),
+          )
+          .timeout(
+            const Duration(seconds: 10),
+            onTimeout: () => throw Exception('Tiempo de espera agotado'),
+          );
+
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode == 200) {
+        final token = body['access_token'] as String;
+        final usuarioMap = body['usuario'] as Map<String, dynamic>?;
+        String rolText = usuarioMap?['nombre_rol']?.toString() ??
+            usuarioMap?['rol']?['nombre_rol']?.toString() ??
+            '';
+        final dynamic rawIdRol = usuarioMap?['id_rol'] ?? usuarioMap?['rol']?['id_rol'];
+        final int? idRol = rawIdRol is int ? rawIdRol : int.tryParse(rawIdRol?.toString() ?? '');
+
+        if (rolText.isEmpty && idRol != null) {
+          if (idRol == 1) rolText = 'Bodeguero';
+          if (idRol == 2) rolText = 'Vendedor';
+          if (idRol == 3) rolText = 'Caja';
+          if (idRol == 4) rolText = 'Gerente';
+          if (idRol == 5) rolText = 'Administrador';
+          if (idRol == 6) rolText = 'Jefe de Ventas';
+          if (idRol == 7) rolText = 'Vendedor Online';
+        }
+        final sucursalId = usuarioMap?['id_sucursal']?.toString();
+        final sucursalNombre = usuarioMap?['nombre_sucursal']?.toString() ??
+            usuarioMap?['sucursal']?['nombre_sucursal']?.toString() ??
+            '';
+        final nombres = usuarioMap?['nombres']?.toString() ?? '';
+        final apellidos = usuarioMap?['apellidos']?.toString() ?? '';
+        final rutUsuario = usuarioMap?['rut_usuario']?.toString() ?? '';
+        final email = usuarioMap?['email']?.toString() ?? '';
+        final idUsuario = usuarioMap?['id_usuario']?.toString() ?? targetUserId;
+        final nombreCompleto = '$nombres $apellidos'.trim();
+
+        final userModel = AuthUserModel(
+          idUsuario: idUsuario,
+          rutUsuario: rutUsuario,
+          nombres: nombres,
+          apellidos: apellidos,
+          email: email,
+          idRol: idRol ?? 0,
+          nombreRol: rolText,
+          idSucursal: int.tryParse(sucursalId ?? '1') ?? 1,
+        );
+
+        // Guardar token y datos de sesión activa
+        await _storage.write(key: _tokenKey, value: token);
+        await _storage.write(key: _rolKey, value: rolText);
+        if (idRol != null) {
+          await _storage.write(key: _idRolKey, value: idRol.toString());
+        }
+        if (sucursalId != null) {
+          await _storage.write(key: _sucursalKey, value: sucursalId);
+        }
+        if (sucursalNombre.isNotEmpty) {
+          await _storage.write(key: _sucursalNombreKey, value: sucursalNombre);
+        }
+        if (nombreCompleto.isNotEmpty) {
+          await _storage.write(
+            key: _nombreUsuarioKey,
+            value: nombreCompleto,
+          );
+        }
+        await _storage.write(key: _userModelKey, value: jsonEncode(userModel.toJson()));
+
+        // Asegurar que las claves de enrolamiento se mantengan persistidas
+        await _storage.write(key: _enrolledUserIdKey, value: idUsuario);
+        if (email.isNotEmpty) {
+          await _storage.write(key: _enrolledUserEmailKey, value: email);
+        }
+        if (nombreCompleto.isNotEmpty) {
+          await _storage.write(key: _enrolledUserNameKey, value: nombreCompleto);
+        }
+
+        unawaited(CartController.instance.cargarDesdeAlmacenamiento());
+        return AuthResult.ok(userModel);
+      }
+
+      if (response.statusCode == 401) {
+        return const AuthResult.fail(
+          'PIN incorrecto para este terminal.',
+          errorType: AuthErrorType.credentials,
+        );
+      }
+
+      // Camino triste: el backend retornó un error (422, 500, etc.)
+      final detail = body['message_user'] ?? body['detail'] ?? 'Error desconocido del servidor';
+      return AuthResult.fail(detail.toString(), errorType: AuthErrorType.server);
+    } on Object catch (e) {
+      return _manejarExcepcionAuth(e);
+    }
+  }
+
+  /// Recupera el ID del usuario previamente enrolado en este terminal.
+  static Future<String?> getEnrolledUserId() => _storage.read(key: _enrolledUserIdKey);
+
+  /// Recupera el email del usuario enrolado en este terminal.
+  static Future<String?> getEnrolledUserEmail() => _storage.read(key: _enrolledUserEmailKey);
+
+  /// Recupera el nombre completo del usuario enrolado en este terminal.
+  static Future<String?> getEnrolledUserName() => _storage.read(key: _enrolledUserNameKey);
+
+  /// Comprueba si el terminal actual cuenta con un usuario enrolado.
+  static Future<bool> isTerminalEnrolled() async {
+    final id = await getEnrolledUserId();
+    return id != null && id.isNotEmpty;
+  }
+
+  /// Desenrola completamente el terminal eliminando tanto la sesión activa como el enrolamiento.
+  static Future<void> desenrolarTerminal() async {
+    await clearToken();
+    await _storage.delete(key: _enrolledUserIdKey);
+    await _storage.delete(key: _enrolledUserEmailKey);
+    await _storage.delete(key: _enrolledUserNameKey);
   }
 
   /// Recupera el token almacenado (útil para inyectarlo en peticiones futuras).
   static Future<String?> getToken() => _storage.read(key: _tokenKey);
 
-  /// Recupera el rol textual almacenado (ej. "Bodeguero", "Vendedor", "Jefe de Ventas", "Vendedor Online").
+  /// Recupera el rol textual almacenado (ej. "Bodeguero", "Vendedor", "Caja", "Jefe de Ventas").
   static Future<String?> getRol() => _storage.read(key: _rolKey);
 
-  /// Recupera el ID numérico del rol del usuario (ej. 2 para Vendedor, 6 para Jefe de Ventas, 7 para VendedorOnline).
+  /// Recupera el ID numérico del rol del usuario (ej. 1=Bodega, 2=Ventas, 3=Caja, 5=Admin, 6=Jefe).
   static Future<int?> getIdRol() async {
     final val = await _storage.read(key: _idRolKey);
     return val != null ? int.tryParse(val) : null;
+  }
+
+  /// Verifica si el usuario actual pertenece al rol Caja (id_rol == 3).
+  static Future<bool> esCaja() async {
+    final idRol = await getIdRol();
+    if (idRol != null) return idRol == 3;
+    final rol = await getRol();
+    final rLower = rol?.toLowerCase() ?? '';
+    return rLower == 'caja' || rLower == 'operario de caja';
+  }
+
+  /// Verifica si el usuario actual posee rol Administrador (id_rol == 5).
+  static Future<bool> esAdmin() async {
+    final idRol = await getIdRol();
+    if (idRol != null) return idRol == 5;
+    final rol = await getRol();
+    final rLower = rol?.toLowerCase() ?? '';
+    return rLower == 'administrador' || rLower == 'admin';
+  }
+
+  /// Verifica si el usuario actual posee rol Gerente (id_rol == 4).
+  static Future<bool> esGerente() async {
+    final idRol = await getIdRol();
+    if (idRol != null) return idRol == 4;
+    final rol = await getRol();
+    final rLower = rol?.toLowerCase() ?? '';
+    return rLower == 'gerente';
   }
 
   /// Verifica si el usuario actual pertenece al módulo de ventas (Vendedor [2], Jefe de Ventas [6], Vendedor Online [7]).
@@ -167,22 +421,69 @@ class AuthService {
   /// Recupera el nombre completo del usuario autenticado.
   static Future<String?> getNombreUsuario() => _storage.read(key: _nombreUsuarioKey);
 
-  /// Elimina el token, rol y datos de sesión (para logout o sesiones expiradas).
+  /// Recupera el modelo completo de sesión AuthUserModel si está disponible.
+  static Future<AuthUserModel?> getAuthUser() async {
+    final jsonStr = await _storage.read(key: _userModelKey);
+    if (jsonStr != null && jsonStr.isNotEmpty) {
+      try {
+        final map = jsonDecode(jsonStr) as Map<String, dynamic>;
+        return AuthUserModel.fromJson(map);
+      } catch (_) {}
+    }
+    // Reconstruir con claves sueltas si no existe el JSON compuesto
+    final token = await getToken();
+    if (token == null) return null;
+    final idRol = await getIdRol() ?? 0;
+    final rol = await getRol() ?? '';
+    final nombreCompleto = await getNombreUsuario() ?? '';
+    final sucursalId = await getSucursalId() ?? 1;
+
+    return AuthUserModel(
+      idUsuario: '',
+      rutUsuario: '',
+      nombres: nombreCompleto,
+      apellidos: '',
+      email: '',
+      idRol: idRol,
+      nombreRol: rol,
+      idSucursal: sucursalId,
+    );
+  }
+
+  /// Elimina el token, rol y datos de sesión activa (para logout o sesiones expiradas),
+  /// liberando las reservas del carrito en backend y preservando la vinculación/enrolamiento del terminal.
   static Future<void> clearToken() async {
+    try {
+      await CartController.instance.liberarYVaciarEnBackend();
+    } catch (_) {
+      CartController.instance.vaciarCarrito();
+    }
+    ThemeController.reset();
     await _storage.delete(key: _tokenKey);
     await _storage.delete(key: _rolKey);
     await _storage.delete(key: _idRolKey);
     await _storage.delete(key: _sucursalKey);
     await _storage.delete(key: _sucursalNombreKey);
     await _storage.delete(key: _nombreUsuarioKey);
+    await _storage.delete(key: _userModelKey);
   }
 
   /// Alias de clearToken para logout explícito
   static Future<void> logout() => clearToken();
 
   /// Manejador global invocado cuando se detecta un 401 Unauthorized
+  /// Invalida las claves de sesión activa sin destruir ni vaciar el carrito del usuario,
+  /// permitiendo que al reingresar el PIN en el terminal conserve sus productos intactos.
   static Future<void> manejarSesionExpirada() async {
-    await logout();
+    ThemeController.reset();
+    await _storage.delete(key: _tokenKey);
+    await _storage.delete(key: _rolKey);
+    await _storage.delete(key: _idRolKey);
+    await _storage.delete(key: _sucursalKey);
+    await _storage.delete(key: _sucursalNombreKey);
+    await _storage.delete(key: _nombreUsuarioKey);
+    await _storage.delete(key: _userModelKey);
+
     BodegaPollingService.instance.reset();
 
     // Redirigir a login
@@ -210,4 +511,3 @@ class AuthService {
     }
   }
 }
-

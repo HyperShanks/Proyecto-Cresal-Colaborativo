@@ -17,3 +17,7 @@ frontend/.pub-cache/
 Thumbs.db
 vision-key.json
 settings.json
+.vscode/
+# Configuración local de análisis de Python (Pyrefly / IDE)
+pyrefly.toml
+pyrightconfig.json

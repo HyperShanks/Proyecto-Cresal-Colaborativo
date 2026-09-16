@@ -12,19 +12,19 @@ class ResultadoCard extends StatelessWidget {
   final String estado;
 
   const ResultadoCard({
-    Key? key,
+    super.key,
     required this.itemCompleto,
     required this.marca,
     required this.modelo,
     required this.sku,
     required this.ubicacion,
     required this.estado,
-  }) : super(key: key);
+  });
 
   String _formatearUbicacionHumana() {
-    final pasillo = (itemCompleto['pasillo']?.toString() ?? '').trim();
-    final pallet = (itemCompleto['pallet']?.toString() ?? '').trim();
-    final galpon = (itemCompleto['galpon']?.toString() ?? '').trim();
+    final pasillo = (itemCompleto['pasillo']?.toString() ?? itemCompleto['ubicacion_pasillo']?.toString() ?? '').trim();
+    final pallet = (itemCompleto['pallet']?.toString() ?? itemCompleto['ubicacion_pallet']?.toString() ?? '').trim();
+    final galpon = (itemCompleto['galpon']?.toString() ?? itemCompleto['ubicacion_galpon']?.toString() ?? '').trim();
 
     final bool tienePasillo = pasillo.isNotEmpty && pasillo != 'S/P' && pasillo != 'null';
     final bool tienePallet = pallet.isNotEmpty && pallet != 'S/P' && pallet != 'null';
@@ -63,6 +63,15 @@ class ResultadoCard extends StatelessWidget {
     final String? imagenUrl = (imagenes != null && imagenes.isNotEmpty)
         ? imagenes.first.toString()
         : null;
+
+    final pasillo = (itemCompleto['pasillo']?.toString() ?? itemCompleto['ubicacion_pasillo']?.toString() ?? '').trim();
+    final pallet = (itemCompleto['pallet']?.toString() ?? itemCompleto['ubicacion_pallet']?.toString() ?? '').trim();
+    final galpon = (itemCompleto['galpon']?.toString() ?? itemCompleto['ubicacion_galpon']?.toString() ?? '').trim();
+
+    final bool tienePasillo = pasillo.isNotEmpty && pasillo != 'S/P' && pasillo != 'null';
+    final bool tienePallet = pallet.isNotEmpty && pallet != 'S/P' && pallet != 'null';
+    final bool tieneGalpon = galpon.isNotEmpty && galpon != 'S/G' && galpon != 'null';
+    final bool tieneUbicacion = tienePasillo || tienePallet || tieneGalpon;
 
     final ubicacionHumana = _formatearUbicacionHumana();
 
@@ -172,25 +181,60 @@ class ResultadoCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.location_on,
-                            size: 14,
-                            color: AppPalette.primary,
+                      if (!tieneUbicacion) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppPalette.warning.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: AppPalette.warning.withValues(alpha: 0.5)),
                           ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              ubicacionHumana,
-                              style: AppTypography.small.copyWith(
-                                fontWeight: FontWeight.w600,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.warning_amber_rounded, size: 14, color: AppPalette.warning),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Sin Galpón / Sin Ubicación asignada',
+                                style: AppTypography.small.copyWith(
+                                  color: AppPalette.warning,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11,
+                                ),
                               ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                            ],
                           ),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Sin Paletizar / Sin Ubicación Asignada',
+                          style: AppTypography.small.copyWith(
+                            color: AppPalette.textSecondary,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ] else ...[
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.location_on,
+                              size: 14,
+                              color: AppPalette.primary,
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                ubicacionHumana,
+                                style: AppTypography.small.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12,
+                                ),
+                                softWrap: true,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),

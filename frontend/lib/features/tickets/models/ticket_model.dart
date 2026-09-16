@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// TICKET MODEL — Contrato de datos para Tickets de Soporte (HU-2.7)
+// TICKET MODEL — Contrato de datos para Tickets de Soporte (HU-06)
 //
 // Mapea 1:1 con el DTO TicketResponse del backend FastAPI.
 // Los campos DateTime se representan como String ISO 8601 porque el backend
@@ -37,6 +37,14 @@ class TicketModel {
     this.fechaCierre,
   });
 
+  /// Folio legible formateado para la interfaz visual (ej: 'TCK-1042' o 'TCK-3FA85F')
+  String get folioVisual {
+    if (idTicket.startsWith('TCK-')) return idTicket;
+    final clean = idTicket.replaceAll('-', '');
+    final prefix = clean.length >= 6 ? clean.substring(0, 6) : clean;
+    return 'TCK-${prefix.toUpperCase()}';
+  }
+
   // ── Deserialización desde JSON de la API ───────────────────────────────────
 
   factory TicketModel.fromJson(Map<String, dynamic> json) {
@@ -60,7 +68,7 @@ class TicketModel {
   // ── Serialización hacia JSON para peticiones POST ──────────────────────────
   // Nota: Solo se incluyen los campos de TicketCreate (sin id_ticket, fechas ni estado).
 
-  Map<String, dynamic> toCreateJson({
+  static Map<String, dynamic> toJsonPayload({
     required String tipoTicket,
     required String prioridad,
     required String asunto,
@@ -73,10 +81,26 @@ class TicketModel {
       'prioridad': prioridad,
       'asunto': asunto,
       'descripcion': descripcion,
-      if (tablaReferencia != null) 'tabla_referencia': tablaReferencia,
-      if (idReferencia != null) 'id_referencia': idReferencia,
+      'tabla_referencia': tablaReferencia,
+      'id_referencia': idReferencia,
     };
   }
+
+  Map<String, dynamic> toCreateJson({
+    required String tipoTicket,
+    required String prioridad,
+    required String asunto,
+    required String descripcion,
+    String? tablaReferencia,
+    String? idReferencia,
+  }) => toJsonPayload(
+    tipoTicket: tipoTicket,
+    prioridad: prioridad,
+    asunto: asunto,
+    descripcion: descripcion,
+    tablaReferencia: tablaReferencia,
+    idReferencia: idReferencia,
+  );
 
   // ── Representación completa como Map (útil para logs y pruebas) ───────────
 
@@ -99,5 +123,6 @@ class TicketModel {
   }
 
   @override
-  String toString() => 'TicketModel(id: $idTicket, asunto: $asunto, estado: $estadoTicket)';
+  String toString() =>
+      'TicketModel(id: $idTicket, asunto: $asunto, estado: $estadoTicket)';
 }

@@ -71,7 +71,7 @@ class PendientePrecioCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            activo.tituloRepuesto,
+                            activo.tituloVehiculo,
                             style: AppTypography.title.copyWith(
                               fontSize: 16.0,
                               fontWeight: FontWeight.bold,

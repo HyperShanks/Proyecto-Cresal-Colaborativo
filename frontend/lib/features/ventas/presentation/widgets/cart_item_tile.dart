@@ -1,11 +1,12 @@
 // lib/features/ventas/presentation/widgets/cart_item_tile.dart
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../core/utils/currency_formatter.dart';
 import '../../controllers/cart_controller.dart';
 import '../../models/cart_item_model.dart';
+import '../screens/catalogo_screen.dart';
 
 /// Tarjeta de ítem individual dentro del Carrito Híbrido (HU-3.3).
 /// Diseñada en Flat Design estricto (sin sombras).
@@ -30,7 +31,7 @@ class _CartItemTileState extends State<CartItemTile> {
   void initState() {
     super.initState();
     _precioController = TextEditingController(
-      text: widget.item.precioUnitario.toString(),
+      text: CurrencyFormatter.formatNumber(widget.item.precioUnitario),
     );
     _precioFocusNode.addListener(_onFocusChange);
   }
@@ -40,7 +41,8 @@ class _CartItemTileState extends State<CartItemTile> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.item.precioUnitario != widget.item.precioUnitario &&
         !_precioFocusNode.hasFocus) {
-      _precioController.text = widget.item.precioUnitario.toString();
+      _precioController.text =
+          CurrencyFormatter.formatNumber(widget.item.precioUnitario);
     }
   }
 
@@ -59,13 +61,14 @@ class _CartItemTileState extends State<CartItemTile> {
   }
 
   void _guardarPrecio() {
-    final limpio = _precioController.text.replaceAll(RegExp(r'[^\d]'), '');
-    final nuevoPrecio = int.tryParse(limpio) ?? 0;
+    final nuevoPrecio = CurrencyFormatter.parse(_precioController.text);
 
     if (nuevoPrecio >= 0 && nuevoPrecio != widget.item.precioUnitario) {
       CartController.instance.actualizarPrecio(widget.item.id, nuevoPrecio);
+      _precioController.text = CurrencyFormatter.formatNumber(nuevoPrecio);
     } else {
-      _precioController.text = widget.item.precioUnitario.toString();
+      _precioController.text =
+          CurrencyFormatter.formatNumber(widget.item.precioUnitario);
     }
   }
 
@@ -200,6 +203,7 @@ class _CartItemTileState extends State<CartItemTile> {
                     ),
                     onPressed: () {
                       CartController.instance.eliminarItem(widget.item.id);
+                      CatalogoScreen.refreshNotifier.value++;
                       ScaffoldMessenger.of(context).hideCurrentSnackBar();
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
@@ -258,6 +262,8 @@ class _CartItemTileState extends State<CartItemTile> {
                     children: [
                       Text(
                         'PRECIO ACORDADO (CLP):',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: AppTypography.small.copyWith(
                           fontSize: 10,
                           letterSpacing: 0.8,
@@ -279,7 +285,7 @@ class _CartItemTileState extends State<CartItemTile> {
                           controller: _precioController,
                           focusNode: _precioFocusNode,
                           keyboardType: TextInputType.number,
-                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                          inputFormatters: [MilesTextInputFormatter()],
                           textAlignVertical: TextAlignVertical.center,
                           style: AppTypography.body.copyWith(
                             color: AppPalette.secondary,
@@ -291,14 +297,15 @@ class _CartItemTileState extends State<CartItemTile> {
                             prefixStyle: AppTypography.body.copyWith(
                               color: AppPalette.secondary,
                               fontWeight: FontWeight.bold,
-                              fontSize: 14,
+                              fontSize: 13,
                             ),
                             suffixIcon: const Icon(
                               Icons.edit_outlined,
-                              size: 16,
+                              size: 14,
                               color: AppPalette.neutral,
                             ),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            suffixIconConstraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
                             border: InputBorder.none,
                           ),
                           onSubmitted: (_) => _guardarPrecio(),
@@ -307,7 +314,7 @@ class _CartItemTileState extends State<CartItemTile> {
                     ],
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 6),
 
                 // Columna 2 (si es Venta Libre): Selector de Cantidad
                 if (!isInventario) ...[
@@ -318,6 +325,8 @@ class _CartItemTileState extends State<CartItemTile> {
                       children: [
                         Text(
                           'CANTIDAD:',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: AppTypography.small.copyWith(
                             fontSize: 10,
                             letterSpacing: 0.8,
@@ -338,12 +347,11 @@ class _CartItemTileState extends State<CartItemTile> {
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              SizedBox(
-                                width: 28,
-                                height: 42,
+                              Expanded(
                                 child: IconButton(
                                   padding: EdgeInsets.zero,
-                                  icon: const Icon(Icons.remove, size: 16),
+                                  visualDensity: VisualDensity.compact,
+                                  icon: const Icon(Icons.remove, size: 14),
                                   color: widget.item.cantidad > 1
                                       ? AppPalette.textPrimary
                                       : AppPalette.neutral,
@@ -355,16 +363,18 @@ class _CartItemTileState extends State<CartItemTile> {
                                   },
                                 ),
                               ),
-                              Text(
-                                '${widget.item.cantidad}',
-                                style: AppTypography.title.copyWith(fontSize: 14),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 2),
+                                child: Text(
+                                  '${widget.item.cantidad}',
+                                  style: AppTypography.title.copyWith(fontSize: 13),
+                                ),
                               ),
-                              SizedBox(
-                                width: 28,
-                                height: 42,
+                              Expanded(
                                 child: IconButton(
                                   padding: EdgeInsets.zero,
-                                  icon: const Icon(Icons.add, size: 16),
+                                  visualDensity: VisualDensity.compact,
+                                  icon: const Icon(Icons.add, size: 14),
                                   color: AppPalette.textPrimary,
                                   onPressed: () {
                                     CartController.instance.actualizarCantidad(
@@ -380,7 +390,7 @@ class _CartItemTileState extends State<CartItemTile> {
                       ],
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 6),
                 ],
 
                 // Columna 3: Subtotal
@@ -391,6 +401,8 @@ class _CartItemTileState extends State<CartItemTile> {
                     children: [
                       Text(
                         'SUBTOTAL:',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: AppTypography.small.copyWith(
                           fontSize: 10,
                           letterSpacing: 0.8,
@@ -403,15 +415,18 @@ class _CartItemTileState extends State<CartItemTile> {
                         height: 42,
                         child: Align(
                           alignment: Alignment.centerRight,
-                          child: Text(
-                            widget.item.subtotalFormateado,
-                            style: AppTypography.headline.copyWith(
-                              color: AppPalette.secondary,
-                              fontSize: 17,
-                              fontWeight: FontWeight.bold,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerRight,
+                            child: Text(
+                              widget.item.subtotalFormateado,
+                              style: AppTypography.headline.copyWith(
+                                color: AppPalette.secondary,
+                                fontSize: 17,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              maxLines: 1,
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ),

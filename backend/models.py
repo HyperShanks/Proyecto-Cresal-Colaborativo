@@ -4,7 +4,7 @@
 # autogenere la documentación Swagger.
 
 import uuid
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, text
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, text, CheckConstraint, Sequence
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from database import Base
@@ -161,6 +161,8 @@ class Activo_Inventariado(Base):
     fecha_creacion = Column(DateTime, nullable=False, server_default=text("now()"))
     fecha_actualizacion = Column(DateTime, nullable=True)
     qr_impreso = Column(Boolean, nullable=False, default=False)
+    reservado_por = Column(UUID(as_uuid=True), ForeignKey("Usuario.id_usuario"), nullable=True)
+    reserva_expira_en = Column(DateTime, nullable=True)
 
 class Detalle_Motor(Base):
     __tablename__ = "Detalle_Motor"
@@ -206,6 +208,12 @@ class Cliente(Base):
 
 class Orden_Venta(Base):
     __tablename__ = "Orden_Venta"
+    __table_args__ = (
+        CheckConstraint(
+            "estado_orden IN ('Reservada', 'Pagada', 'Despachada', 'Completada', 'Anulada')",
+            name="check_orden_venta_estado_orden",
+        ),
+    )
 
     id_orden = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     id_cliente = Column(UUID(as_uuid=True), ForeignKey("Cliente.id_cliente"), nullable=False)
@@ -217,8 +225,23 @@ class Orden_Venta(Base):
     qr_transaccional_salida = Column(String(255), nullable=True, unique=True)
     total_venta = Column(Integer, nullable=False, default=0)
     monto_pendiente = Column(Integer, nullable=False, default=0)
+    abono_requerido = Column(Integer, nullable=False, default=0)
     fecha_creacion = Column(DateTime, nullable=False, server_default=text("now()"))
     fecha_actualizacion = Column(DateTime, nullable=True)
+    numero_orden = Column(Integer, Sequence("Orden_Venta_numero_orden_seq"), nullable=True)
+
+    @property
+    def folio(self) -> str:
+        """
+        Retorna el folio comercial formateado de la orden.
+        Si posee numero_orden asignado por BD, formatea ORD-0001.
+        De lo contrario, genera la convención ORD-XXXXXXXX con los primeros 8 caracteres del UUID.
+        """
+        if self.numero_orden is not None:
+            return f"ORD-{self.numero_orden:04d}"
+        if self.qr_transaccional_salida and self.qr_transaccional_salida.startswith("ORD-"):
+            return self.qr_transaccional_salida
+        return f"ORD-{str(self.id_orden).replace('-', '')[:8].upper()}"
 
 class Detalle_Orden(Base):
     __tablename__ = "Detalle_Orden"
@@ -260,6 +283,7 @@ class Reservas_Backorder(Base):
     notas_preparacion = Column(String(255), nullable=True)
     precio_acordado = Column(Integer, nullable=False)
     monto_abonado = Column(Integer, nullable=False, default=0)
+    abono_requerido = Column(Integer, nullable=False, default=0)
     id_activo_asignado = Column(UUID(as_uuid=True), ForeignKey("Activo_Inventariado.id_activo"), nullable=True)
     estado_reserva = Column(String(30), nullable=False, server_default="Pendiente")
     fecha_creacion = Column(DateTime, nullable=False, server_default=text("now()"))
@@ -303,6 +327,12 @@ class Tracking_Logistico(Base):
 
 class Despacho(Base):
     __tablename__ = "Despacho"
+    __table_args__ = (
+        CheckConstraint(
+            "estado_despacho IN ('Por Enviar', 'Enviado')",
+            name="check_despacho_estado_despacho",
+        ),
+    )
 
     id_despacho = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     id_orden = Column(UUID(as_uuid=True), ForeignKey("Orden_Venta.id_orden"), nullable=False, unique=True)

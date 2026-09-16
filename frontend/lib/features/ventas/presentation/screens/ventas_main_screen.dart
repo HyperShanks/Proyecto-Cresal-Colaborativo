@@ -4,7 +4,7 @@ import '../../../../core/theme/tokens/app_typography.dart';
 import '../../../auth/services/auth_service.dart';
 import '../../services/inventario_service.dart';
 import '../../controllers/cart_controller.dart';
-import 'carrito_screen.dart';
+import 'checkout_wizard_screen.dart';
 import 'catalogo_screen.dart';
 import 'historial_screen.dart';
 import 'bandeja_precios_screen.dart';
@@ -24,6 +24,10 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final GlobalKey<CatalogoScreenState> _catalogoKey =
       GlobalKey<CatalogoScreenState>();
+  final GlobalKey<HistorialScreenState> _historialKey =
+      GlobalKey<HistorialScreenState>();
+  final GlobalKey<BandejaPreciosScreenState> _bandejaPreciosKey =
+      GlobalKey<BandejaPreciosScreenState>();
   int _currentIndex = 0;
   String? _userRol;
   int? _idRol;
@@ -69,13 +73,6 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
       _idRol == 6 ||
       _userRol?.toLowerCase() == 'jefe de ventas' ||
       _userRol?.toLowerCase() == 'auditor';
-
-  bool get _esVendedor =>
-      _idRol == 2 ||
-      _idRol == 7 ||
-      _userRol?.toLowerCase() == 'vendedor' ||
-      _userRol?.toLowerCase() == 'vendedoronline' ||
-      _userRol?.toLowerCase() == 'vendedor online';
 
   bool get _puedeGestionarEntregas {
     if (_idRol == 7) return false;
@@ -247,6 +244,7 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
                 Navigator.of(context).pop();
                 // Si la pestaña de Tasación está activa, navega al índice 2
                 setState(() => _currentIndex = 2);
+                _bandejaPreciosKey.currentState?.refrescar();
               },
             ),
           ],
@@ -330,6 +328,7 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
         onOpenMenuDrawer: () => _scaffoldKey.currentState?.openDrawer(),
       ),
       HistorialScreen(
+        key: _historialKey,
         onOpenMenuDrawer: () => _scaffoldKey.currentState?.openDrawer(),
         onRefreshCatalogo: () => _catalogoKey.currentState?.refrescarCatalogo(),
       ),
@@ -338,13 +337,15 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
     if (_esJefeVentas) {
       tabs.add(
         BandejaPreciosScreen(
+          key: _bandejaPreciosKey,
           onOpenMenuDrawer: () => _scaffoldKey.currentState?.openDrawer(),
+          onRefreshCatalogo: () => _catalogoKey.currentState?.refrescarCatalogo(),
         ),
       );
     }
 
     tabs.add(
-      CarritoScreen(
+      CheckoutWizardScreen(
         onOpenMenuDrawer: () => _scaffoldKey.currentState?.openDrawer(),
         onNavigateToCatalogo: () {
           _catalogoKey.currentState?.refrescarCatalogo();
@@ -451,6 +452,13 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
                   _currentIndex = index;
                 });
                 _actualizarPendientesTasacion();
+                if (index == 0) {
+                  _catalogoKey.currentState?.refrescarCatalogo();
+                } else if (index == 1) {
+                  _historialKey.currentState?.refrescar();
+                } else if (_esJefeVentas && index == 2) {
+                  _bandejaPreciosKey.currentState?.refrescar();
+                }
               },
               backgroundColor: AppPalette.surface,
               selectedItemColor: AppPalette.primary,

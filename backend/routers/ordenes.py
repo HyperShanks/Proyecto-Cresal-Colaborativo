@@ -3,35 +3,77 @@
 # registrar datos de Micro-CRM, gestionar despacho y asegurar la consistencia ACID del inventario.
 
 import uuid
+from collections import defaultdict
 from datetime import datetime, time as datetime_time, timezone, timedelta
 from zoneinfo import ZoneInfo
-from typing import List, Optional
+from typing import List, Optional, Dict
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
+from sqlalchemy import or_, and_, func, cast, String, case
 
 from database import get_db
 from models import (
-    Usuario, Cliente, Comuna, Orden_Venta, Detalle_Orden,
+    Usuario, Cliente, Region, Comuna, Orden_Venta, Detalle_Orden,
     Despacho, Activo_Inventariado, Estado_Activo,
     Vehiculo_Origen, Categoria_Activo, Transaccion_Pago,
-    Tracking_Logistico, Sucursal
+    Tracking_Logistico, Sucursal, Reservas_Backorder,
+    Detalle_Motor, Detalle_Caja_Cambio
 )
 from schemas import (
     OrdenCreateRequest, OrdenResponse,
     ClienteOrdenResumen, DespachoOrdenResumen,
     DetalleOrdenItemResponse, OrdenHistorialItemResponse,
-    OrdenAnulacionResponse, InstruccionesUpdateRequest,
+    OrdenAnulacionResponse, AnularOrdenRequest, InstruccionesUpdateRequest,
     InstruccionesUpdateResponse, OrdenPagoRequest,
     OrdenPagoResponse, EntregaEnvioItemResponse,
     EntregaConfirmacionResponse, DespachoEnvioResponse,
-    VendedorResumenResponse
+    DespachoActualizarEstadoRequest, DespachoActualizarEstadoResponse,
+    VendedorResumenResponse, CheckoutWizardRequest,
+    CheckoutWizardResponse, ReservaBackorderDTO, DespachoDTO,
+    HistorialCajaResponse, HistorialOrdenItemResponse,
+    HistorialPagoDetalleDTO, HistorialArticuloDTO, HistorialMovimientoDTO,
+    GeografiaResponseDTO, RegionGeografiaDTO, ComunaItemDTO,
 )
-from core.security import get_current_user
+from core.security import get_current_user, require_auditoria_or_caja_role, require_caja_role
+from core.policies import validar_horario_operativo_ordenes
+
 
 router = APIRouter(
     prefix="/api/v1/ordenes",
     tags=["Órdenes de Venta"]
 )
+
+
+@router.get(
+    "/comunas",
+    response_model=GeografiaResponseDTO,
+    summary="Obtener Regiones y Comunas Oficiales desde la BD",
+    description="Retorna el listado completo y jerárquico de regiones y comunas cargadas en la Base de Datos para poblar los selectores de despacho y CRM."
+)
+def obtener_comunas_geografia(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    regiones = db.query(Region).order_by(Region.id_region.asc()).all()
+    resultado = []
+    for r in regiones:
+        comunas_dto = [
+            ComunaItemDTO(
+                id_comuna=c.id_comuna,
+                nombre_comuna=c.nombre_comuna,
+                id_region=c.id_region,
+            )
+            for c in r.comunas
+        ]
+        comunas_dto.sort(key=lambda x: x.nombre_comuna)
+        resultado.append(
+            RegionGeografiaDTO(
+                id_region=r.id_region,
+                nombre_region=r.nombre_region,
+                comunas=comunas_dto,
+            )
+        )
+    return GeografiaResponseDTO(regiones=resultado)
 
 
 @router.post(
@@ -66,6 +108,9 @@ def crear_orden(
     3. Rollback inmediato ante cualquier fallo.
     """
     # ── 1. Validaciones Previas de Negocio ──────────────────────────────────
+    # 1.0 Validación de Horario Operativo y Periodo de Gracia por Rol
+    validar_horario_operativo_ordenes(current_user, orden_in.items, db)
+
     if not orden_in.consentimiento_legal:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -201,39 +246,29 @@ def crear_orden(
                 db.flush()
 
         # ── Paso A.2: Cabecera Orden_Venta ──────────────────────────────────
-        qr_salida = f"ORD-{uuid.uuid4().hex[:8].upper()}"
+        # Tarea 2: Toda orden creada en Mesón nace en 'Reservada' con qr_transaccional_salida = NULL.
+        # El acuerdo de abono comercial solo se registra como propuesta en abono_requerido sin restar del saldo pendiente (que sigue siendo el total) ni generar registros en Transaccion_Pago.
+        now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
 
         monto_abono_val = orden_in.monto_abono if (orden_in.monto_abono is not None and orden_in.monto_abono > 0) else 0
         if monto_abono_val > total_calculado:
             monto_abono_val = total_calculado
-
-        monto_pendiente_calc = total_calculado - monto_abono_val
-        estado_inicial = "Pagada" if monto_pendiente_calc == 0 else "Reservada"
 
         nueva_orden = Orden_Venta(
             id_cliente=cliente.id_cliente,
             id_vendedor=current_user.id_usuario,
             id_vendedor_asignado=orden_in.id_vendedor_asignado,
             id_sucursal=id_sucursal_orden,
-            estado_orden=estado_inicial,
-            qr_transaccional_salida=qr_salida,
+            estado_orden="Reservada",
+            qr_transaccional_salida=None,
             total_venta=total_calculado,
-            monto_pendiente=monto_pendiente_calc,
+            monto_pendiente=total_calculado,
+            abono_requerido=monto_abono_val,
+            fecha_creacion=now_utc,
+            fecha_actualizacion=now_utc,
         )
         db.add(nueva_orden)
         db.flush()
-
-        if monto_abono_val > 0:
-            transaccion_abono = Transaccion_Pago(
-                id_pago=uuid.uuid4(),
-                id_orden=nueva_orden.id_orden,
-                monto=monto_abono_val,
-                metodo_pago="Abono Inicial",
-                estado_pago="Procesado",
-                fecha_pago=datetime.now(),
-            )
-            db.add(transaccion_abono)
-            db.flush()
 
         # ── Paso A.3: Despacho (Exclusivo para envíos a clientes a domicilio/taller) ──
         if orden_in.requiere_despacho and orden_in.despacho:
@@ -332,6 +367,8 @@ def crear_orden(
             # Paso C: Bloquear y actualizar estado de repuesto inventariado
             if item.id_activo and activo:
                 activo.id_estado = estado_reservado.id_estado
+                activo.reserva_expira_en = None
+                activo.reservado_por = None
                 activo.version_lock = (activo.version_lock or 1) + 1
 
         # ── 3. Commit Transaccional Atómico ─────────────────────────────────
@@ -340,9 +377,12 @@ def crear_orden(
 
         return OrdenResponse(
             id_orden=nueva_orden.id_orden,
+            numero_orden=nueva_orden.numero_orden,
+            folio=nueva_orden.folio,
             estado_orden=nueva_orden.estado_orden,
             total_venta=nueva_orden.total_venta,
             monto_pendiente=nueva_orden.monto_pendiente,
+            abono_requerido=nueva_orden.abono_requerido,
             qr_transaccional_salida=nueva_orden.qr_transaccional_salida,
             mensaje="Orden de venta generada exitosamente y derivada a caja.",
             fecha_creacion=nueva_orden.fecha_creacion.isoformat() if nueva_orden.fecha_creacion else None,
@@ -358,6 +398,348 @@ def crear_orden(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error en la transacción de creación de la orden: {str(e)}"
         )
+
+
+tz_chile_ordenes = ZoneInfo("America/Santiago")
+
+
+def parse_periodo_ordenes_chile(
+    periodo: Optional[str] = "TODOS",
+    fecha_desde: Optional[str] = None,
+    fecha_hasta: Optional[str] = None,
+) -> tuple[Optional[datetime], Optional[datetime]]:
+    """
+    Calculo los rangos de fecha en horario chileno y los convierto a UTC
+    para filtrar órdenes de manera consistente en base de datos.
+    """
+    p = (periodo or "TODOS").strip().upper()
+    ahora_chile = datetime.now(tz_chile_ordenes)
+
+    if p == "HOY":
+        start_local = datetime.combine(ahora_chile.date(), datetime_time.min, tzinfo=tz_chile_ordenes)
+        end_local = datetime.combine(ahora_chile.date(), datetime_time.max, tzinfo=tz_chile_ordenes)
+    elif p in ["7D", "ESTA_SEMANA"]:
+        lunes = ahora_chile.date() - timedelta(days=ahora_chile.weekday())
+        start_local = datetime.combine(lunes, datetime_time.min, tzinfo=tz_chile_ordenes)
+        end_local = datetime.combine(ahora_chile.date(), datetime_time.max, tzinfo=tz_chile_ordenes)
+    elif p in ["30D", "ESTE_MES"]:
+        primer_dia = ahora_chile.date().replace(day=1)
+        start_local = datetime.combine(primer_dia, datetime_time.min, tzinfo=tz_chile_ordenes)
+        end_local = datetime.combine(ahora_chile.date(), datetime_time.max, tzinfo=tz_chile_ordenes)
+    elif p == "RANGO" or (fecha_desde and fecha_hasta):
+        if not fecha_desde or not fecha_hasta:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="fecha_desde y fecha_hasta son obligatorias para el período RANGO.",
+            )
+        try:
+            d_desde = datetime.strptime(str(fecha_desde).strip(), "%Y-%m-%d").date()
+            d_hasta = datetime.strptime(str(fecha_hasta).strip(), "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Formato de fecha inválido. Debe ser YYYY-MM-DD.",
+            )
+        if d_desde > d_hasta:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="fecha_desde no puede ser posterior a fecha_hasta.",
+            )
+        start_local = datetime.combine(d_desde, datetime_time.min, tzinfo=tz_chile_ordenes)
+        end_local = datetime.combine(d_hasta, datetime_time.max, tzinfo=tz_chile_ordenes)
+    elif p == "TODOS":
+        return None, None
+    else:
+        return None, None
+
+    start_utc = start_local.astimezone(timezone.utc).replace(tzinfo=None)
+    end_utc = end_local.astimezone(timezone.utc).replace(tzinfo=None)
+    return start_utc, end_utc
+
+
+@router.get(
+    "",
+    response_model=HistorialCajaResponse,
+    summary="Visor Histórico Centralizado de Órdenes y Auditoría (HU-5.2)",
+    description="Consulta el historial multidimensional de órdenes de venta para auditoría gerencial y de caja. "
+                "Permite filtrar por sucursal, estado, rango temporal, método de pago y búsqueda predictiva tolerante."
+)
+@router.get(
+    "/",
+    response_model=HistorialCajaResponse,
+    include_in_schema=False
+)
+def listar_ordenes_auditoria(
+    id_sucursal: Optional[int] = Query(None, description="ID de la sucursal (None para consolidado)"),
+    sucursal_id: Optional[int] = Query(None, description="Alias para id_sucursal"),
+    estado: Optional[str] = Query(None, description="Filtro por estado de orden"),
+    estado_orden: Optional[str] = Query(None, description="Alias para estado"),
+    periodo: Optional[str] = Query("TODOS", description="Atajo de período: HOY, 7D, ESTA_SEMANA, 30D, ESTE_MES, RANGO, TODOS"),
+    fecha_inicio: Optional[str] = Query(None, description="Fecha inicio YYYY-MM-DD"),
+    fecha_fin: Optional[str] = Query(None, description="Fecha término YYYY-MM-DD"),
+    fecha_desde: Optional[str] = Query(None, description="Alias para fecha_inicio"),
+    fecha_hasta: Optional[str] = Query(None, description="Alias para fecha_fin"),
+    metodo_pago: Optional[str] = Query(None, description="Filtro por método de pago"),
+    search: Optional[str] = Query(None, description="Búsqueda predictiva (Folio, RUT, Cliente, Vendedor)"),
+    busqueda: Optional[str] = Query(None, description="Alias para search"),
+    pagina: int = Query(1, ge=1, description="Número de página"),
+    limite: int = Query(20, ge=1, le=100, description="Registros por página"),
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_auditoria_or_caja_role),
+):
+    """
+    Endpoint centralizado para auditoría de órdenes de venta (HU-5.2).
+    Permito a Gerentes (4), Administradores (5) y Cajeros (3) auditar órdenes
+    aplicando filtros combinados con optimización de consultas.
+    """
+    UsuarioVendedor = aliased(Usuario, name="vendedor_auditoria")
+    UsuarioCajera = aliased(Usuario, name="cajera_auditoria")
+
+    query = (
+        db.query(Orden_Venta, Cliente, UsuarioVendedor, UsuarioCajera, Sucursal)
+        .join(Cliente, Orden_Venta.id_cliente == Cliente.id_cliente)
+        .join(UsuarioVendedor, Orden_Venta.id_vendedor == UsuarioVendedor.id_usuario)
+        .outerjoin(UsuarioCajera, Orden_Venta.id_cajera == UsuarioCajera.id_usuario)
+        .outerjoin(Sucursal, Orden_Venta.id_sucursal == Sucursal.id_sucursal)
+    )
+
+    # 1. Filtro por Sucursal (None = consolidado global)
+    target_sucursal = id_sucursal or sucursal_id
+    if target_sucursal is not None:
+        query = query.filter(Orden_Venta.id_sucursal == target_sucursal)
+
+    # 2. Filtro por Estado Oficial
+    est_target = estado or estado_orden
+    if est_target and est_target.strip().lower() not in ["todos", ""]:
+        query = query.filter(Orden_Venta.estado_orden.ilike(est_target.strip()))
+
+    # 3. Filtro Temporal (Zona Horaria Chile -> UTC)
+    f_ini = fecha_inicio or fecha_desde
+    f_fin = fecha_fin or fecha_hasta
+    start_utc, end_utc = parse_periodo_ordenes_chile(periodo, f_ini, f_fin)
+    if start_utc is not None and end_utc is not None:
+        query = query.filter(Orden_Venta.fecha_creacion.between(start_utc, end_utc))
+
+    # 4. Filtro por Método de Pago
+    if metodo_pago and metodo_pago.strip().lower() not in ["todos", ""]:
+        metodo_clean = metodo_pago.strip()
+        subq_pagos = (
+            db.query(Transaccion_Pago.id_orden)
+            .filter(
+                Transaccion_Pago.metodo_pago.ilike(f"%{metodo_clean}%"),
+                Transaccion_Pago.estado_pago == "Procesado"
+            )
+        )
+        query = query.filter(Orden_Venta.id_orden.in_(subq_pagos))
+
+    # 5. Búsqueda Predictiva y Tolerante
+    term = (search or busqueda or "").strip()
+    if term:
+        term_clean_rut = term.replace(".", "").replace("-", "").strip()
+        rut_db_limpio = func.replace(
+            func.replace(Cliente.rut_cliente, ".", ""), "-", ""
+        )
+        query = query.filter(
+            or_(
+                cast(Orden_Venta.numero_orden, String).ilike(f"%{term.upper().replace('ORD-', '').lstrip('0')}%") if term.upper().replace('ORD-', '').lstrip('0').isdigit() else cast(Orden_Venta.numero_orden, String).ilike(f"%{term}%"),
+                Orden_Venta.qr_transaccional_salida.ilike(f"%{term}%"),
+                cast(Orden_Venta.id_orden, String).ilike(f"%{term}%"),
+                Cliente.nombres.ilike(f"%{term}%"),
+                Cliente.apellidos.ilike(f"%{term}%"),
+                Cliente.rut_cliente.ilike(f"%{term}%"),
+                rut_db_limpio.ilike(f"%{term_clean_rut}%"),
+                UsuarioVendedor.nombres.ilike(f"%{term}%"),
+                UsuarioVendedor.apellidos.ilike(f"%{term}%"),
+            )
+        )
+
+    total_registros = query.count()
+    total_paginas = max(1, (total_registros + limite - 1) // limite)
+
+    # Cálculo consolidado del monto efectivamente recaudado/abonado en la consulta (sin ORDER BY para evitar GroupingError en PostgreSQL)
+    # - Si la orden está 'Anulada': $0 recaudado.
+    # - Para órdenes con abono (ej. Reservada) o pagadas: suma lo efectivamente abonado/pagado: (total_venta - monto_pendiente)
+    monto_recaudado_expr = case(
+        (Orden_Venta.estado_orden.ilike("Anulada"), 0),
+        (
+            Orden_Venta.total_venta > func.coalesce(Orden_Venta.monto_pendiente, 0),
+            Orden_Venta.total_venta - func.coalesce(Orden_Venta.monto_pendiente, 0),
+        ),
+        else_=0,
+    )
+    total_monto_consolidado = (
+        query.order_by(None)
+        .with_entities(func.coalesce(func.sum(monto_recaudado_expr), 0))
+        .scalar()
+        or 0
+    )
+
+    # Paginación con orden cronológico descendente
+    resultados_paginados = (
+        query.order_by(Orden_Venta.fecha_creacion.desc())
+        .offset((pagina - 1) * limite)
+        .limit(limite)
+        .all()
+    )
+
+    # Optimización de Rendimiento (Resolución de problema N+1):
+    # Pre-cargamos en lote los pagos y artículos de todas las órdenes de la página
+    # mediante 2 consultas IN(orden_ids), evitando 40 viajes individuales de red a Supabase.
+    orden_ids = [orden.id_orden for orden, *_ in resultados_paginados]
+    pagos_por_orden: Dict[int, List[Transaccion_Pago]] = defaultdict(list)
+    articulos_por_orden: Dict[int, List[HistorialArticuloDTO]] = defaultdict(list)
+
+    if orden_ids:
+        todos_pagos = (
+            db.query(Transaccion_Pago)
+            .filter(Transaccion_Pago.id_orden.in_(orden_ids))
+            .order_by(Transaccion_Pago.fecha_pago.asc())
+            .all()
+        )
+        for p in todos_pagos:
+            pagos_por_orden[p.id_orden].append(p)
+
+        todos_detalles = (
+            db.query(Detalle_Orden, Activo_Inventariado, Vehiculo_Origen, Categoria_Activo)
+            .outerjoin(Activo_Inventariado, Detalle_Orden.id_activo == Activo_Inventariado.id_activo)
+            .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
+            .outerjoin(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
+            .filter(Detalle_Orden.id_orden.in_(orden_ids))
+            .all()
+        )
+        for det, act, veh, cat in todos_detalles:
+            sku_val = act.sku_qr_fisico if act else None
+            if det.descripcion_manual:
+                desc = det.descripcion_manual
+            elif act:
+                cat_str = cat.nombre_categoria if cat else "Repuesto"
+                veh_str = f"{veh.marca} {veh.modelo}" if veh else ""
+                desc = f"{cat_str} {veh_str}".strip() or "Repuesto Inventariado"
+            else:
+                desc = "Repuesto"
+            articulos_por_orden[det.id_orden].append(
+                HistorialArticuloDTO(
+                    cantidad=det.cantidad or 1,
+                    tipo="INVENTARIADO" if act else "DESARME",
+                    descripcion=desc,
+                    sku=sku_val,
+                    precio=det.precio_unitario or 0,
+                    subtotal=det.precio_final or ((det.precio_unitario or 0) * (det.cantidad or 1)),
+                )
+            )
+
+    items: List[HistorialOrdenItemResponse] = []
+    for orden, cliente, vendedor, cajera, sucursal in resultados_paginados:
+        # Fechas en formato chileno
+        if orden.fecha_creacion:
+            dt_utc = orden.fecha_creacion.replace(tzinfo=timezone.utc)
+            dt_chile = dt_utc.astimezone(tz_chile_ordenes)
+        else:
+            dt_chile = datetime.now(tz_chile_ordenes)
+
+        fecha_iso = dt_chile.strftime("%Y-%m-%d")
+        hora = dt_chile.strftime("%H:%M")
+        fecha_hora_formateada = dt_chile.strftime("%H:%M - %d/%m/%Y")
+
+        # Pagos asociados recuperados desde memoria (O(1))
+        pagos_db = pagos_por_orden.get(orden.id_orden, [])
+        desglose_pagos = [
+            HistorialPagoDetalleDTO(
+                id_transaccion=p.id_pago,
+                metodo_pago=p.metodo_pago,
+                monto=p.monto,
+                fecha_pago=p.fecha_pago,
+            )
+            for p in pagos_db
+        ]
+
+        if desglose_pagos:
+            metodos_resumen = " + ".join(
+                f"{p.metodo_pago}: ${p.monto:,.0f}".replace(",", ".")
+                for p in desglose_pagos
+            )
+        else:
+            metodos_resumen = "Sin pagos"
+
+        # Artículos recuperados desde memoria (O(1))
+        articulos_dto = articulos_por_orden.get(orden.id_orden, [])
+
+        # Timeline de movimientos
+        vendedor_nom = f"{vendedor.nombres} {vendedor.apellidos or ''}".strip()
+        cajera_nom = f"{cajera.nombres} {cajera.apellidos or ''}".strip() if cajera else "Lorena Valenzuela"
+
+        movimientos = [
+            HistorialMovimientoDTO(
+                hora=hora,
+                evento=f"Orden emitida en Mesón por {vendedor_nom}",
+            )
+        ]
+        for p in pagos_db:
+            if p.fecha_pago:
+                p_dt = p.fecha_pago if p.fecha_pago.tzinfo else p.fecha_pago.replace(tzinfo=timezone.utc)
+                p_hora = p_dt.astimezone(tz_chile_ordenes).strftime("%H:%M")
+            else:
+                p_hora = hora
+            movimientos.append(
+                HistorialMovimientoDTO(
+                    hora=p_hora,
+                    evento=f"Pago liquidado en ventanilla ({p.metodo_pago}: ${p.monto:,.0f})".replace(",", "."),
+                )
+            )
+        if orden.qr_transaccional_salida:
+            movimientos.append(
+                HistorialMovimientoDTO(
+                    hora=hora,
+                    evento="QR Transaccional generado para barrera de salida",
+                )
+            )
+
+        # Asegurar formato comercial ORD-XXXX si el folio viniera como TX-QR-... o nulo
+        folio_display = orden.folio
+        if not folio_display or folio_display.startswith("TX-QR-"):
+            if orden.numero_orden:
+                folio_display = f"ORD-{orden.numero_orden:04d}"
+            elif orden.id_orden:
+                folio_display = f"ORD-{str(orden.id_orden).replace('-', '')[:8].upper()}"
+            else:
+                folio_display = "ORD-0000"
+
+        items.append(
+            HistorialOrdenItemResponse(
+                id_orden=orden.id_orden,
+                folio=folio_display,
+                tipo_operacion="VENTA",
+                emite_qr=bool(orden.qr_transaccional_salida) or (orden.monto_pendiente <= 0),
+                fecha_iso=fecha_iso,
+                hora=hora,
+                fecha_hora_formateada=fecha_hora_formateada,
+                cliente_nombre=f"{cliente.nombres} {cliente.apellidos or ''}".strip(),
+                cliente_rut=cliente.rut_cliente,
+                vendedor_nombre=vendedor_nom,
+                cajera_nombre=cajera_nom,
+                sucursal_nombre=sucursal.nombre_sucursal if sucursal else f"Sucursal {orden.id_sucursal}",
+                id_sucursal=orden.id_sucursal,
+                estado_orden=orden.estado_orden,
+                modalidad_pago="split" if len(pagos_db) > 1 else "unico",
+                metodos_resumen=metodos_resumen,
+                total_venta=orden.total_venta,
+                abono_previo=0,
+                monto_pendiente=orden.monto_pendiente or 0,
+                total_liquidado=sum(p.monto for p in pagos_db),
+                desglose_pagos=desglose_pagos,
+                articulos=articulos_dto,
+                historial_movimientos=movimientos,
+            )
+        )
+
+    return HistorialCajaResponse(
+        total_registros=total_registros,
+        pagina_actual=pagina,
+        limite_por_pagina=limite,
+        total_paginas=total_paginas,
+        total_monto_consolidado=total_monto_consolidado,
+        items=items,
+    )
 
 
 @router.get(
@@ -398,8 +780,10 @@ def obtener_mis_ventas(
                 )
         else:
             ahora_chile = datetime.now(tz_chile)
-            inicio_utc = ahora_chile.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc).replace(tzinfo=None)
-            fin_utc = ahora_chile.replace(hour=23, minute=59, second=59, microsecond=999999).astimezone(timezone.utc).replace(tzinfo=None)
+            inicio_dia_chile = datetime.combine(ahora_chile.date(), datetime_time.min, tzinfo=tz_chile)
+            fin_dia_chile = datetime.combine(ahora_chile.date(), datetime_time.max, tzinfo=tz_chile)
+            inicio_utc = inicio_dia_chile.astimezone(timezone.utc).replace(tzinfo=None)
+            fin_utc = fin_dia_chile.astimezone(timezone.utc).replace(tzinfo=None)
 
         query = query.filter(
             Orden_Venta.fecha_creacion >= inicio_utc,
@@ -409,7 +793,15 @@ def obtener_mis_ventas(
     if estado and estado.strip():
         query = query.filter(Orden_Venta.estado_orden == estado.strip())
 
-    ordenes = query.order_by(Orden_Venta.fecha_creacion.desc()).all()
+    ordenes = query.order_by(
+        case(
+            (func.lower(Orden_Venta.estado_orden) == "anulada", 2),
+            (func.lower(Orden_Venta.estado_orden) == "completada", 1),
+            (func.lower(Orden_Venta.estado_orden) == "entregada", 1),
+            else_=0,
+        ),
+        Orden_Venta.fecha_creacion.desc(),
+    ).all()
 
     resultado = []
     for orden in ordenes:
@@ -460,6 +852,8 @@ def obtener_mis_ventas(
             titulo_item = d.descripcion_manual or "Repuesto Misceláneo"
             es_inv = False
 
+            id_cat = None
+            nom_cat = None
             if d.id_activo:
                 es_inv = True
                 activo_db = (
@@ -472,6 +866,8 @@ def obtener_mis_ventas(
                 if activo_db:
                     act, veh, cat = activo_db
                     sku_fisico = act.sku_qr_fisico
+                    id_cat = cat.id_categoria if cat else None
+                    nom_cat = cat.nombre_categoria if cat else None
                     nombre_cat = cat.nombre_categoria if cat else "Repuesto"
                     if veh:
                         titulo_item = f"{nombre_cat} - {veh.marca} {veh.modelo} {veh.anio or ''}".strip()
@@ -482,6 +878,8 @@ def obtener_mis_ventas(
                 DetalleOrdenItemResponse(
                     id_detalle=d.id_detalle,
                     id_activo=d.id_activo,
+                    id_categoria=id_cat,
+                    nombre_categoria=nom_cat,
                     titulo=titulo_item,
                     sku_qr_fisico=sku_fisico,
                     descripcion_manual=d.descripcion_manual,
@@ -499,6 +897,8 @@ def obtener_mis_ventas(
         resultado.append(
             OrdenHistorialItemResponse(
                 id_orden=orden.id_orden,
+                numero_orden=orden.numero_orden,
+                folio=orden.folio,
                 estado_orden=orden.estado_orden,
                 total_venta=orden.total_venta,
                 monto_pendiente=orden.monto_pendiente,
@@ -587,7 +987,7 @@ def listar_entregas_envios(
             .filter(
                 Orden_Venta.id_sucursal == sucursal_id,
                 Orden_Venta.estado_orden.in_(["Reservada", "Pagada"]),
-                Despacho.estado_despacho.in_(["Por Enviar", "En Preparacion"]),
+                Despacho.estado_despacho == "Por Enviar",
             )
         )
         ordenes_resultado.extend([("Despacho", o) for o in q_despachos.all()])
@@ -663,6 +1063,8 @@ def listar_entregas_envios(
             titulo_item = d.descripcion_manual or "Repuesto Misceláneo"
             es_inv = False
 
+            id_cat = None
+            nom_cat = None
             if d.id_activo:
                 es_inv = True
                 activo_db = (
@@ -675,6 +1077,8 @@ def listar_entregas_envios(
                 if activo_db:
                     act, veh, cat = activo_db
                     sku_fisico = act.sku_qr_fisico
+                    id_cat = cat.id_categoria if cat else None
+                    nom_cat = cat.nombre_categoria if cat else None
                     nombre_cat = cat.nombre_categoria if cat else "Repuesto"
                     if veh:
                         titulo_item = f"{nombre_cat} - {veh.marca} {veh.modelo} {veh.anio or ''}".strip()
@@ -685,6 +1089,8 @@ def listar_entregas_envios(
                 DetalleOrdenItemResponse(
                     id_detalle=d.id_detalle,
                     id_activo=d.id_activo,
+                    id_categoria=id_cat,
+                    nombre_categoria=nom_cat,
                     titulo=titulo_item,
                     sku_qr_fisico=sku_fisico,
                     descripcion_manual=d.descripcion_manual,
@@ -715,17 +1121,17 @@ def listar_entregas_envios(
                 vendedor_asignado_nombre = f"{v_asig_db.nombres} {v_asig_db.apellidos or ''}".strip()
 
         todos_listos = all(d.estado_preparacion == "Listo" for d in detalles_resumen) if detalles_resumen else True
-        folio = orden.qr_transaccional_salida or f"ORD-{str(orden.id_orden)[:8].upper()}"
+        folio = orden.folio
 
         # Filtro Específico: Cliente (Nombre, RUT, Teléfono)
         if busqueda_cliente and busqueda_cliente.strip():
             bc = busqueda_cliente.strip().upper()
-            rut_c = (cliente_resumen.rut_cliente if cliente_resumen else "").upper()
-            nom_c = f"{cliente_resumen.nombres if cliente_resumen else ''} {cliente_resumen.apellidos if cliente_resumen else ''}".upper()
-            tel_c = (cliente_resumen.telefono if cliente_resumen else "").upper()
-            rec_rut = (despacho_resumen.receptor_rut if despacho_resumen else "").upper()
-            rec_nom = (despacho_resumen.receptor_nombres if despacho_resumen else "").upper()
-            rec_tel = (despacho_resumen.receptor_telefono if despacho_resumen else "").upper()
+            rut_c = (cliente_resumen.rut_cliente if cliente_resumen and cliente_resumen.rut_cliente else "").upper()
+            nom_c = f"{cliente_resumen.nombres or ''} {cliente_resumen.apellidos or ''}".strip().upper() if cliente_resumen else ""
+            tel_c = (cliente_resumen.telefono if cliente_resumen and cliente_resumen.telefono else "").upper()
+            rec_rut = (despacho_resumen.receptor_rut if despacho_resumen and despacho_resumen.receptor_rut else "").upper()
+            rec_nom = (despacho_resumen.receptor_nombres if despacho_resumen and despacho_resumen.receptor_nombres else "").upper()
+            rec_tel = (despacho_resumen.receptor_telefono if despacho_resumen and despacho_resumen.receptor_telefono else "").upper()
 
             if not (bc in rut_c or bc in nom_c or bc in tel_c or bc in rec_rut or bc in rec_nom or bc in rec_tel):
                 continue
@@ -741,6 +1147,7 @@ def listar_entregas_envios(
         # Filtro General (Compatibilidad)
         if term_busqueda:
             folio_upper = folio.upper()
+            numero_str = str(orden.numero_orden) if orden.numero_orden is not None else ""
             rut_upper = (cliente_resumen.rut_cliente if cliente_resumen else "").upper()
             nom_upper = f"{cliente_resumen.nombres if cliente_resumen else ''} {cliente_resumen.apellidos if cliente_resumen else ''}".upper()
             rec_rut_upper = (despacho_resumen.receptor_rut if despacho_resumen else "").upper()
@@ -750,6 +1157,8 @@ def listar_entregas_envios(
 
             matches = (
                 term_busqueda in folio_upper
+                or (bool(numero_str) and term_busqueda in numero_str)
+                or (bool(orden.qr_transaccional_salida) and term_busqueda in orden.qr_transaccional_salida.upper())
                 or term_busqueda in rut_upper
                 or term_busqueda in nom_upper
                 or term_busqueda in rec_rut_upper
@@ -764,6 +1173,7 @@ def listar_entregas_envios(
         items_response.append(
             EntregaEnvioItemResponse(
                 id_orden=orden.id_orden,
+                numero_orden=orden.numero_orden,
                 folio=folio,
                 tipo_entrega=tipo_entrega_item,
                 estado_orden=orden.estado_orden,
@@ -814,48 +1224,73 @@ def confirmar_entrega_tienda(
             detail=f"La orden ya fue entregada anteriormente (Estado: {orden.estado_orden})."
         )
 
-    # Actualizar Orden a 'Despachada'
-    orden.estado_orden = "Despachada"
-    orden.fecha_actualizacion = datetime.now()
-
-    # Obtener o crear estado 'Entregado' / 'Finalizado'
-    estado_final = db.query(Estado_Activo).filter(
-        Estado_Activo.nombre_estado.in_(["Entregado", "Finalizado"])
-    ).first()
-    if not estado_final:
-        estado_final = Estado_Activo(id_estado=6, nombre_estado="Entregado")
-        db.add(estado_final)
-        db.flush()
-
     detalles = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == orden.id_orden).all()
-    activos_actualizados = 0
-
+    activos_sin_imprimir = []
     for d in detalles:
-        d.estado_preparacion = "Listo"
-        d.fecha_preparacion = datetime.now()
         if d.id_activo:
-            activo = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == d.id_activo).first()
-            if activo:
-                activo.id_estado = estado_final.id_estado
-                activo.ubicacion_pasillo = None
-                activo.ubicacion_pallet = None
-                activo.ubicacion_galpon = None
-                activo.observacion_estado = f"Entregado en tienda por {current_user.nombres} {current_user.apellidos} - Orden #{str(orden.id_orden)[:8].upper()}"
-                activo.fecha_actualizacion = datetime.now()
-                activos_actualizados += 1
+            act = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == d.id_activo).first()
+            if act and not act.qr_impreso:
+                activos_sin_imprimir.append(act.sku_qr_fisico or str(act.id_activo)[:8])
 
-    db.commit()
-    db.refresh(orden)
+    if activos_sin_imprimir:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No se puede confirmar la entrega. Las siguientes piezas no tienen su código QR impreso: {', '.join(activos_sin_imprimir)}. Imprima la etiqueta antes de entregar."
+        )
 
-    folio = orden.qr_transaccional_salida or f"ORD-{str(orden.id_orden)[:8].upper()}"
-    return EntregaConfirmacionResponse(
-        id_orden=orden.id_orden,
-        folio=folio,
-        estado_orden=orden.estado_orden,
-        mensaje="¡Entrega en tienda confirmada exitosamente! Orden actualizada a Despachada.",
-        activos_finalizados=activos_actualizados,
-        fecha_entrega=datetime.now().isoformat(),
-    )
+    try:
+        # Actualizar Orden a 'Completada'
+        orden.estado_orden = "Completada"
+        orden.fecha_actualizacion = datetime.now()
+
+        # Obtener o crear estado 'Entregado' / 'Finalizado'
+        estado_final = db.query(Estado_Activo).filter(
+            Estado_Activo.nombre_estado.in_(["Entregado", "Finalizado"])
+        ).first()
+        if not estado_final:
+            estado_final = Estado_Activo(id_estado=6, nombre_estado="Entregado")
+            db.add(estado_final)
+            db.flush()
+
+        detalles = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == orden.id_orden).all()
+        activos_actualizados = 0
+
+        for d in detalles:
+            d.estado_preparacion = "Listo"
+            d.fecha_preparacion = datetime.now()
+            if d.id_activo:
+                activo = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == d.id_activo).first()
+                if activo:
+                    activo.id_estado = estado_final.id_estado
+                    activo.ubicacion_pasillo = None
+                    activo.ubicacion_pallet = None
+                    activo.ubicacion_galpon = None
+                    activo.observacion_estado = f"Entregado en tienda por {current_user.nombres} {current_user.apellidos} - Orden #{str(orden.id_orden)[:8].upper()}"
+                    activo.version_lock = (activo.version_lock or 1) + 1
+                    activo.fecha_actualizacion = datetime.now()
+                    activos_actualizados += 1
+
+        db.commit()
+        db.refresh(orden)
+
+        folio = orden.folio
+        return EntregaConfirmacionResponse(
+            id_orden=orden.id_orden,
+            folio=folio,
+            estado_orden=orden.estado_orden,
+            mensaje="¡Entrega en tienda confirmada exitosamente! Orden actualizada a Completada.",
+            activos_finalizados=activos_actualizados,
+            fecha_entrega=datetime.now().isoformat(),
+        )
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error transaccional al confirmar la entrega en tienda: {str(e)}"
+        )
 
 
 @router.patch(
@@ -877,52 +1312,137 @@ def marcar_despacho_enviado(
     if not orden:
         raise HTTPException(status_code=404, detail="Orden asociada al despacho no encontrada.")
 
-    despacho.estado_despacho = "Enviado"
-    despacho.fecha_actualizacion = datetime.now()
-
-    orden.estado_orden = "Despachada"
-    orden.fecha_actualizacion = datetime.now()
-
-    estado_final = db.query(Estado_Activo).filter(
-        Estado_Activo.nombre_estado.in_(["Entregado", "Finalizado"])
-    ).first()
-    if not estado_final:
-        estado_final = Estado_Activo(id_estado=6, nombre_estado="Entregado")
-        db.add(estado_final)
-        db.flush()
-
     detalles = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == orden.id_orden).all()
-    activos_actualizados = 0
-
+    activos_sin_imprimir = []
     for d in detalles:
-        d.estado_preparacion = "Listo"
-        d.fecha_preparacion = datetime.now()
         if d.id_activo:
-            activo = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == d.id_activo).first()
-            if activo:
-                activo.id_estado = estado_final.id_estado
-                activo.ubicacion_pasillo = None
-                activo.ubicacion_pallet = None
-                activo.ubicacion_galpon = None
-                activo.observacion_estado = f"Despachado con transporte '{despacho.empresa_transporte or 'Externo'}' - Orden #{str(orden.id_orden)[:8].upper()}"
-                activo.fecha_actualizacion = datetime.now()
-                activos_actualizados += 1
+            act = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == d.id_activo).first()
+            if act and not act.qr_impreso:
+                activos_sin_imprimir.append(act.sku_qr_fisico or str(act.id_activo)[:8])
 
-    db.commit()
-    db.refresh(despacho)
-    db.refresh(orden)
+    if activos_sin_imprimir:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No se puede despachar el envío. Las siguientes piezas no tienen su código QR impreso: {', '.join(activos_sin_imprimir)}. Imprima la etiqueta antes de despachar."
+        )
 
-    folio = orden.qr_transaccional_salida or f"ORD-{str(orden.id_orden)[:8].upper()}"
-    return DespachoEnvioResponse(
-        id_despacho=despacho.id_despacho,
-        id_orden=orden.id_orden,
-        folio=folio,
-        estado_despacho=despacho.estado_despacho,
-        estado_orden=orden.estado_orden,
-        mensaje=f"¡Despacho #{str(despacho.id_despacho)[:8].upper()} marcado como Enviado exitosamente!",
-        activos_finalizados=activos_actualizados,
-        fecha_envio=datetime.now().isoformat(),
-    )
+    try:
+        despacho.estado_despacho = "Enviado"
+        despacho.fecha_actualizacion = datetime.now()
+
+        orden.estado_orden = "Despachada"
+        orden.fecha_actualizacion = datetime.now()
+
+        estado_final = db.query(Estado_Activo).filter(
+            Estado_Activo.nombre_estado.in_(["Entregado", "Finalizado"])
+        ).first()
+        if not estado_final:
+            estado_final = Estado_Activo(id_estado=6, nombre_estado="Entregado")
+            db.add(estado_final)
+            db.flush()
+
+        detalles = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == orden.id_orden).all()
+        activos_actualizados = 0
+
+        for d in detalles:
+            d.estado_preparacion = "Listo"
+            d.fecha_preparacion = datetime.now()
+            if d.id_activo:
+                activo = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == d.id_activo).first()
+                if activo:
+                    activo.id_estado = estado_final.id_estado
+                    activo.ubicacion_pasillo = None
+                    activo.ubicacion_pallet = None
+                    activo.ubicacion_galpon = None
+                    activo.observacion_estado = f"Despachado con transporte '{despacho.empresa_transporte or 'Externo'}' - Orden #{str(orden.id_orden)[:8].upper()}"
+                    activo.version_lock = (activo.version_lock or 1) + 1
+                    activo.fecha_actualizacion = datetime.now()
+                    activos_actualizados += 1
+
+        db.commit()
+        db.refresh(despacho)
+        db.refresh(orden)
+
+        folio = orden.folio
+        return DespachoEnvioResponse(
+            id_despacho=despacho.id_despacho,
+            id_orden=orden.id_orden,
+            folio=folio,
+            estado_despacho=despacho.estado_despacho,
+            estado_orden=orden.estado_orden,
+            mensaje=f"¡Despacho #{str(despacho.id_despacho)[:8].upper()} marcado como Enviado exitosamente!",
+            activos_finalizados=activos_actualizados,
+            fecha_envio=datetime.now().isoformat(),
+        )
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error transaccional al marcar despacho como enviado: {str(e)}"
+        )
+
+
+@router.patch(
+    "/despachos/{id_despacho}/estado",
+    response_model=DespachoActualizarEstadoResponse,
+    status_code=200,
+    summary="Actualizar Estado del Despacho (Independiente del estado de la orden)",
+)
+def actualizar_estado_despacho(
+    id_despacho: uuid.UUID,
+    payload: DespachoActualizarEstadoRequest,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """
+    Actualiza exclusivamente el estado logístico del despacho ('Por Enviar' o 'Enviado').
+    REGLA: No altera el estado de la orden (Orden_Venta.estado_orden) ni libera activos en bodega.
+    La barrera de salida sigue siendo la única que completa la orden.
+    """
+    despacho = db.query(Despacho).filter(Despacho.id_despacho == id_despacho).first()
+    if not despacho:
+        raise HTTPException(status_code=404, detail="Registro de despacho no encontrado.")
+
+    orden = db.query(Orden_Venta).filter(Orden_Venta.id_orden == despacho.id_orden).first()
+    if not orden:
+        raise HTTPException(status_code=404, detail="Orden asociada al despacho no encontrada.")
+
+    nuevo_estado = payload.nuevo_estado.strip()
+    if nuevo_estado.lower() in ["enviado", "enviada"]:
+        estado_normalizado = "Enviado"
+    elif nuevo_estado.lower() in ["por enviar", "pendiente", "por_enviar"]:
+        estado_normalizado = "Por Enviar"
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Estado de despacho '{nuevo_estado}' no válido. Opciones permitidas: 'Por Enviar', 'Enviado'."
+        )
+
+    try:
+        despacho.estado_despacho = estado_normalizado
+        despacho.fecha_actualizacion = datetime.now()
+        db.commit()
+        db.refresh(despacho)
+
+        folio = orden.folio
+        return DespachoActualizarEstadoResponse(
+            id_despacho=despacho.id_despacho,
+            id_orden=orden.id_orden,
+            folio=folio,
+            estado_despacho=despacho.estado_despacho,
+            estado_orden=orden.estado_orden,
+            mensaje=f"Estado de despacho actualizado a '{despacho.estado_despacho}'.",
+            fecha_actualizacion=datetime.now().isoformat(),
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error transaccional al actualizar estado de despacho: {str(e)}"
+        )
 
 
 @router.post(
@@ -945,7 +1465,7 @@ def pagar_orden(
     id_orden: uuid.UUID,
     pago_in: Optional[OrdenPagoRequest] = None,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(require_caja_role),
 ):
     """
     Motor Transaccional de Pago y Generación de QR (ACID):
@@ -1010,11 +1530,7 @@ def pagar_orden(
                 detail="El monto a pagar debe ser mayor a 0."
             )
 
-        # Generación de token único de alta entropía para el handshake QR
-        # Formato: TX-QR-<ID_ORDEN_8>-<RANDOM_HEX_12>
-        token_entropy = uuid.uuid4().hex[:12].upper()
-        qr_token = f"TX-QR-{str(orden.id_orden)[:8].upper()}-{token_entropy}"
-        print(f"🔑 [PAGO] QR Transaccional generado: {qr_token}")
+        now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
 
         # 1. Registrar la transacción de pago en PostgreSQL
         nuevo_pago = Transaccion_Pago(
@@ -1023,36 +1539,51 @@ def pagar_orden(
             monto=monto_a_pagar,
             metodo_pago=pago_in.metodo_pago or "Efectivo",
             estado_pago="Procesado",
-            fecha_pago=datetime.now(),
+            fecha_pago=now_utc,
         )
         db.add(nuevo_pago)
         print(f"📝 [PAGO] Registro de Transaccion_Pago creado: ID {nuevo_pago.id_pago} - Monto: ${monto_a_pagar} ({nuevo_pago.metodo_pago})")
 
         # 2. Actualizar la cabecera de la orden
-        orden.estado_orden = "Pagada"
-        orden.monto_pendiente = max(0, orden.monto_pendiente - monto_a_pagar)
+        nuevo_saldo = max(0, orden.monto_pendiente - monto_a_pagar)
+        orden.monto_pendiente = nuevo_saldo
         orden.id_cajera = current_user.id_usuario
-        orden.qr_transaccional_salida = qr_token
-        orden.fecha_actualizacion = datetime.now()
-
-        # 3. Actualizar los repuestos físicos inventariados a estado 'Vendido' (ID 3)
-        estado_vendido = db.query(Estado_Activo).filter(Estado_Activo.nombre_estado == "Vendido").first()
-        if not estado_vendido:
-            estado_vendido = Estado_Activo(id_estado=3, nombre_estado="Vendido")
-            db.add(estado_vendido)
-            db.flush()
+        orden.fecha_actualizacion = now_utc
 
         detalles = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == orden.id_orden).all()
-        activos_vendidos = 0
+        tiene_activo_fisico = any(d.id_activo is not None for d in detalles)
 
-        for d in detalles:
-            if d.id_activo:
-                activo = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == d.id_activo).first()
-                if activo:
-                    activo.id_estado = estado_vendido.id_estado
-                    activo.version_lock = (activo.version_lock or 1) + 1
-                    activo.fecha_actualizacion = datetime.now()
-                    activos_vendidos += 1
+        if nuevo_saldo == 0:
+            orden.estado_orden = "Pagada"
+            if tiene_activo_fisico:
+                token_entropy = uuid.uuid4().hex[:12].upper()
+                qr_token = f"TX-QR-{str(orden.id_orden)[:8].upper()}-{token_entropy}"
+                orden.qr_transaccional_salida = qr_token
+                print(f"🔑 [PAGO] QR Transaccional generado: {qr_token}")
+            else:
+                orden.qr_transaccional_salida = None
+                print("ℹ️ [PAGO] Orden pagada sin activos inventariados (misceláneos/servicios). QR permanece nulo.")
+        else:
+            orden.estado_orden = "Reservada"
+            orden.qr_transaccional_salida = None
+
+        # 3. Actualizar los repuestos físicos inventariados a estado 'Vendido' (ID 3) si está pagada
+        if orden.estado_orden == "Pagada":
+            estado_vendido = db.query(Estado_Activo).filter(Estado_Activo.nombre_estado == "Vendido").first()
+            if not estado_vendido:
+                estado_vendido = Estado_Activo(id_estado=3, nombre_estado="Vendido")
+                db.add(estado_vendido)
+                db.flush()
+
+            activos_vendidos = 0
+            for d in detalles:
+                if d.id_activo:
+                    activo = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == d.id_activo).first()
+                    if activo:
+                        activo.id_estado = estado_vendido.id_estado
+                        activo.version_lock = (activo.version_lock or 1) + 1
+                        activo.fecha_actualizacion = now_utc
+                        activos_vendidos += 1
 
         print(f"📦 [PAGO] {activos_vendidos} repuesto(s) físico(s) actualizados a estado 'Vendido' (ID {estado_vendido.id_estado}).")
 
@@ -1066,6 +1597,8 @@ def pagar_orden(
 
         return OrdenPagoResponse(
             id_orden=orden.id_orden,
+            numero_orden=orden.numero_orden,
+            folio=orden.folio,
             id_pago=nuevo_pago.id_pago,
             estado_orden=orden.estado_orden,
             total_venta=orden.total_venta,
@@ -1090,18 +1623,29 @@ def pagar_orden(
         )
 
 
-@router.patch(
+@router.post(
     "/{id_orden}/anular",
     response_model=OrdenAnulacionResponse,
-    summary="Anular Orden y Liberar Stock (ACID)",
-    description="Anula una orden en estado 'Reservada' (Pendiente de pago) y "
-                "devuelve automáticamente los repuestos inventariados a 'Disponible' en el catálogo."
+    summary="Anular Orden, Reversar Pagos y Generar Logística Inversa (SPEC-HU-TAREA-4)",
+    description="Anula una orden en el Mesón de Ventas, propaga la reversa de transacciones de pago "
+                "y genera automáticamente tareas de reingreso (Logística Inversa) para PDA Bodega."
 )
-def anular_orden(
+def anular_orden_post(
     id_orden: uuid.UUID,
+    payload: Optional[AnularOrdenRequest] = None,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
+    rol_nombre = (current_user.nombre_rol or "").lower()
+    es_vendedor_o_admin = current_user.id_rol in [2, 4, 5, 6, 7] or (
+        "vendedor" in rol_nombre or "admin" in rol_nombre or "jefe" in rol_nombre or "gerente" in rol_nombre
+    )
+    if not es_vendedor_o_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permisos de ventas o administración para anular órdenes."
+        )
+
     orden = db.query(Orden_Venta).filter(Orden_Venta.id_orden == id_orden).first()
     if not orden:
         raise HTTPException(
@@ -1109,7 +1653,104 @@ def anular_orden(
             detail=f"Orden con ID '{id_orden}' no encontrada."
         )
 
-    # Solo se permite anular órdenes en estado 'Reservada' (Pendiente de pago)
+    if orden.estado_orden == "Anulada":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"La orden #{str(orden.id_orden)[:8].upper()} ya se encuentra anulada."
+        )
+
+    if orden.estado_orden == "Completada":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"No es posible anular la orden #{str(orden.id_orden)[:8].upper()} porque ya fue entregada/completada."
+        )
+
+    try:
+        # Paso A: Cambiar estado de la orden a 'Anulada'
+        orden.estado_orden = "Anulada"
+        orden.monto_pendiente = 0
+        orden.fecha_actualizacion = datetime.now(timezone.utc)
+
+        # Paso B: Reversar pagos asociados
+        pagos = db.query(Transaccion_Pago).filter(Transaccion_Pago.id_orden == id_orden).all()
+        pagos_reversados = 0
+        for pago in pagos:
+            pago.estado_pago = "Anulado"
+            pagos_reversados += 1
+
+        # Paso C: Obtener activos físicos de la orden para cola de reingreso
+        detalles = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == id_orden).all()
+        activos_afectados = 0
+
+        estado_disponible = db.query(Estado_Activo).filter(Estado_Activo.nombre_estado == "Disponible").first()
+        if not estado_disponible:
+            estado_disponible = Estado_Activo(id_estado=1, nombre_estado="Disponible")
+            db.add(estado_disponible)
+            db.flush()
+
+        for d in detalles:
+            if d.id_activo:
+                activo = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == d.id_activo).first()
+                if activo:
+                    activo.id_estado = estado_disponible.id_estado
+                    activo.version_lock = (activo.version_lock or 1) + 1
+                    activo.fecha_actualizacion = datetime.now(timezone.utc)
+                    activos_afectados += 1
+                d.estado_preparacion = "Reingreso Pendiente"
+
+        db.commit()
+        db.refresh(orden)
+
+        mensaje = "Orden anulada, pagos reversados y tareas de reingreso generadas"
+        return OrdenAnulacionResponse(
+            id_orden=orden.id_orden,
+            estado_orden=orden.estado_orden,
+            mensaje=mensaje,
+            msg=mensaje,
+            activos_liberados=activos_afectados,
+            pagos_reversados=pagos_reversados,
+            motivo_anulacion=payload.motivo_anulacion if payload else None,
+        )
+
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error transaccional al anular la orden: {str(e)}"
+        )
+
+
+@router.patch(
+    "/{id_orden}/anular",
+    response_model=OrdenAnulacionResponse,
+    summary="Anular Orden y Liberar Stock Directo (HU-3.5 Retrocompatibilidad)",
+    description="Anula una orden en estado 'Reservada' y devuelve repuestos a 'Disponible'."
+)
+def anular_orden_patch(
+    id_orden: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    rol_nombre = (current_user.nombre_rol or "").lower()
+    es_vendedor_o_admin = current_user.id_rol in [2, 4, 5, 6, 7] or (
+        "vendedor" in rol_nombre or "admin" in rol_nombre or "jefe" in rol_nombre or "gerente" in rol_nombre
+    )
+    if not es_vendedor_o_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permisos de ventas o administración para anular órdenes."
+        )
+
+    orden = db.query(Orden_Venta).filter(Orden_Venta.id_orden == id_orden).first()
+    if not orden:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Orden con ID '{id_orden}' no encontrada."
+        )
+
     if orden.estado_orden != "Reservada":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1118,12 +1759,10 @@ def anular_orden(
         )
 
     try:
-        # Paso A: Cambiar estado de la orden a 'Anulada'
         orden.estado_orden = "Anulada"
         orden.monto_pendiente = 0
-        orden.fecha_actualizacion = datetime.now()
+        orden.fecha_actualizacion = datetime.now(timezone.utc)
 
-        # Paso B: Liberar repuestos inventariados a 'Disponible'
         estado_disponible = db.query(Estado_Activo).filter(Estado_Activo.nombre_estado == "Disponible").first()
         if not estado_disponible:
             estado_disponible = Estado_Activo(id_estado=1, nombre_estado="Disponible")
@@ -1140,14 +1779,17 @@ def anular_orden(
                     activo.id_estado = estado_disponible.id_estado
                     activo.version_lock = (activo.version_lock or 1) + 1
                     activos_liberados += 1
+                d.estado_preparacion = "Reingreso Pendiente"
 
         db.commit()
         db.refresh(orden)
 
+        mensaje = "Orden anulada exitosamente. Los repuestos inventariados han sido devueltos al catálogo como disponibles."
         return OrdenAnulacionResponse(
             id_orden=orden.id_orden,
             estado_orden=orden.estado_orden,
-            mensaje="Orden anulada exitosamente. Los repuestos inventariados han sido devueltos al catálogo como disponibles.",
+            mensaje=mensaje,
+            msg=mensaje,
             activos_liberados=activos_liberados,
         )
 
@@ -1234,28 +1876,111 @@ def actualizar_instrucciones_bodega(
 @router.get(
     "/{id_orden}",
     summary="Obtener Detalle de Orden de Venta",
-    description="Consulta la información de una orden específica por su UUID."
+    description=(
+        "Consulta la información completa de una orden específica por su "
+        "UUID incluyendo pagos y detalle de piezas."
+    )
 )
 def obtener_orden(
     id_orden: uuid.UUID,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    orden = db.query(Orden_Venta).filter(Orden_Venta.id_orden == id_orden).first()
+    orden = db.query(Orden_Venta).filter(
+        Orden_Venta.id_orden == id_orden
+    ).first()
     if not orden:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
 
-    cliente = db.query(Cliente).filter(Cliente.id_cliente == orden.id_cliente).first()
-    detalles = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == id_orden).all()
-    despacho = db.query(Despacho).filter(Despacho.id_orden == id_orden).first()
+    cliente = db.query(Cliente).filter(
+        Cliente.id_cliente == orden.id_cliente
+    ).first()
+    detalles = db.query(Detalle_Orden).filter(
+        Detalle_Orden.id_orden == id_orden
+    ).all()
+    despacho = db.query(Despacho).filter(
+        Despacho.id_orden == id_orden
+    ).first()
+    pagos = (
+        db.query(Transaccion_Pago)
+        .filter(Transaccion_Pago.id_orden == id_orden)
+        .order_by(Transaccion_Pago.fecha_pago.asc())
+        .all()
+    )
+    vendedor = db.query(Usuario).filter(
+        Usuario.id_usuario == orden.id_vendedor
+    ).first()
+    cajera = (
+        db.query(Usuario).filter(Usuario.id_usuario == orden.id_cajera).first()
+        if orden.id_cajera else None
+    )
+    sucursal = (
+        db.query(Sucursal)
+        .filter(Sucursal.id_sucursal == orden.id_sucursal)
+        .first()
+        if orden.id_sucursal else None
+    )
+
+    detalles_res = []
+    for d in detalles:
+        sku_val = None
+        if d.id_activo:
+            act = db.query(Activo_Inventariado).filter(
+                Activo_Inventariado.id_activo == d.id_activo
+            ).first()
+            if act:
+                sku_val = act.sku_qr_fisico
+        detalles_res.append({
+            "id_detalle": d.id_detalle,
+            "id_activo": d.id_activo,
+            "sku": sku_val,
+            "descripcion_manual": d.descripcion_manual,
+            "notas_preparacion": d.notas_preparacion,
+            "cantidad": d.cantidad,
+            "precio_unitario": d.precio_unitario,
+            "precio_final": d.precio_final,
+            "preparacion_lista": d.preparacion_lista,
+            "estado_preparacion": d.estado_preparacion or "Pendiente",
+        })
+
+    pagos_res = [
+        {
+            "id_pago": p.id_pago,
+            "metodo_pago": p.metodo_pago,
+            "monto": p.monto,
+            "estado_pago": p.estado_pago or "Procesado",
+            "fecha_pago": p.fecha_pago.isoformat() if p.fecha_pago else None,
+        }
+        for p in pagos
+    ]
+
+    nom_vend = (
+        f"{vendedor.nombres} {vendedor.apellidos or ''}".strip()
+        if vendedor else "Vendedor General"
+    )
+    nom_caja = (
+        f"{cajera.nombres} {cajera.apellidos or ''}".strip()
+        if cajera else "Lorena Valenzuela"
+    )
+    nom_suc = (
+        sucursal.nombre_sucursal
+        if sucursal else f"Sucursal {orden.id_sucursal}"
+    )
 
     return {
         "id_orden": orden.id_orden,
+        "folio": orden.folio,
         "estado_orden": orden.estado_orden,
         "total_venta": orden.total_venta,
         "monto_pendiente": orden.monto_pendiente,
         "qr_transaccional_salida": orden.qr_transaccional_salida,
-        "fecha_creacion": orden.fecha_creacion.isoformat() if orden.fecha_creacion else None,
+        "fecha_creacion": (
+            orden.fecha_creacion.isoformat()
+            if orden.fecha_creacion else None
+        ),
+        "vendedor_nombre": nom_vend,
+        "cajera_nombre": nom_caja,
+        "sucursal_nombre": nom_suc,
         "cliente": {
             "rut": cliente.rut_cliente if cliente else None,
             "nombres": cliente.nombres if cliente else None,
@@ -1271,18 +1996,393 @@ def obtener_orden(
             "empresa_transporte": despacho.empresa_transporte,
             "costo_envio": despacho.costo_envio,
         } if despacho else None,
-        "detalles": [
-            {
-                "id_detalle": d.id_detalle,
-                "id_activo": d.id_activo,
-                "descripcion_manual": d.descripcion_manual,
-                "notas_preparacion": d.notas_preparacion,
-                "cantidad": d.cantidad,
-                "precio_unitario": d.precio_unitario,
-                "precio_final": d.precio_final,
-                "preparacion_lista": d.preparacion_lista,
-                "estado_preparacion": d.estado_preparacion,
-            }
-            for d in detalles
-        ],
+        "detalles": detalles_res,
+        "pagos": pagos_res,
+        "pagos_aplicados": pagos_res,
     }
+
+
+# ==========================================
+# ENDPOINT CHECKOUT WIZARD & RESERVAS BACKORDER (SPEC-HU-05)
+# ==========================================
+
+@router.post(
+    "/checkout-wizard",
+    response_model=CheckoutWizardResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Procesar Checkout por Pasos (Wizard) y Reservas Backorder (SPEC-HU-05)",
+    description="Procesa de forma atómica (ACID) la creación de la orden de venta, "
+                "reserva de repuestos físicos de inventario, registro de reservas por encargo (Backorder) "
+                "y datos de despacho a domicilio."
+)
+def checkout_wizard(
+    request: CheckoutWizardRequest,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    # 1. Control de Acceso RBAC: Solo roles de Ventas, Jefatura o Administración
+    rol_nombre = (current_user.nombre_rol or "").lower()
+    es_vendedor_o_admin = current_user.id_rol in [2, 4, 5, 6, 7] or (
+        "vendedor" in rol_nombre or "admin" in rol_nombre or "jefe" in rol_nombre or "gerente" in rol_nombre
+    )
+    if not es_vendedor_o_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso restringido: Solo el personal de Ventas o Administración puede procesar el checkout."
+        )
+
+    # 1.1 Validación de Horario Operativo y Periodo de Gracia por Rol
+    validar_horario_operativo_ordenes(current_user, request.items_inventariados, db)
+
+    # 2. Validar o Crear Cliente (Micro-CRM / Consumidor Final)
+    cliente = None
+    if request.id_cliente:
+        cliente = db.query(Cliente).filter(Cliente.id_cliente == request.id_cliente).first()
+
+    if not cliente and request.cliente:
+        rut_limpio = request.cliente.rut_cliente.strip()
+        rut_norm = rut_limpio.replace(".", "").replace("-", "").upper()
+        es_consumidor_final = rut_norm in ["66666666", "6666666"] or "CONSUMIDOR" in request.cliente.nombres.upper()
+
+        if es_consumidor_final:
+            cliente = db.query(Cliente).filter(
+                Cliente.rut_cliente.in_(["6.666.666-6", "66666666-6", "6666666-6"])
+            ).first()
+            if not cliente:
+                cliente = Cliente(
+                    id_cliente=uuid.uuid4(),
+                    rut_cliente="6.666.666-6",
+                    nombres="Consumidor",
+                    apellidos="Final",
+                    consentimiento_legal=True,
+                    estado="Activo",
+                )
+                db.add(cliente)
+                db.flush()
+        else:
+            cliente = db.query(Cliente).filter(
+                (Cliente.rut_cliente == rut_limpio) | (Cliente.rut_cliente == rut_limpio.replace(".", ""))
+            ).first()
+            if not cliente:
+                id_comuna_cli = None
+                if request.cliente.comuna:
+                    com_cli = db.query(Comuna).filter(Comuna.nombre_comuna.ilike(request.cliente.comuna.strip())).first()
+                    if com_cli:
+                        id_comuna_cli = com_cli.id_comuna
+                cliente = Cliente(
+                    id_cliente=uuid.uuid4(),
+                    rut_cliente=rut_limpio,
+                    nombres=request.cliente.nombres.strip(),
+                    apellidos=request.cliente.apellidos.strip(),
+                    telefono=request.cliente.telefono.strip() if request.cliente.telefono else None,
+                    correo=request.cliente.correo.strip() if request.cliente.correo else None,
+                    id_comuna=id_comuna_cli,
+                    consentimiento_legal=request.cliente.consentimiento_legal,
+                    estado="Activo",
+                )
+                db.add(cliente)
+                db.flush()
+            else:
+                cliente.nombres = request.cliente.nombres.strip()
+                cliente.apellidos = request.cliente.apellidos.strip()
+                if request.cliente.telefono:
+                    cliente.telefono = request.cliente.telefono.strip()
+                if request.cliente.correo:
+                    cliente.correo = request.cliente.correo.strip()
+
+    if not cliente or cliente.estado != "Activo":
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="El cliente especificado no existe o se encuentra inactivo."
+        )
+
+    # Validar que al menos haya 1 ítem (inventariado, manual o reserva backorder)
+    num_inv = len(request.items_inventariados or [])
+    num_man = len(request.items_manuales or [])
+    num_res = len(request.reservas or [])
+
+    if num_inv == 0 and num_man == 0 and num_res == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La orden debe contener al menos un producto inventariado, ítem manual o reserva por encargo."
+        )
+
+    # Validar datos de despacho si aplica
+    tipo_ent = (request.tipo_entrega or "Retiro").strip()
+    es_despacho = "despacho" in tipo_ent.lower()
+    es_traslado = "traslado" in tipo_ent.lower()
+
+    if es_despacho:
+        if not request.datos_despacho:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Para entrega tipo 'Despacho Domicilio' se requieren los datos de despacho completos."
+            )
+        comuna_id = request.datos_despacho.id_comuna_destino or 1
+        comuna = db.query(Comuna).filter(Comuna.id_comuna == comuna_id).first()
+        if not comuna and getattr(request.datos_despacho, "comuna_destino", None):
+            comuna = db.query(Comuna).filter(Comuna.nombre_comuna.ilike(request.datos_despacho.comuna_destino.strip())).first()
+            if comuna:
+                comuna_id = comuna.id_comuna
+        if not comuna:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"La comuna destino con ID '{comuna_id}' no existe."
+            )
+        if not request.datos_despacho.direccion_envio.strip() or not request.datos_despacho.receptor_nombres.strip() or not request.datos_despacho.receptor_rut.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Los campos de dirección, receptor y RUT son obligatorios para el despacho."
+            )
+
+    try:
+        # A. Crear Cabecera de Orden de Venta
+        id_orden = uuid.uuid4()
+        sucursal_id = current_user.id_sucursal or 1
+        vendedor_asig = request.id_vendedor_asignado or current_user.id_usuario
+
+        abono_req_val = request.monto_abono or 0
+        if abono_req_val == 0 and request.reservas:
+            abono_req_val = sum((r.abono_requerido if getattr(r, "abono_requerido", None) is not None else r.monto_abonado) for r in request.reservas)
+
+        orden = Orden_Venta(
+            id_orden=id_orden,
+            id_cliente=cliente.id_cliente,
+            id_vendedor=current_user.id_usuario,
+            id_vendedor_asignado=vendedor_asig,
+            id_sucursal=sucursal_id,
+            estado_orden="Reservada",
+            total_venta=request.total_venta,
+            monto_pendiente=request.total_venta,
+            abono_requerido=abono_req_val,
+            fecha_creacion=datetime.now(timezone.utc),
+            fecha_actualizacion=datetime.now(timezone.utc)
+        )
+        db.add(orden)
+        db.flush()
+
+        # B. Procesar Ítems Inventariados
+        activos_reservados = 0
+        for act_id in (request.items_inventariados or []):
+            activo = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == act_id).first()
+            if not activo:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"El activo con ID '{act_id}' no fue encontrado en inventario."
+                )
+            # Permitir si está Disponible (1), Paletizado (7) o Reservado por el mismo vendedor en su carrito (2)
+            es_su_reserva = (
+                activo.id_estado == 2
+                and activo.reservado_por is not None
+                and activo.reservado_por == current_user.id_usuario
+            )
+            if activo.id_estado not in [1, 7] and not es_su_reserva:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"El repuesto SKU '{activo.sku_qr_fisico}' no está disponible para venta (Estado actual ID {activo.id_estado})."
+                )
+
+            # Transición a Reservado formal de orden (id_estado = 2, sin TTL de carrito)
+            activo.id_estado = 2
+            activo.reserva_expira_en = None  # Elimina el TTL para que no caduque a los 15 min si el cliente demora en ir a Caja
+            activo.reservado_por = None      # Ya no pertenece a un carrito volátil, ahora pertenece a la orden oficial
+            activo.version_lock = (activo.version_lock or 1) + 1
+            activo.fecha_actualizacion = datetime.now(timezone.utc)
+            activos_reservados += 1
+
+            cat = db.query(Categoria_Activo).filter(Categoria_Activo.id_categoria == activo.id_categoria).first()
+            cat_nombre = cat.nombre_categoria if cat else "Repuesto"
+            veh = db.query(Vehiculo_Origen).filter(Vehiculo_Origen.id_vehiculo == activo.id_vehiculo).first() if activo.id_vehiculo else None
+            motor = db.query(Detalle_Motor).filter(Detalle_Motor.id_activo == activo.id_activo).first()
+            caja = db.query(Detalle_Caja_Cambio).filter(Detalle_Caja_Cambio.id_activo == activo.id_activo).first()
+
+            tec_parts = []
+            if motor:
+                if motor.cilindrada:
+                    tec_parts.append(motor.cilindrada)
+                if motor.combustible:
+                    tec_parts.append(motor.combustible)
+            if caja and caja.transmision_tipo:
+                tec_parts.append(caja.transmision_tipo)
+
+            veh_parts = []
+            if veh:
+                if veh.marca:
+                    veh_parts.append(veh.marca)
+                if veh.modelo:
+                    veh_parts.append(veh.modelo)
+                if veh.anio:
+                    veh_parts.append(str(veh.anio))
+
+            veh_str = f" - {' '.join(veh_parts)}" if veh_parts else ""
+            tec_str = f" ({' • '.join(tec_parts)})" if tec_parts else ""
+            desc = f"{cat_nombre}{veh_str}{tec_str}".strip() or f"{cat_nombre} ({activo.sku_qr_fisico})"
+
+            detalle = Detalle_Orden(
+                id_detalle=uuid.uuid4(),
+                id_orden=orden.id_orden,
+                id_activo=activo.id_activo,
+                descripcion_manual=desc,
+                notas_preparacion=request.instrucciones_bodega,
+                cantidad=1,
+                precio_unitario=activo.precio_referencia or 0,
+                precio_final=activo.precio_referencia or 0,
+                estado_preparacion="Pendiente"
+            )
+            db.add(detalle)
+
+        # C. Procesar Ítems Manuales
+        for m in (request.items_manuales or []):
+            desc_m = m.get("descripcion", "Ítem Manual")
+            cant_m = int(m.get("cantidad", 1))
+            p_unit = int(m.get("precio_unitario", 0))
+            p_fin = int(m.get("precio_final", p_unit * cant_m))
+            notas_m = m.get("notas_preparacion") or request.instrucciones_bodega
+
+            detalle_m = Detalle_Orden(
+                id_detalle=uuid.uuid4(),
+                id_orden=orden.id_orden,
+                id_activo=None,
+                descripcion_manual=desc_m,
+                notas_preparacion=notas_m,
+                cantidad=cant_m,
+                precio_unitario=p_unit,
+                precio_final=p_fin,
+                estado_preparacion="Pendiente"
+            )
+            db.add(detalle_m)
+
+        # D. Procesar Reservas por Encargo (Backorder / Compras en Verde)
+        reservas_creadas = 0
+        for r in (request.reservas or []):
+            categoria = db.query(Categoria_Activo).filter(Categoria_Activo.id_categoria == r.id_categoria_requerida).first()
+            cat_label = categoria.nombre_categoria if categoria else f"Categoría {r.id_categoria_requerida}"
+
+            abono_res = r.abono_requerido if getattr(r, "abono_requerido", None) is not None else r.monto_abonado
+            reserva_bo = Reservas_Backorder(
+                id_reserva=uuid.uuid4(),
+                id_cliente=cliente.id_cliente,
+                id_vendedor=current_user.id_usuario,
+                id_orden=orden.id_orden,
+                id_sucursal_registro=sucursal_id,
+                id_categoria_requerida=r.id_categoria_requerida,
+                marca_requerida=r.marca_requerida.strip(),
+                modelo_requerido=r.modelo_requerido.strip(),
+                anio_requerido=r.anio_requerido,
+                cilindrada_requerida=r.cilindrada_requerida,
+                combustible_requerido=r.combustible_requerido,
+                transmision_requerida=r.transmision_requerida,
+                notas_preparacion=r.notas_preparacion,
+                precio_acordado=r.precio_acordado,
+                monto_abonado=0,
+                abono_requerido=abono_res,
+                estado_reserva="Pendiente",
+                fecha_creacion=datetime.now(timezone.utc)
+            )
+            db.add(reserva_bo)
+            reservas_creadas += 1
+
+            # Línea de detalle comercial en la orden
+            desc_res = f"[RESERVA EN VERDE] {cat_label} - {r.marca_requerida} {r.modelo_requerido}"
+            if r.anio_requerido:
+                desc_res += f" ({r.anio_requerido})"
+
+            detalle_res = Detalle_Orden(
+                id_detalle=uuid.uuid4(),
+                id_orden=orden.id_orden,
+                id_activo=None,
+                descripcion_manual=desc_res,
+                notas_preparacion=r.notas_preparacion or f"Reserva por encargo. Abono acordado: ${abono_res:,}".replace(",", "."),
+                cantidad=1,
+                precio_unitario=r.precio_acordado,
+                precio_final=r.precio_acordado,
+                estado_preparacion="Pendiente"
+            )
+            db.add(detalle_res)
+
+        # E. Procesar Despacho a Domicilio o Traslado a otra Sucursal
+        despacho_generado = False
+        if es_despacho and request.datos_despacho:
+            d_data = request.datos_despacho
+            despacho = Despacho(
+                id_despacho=uuid.uuid4(),
+                id_orden=orden.id_orden,
+                id_comuna_destino=d_data.id_comuna_destino or 1,
+                direccion_envio=d_data.direccion_envio.strip(),
+                receptor_nombres=d_data.receptor_nombres.strip(),
+                receptor_rut=d_data.receptor_rut.strip(),
+                receptor_telefono=d_data.receptor_telefono.strip(),
+                empresa_transporte=d_data.empresa_transporte or "Chilexpress",
+                costo_envio=0,
+                estado_despacho="Por Enviar",
+                estado="Activo",
+                fecha_creacion=datetime.now(timezone.utc)
+            )
+            db.add(despacho)
+            despacho_generado = True
+        elif es_traslado:
+            id_suc_dest = request.id_sucursal_destino or (request.datos_despacho.id_sucursal_destino if request.datos_despacho else 2)
+            nombre_dest = "Viña del Mar" if id_suc_dest == 1 else "Limache"
+            rec_rut = (request.datos_despacho.receptor_rut if request.datos_despacho and request.datos_despacho.receptor_rut else cliente.rut_cliente) or "S/R"
+            rec_nom = (request.datos_despacho.receptor_nombres if request.datos_despacho and request.datos_despacho.receptor_nombres else f"{cliente.nombres} {cliente.apellidos}".strip()) or "Cliente"
+            rec_tel = (request.datos_despacho.receptor_telefono if request.datos_despacho and request.datos_despacho.receptor_telefono else (cliente.telefono or "+56900000000")) or "+56900000000"
+
+            despacho_traslado = Despacho(
+                id_despacho=uuid.uuid4(),
+                id_orden=orden.id_orden,
+                id_comuna_destino=1 if id_suc_dest == 1 else 2,
+                direccion_envio=f"Traslado a Sucursal {nombre_dest}",
+                receptor_nombres=rec_nom,
+                receptor_rut=rec_rut,
+                receptor_telefono=rec_tel,
+                empresa_transporte="Interno",
+                costo_envio=0,
+                estado_despacho="Por Enviar",
+                estado="Activo",
+                fecha_creacion=datetime.now(timezone.utc)
+            )
+            db.add(despacho_traslado)
+            despacho_generado = True
+
+            # Registrar Tracking_Logistico para cada activo inventariado involucrado en el traslado
+            for act_id in (request.items_inventariados or []):
+                act_item = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == act_id).first()
+                if act_item:
+                    tracking = Tracking_Logistico(
+                        id_activo=act_item.id_activo,
+                        id_sucursal_origen=act_item.id_sucursal_actual,
+                        id_sucursal_destino=id_suc_dest,
+                        id_usuario_gestor=current_user.id_usuario,
+                        id_orden=orden.id_orden,
+                        estado_traslado="Pendiente",
+                    )
+                    db.add(tracking)
+
+        db.commit()
+        db.refresh(orden)
+
+        return CheckoutWizardResponse(
+            id_orden=orden.id_orden,
+            numero_orden=orden.numero_orden,
+            folio=orden.folio,
+            estado=orden.estado_orden,
+            estado_orden=orden.estado_orden,
+            total_venta=orden.total_venta,
+            monto_pendiente=orden.monto_pendiente,
+            abono_requerido=orden.abono_requerido,
+            reservas_generadas=reservas_creadas,
+            activos_reservados=activos_reservados,
+            despacho_generado=despacho_generado,
+            msg="Orden generada exitosamente.",
+            mensaje="Orden generada exitosamente."
+        )
+
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error transaccional al procesar Checkout Wizard: {str(e)}"
+        )

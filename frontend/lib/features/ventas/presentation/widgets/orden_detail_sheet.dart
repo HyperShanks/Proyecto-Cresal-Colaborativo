@@ -4,11 +4,11 @@ import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../services/ordenes_service.dart';
 import 'qr_ticket_dialog.dart';
+import 'modal_anular_orden.dart';
 
 /// Modal inferior para visualizar el detalle técnico completo de una orden de venta (HU-3.5).
 /// Ofrece acciones condicionales de visualización de QR transaccional (HU-3.6),
-/// simulación de pago en caja para demostraciones (HU-3.6),
-/// edición de notas técnicas y anulación transaccional si está en estado 'Reservada'.
+/// edición de notas técnicas, entrega en mesón y anulación transaccional si está en estado 'Reservada'.
 class OrdenDetailSheet extends StatefulWidget {
   final OrdenHistorialModel orden;
   final VoidCallback? onOrderUpdated;
@@ -52,6 +52,12 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
       textColor = AppPalette.success;
       icon = Icons.check_circle_outline;
       label = 'Pagada';
+    } else if (_orden.esCompletada) {
+      bgColor = AppPalette.primary.withValues(alpha: 0.15);
+      borderColor = AppPalette.primary.withValues(alpha: 0.5);
+      textColor = AppPalette.primary;
+      icon = Icons.verified_outlined;
+      label = 'Completada';
     } else if (_orden.esAnulada) {
       bgColor = AppPalette.error.withValues(alpha: 0.15);
       borderColor = AppPalette.error.withValues(alpha: 0.5);
@@ -191,8 +197,8 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
       });
 
       scaffoldMessenger.showSnackBar(
-        SnackBar(
-          content: const Row(
+        const SnackBar(
+          content: Row(
             children: [
               Icon(Icons.check_circle_outline, color: Colors.white, size: 20.0),
               SizedBox(width: 8.0),
@@ -218,110 +224,26 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
     }
   }
 
-  /// Diálogo de confirmación para anular la orden
+  /// Diálogo modal interactivo para anular la orden (SPEC-HU-TAREA-4)
   Future<void> _dialogAnularOrden() async {
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
-    final navigator = Navigator.of(context);
-
-    final confirmar = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppPalette.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12.0),
-          side: const BorderSide(color: Colors.white10),
-        ),
-        title: Row(
-          children: [
-            const Icon(Icons.warning_amber_rounded, color: AppPalette.error, size: 24.0),
-            const SizedBox(width: 8.0),
-            Text(
-              '¿Deshacer esta Orden?',
-              style: AppTypography.title.copyWith(fontSize: 18.0),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Al anular la orden ${_orden.folioDisplay}:',
-              style: AppTypography.body.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8.0),
-            Text(
-              '• La orden pasará inmediatamente a estado "Anulada".\n'
-              '• Todos los repuestos inventariados serán liberados y volverán a estar disponibles en el catálogo.',
-              style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(
-              'Volver',
-              style: AppTypography.button.copyWith(color: AppPalette.textSecondary),
-            ),
-          ),
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppPalette.error,
-              foregroundColor: AppPalette.textPrimary,
-              elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
-            ),
-            icon: const Icon(Icons.delete_outline, size: 18.0),
-            label: const Text('Confirmar Anulación'),
-            onPressed: () => Navigator.of(ctx).pop(true),
-          ),
-        ],
-      ),
+    final result = await ModalAnularOrden.mostrar(
+      context,
+      idOrden: _orden.idOrden,
+      folio: _orden.folioDisplay,
+      clienteNombre: _orden.cliente?.nombreCompleto,
+      totalVenta: _orden.totalVenta,
+      onOrdenAnulada: () {
+        widget.onOrderUpdated?.call();
+      },
     );
 
-    if (confirmar != true || !mounted) return;
-
-    setState(() => _isLoading = true);
-
-    try {
-      await OrdenesService.anularOrden(_orden.idOrden);
-
-      if (!mounted) return;
-
-      scaffoldMessenger.showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.check_circle_outline, color: Colors.white, size: 20.0),
-              const SizedBox(width: 8.0),
-              Expanded(
-                child: Text('Orden ${_orden.folioDisplay} anulada. Repuestos devueltos al catálogo.'),
-              ),
-            ],
-          ),
-          backgroundColor: AppPalette.success,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-
-      widget.onOrderUpdated?.call();
-      navigator.pop(); // Cerrar el bottom sheet tras anular
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      scaffoldMessenger.showSnackBar(
-        SnackBar(
-          content: Text('Error al anular la orden: $e'),
-          backgroundColor: AppPalette.error,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+    if (result == true && mounted) {
+      Navigator.of(context).pop(); // Cerrar el bottom sheet tras anulación exitosa
     }
   }
 
-  /// Simula la confirmación de pago en caja para demostraciones y pruebas del flujo (HU-3.6)
-  Future<void> _simularPagoCaja() async {
+  /// Confirmar entrega directa de productos misceláneos en mesón (tienda)
+  Future<void> _entregarOrdenMeson() async {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
 
     final confirmar = await showDialog<bool>(
@@ -341,14 +263,14 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                 borderRadius: BorderRadius.circular(8.0),
               ),
               child: const Icon(
-                Icons.point_of_sale_rounded,
+                Icons.check_circle_outline,
                 color: AppPalette.success,
                 size: 22.0,
               ),
             ),
             const SizedBox(width: 10.0),
             Text(
-              'Simular Pago en Caja',
+              'Confirmar Entrega en Mesón',
               style: AppTypography.title.copyWith(fontSize: 17.0),
             ),
           ],
@@ -358,7 +280,7 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '¿Deseas registrar la liquidación total de la orden por ${_orden.totalVentaFormateado}?',
+              '¿Confirmar la entrega física de la orden ${_orden.folioDisplay} al cliente?',
               style: AppTypography.body.copyWith(fontSize: 14.5),
             ),
             const SizedBox(height: 12.0),
@@ -369,14 +291,18 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                 borderRadius: BorderRadius.circular(8.0),
                 border: Border.all(color: Colors.white10),
               ),
-              child: Row(
+              child: const Row(
                 children: [
-                  const Icon(Icons.info_outline, size: 16.0, color: AppPalette.secondary),
-                  const SizedBox(width: 8.0),
+                  Icon(Icons.info_outline, size: 16.0, color: AppPalette.secondary),
+                  SizedBox(width: 8.0),
                   Expanded(
                     child: Text(
-                      'Esta acción confirmará el pago en el backend (ACID) y generará el código QR transaccional para retiro en bodega.',
-                      style: AppTypography.small.copyWith(fontSize: 11.5),
+                      'Esta orden corresponde a venta de misceláneos en mesón. Al confirmar, pasará al estado Completada.',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: AppPalette.textSecondary,
+                        fontFamily: AppTypography.fontFamily,
+                      ),
                     ),
                   ),
                 ],
@@ -400,7 +326,7 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
             ),
             icon: const Icon(Icons.check, size: 18.0),
-            label: const Text('CONFIRMAR PAGO'),
+            label: const Text('CONFIRMAR ENTREGA'),
             onPressed: () => Navigator.of(ctx).pop(true),
           ),
         ],
@@ -412,19 +338,12 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
     setState(() => _isLoading = true);
 
     try {
-      final responsePago = await OrdenesService.pagarOrden(
-        _orden.idOrden,
-        metodoPago: 'Efectivo',
-      );
+      await OrdenesService.confirmarEntregaTienda(_orden.idOrden);
 
       if (!mounted) return;
 
       setState(() {
-        _orden = _orden.copyWith(
-          estadoOrden: responsePago.estadoOrden,
-          montoPendiente: responsePago.montoPendiente,
-          qrTransaccionalSalida: responsePago.qrTransaccionalSalida,
-        );
+        _orden = _orden.copyWith(estadoOrden: 'Completada');
         _isLoading = false;
       });
 
@@ -438,7 +357,7 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
               SizedBox(width: 8.0),
               Expanded(
                 child: Text(
-                  '¡Pago confirmado exitosamente! Código QR transaccional emitido.',
+                  '¡Entrega confirmada exitosamente! Orden completada.',
                   style: TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
@@ -449,21 +368,118 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
           behavior: SnackBarBehavior.floating,
         ),
       );
-
-      // Desplegar automáticamente el modal del Ticket Digital QR
-      if (mounted) {
-        QrTicketDialog.mostrar(context, _orden);
-      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
       scaffoldMessenger.showSnackBar(
         SnackBar(
-          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          content: Text('Error al confirmar entrega: ${e.toString().replaceFirst("Exception: ", "")}'),
           backgroundColor: AppPalette.error,
           behavior: SnackBarBehavior.floating,
         ),
       );
+    }
+  }
+
+  Future<void> _dialogCambiarEstadoDespacho() async {
+    final d = _orden.despacho;
+    if (d == null || d.idDespacho.isEmpty) return;
+
+    final bool esEnviado = d.estadoDespacho.trim().toLowerCase() == 'enviado';
+    final String siguienteEstado = esEnviado ? 'Por Enviar' : 'Enviado';
+
+    final bool? confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppPalette.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.local_shipping_outlined, color: AppPalette.primary, size: 24),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'Estado de Despacho',
+                style: TextStyle(color: AppPalette.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          '¿Deseas cambiar el estado de despacho a "$siguienteEstado"?\n\n'
+          'Nota: Esto solo actualiza el estado logístico del envío y no altera el estado de la orden (${_orden.estadoOrden}). '
+          'La orden continúa su flujo normal hasta su validación en bodega.',
+          style: const TextStyle(color: AppPalette.textSecondary, fontSize: 13.5, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('CANCELAR', style: TextStyle(color: AppPalette.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppPalette.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text('CAMBIAR A $siguienteEstado', style: const TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar == true) {
+      setState(() => _isLoading = true);
+      try {
+        await OrdenesService.actualizarEstadoDespacho(d.idDespacho, siguienteEstado);
+        if (!mounted) return;
+        setState(() {
+          _isLoading = false;
+          _orden = _orden.copyWith(
+            despacho: DespachoOrdenResumenModel(
+              idDespacho: d.idDespacho,
+              direccionEnvio: d.direccionEnvio,
+              receptorNombres: d.receptorNombres,
+              receptorRut: d.receptorRut,
+              receptorTelefono: d.receptorTelefono,
+              empresaTransporte: d.empresaTransporte,
+              costoEnvio: d.costoEnvio,
+              estadoDespacho: siguienteEstado,
+              comunaDestino: d.comunaDestino,
+            ),
+          );
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppPalette.surface,
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: AppPalette.success),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Estado de despacho actualizado a $siguienteEstado.',
+                    style: const TextStyle(color: AppPalette.textPrimary),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppPalette.surface,
+            content: Text(
+              'Error al actualizar despacho: ${e.toString().replaceAll("Exception: ", "")}',
+              style: const TextStyle(color: AppPalette.error),
+            ),
+          ),
+        );
+      }
     }
   }
 
@@ -535,6 +551,26 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                 ),
                 Row(
                   children: [
+                    if (_orden.esMixta) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                        decoration: BoxDecoration(
+                          color: AppPalette.secondary.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(20.0),
+                          border: Border.all(color: AppPalette.secondary.withValues(alpha: 0.5)),
+                        ),
+                        child: Text(
+                          'Mixta',
+                          style: TextStyle(
+                            fontSize: 12.0,
+                            fontWeight: FontWeight.w600,
+                            color: AppPalette.secondary,
+                            fontFamily: AppTypography.fontFamily,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6.0),
+                    ],
                     _buildStatusBadge(),
                     const SizedBox(width: 8.0),
                     IconButton(
@@ -624,14 +660,62 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Icon(Icons.local_shipping, size: 16.0, color: AppPalette.secondary),
-                              const SizedBox(width: 6.0),
-                              Text(
-                                'Despacho a Domicilio',
-                                style: AppTypography.small.copyWith(
-                                  color: AppPalette.secondary,
-                                  fontWeight: FontWeight.bold,
+                              Row(
+                                children: [
+                                  const Icon(Icons.local_shipping, size: 16.0, color: AppPalette.secondary),
+                                  const SizedBox(width: 6.0),
+                                  Text(
+                                    'Despacho a Domicilio',
+                                    style: AppTypography.small.copyWith(
+                                      color: AppPalette.secondary,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              InkWell(
+                                borderRadius: BorderRadius.circular(6.0),
+                                onTap: _isLoading ? null : _dialogCambiarEstadoDespacho,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 3.0),
+                                  decoration: BoxDecoration(
+                                    color: (_orden.despacho!.estadoDespacho.toLowerCase() == 'enviado'
+                                            ? AppPalette.success
+                                            : AppPalette.secondary)
+                                        .withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(6.0),
+                                    border: Border.all(
+                                      color: (_orden.despacho!.estadoDespacho.toLowerCase() == 'enviado'
+                                              ? AppPalette.success
+                                              : AppPalette.secondary)
+                                          .withValues(alpha: 0.4),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        _orden.despacho!.estadoDespacho,
+                                        style: TextStyle(
+                                          fontSize: 10.5,
+                                          fontWeight: FontWeight.bold,
+                                          color: _orden.despacho!.estadoDespacho.toLowerCase() == 'enviado'
+                                              ? AppPalette.success
+                                              : AppPalette.secondary,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4.0),
+                                      Icon(
+                                        Icons.sync_alt_rounded,
+                                        size: 13.0,
+                                        color: _orden.despacho!.estadoDespacho.toLowerCase() == 'enviado'
+                                            ? AppPalette.success
+                                            : AppPalette.secondary,
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ],
@@ -641,11 +725,30 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                             'Dirección: ${_orden.despacho!.direccionEnvio}',
                             style: AppTypography.body.copyWith(fontSize: 13.0),
                           ),
+                          if (_orden.despacho!.comunaDestino != null && _orden.despacho!.comunaDestino!.isNotEmpty) ...[
+                            const SizedBox(height: 2.0),
+                            Text(
+                              'Comuna: ${_orden.despacho!.comunaDestino}',
+                              style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
+                            ),
+                          ],
                           const SizedBox(height: 4.0),
                           Text(
                             'Receptor: ${_orden.despacho!.receptorNombres} (${_orden.despacho!.receptorRut})',
                             style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
                           ),
+                          const SizedBox(height: 2.0),
+                          Text(
+                            'Teléfono: ${_orden.despacho!.receptorTelefono}',
+                            style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
+                          ),
+                          if (_orden.despacho!.empresaTransporte != null && _orden.despacho!.empresaTransporte!.isNotEmpty) ...[
+                            const SizedBox(height: 2.0),
+                            Text(
+                              'Transporte: ${_orden.despacho!.empresaTransporte}',
+                              style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
+                            ),
+                          ],
                           const SizedBox(height: 2.0),
                           Text(
                             'Estado Envío: ${_orden.despacho!.estadoDespacho}',
@@ -740,6 +843,48 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                                           ),
                                         ),
                                       ],
+                                      const SizedBox(height: 4.0),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 2.0),
+                                        decoration: BoxDecoration(
+                                          color: detalle.esMotorOCaja
+                                              ? AppPalette.primary.withValues(alpha: 0.12)
+                                              : AppPalette.secondary.withValues(alpha: 0.12),
+                                          borderRadius: BorderRadius.circular(4.0),
+                                          border: Border.all(
+                                            color: detalle.esMotorOCaja
+                                                ? AppPalette.primary.withValues(alpha: 0.3)
+                                                : AppPalette.secondary.withValues(alpha: 0.3),
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              detalle.esMotorOCaja
+                                                  ? Icons.warehouse_outlined
+                                                  : Icons.storefront_outlined,
+                                              size: 11.0,
+                                              color: detalle.esMotorOCaja
+                                                  ? AppPalette.primary
+                                                  : AppPalette.secondary,
+                                            ),
+                                            const SizedBox(width: 4.0),
+                                            Text(
+                                              detalle.esMotorOCaja
+                                                  ? 'Retiro en Bodega (Barrera)'
+                                                  : 'Entrega Inmediata en Mesón',
+                                              style: TextStyle(
+                                                fontSize: 10.5,
+                                                fontWeight: FontWeight.w600,
+                                                color: detalle.esMotorOCaja
+                                                    ? AppPalette.primary
+                                                    : AppPalette.secondary,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -832,8 +977,51 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                     ),
                   ),
 
-                  // ── Sección 4.A: Ticket QR Transaccional (Si tiene QR disponible) ─
-                  if (_orden.tieneQrDisponible) ...[
+                  // ── Sección 4.A.0: Aviso Informativo Orden Mixta (Mesón + Bodega) ──
+                  if (_orden.esMixta && _orden.esPagada && !_orden.esCompletada) ...[
+                    const SizedBox(height: 16.0),
+                    Container(
+                      padding: const EdgeInsets.all(14.0),
+                      decoration: BoxDecoration(
+                        color: AppPalette.secondary.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10.0),
+                        border: Border.all(color: AppPalette.secondary.withValues(alpha: 0.4)),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.swap_horiz_rounded, color: AppPalette.secondary, size: 22.0),
+                          const SizedBox(width: 10.0),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Orden Mixta (Mesón + Bodega)',
+                                  style: AppTypography.title.copyWith(
+                                    color: AppPalette.secondary,
+                                    fontSize: 14.0,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 4.0),
+                                Text(
+                                  'Entrega el o los repuestos misceláneos al cliente directamente en mesón. El activo principal (motor/caja) debe ser retirado en bodega con el Ticket QR. La orden pasará a Completada automáticamente al validar la salida en barrera.',
+                                  style: AppTypography.small.copyWith(
+                                    color: AppPalette.textPrimary,
+                                    fontSize: 12.0,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  // ── Sección 4.A: Ticket QR Transaccional (Si tiene motor/caja y QR disponible) ─
+                  if (_orden.contieneMotorOCaja && _orden.tieneQrDisponible) ...[
                     const SizedBox(height: 20.0),
                     Container(
                       padding: const EdgeInsets.all(16.0),
@@ -872,7 +1060,7 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                                       ),
                                     ),
                                     Text(
-                                      'Orden pagada. Lista para Handshake con Bodega.',
+                                      'Orden pagada. Lista para retiro en bodega.',
                                       style: AppTypography.small.copyWith(
                                         color: AppPalette.textSecondary,
                                         fontSize: 12.0,
@@ -914,37 +1102,151 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                     ),
                   ],
 
-                  // ── Sección 4.B: Acciones Condicionales (Solo si está Reservada) ─
+                  // ── Sección 4.A.1: Entrega Inmediata en Mesón (Misceláneos pagados sin motor/caja) ─
+                  if (!_orden.contieneMotorOCaja && _orden.esPagada && !_orden.esCompletada) ...[
+                    const SizedBox(height: 20.0),
+                    Container(
+                      padding: const EdgeInsets.all(16.0),
+                      decoration: BoxDecoration(
+                        color: AppPalette.success.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12.0),
+                        border: Border.all(color: AppPalette.success.withValues(alpha: 0.5)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8.0),
+                                decoration: BoxDecoration(
+                                  color: AppPalette.success.withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(8.0),
+                                ),
+                                child: const Icon(
+                                  Icons.storefront_outlined,
+                                  color: AppPalette.success,
+                                  size: 28.0,
+                                ),
+                              ),
+                              const SizedBox(width: 12.0),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Entrega Inmediata en Mesón',
+                                      style: AppTypography.title.copyWith(
+                                        color: AppPalette.success,
+                                        fontSize: 15.0,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    Text(
+                                      'Venta de repuestos misceláneos o insumos. Entrega directa en mostrador.',
+                                      style: AppTypography.small.copyWith(
+                                        color: AppPalette.textSecondary,
+                                        fontSize: 12.0,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 14.0),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppPalette.success,
+                                foregroundColor: AppPalette.textPrimary,
+                                elevation: 0,
+                                minimumSize: const Size(double.infinity, 48.0),
+                                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(AppComponents.defaultBorderRadius),
+                                ),
+                              ),
+                              icon: const Icon(Icons.check_circle_outline, size: 20.0),
+                              label: const Text(
+                                'MARCAR COMO ENTREGADO',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13.5,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              onPressed: _isLoading ? null : _entregarOrdenMeson,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  // ── Sección 4.B: Confirmación de Entrega (Si está Completada) ─
+                  if (_orden.esCompletada) ...[
+                    const SizedBox(height: 20.0),
+                    Container(
+                      padding: const EdgeInsets.all(16.0),
+                      decoration: BoxDecoration(
+                        color: AppPalette.primary.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12.0),
+                        border: Border.all(color: AppPalette.primary.withValues(alpha: 0.5)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8.0),
+                            decoration: BoxDecoration(
+                              color: AppPalette.primary.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(8.0),
+                            ),
+                            child: const Icon(
+                              Icons.verified_outlined,
+                              color: AppPalette.primary,
+                              size: 28.0,
+                            ),
+                          ),
+                          const SizedBox(width: 12.0),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Orden Completada',
+                                  style: AppTypography.title.copyWith(
+                                    fontSize: 15.0,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppPalette.primary,
+                                  ),
+                                ),
+                                const SizedBox(height: 4.0),
+                                Text(
+                                  _orden.contieneMotorOCaja
+                                      ? 'Los repuestos fueron validados y entregados exitosamente en barrera de bodega.'
+                                      : 'Los repuestos misceláneos fueron entregados exitosamente al cliente en mesón.',
+                                  style: AppTypography.small.copyWith(
+                                    color: AppPalette.textSecondary,
+                                    fontSize: 12.0,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  // ── Sección 4.C: Acciones Condicionales (Solo si está Reservada) ─
                   if (_orden.esReservada) ...[
                     const SizedBox(height: 20.0),
                     Text(
                       'Acciones de Gestión',
                       style: AppTypography.title.copyWith(fontSize: 15.0),
                     ),
-                    const SizedBox(height: 10.0),
-
-                    // Botón Demo: Simular Pago en Caja
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48.0,
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppPalette.primary,
-                          foregroundColor: AppPalette.textPrimary,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10.0),
-                          ),
-                        ),
-                        icon: const Icon(Icons.point_of_sale_rounded, size: 20.0),
-                        label: const Text(
-                          '💳 Simular Pago en Caja (Demo)',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        onPressed: _isLoading ? null : _simularPagoCaja,
-                      ),
-                    ),
-
                     const SizedBox(height: 10.0),
 
                     // Botón Editar Instrucciones a Bodega

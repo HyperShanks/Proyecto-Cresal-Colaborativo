@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../core/routes/route_observer.dart';
 import '../../services/ordenes_service.dart';
 import '../../services/ordenes_sync_notifier.dart';
 import '../widgets/orden_card.dart';
@@ -12,19 +14,21 @@ class HistorialScreen extends StatefulWidget {
   final VoidCallback? onOpenMenuDrawer;
   final VoidCallback? onRefreshCatalogo;
   final List<OrdenHistorialModel>? initialOrdenes;
+  final http.Client? client;
 
   const HistorialScreen({
     super.key,
     this.onOpenMenuDrawer,
     this.onRefreshCatalogo,
     this.initialOrdenes,
+    this.client,
   });
 
   @override
-  State<HistorialScreen> createState() => _HistorialScreenState();
+  State<HistorialScreen> createState() => HistorialScreenState();
 }
 
-class _HistorialScreenState extends State<HistorialScreen> {
+class HistorialScreenState extends State<HistorialScreen> with RouteAware {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final TextEditingController _searchController = TextEditingController();
 
@@ -51,10 +55,45 @@ class _HistorialScreenState extends State<HistorialScreen> {
 
     if (widget.initialOrdenes != null) {
       _ordenes = List.from(widget.initialOrdenes!);
+      _ordenarOrdenes(_ordenes);
       _isLoading = false;
     } else {
       _cargarOrdenes();
     }
+  }
+
+  /// Prioridad de ordenamiento: 0 = Activas/Pendientes, 1 = Completadas, 2 = Anuladas (al final absoluto)
+  static int _prioridadEstado(String estado) {
+    final est = estado.trim().toLowerCase();
+    if (est == 'anulada') return 2;
+    if (est == 'completada' || est == 'entregada') return 1;
+    return 0;
+  }
+
+  void _ordenarOrdenes(List<OrdenHistorialModel> lista) {
+    lista.sort((a, b) {
+      final aPrio = _prioridadEstado(a.estadoOrden);
+      final bPrio = _prioridadEstado(b.estadoOrden);
+      if (aPrio != bPrio) {
+        return aPrio.compareTo(bPrio);
+      }
+      return (b.fechaCreacion ?? '').compareTo(a.fechaCreacion ?? '');
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != null) {
+      routeObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void didPopNext() {
+    super.didPopNext();
+    refrescar();
   }
 
   void _onSyncNotification() {
@@ -65,9 +104,15 @@ class _HistorialScreenState extends State<HistorialScreen> {
 
   @override
   void dispose() {
+    routeObserver.unsubscribe(this);
     OrdenesSyncNotifier.instance.removeListener(_onSyncNotification);
     _searchController.dispose();
     super.dispose();
+  }
+
+  /// Método público para forzar recarga de órdenes (Auto-Refresh SPEC-HU-TAREA-20)
+  Future<void> refrescar() async {
+    await _cargarOrdenes();
   }
 
   Future<void> _cargarOrdenes() async {
@@ -80,9 +125,13 @@ class _HistorialScreenState extends State<HistorialScreen> {
       final ordenes = await OrdenesService.obtenerMisVentas(
         todas: _verTodas,
         estado: _filtroEstado,
+        client: widget.client,
       );
 
       if (!mounted) return;
+
+      // Ordenar: Activas al principio, completadas al final y anuladas al final absoluto
+      _ordenarOrdenes(ordenes);
 
       setState(() {
         _ordenes = ordenes;
@@ -555,6 +604,7 @@ class _HistorialScreenState extends State<HistorialScreen> {
                                     return OrdenCard(
                                       orden: orden,
                                       onTap: () => _abrirDetalleOrden(orden),
+                                      onEstadoDespachoCambiado: _cargarOrdenes,
                                     );
                                   },
                                 ),

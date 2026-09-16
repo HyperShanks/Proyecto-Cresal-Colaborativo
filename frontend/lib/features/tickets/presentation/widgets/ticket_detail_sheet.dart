@@ -4,8 +4,11 @@ import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../models/ticket_model.dart';
 
+import 'ticket_detail_dialog.dart';
+
 /// Modal BottomSheet que despliega el detalle completo de un ticket de soporte,
 /// incluyendo la descripción detallada, metadatos, referencias y resolución.
+/// Se adapta dinámicamente tanto a Dark Mode (PDA / Celular) como a Light Mode (Caja / Desktop).
 class TicketDetailSheet extends StatelessWidget {
   final TicketModel ticket;
 
@@ -14,11 +17,17 @@ class TicketDetailSheet extends StatelessWidget {
     required this.ticket,
   });
 
-  /// Método de invocación estática
+  /// Método de invocación estática adaptativo (Dialog en Desktop >= 768px, BottomSheet en Móvil < 768px)
   static Future<void> mostrar(BuildContext context, TicketModel ticket) {
+    final isDesktop = MediaQuery.sizeOf(context).width >= 768;
+    if (isDesktop) {
+      return TicketDetailDialog.mostrar(context, ticket);
+    }
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return showModalBottomSheet<void>(
       context: context,
-      backgroundColor: AppPalette.surface,
+      backgroundColor: isDark ? AppPalette.surface : AppPalette.surfaceLight,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20.0)),
@@ -27,29 +36,14 @@ class TicketDetailSheet extends StatelessWidget {
     );
   }
 
-  static Color _colorForEstado(String estado) {
-    switch (estado.toLowerCase()) {
-      case 'abierto':
-        return AppPalette.secondary;
-      case 'en proceso':
-        return AppPalette.primary;
-      case 'resuelto':
-        return AppPalette.success;
-      case 'cerrado':
-        return AppPalette.neutral;
-      default:
-        return AppPalette.neutral;
-    }
-  }
-
   static Color _colorForPrioridad(String prioridad) {
     switch (prioridad.toLowerCase()) {
       case 'urgente':
         return AppPalette.error;
       case 'alta':
-        return const Color(0xFFFF7043);
-      case 'media':
         return AppPalette.secondary;
+      case 'media':
+        return AppPalette.primary;
       case 'baja':
         return AppPalette.success;
       default:
@@ -76,7 +70,16 @@ class TicketDetailSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final estadoColor = _colorForEstado(ticket.estadoTicket);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor = isDark ? AppPalette.surface : AppPalette.surfaceLight;
+    final bgBoxColor = isDark ? AppPalette.background : AppPalette.backgroundLight;
+    final borderBoxColor = isDark ? AppPalette.neutral.withValues(alpha: 0.25) : AppPalette.borderLight;
+    final textPrimary = isDark ? AppPalette.textPrimary : AppPalette.textPrimaryLight;
+    final textSecondary = isDark ? AppPalette.textSecondary : AppPalette.textSecondaryLight;
+    final dividerColor = isDark ? AppPalette.neutral.withValues(alpha: 0.2) : AppPalette.borderLight;
+    final handleColor = isDark ? AppPalette.neutral.withValues(alpha: 0.4) : AppPalette.borderLight;
+    final resBg = isDark ? AppPalette.success.withValues(alpha: 0.12) : AppPalette.successBg;
+    final resBorder = isDark ? AppPalette.success.withValues(alpha: 0.4) : AppPalette.successBorder;
     final prioridadColor = _colorForPrioridad(ticket.prioridad);
 
     return DraggableScrollableSheet(
@@ -87,9 +90,9 @@ class TicketDetailSheet extends StatelessWidget {
       builder: (context, scrollController) {
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
-          decoration: const BoxDecoration(
-            color: AppPalette.surface,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20.0)),
+          decoration: BoxDecoration(
+            color: surfaceColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20.0)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -101,7 +104,7 @@ class TicketDetailSheet extends StatelessWidget {
                   height: 4.0,
                   margin: const EdgeInsets.only(bottom: 16.0),
                   decoration: BoxDecoration(
-                    color: AppPalette.neutral.withValues(alpha: 0.4),
+                    color: handleColor,
                     borderRadius: BorderRadius.circular(2.0),
                   ),
                 ),
@@ -118,49 +121,20 @@ class TicketDetailSheet extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 4.0),
                           decoration: BoxDecoration(
-                            color: AppPalette.background,
+                            color: bgBoxColor,
                             borderRadius: BorderRadius.circular(6.0),
-                            border: Border.all(color: Colors.white10),
+                            border: Border.all(color: borderBoxColor),
                           ),
                           child: Text(
                             ticket.tipoTicket.toUpperCase(),
                             style: AppTypography.small.copyWith(
-                              color: AppPalette.textSecondary,
+                              color: textSecondary,
                               fontWeight: FontWeight.bold,
-                              letterSpacing: 1.0,
+                              letterSpacing: 0.8,
                             ),
                           ),
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
-                          decoration: BoxDecoration(
-                            color: estadoColor.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(20.0),
-                            border: Border.all(color: estadoColor.withValues(alpha: 0.5)),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 8.0,
-                                height: 8.0,
-                                decoration: BoxDecoration(
-                                  color: estadoColor,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 6.0),
-                              Text(
-                                ticket.estadoTicket.toUpperCase(),
-                                style: AppTypography.small.copyWith(
-                                  color: estadoColor,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 11.5,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                        _buildEstadoBadge(ticket.estadoTicket, isDark),
                       ],
                     ),
 
@@ -168,11 +142,11 @@ class TicketDetailSheet extends StatelessWidget {
 
                     // ── Asunto / Título del Ticket ──────────────────────────
                     Text(
-                      ticket.asunto,
+                      '${ticket.folioVisual} — ${ticket.asunto}',
                       style: AppTypography.headline.copyWith(
-                        color: AppPalette.textPrimary,
-                        fontSize: 20.0,
-                        fontWeight: FontWeight.bold,
+                        color: textPrimary,
+                        fontSize: 18.0,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
 
@@ -182,9 +156,9 @@ class TicketDetailSheet extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.all(14.0),
                       decoration: BoxDecoration(
-                        color: AppPalette.background,
+                        color: bgBoxColor,
                         borderRadius: BorderRadius.circular(10.0),
-                        border: Border.all(color: Colors.white10),
+                        border: Border.all(color: borderBoxColor),
                       ),
                       child: Column(
                         children: [
@@ -192,7 +166,7 @@ class TicketDetailSheet extends StatelessWidget {
                             children: [
                               Icon(Icons.flag_rounded, color: prioridadColor, size: 18.0),
                               const SizedBox(width: 8.0),
-                              Text('Prioridad:', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
+                              Text('Prioridad:', style: AppTypography.small.copyWith(color: textSecondary)),
                               const Spacer(),
                               Text(
                                 ticket.prioridad,
@@ -203,29 +177,30 @@ class TicketDetailSheet extends StatelessWidget {
                               ),
                             ],
                           ),
-                          const Divider(color: Colors.white10, height: 16.0),
+                          Divider(color: dividerColor, height: 16.0),
                           Row(
                             children: [
-                              const Icon(Icons.calendar_today_outlined, color: AppPalette.textSecondary, size: 16.0),
+                              Icon(Icons.calendar_today_rounded, color: textSecondary, size: 16.0),
                               const SizedBox(width: 8.0),
-                              Text('Fecha de Creación:', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
+                              Text('Fecha de Creación:', style: AppTypography.small.copyWith(color: textSecondary)),
                               const Spacer(),
                               Text(
                                 _formatFecha(ticket.fechaCreacion),
                                 style: AppTypography.body.copyWith(
-                                  color: AppPalette.textPrimary,
+                                  color: textPrimary,
                                   fontSize: 13.0,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ],
                           ),
                           if (ticket.tablaReferencia != null && ticket.tablaReferencia!.isNotEmpty) ...[
-                            const Divider(color: Colors.white10, height: 16.0),
+                            Divider(color: dividerColor, height: 16.0),
                             Row(
                               children: [
                                 const Icon(Icons.link_rounded, color: AppPalette.primary, size: 16.0),
                                 const SizedBox(width: 8.0),
-                                Text('Referencia:', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
+                                Text('Referencia:', style: AppTypography.small.copyWith(color: textSecondary)),
                                 const Spacer(),
                                 Text(
                                   ticket.tablaReferencia!,
@@ -251,7 +226,7 @@ class TicketDetailSheet extends StatelessWidget {
                         Text(
                           'DESCRIPCIÓN DETALLADA',
                           style: AppTypography.small.copyWith(
-                            color: AppPalette.textSecondary,
+                            color: textSecondary,
                             fontWeight: FontWeight.bold,
                             letterSpacing: 0.8,
                           ),
@@ -264,16 +239,16 @@ class TicketDetailSheet extends StatelessWidget {
                       width: double.infinity,
                       padding: const EdgeInsets.all(16.0),
                       decoration: BoxDecoration(
-                        color: AppPalette.background,
+                        color: bgBoxColor,
                         borderRadius: BorderRadius.circular(10.0),
-                        border: Border.all(color: Colors.white10),
+                        border: Border.all(color: borderBoxColor),
                       ),
                       child: Text(
                         ticket.descripcion,
                         style: AppTypography.body.copyWith(
-                          color: AppPalette.textPrimary,
-                          fontSize: 14.5,
-                          height: 1.5,
+                          color: textPrimary,
+                          fontSize: 14.0,
+                          height: 1.4,
                         ),
                       ),
                     ),
@@ -283,14 +258,16 @@ class TicketDetailSheet extends StatelessWidget {
                       const SizedBox(height: 20.0),
                       Row(
                         children: [
-                          const Icon(Icons.check_circle_outline, color: AppPalette.success, size: 18.0),
+                          const Icon(Icons.check_circle_rounded, color: AppPalette.success, size: 18.0),
                           const SizedBox(width: 8.0),
-                          Text(
-                            'RESOLUCIÓN TÉCNICA / CIERRE',
-                            style: AppTypography.small.copyWith(
-                              color: AppPalette.success,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.8,
+                          Expanded(
+                            child: Text(
+                              'RESOLUCIÓN TÉCNICA / OBSERVACIÓN DE CIERRE',
+                              style: AppTypography.small.copyWith(
+                                color: AppPalette.success,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.8,
+                              ),
                             ),
                           ),
                         ],
@@ -300,9 +277,9 @@ class TicketDetailSheet extends StatelessWidget {
                         width: double.infinity,
                         padding: const EdgeInsets.all(16.0),
                         decoration: BoxDecoration(
-                          color: AppPalette.success.withValues(alpha: 0.1),
+                          color: resBg,
                           borderRadius: BorderRadius.circular(10.0),
-                          border: Border.all(color: AppPalette.success.withValues(alpha: 0.4)),
+                          border: Border.all(color: resBorder),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -310,7 +287,7 @@ class TicketDetailSheet extends StatelessWidget {
                             Text(
                               ticket.observacionCierre!,
                               style: AppTypography.body.copyWith(
-                                color: AppPalette.textPrimary,
+                                color: textPrimary,
                                 fontSize: 14.0,
                                 height: 1.4,
                               ),
@@ -321,7 +298,8 @@ class TicketDetailSheet extends StatelessWidget {
                                 'Cerrado el: ${_formatFecha(ticket.fechaCierre)}',
                                 style: AppTypography.small.copyWith(
                                   color: AppPalette.success,
-                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12.0,
                                 ),
                               ),
                             ],
@@ -340,22 +318,102 @@ class TicketDetailSheet extends StatelessWidget {
                 width: double.infinity,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppPalette.surface,
-                    foregroundColor: AppPalette.textPrimary,
+                    backgroundColor: surfaceColor,
+                    foregroundColor: textPrimary,
+                    elevation: 0,
                     padding: const EdgeInsets.symmetric(vertical: 14.0),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10.0),
-                      side: const BorderSide(color: Colors.white24),
+                      side: BorderSide(color: borderBoxColor),
                     ),
                   ),
                   onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('CERRAR DETALLE', style: TextStyle(fontWeight: FontWeight.bold)),
+                  child: Text('CERRAR DETALLE', style: AppTypography.button.copyWith(fontWeight: FontWeight.bold, color: textPrimary, fontSize: 14)),
                 ),
               ),
             ],
           ),
         );
       },
+    );
+  }
+
+  Widget _buildEstadoBadge(String estado, bool isDark) {
+    Color bg;
+    Color border;
+    Color text;
+
+    if (isDark) {
+      switch (estado.toLowerCase()) {
+        case 'abierto':
+          bg = AppPalette.secondary.withValues(alpha: 0.15);
+          border = AppPalette.secondary.withValues(alpha: 0.5);
+          text = AppPalette.secondary;
+          break;
+        case 'en proceso':
+        case 'en revisión':
+        case 'en revision':
+          bg = AppPalette.primary.withValues(alpha: 0.15);
+          border = AppPalette.primary.withValues(alpha: 0.5);
+          text = AppPalette.primary;
+          break;
+        case 'resuelto':
+          bg = AppPalette.success.withValues(alpha: 0.15);
+          border = AppPalette.success.withValues(alpha: 0.5);
+          text = AppPalette.success;
+          break;
+        case 'cerrado':
+        case 'rechazado':
+        default:
+          bg = AppPalette.background;
+          border = AppPalette.neutral.withValues(alpha: 0.3);
+          text = AppPalette.textSecondary;
+          break;
+      }
+    } else {
+      switch (estado.toLowerCase()) {
+        case 'abierto':
+          bg = AppPalette.warningBg;
+          border = AppPalette.warningBorder;
+          text = AppPalette.warningText;
+          break;
+        case 'en proceso':
+        case 'en revisión':
+        case 'en revision':
+          bg = AppPalette.primary.withValues(alpha: 0.12);
+          border = AppPalette.primary.withValues(alpha: 0.35);
+          text = AppPalette.primary;
+          break;
+        case 'resuelto':
+          bg = AppPalette.successBg;
+          border = AppPalette.successBorder;
+          text = AppPalette.success;
+          break;
+        case 'cerrado':
+        case 'rechazado':
+        default:
+          bg = AppPalette.backgroundLight;
+          border = AppPalette.borderLight;
+          text = AppPalette.textSecondaryLight;
+          break;
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 4.0),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20.0),
+        border: Border.all(color: border),
+      ),
+      child: Text(
+        estado.toUpperCase(),
+        style: AppTypography.small.copyWith(
+          color: text,
+          fontWeight: FontWeight.bold,
+          fontSize: 11.0,
+        ),
+      ),
     );
   }
 }

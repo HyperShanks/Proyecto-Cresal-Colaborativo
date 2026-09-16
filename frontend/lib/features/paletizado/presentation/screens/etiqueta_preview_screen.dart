@@ -6,7 +6,8 @@ import '../../domain/models/etiqueta_data.dart';
 import '../widgets/etiqueta_termica_widget.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
-//import '../../services/print_service.dart';
+import '../widgets/dialogo_falla_impresora.dart';
+import '../../services/print_service.dart';
 import '../../services/paletizado_service.dart';
 
 class EtiquetaPreviewScreen extends StatefulWidget {
@@ -24,91 +25,102 @@ class _EtiquetaPreviewScreenState extends State<EtiquetaPreviewScreen> {
     debugPrint(
       '📌 [PREVIEW_SCREEN] 🔘 Botón de impresión presionado para SKU: ${data.skuQrFisico}',
     );
-    setState(() => _isImprimiendo = true);
 
-    try {
-      // =======================================================================
-      // ⚠️ MODO SIMULADOR EN CASA / PRUEBAS LOCALES (TEMPORAL)
-      // Para restaurar en producción: descomentar la llamada a PrintService y borrar el forzado a true.
-      // =======================================================================
-      // final exitoImpresion = await PrintService.imprimirEtiqueta(data);
-      final exitoImpresion = true;
-      // =======================================================================
+    bool exitoImpresion = false;
 
-      if (!mounted) return;
-
-      if (exitoImpresion) {
-        // Fase 4: Confirmar en backend (PATCH qr_impreso = true)
+    while (!exitoImpresion && mounted) {
+      setState(() => _isImprimiendo = true);
+      try {
+        exitoImpresion = await PrintService.imprimirEtiqueta(data);
+      } on PrinterException catch (e) {
         debugPrint(
-          '📌 [PREVIEW_SCREEN] 📡 Impresión física exitosa. Confirmando en backend...',
+          '📌 [PREVIEW_SCREEN] ❌ Error de dominio de impresora: ${e.mensaje}',
         );
-        final exitoPatch = await _paletizadoService.confirmarQrImpreso(
-          data.idActivo,
-        );
+        if (!mounted) break;
+        setState(() => _isImprimiendo = false);
 
-        if (!mounted) return;
-
-        if (exitoPatch) {
-          debugPrint(
-            '📌 [PREVIEW_SCREEN] ✅ Ciclo completo: etiqueta impresa y registrada en BD.',
-          );
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                '✅ Etiqueta impresa y registrada. SKU: ${data.skuQrFisico}',
-              ),
-              backgroundColor: AppPalette.success,
-              duration: const Duration(seconds: 3),
-            ),
-          );
-        } else {
-          // Impresión exitosa pero PATCH falló (problema de red/backend)
-          debugPrint(
-            '📌 [PREVIEW_SCREEN] ⚠️ Etiqueta impresa pero no se pudo confirmar en backend.',
-          );
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                '⚠️ Etiqueta impresa. No se pudo confirmar en el sistema (sin conexión).',
-              ),
-              backgroundColor: AppPalette.secondary,
-              duration: Duration(seconds: 4),
-            ),
-          );
+        // Mostrar diálogo modal interactivo con instrucciones de resolución física
+        final reintentar = await DialogoFallaImpresora.mostrar(context, e);
+        if (!reintentar || !mounted) {
+          return;
         }
+        // Operador pulsó "REINTENTAR": el bucle while vuelve a intentar imprimir
+        continue;
+      } catch (e) {
+        debugPrint('📌 [PREVIEW_SCREEN] ❌ Excepción no controlada: $e');
+        if (!mounted) break;
+        setState(() => _isImprimiendo = false);
 
-        // pop(true): indica a la pantalla anterior que debe actualizar su UI
-        Navigator.of(context).pop(true);
+        final reintentar = await DialogoFallaImpresora.mostrar(
+          context,
+          PrinterCommunicationException(
+            'Error inesperado de comunicación con la impresora térmica.',
+            e,
+          ),
+        );
+        if (!reintentar || !mounted) {
+          return;
+        }
+        continue;
+      } finally {
+        if (mounted && !exitoImpresion) {
+          setState(() => _isImprimiendo = false);
+        }
       }
-    } on PrinterException catch (e) {
+    }
+
+    if (!mounted || !exitoImpresion) return;
+
+    // Fase 4: Confirmar en backend (PATCH qr_impreso = true)
+    debugPrint(
+      '📌 [PREVIEW_SCREEN] 📡 Impresión física exitosa. Confirmando en backend...',
+    );
+    final exitoPatch = await _paletizadoService.confirmarQrImpreso(
+      data.idActivo,
+    );
+
+    if (!mounted) return;
+
+    if (exitoPatch) {
       debugPrint(
-        '📌 [PREVIEW_SCREEN] ❌ Error de dominio de impresora: ${e.mensaje}',
+        '📌 [PREVIEW_SCREEN] ✅ Ciclo completo: etiqueta impresa y registrada en BD.',
       );
-      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('❌ ${e.mensaje}'),
-          backgroundColor: AppPalette.secondary,
-          duration: const Duration(seconds: 4),
+          content: Text(
+            '✅ Etiqueta impresa y registrada. SKU: ${data.skuQrFisico}',
+          ),
+          backgroundColor: AppPalette.success,
+          duration: const Duration(seconds: 3),
         ),
       );
-    } catch (e) {
-      debugPrint('📌 [PREVIEW_SCREEN] ❌ Excepción no controlada: $e');
-      if (!mounted) return;
+    } else {
+      debugPrint(
+        '📌 [PREVIEW_SCREEN] ⚠️ Etiqueta impresa pero no se pudo confirmar en backend.',
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('❌ Error inesperado de conexión con la impresora.'),
+          content: Text(
+            '⚠️ Etiqueta impresa físicamente. No se pudo confirmar en el sistema (sin conexión).',
+          ),
           backgroundColor: AppPalette.secondary,
+          duration: Duration(seconds: 4),
         ),
       );
-    } finally {
-      if (mounted) setState(() => _isImprimiendo = false);
     }
+
+    Navigator.of(context).pop(true);
   }
 
   @override
   Widget build(BuildContext context) {
-    final data = ModalRoute.of(context)?.settings.arguments as EtiquetaData?;
+    final rawArgs = ModalRoute.of(context)?.settings.arguments;
+    EtiquetaData? data;
+    if (rawArgs is EtiquetaData) {
+      data = rawArgs;
+    } else if (rawArgs is Map) {
+      data = EtiquetaData.fromJson(Map<String, dynamic>.from(rawArgs));
+    }
 
     if (data == null) {
       debugPrint(
@@ -126,8 +138,10 @@ class _EtiquetaPreviewScreenState extends State<EtiquetaPreviewScreen> {
       );
     }
 
+    final EtiquetaData etiqueta = data;
+
     debugPrint(
-      '📌 [PREVIEW_SCREEN] 📄 Renderizando vista previa para Folio: ${data.numeroIngreso}',
+      '📌 [PREVIEW_SCREEN] 📄 Renderizando vista previa para Folio: ${etiqueta.numeroIngreso}',
     );
 
     return Scaffold(
@@ -148,7 +162,7 @@ class _EtiquetaPreviewScreenState extends State<EtiquetaPreviewScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: FittedBox(
                   fit: BoxFit.contain,
-                  child: EtiquetaTermicaWidget(data: data),
+                  child: EtiquetaTermicaWidget(data: etiqueta),
                 ),
               ),
             ),
@@ -162,7 +176,7 @@ class _EtiquetaPreviewScreenState extends State<EtiquetaPreviewScreen> {
               child: ElevatedButton.icon(
                 onPressed: _isImprimiendo
                     ? null
-                    : () => _iniciarImpresion(data),
+                    : () => _iniciarImpresion(etiqueta),
                 icon: _isImprimiendo
                     ? const SizedBox(
                         width: 20,

@@ -1,41 +1,183 @@
+// lib/features/alertas/presentation/screens/alertas_screen.dart
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../../../../core/routes/route_observer.dart';
 import '../../models/tarea_alerta.dart';
 import '../../services/logistica_service.dart';
-import '../widgets/task_card.dart';
-
+import '../../services/bodega_polling_service.dart';
+import '../widgets/alerta_preentrega_tab.dart';
+import '../widgets/alerta_reimpresion_tab.dart';
+import '../widgets/alerta_reintegracion_tab.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 
+/// Centro de Alertas y Tareas de Bodega PDA con navegación por pestañas (SPEC-HU-TAREA-13 / SPEC-HU-TAREA-20).
+/// Segmenta el flujo de trabajo en:
+/// 1. Pre-entrega (Preparación, Liberada, Traslado)
+/// 2. Re-impresión (Etiquetas QR por imprimir)
+/// 3. Re-integración (Logística Inversa por órdenes anuladas)
 class AlertasScreen extends StatefulWidget {
-  const AlertasScreen({Key? key}) : super(key: key);
+  final Future<List<TareaAlerta>>? futureAlertas;
+  final Future<List<TareaAlerta>> Function()? onFetchAlertas;
+
+  const AlertasScreen({
+    super.key,
+    this.futureAlertas,
+    this.onFetchAlertas,
+  });
 
   @override
-  _AlertasScreenState createState() => _AlertasScreenState();
+  State<AlertasScreen> createState() => _AlertasScreenState();
 }
 
-class _AlertasScreenState extends State<AlertasScreen> {
+class _AlertasScreenState extends State<AlertasScreen>
+    with SingleTickerProviderStateMixin, RouteAware {
   late Future<List<TareaAlerta>> futureAlertas;
+  late final TabController _tabController;
+  int _lastTabIndex = 0;
+  bool _isDisposed = false;
 
   @override
   void initState() {
     super.initState();
-    futureAlertas = LogisticaService.obtenerAlertas();
+    _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(_handleTabChange);
+    futureAlertas = widget.onFetchAlertas?.call() ??
+        widget.futureAlertas ??
+        LogisticaService.obtenerAlertas();
+    futureAlertas.then((tareas) {
+      if (mounted && !_isDisposed) {
+        _sincronizarNotifiers(tareas);
+      }
+    }).catchError((_) {});
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != null) {
+      routeObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void didPopNext() {
+    super.didPopNext();
+    _refreshAlertas();
+  }
+
+  void _handleTabChange() {
+    if (!_tabController.indexIsChanging && _tabController.index != _lastTabIndex) {
+      _lastTabIndex = _tabController.index;
+      _refreshAlertas();
+    }
+  }
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    _tabController.removeListener(_handleTabChange);
+    _tabController.dispose();
+    _isDisposed = true;
+    super.dispose();
+  }
+
+  void _sincronizarNotifiers(List<TareaAlerta> tareas) {
+    if (!mounted || _isDisposed) return;
+
+    final preentrega = tareas
+        .where((t) =>
+            t.tipoAlerta == 'PREPARACION' ||
+            t.tipoAlerta == 'LIBERADA' ||
+            t.tipoAlerta == 'TRASLADO')
+        .toList();
+    final reimpresion = tareas.where((t) => t.tipoAlerta == 'IMPRESION').toList();
+    final reintegracion = tareas.where((t) => t.tipoAlerta == 'REINGRESO').toList();
+
+    final s = BodegaPollingService.instance;
+    s.tareasNotifier.value = tareas;
+    s.preentregaNotifier.value = preentrega;
+    s.reimpresionNotifier.value = reimpresion;
+    s.reintegracionNotifier.value = reintegracion;
+    s.conteoPreentregaNotifier.value = preentrega.length;
+    s.conteoReimpresionNotifier.value = reimpresion.length;
+    s.conteoReintegracionNotifier.value = reintegracion.length;
+    s.totalPendientesNotifier.value = tareas.length;
   }
 
   Future<void> _refreshAlertas() async {
-    setState(() {
-      futureAlertas = LogisticaService.obtenerAlertas();
-    });
+    final fut = widget.onFetchAlertas?.call() ??
+        widget.futureAlertas ??
+        LogisticaService.obtenerAlertas();
+    if (mounted && !_isDisposed) {
+      setState(() {
+        futureAlertas = fut;
+      });
+    }
+    try {
+      final tareas = await fut;
+      if (mounted && !_isDisposed) {
+        _sincronizarNotifiers(tareas);
+      }
+    } catch (_) {}
+  }
+
+  Widget _buildTabItem({
+    required String label,
+    required ValueListenable<int> countNotifier,
+  }) {
+    return Tab(
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+            ),
+          ),
+          ValueListenableBuilder<int>(
+            valueListenable: countNotifier,
+            builder: (context, count, _) {
+              if (count <= 0) return const SizedBox.shrink();
+              return Container(
+                margin: const EdgeInsets.only(left: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                decoration: BoxDecoration(
+                  color: AppPalette.primary,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '$count',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final polling = BodegaPollingService.instance;
+
     return Scaffold(
       backgroundColor: AppPalette.background,
       appBar: AppBar(
         backgroundColor: AppPalette.surface,
         foregroundColor: AppPalette.textPrimary,
-        elevation: 0,
+        elevation: 0.5,
         centerTitle: false,
         title: Text(
           'Alertas Tareas',
@@ -53,121 +195,104 @@ class _AlertasScreenState extends State<AlertasScreen> {
             tooltip: 'Actualizar tareas',
           ),
         ],
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: AppPalette.primary,
+          indicatorWeight: 3,
+          indicatorSize: TabBarIndicatorSize.tab,
+          labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+          labelColor: AppPalette.primary,
+          unselectedLabelColor: AppPalette.textSecondary,
+          tabs: [
+            _buildTabItem(
+              label: 'Entrega',
+              countNotifier: polling.conteoPreentregaNotifier,
+            ),
+            _buildTabItem(
+              label: 'Imprimir',
+              countNotifier: polling.conteoReimpresionNotifier,
+            ),
+            _buildTabItem(
+              label: 'Re-integración',
+              countNotifier: polling.conteoReintegracionNotifier,
+            ),
+          ],
+        ),
       ),
-      body: RefreshIndicator(
-        onRefresh: _refreshAlertas,
-        color: AppPalette.primary,
-        backgroundColor: AppPalette.surface,
-        child: FutureBuilder<List<TareaAlerta>>(
-          future: futureAlertas,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(
-                child: CircularProgressIndicator(color: AppPalette.primary),
-              );
-            } else if (snapshot.hasError) {
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.error_outline, color: AppPalette.error, size: 48),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Error al cargar tareas: ${snapshot.error}',
-                        style: const TextStyle(color: AppPalette.error),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: _refreshAlertas,
-                        style: ElevatedButton.styleFrom(backgroundColor: AppPalette.primary),
-                        child: const Text('Reintentar'),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-              return Center(
+      body: FutureBuilder<List<TareaAlerta>>(
+        future: futureAlertas,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(color: AppPalette.primary),
+            );
+          } else if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.task_alt, color: AppPalette.success, size: 56),
+                    const Icon(Icons.wifi_off_rounded, color: AppPalette.error, size: 52),
                     const SizedBox(height: 16),
-                    Text(
-                      '¡Al día!',
-                      style: AppTypography.title.copyWith(color: AppPalette.textPrimary),
-                    ),
-                    const SizedBox(height: 6),
                     const Text(
-                      'No hay tareas operativas pendientes.',
-                      style: TextStyle(color: AppPalette.textSecondary),
+                      'No se pudieron cargar las tareas. Reintentando conexión con la bodega...',
+                      style: TextStyle(
+                        color: AppPalette.error,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 20),
+                    ElevatedButton.icon(
+                      onPressed: _refreshAlertas,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppPalette.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      icon: const Icon(Icons.refresh, size: 18),
+                      label: const Text('Reintentar'),
                     ),
                   ],
                 ),
-              );
-            }
-
-            final tareas = snapshot.data!;
-            final trasladosCount = tareas.where((t) => t.esTraslado || t.tipoAlerta == 'TRASLADO').length;
-
-            return ListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-              itemCount: tareas.length + 1,
-              itemBuilder: (context, index) {
-                if (index == 0) {
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: AppPalette.surface,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppPalette.neutral.withValues(alpha: 0.2)),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          '${tareas.length} ${tareas.length == 1 ? 'TAREA PENDIENTE' : 'TAREAS PENDIENTES'}',
-                          style: AppTypography.small.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: AppPalette.primary,
-                            letterSpacing: 1.0,
-                          ),
-                        ),
-                        if (trasladosCount > 0)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: AppPalette.secondary.withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(4),
-                              border: Border.all(color: AppPalette.secondary),
-                            ),
-                            child: Text(
-                              '$trasladosCount TRASLADO(S)',
-                              style: AppTypography.small.copyWith(
-                                color: AppPalette.secondary,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 10,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  );
-                }
-
-                return TaskCard(
-                  key: Key('task_card_${tareas[index - 1].idTarea}'),
-                  tarea: tareas[index - 1],
-                  onActualizar: _refreshAlertas,
-                );
-              },
+              ),
             );
-          },
-        ),
+          }
+
+          final tareas = snapshot.data ?? [];
+
+          final preentrega = tareas
+              .where((t) =>
+                  t.tipoAlerta == 'PREPARACION' ||
+                  t.tipoAlerta == 'LIBERADA' ||
+                  t.tipoAlerta == 'TRASLADO')
+              .toList();
+          final reimpresion = tareas.where((t) => t.tipoAlerta == 'IMPRESION').toList();
+          final reintegracion = tareas.where((t) => t.tipoAlerta == 'REINGRESO').toList();
+
+          return TabBarView(
+            controller: _tabController,
+            children: [
+              AlertaPreentregaTab(
+                tareas: preentrega,
+                onRefresh: _refreshAlertas,
+              ),
+              AlertaReimpresionTab(
+                tareas: reimpresion,
+                onRefresh: _refreshAlertas,
+              ),
+              AlertaReintegracionTab(
+                tareas: reintegracion,
+                onRefresh: _refreshAlertas,
+              ),
+            ],
+          );
+        },
       ),
     );
   }

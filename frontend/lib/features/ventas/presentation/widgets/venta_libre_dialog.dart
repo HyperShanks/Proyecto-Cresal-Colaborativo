@@ -1,9 +1,9 @@
 // lib/features/ventas/presentation/widgets/venta_libre_dialog.dart
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../core/utils/currency_formatter.dart';
 import '../../controllers/cart_controller.dart';
 
 /// Modal Bottom Sheet para registrar un artículo de Venta Libre / Misceláneo (HU-3.3).
@@ -57,8 +57,7 @@ class _VentaLibreDialogState extends State<VentaLibreDialog> {
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
 
-    final montoLimpio = _montoController.text.replaceAll(RegExp(r'[^\d]'), '');
-    final monto = int.tryParse(montoLimpio) ?? 0;
+    final monto = CurrencyFormatter.parse(_montoController.text);
 
     if (monto <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -239,7 +238,7 @@ class _VentaLibreDialogState extends State<VentaLibreDialog> {
                         TextFormField(
                           controller: _montoController,
                           keyboardType: TextInputType.number,
-                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                          inputFormatters: [MilesTextInputFormatter()],
                           style: AppTypography.body.copyWith(
                             color: AppPalette.secondary,
                             fontWeight: FontWeight.bold,

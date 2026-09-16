@@ -7,7 +7,9 @@ import '../widgets/ticket_card.dart';
 import '../widgets/ticket_detail_sheet.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TICKETS LIST SCREEN (HU-2.7) — Historial de tickets del operario autenticado
+// TICKETS LIST SCREEN — Bandeja de historial "Mis Tickets" (Theme-Aware)
+// Consume GET /api/v1/tickets/mis-tickets con Shimmer y refresco.
+// Se adapta dinámicamente tanto a Dark Mode (PDA / Celular) como a Light Mode (Caja / Desktop).
 // ─────────────────────────────────────────────────────────────────────────────
 class TicketsListScreen extends StatefulWidget {
   const TicketsListScreen({super.key});
@@ -17,7 +19,6 @@ class TicketsListScreen extends StatefulWidget {
 }
 
 class _TicketsListScreenState extends State<TicketsListScreen> {
-  // ── Estado de carga ────────────────────────────────────────────────────────
   late Future<List<TicketModel>> _ticketsFuture;
 
   @override
@@ -35,42 +36,50 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
   // ── Build ──────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surfaceColor = isDark ? AppPalette.surface : AppPalette.surfaceLight;
+
     return FutureBuilder<List<TicketModel>>(
       future: _ticketsFuture,
       builder: (context, snapshot) {
         // ── Cargando ─────────────────────────────────────────────────────────
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return _buildShimmerLoader();
+          return _buildShimmerLoader(isDark);
         }
 
         // ── Error de red / API ────────────────────────────────────────────────
         if (snapshot.hasError) {
-          return _buildErrorState(snapshot.error.toString());
+          return _buildErrorState(snapshot.error.toString(), isDark);
         }
 
         final tickets = snapshot.data ?? [];
 
         // ── Sin tickets ───────────────────────────────────────────────────────
         if (tickets.isEmpty) {
-          return _buildEmptyState();
+          return _buildEmptyState(isDark);
         }
 
         // ── Lista de tickets ──────────────────────────────────────────────────
         return RefreshIndicator(
           color: AppPalette.primary,
-          backgroundColor: AppPalette.surface,
+          backgroundColor: surfaceColor,
           onRefresh: () async => _cargarTickets(),
-          child: ListView.separated(
-            padding: const EdgeInsets.all(20),
-            itemCount: tickets.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
-            itemBuilder: (context, index) {
-              final ticket = tickets[index];
-              return TicketCard(
-                ticket: ticket,
-                onTap: () => TicketDetailSheet.mostrar(context, ticket),
-              );
-            },
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 860),
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                itemCount: tickets.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 12),
+                itemBuilder: (context, index) {
+                  final ticket = tickets[index];
+                  return TicketCard(
+                    ticket: ticket,
+                    onTap: () => TicketDetailSheet.mostrar(context, ticket),
+                  );
+                },
+              ),
+            ),
           ),
         );
       },
@@ -78,82 +87,143 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
   }
 
   // ── Shimmer / loader placeholder ──────────────────────────────────────────
-  Widget _buildShimmerLoader() {
-    return ListView.separated(
-      padding: const EdgeInsets.all(20),
-      itemCount: 4,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
-      itemBuilder: (_, __) => _ShimmerCard(),
-    );
-  }
-
-  // ── Estado vacío ──────────────────────────────────────────────────────────
-  Widget _buildEmptyState() {
+  Widget _buildShimmerLoader(bool isDark) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.confirmation_number_outlined,
-            size: 64,
-            color: AppPalette.neutral.withValues(alpha: 0.5),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Sin tickets creados',
-            style: AppTypography.title.copyWith(color: AppPalette.textSecondary),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Los tickets que crees aparecerán aquí.',
-            style: AppTypography.small,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 24),
-          TextButton.icon(
-            onPressed: _cargarTickets,
-            icon: const Icon(Icons.refresh, color: AppPalette.primary),
-            label: Text(
-              'Actualizar',
-              style: AppTypography.button.copyWith(color: AppPalette.primary),
-            ),
-          ),
-        ],
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 860),
+        child: ListView.separated(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          itemCount: 4,
+          separatorBuilder: (_, _) => const SizedBox(height: 12),
+          itemBuilder: (_, _) => _ShimmerCard(isDark: isDark),
+        ),
       ),
     );
   }
 
-  // ── Estado de error ───────────────────────────────────────────────────────
-  Widget _buildErrorState(String error) {
-    final mensaje = error.replaceFirst('Exception: ', '');
+  // ── Estado vacío ──────────────────────────────────────────────────────────
+  Widget _buildEmptyState(bool isDark) {
+    final surfaceColor = isDark ? AppPalette.surface : AppPalette.surfaceLight;
+    final borderColor = isDark ? AppPalette.neutral.withValues(alpha: 0.25) : AppPalette.borderLight;
+    final textPrimary = isDark ? AppPalette.textPrimary : AppPalette.textPrimaryLight;
+    final textSecondary = isDark ? AppPalette.textSecondary : AppPalette.textSecondaryLight;
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
-              Icons.wifi_off_outlined,
-              size: 56,
-              color: AppPalette.error,
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: surfaceColor,
+                shape: BoxShape.circle,
+                border: Border.all(color: borderColor),
+              ),
+              child: Icon(
+                Icons.confirmation_number_outlined,
+                size: 56,
+                color: textSecondary,
+              ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
+            Text(
+              'No hay tickets registrados',
+              style: AppTypography.title.copyWith(
+                color: textPrimary,
+                fontWeight: FontWeight.w700,
+                fontSize: 18,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Los reportes e incidencias que envíes aparecerán en esta bandeja.',
+              style: AppTypography.body.copyWith(
+                color: textSecondary,
+                fontSize: 13,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: surfaceColor,
+                foregroundColor: AppPalette.primary,
+                elevation: 0,
+                side: BorderSide(color: borderColor),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              ),
+              onPressed: _cargarTickets,
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: Text(
+                'Actualizar Bandeja',
+                style: AppTypography.button.copyWith(
+                  color: AppPalette.primary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Estado de error ───────────────────────────────────────────────────────
+  Widget _buildErrorState(String error, bool isDark) {
+    final mensaje = error.replaceFirst('Exception: ', '');
+    final textPrimary = isDark ? AppPalette.textPrimary : AppPalette.textPrimaryLight;
+    final textSecondary = isDark ? AppPalette.textSecondary : AppPalette.textSecondaryLight;
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: AppPalette.error.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.wifi_off_rounded,
+                size: 48,
+                color: AppPalette.error,
+              ),
+            ),
+            const SizedBox(height: 18),
             Text(
               'No se pudieron cargar los tickets',
-              style: AppTypography.title.copyWith(fontSize: 18),
+              style: AppTypography.title.copyWith(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: textPrimary,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
               mensaje,
-              style: AppTypography.small,
+              style: AppTypography.small.copyWith(
+                color: textSecondary,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppPalette.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              ),
               onPressed: _cargarTickets,
-              icon: const Icon(Icons.refresh),
-              label: const Text('REINTENTAR'),
+              icon: const Icon(Icons.refresh_rounded, size: 18, color: Colors.white),
+              label: Text('REINTENTAR', style: AppTypography.button.copyWith(fontWeight: FontWeight.w700, fontSize: 13, color: Colors.white)),
             ),
           ],
         ),
@@ -163,10 +233,12 @@ class _TicketsListScreenState extends State<TicketsListScreen> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SHIMMER CARD — Placeholder animado mientras cargan los tickets
-// Implementación pura sin dependencia de paquetes externos.
+// SHIMMER CARD — Placeholder animado Theme-Aware (Dark Mode & Light Mode)
 // ─────────────────────────────────────────────────────────────────────────────
 class _ShimmerCard extends StatefulWidget {
+  final bool isDark;
+  const _ShimmerCard({required this.isDark});
+
   @override
   State<_ShimmerCard> createState() => _ShimmerCardState();
 }
@@ -197,22 +269,21 @@ class _ShimmerCardState extends State<_ShimmerCard>
 
   @override
   Widget build(BuildContext context) {
+    final surfaceColor = widget.isDark ? AppPalette.surface : AppPalette.surfaceLight;
+    final borderColor = widget.isDark ? AppPalette.neutral.withValues(alpha: 0.2) : AppPalette.borderLight;
+    final shimmerLineColor = widget.isDark
+        ? AppPalette.neutral.withValues(alpha: _animation.value * 0.4)
+        : AppPalette.borderLight.withValues(alpha: _animation.value + 0.3);
+
     return AnimatedBuilder(
       animation: _animation,
-      builder: (_, __) {
-        final shimmerColor =
-            AppPalette.surface.withValues(alpha: _animation.value + 0.3);
+      builder: (_, _) {
         return Container(
           height: 96,
           decoration: BoxDecoration(
-            color: shimmerColor,
+            color: surfaceColor,
             borderRadius: BorderRadius.circular(12),
-            border: Border(
-              left: BorderSide(
-                color: AppPalette.neutral.withValues(alpha: _animation.value),
-                width: 4,
-              ),
-            ),
+            border: Border.all(color: borderColor),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Column(
@@ -221,19 +292,19 @@ class _ShimmerCardState extends State<_ShimmerCard>
               _ShimmerLine(
                 width: 100,
                 height: 12,
-                color: AppPalette.neutral.withValues(alpha: _animation.value),
+                color: shimmerLineColor,
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               _ShimmerLine(
                 width: double.infinity,
                 height: 14,
-                color: AppPalette.neutral.withValues(alpha: _animation.value),
+                color: shimmerLineColor,
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               _ShimmerLine(
                 width: 160,
                 height: 11,
-                color: AppPalette.neutral.withValues(alpha: _animation.value * 0.7),
+                color: shimmerLineColor,
               ),
             ],
           ),

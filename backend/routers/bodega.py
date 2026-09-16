@@ -1,8 +1,9 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import or_, func
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
@@ -30,6 +31,10 @@ from schemas import (
     ItemSalidaInfo,
     EscanearSalidaRequest,
     EscanearSalidaResponse,
+    TareaReingresoDTO,
+    ConfirmarReingresoRequest,
+    ConfirmarReingresoResponse,
+    ResumenAlertasDTO,
 )
 from core.security import get_current_user
 
@@ -37,6 +42,143 @@ router = APIRouter(prefix="/api/v1/bodega", tags=["Tablero Operativo"])
 
 # Alias retrocompatible
 TareaAlerta = TareaAlertaResponse
+
+
+@router.get(
+    "/resumen-alertas",
+    response_model=ResumenAlertasDTO,
+    summary="Resumen de Tareas y Alertas de Bodega (SPEC-HU-06)",
+    description="Retorna el conteo consolidado y desglosado de tareas operativas pendientes "
+                "(preparaciones, entregas/liberadas y reingresos) para la sucursal del bodeguero."
+)
+def obtener_resumen_alertas(
+    sucursal_id: Optional[int] = Query(None, description="ID de la sucursal del bodeguero"),
+    db: Session = Depends(get_db),
+    usuario_logeado: Usuario = Depends(get_current_user),
+):
+    """
+    Calcula el resumen agregado de tareas operativas de Bodega para alimentar el Badge del AppBar.
+    """
+    target_sucursal = sucursal_id if sucursal_id is not None else (usuario_logeado.id_sucursal or 1)
+
+    # 1. Preparaciones y traslados pendientes (no listas o pagadas pendientes de barrera)
+    conteo_preparacion = (
+        db.query(Detalle_Orden)
+        .join(Orden_Venta, Detalle_Orden.id_orden == Orden_Venta.id_orden)
+        .join(Activo_Inventariado, Detalle_Orden.id_activo == Activo_Inventariado.id_activo)
+        .filter(
+            Activo_Inventariado.id_estado.in_([2, 3]),
+            Activo_Inventariado.id_sucursal_actual == target_sucursal,
+            or_(
+                Detalle_Orden.estado_preparacion != "Listo",
+                Orden_Venta.estado_orden == "Pagada",
+            ),
+            Orden_Venta.estado_orden.in_(["Reservada", "Pagada"]),
+        )
+        .count()
+    )
+
+    # 2. Entregas / Impresiones pendientes (Activos en bodega sin QR impreso: Paletizado, Reservado, Vendido o Disponible)
+    conteo_impresiones = (
+        db.query(Activo_Inventariado)
+        .join(Estado_Activo, Activo_Inventariado.id_estado == Estado_Activo.id_estado)
+        .filter(
+            or_(
+                Activo_Inventariado.qr_impreso == False,
+                Activo_Inventariado.qr_impreso.is_(None),
+            ),
+            Activo_Inventariado.estado == "Activo",
+            Activo_Inventariado.id_sucursal_actual == target_sucursal,
+            or_(
+                Activo_Inventariado.id_estado.in_([1, 2, 3, 7]),
+                func.lower(Estado_Activo.nombre_estado).in_(["disponible", "reservado", "vendido", "paletizado"]),
+            ),
+            Activo_Inventariado.id_estado != 5,
+            ~func.lower(Estado_Activo.nombre_estado).ilike("%desarme%"),
+        )
+        .count()
+    )
+
+    # Las tareas de entrega en barrera (LIBERADA) ya están contabilizadas dentro de conteo_preparacion
+    # (órdenes con estado_preparacion != 'Listo' y estado_orden in ['Reservada', 'Pagada']).
+    # Por lo tanto, conteo_entregas refleja las impresiones de etiquetas QR pendientes.
+    conteo_entregas = conteo_impresiones
+
+    # 3. Reingresos de Logística Inversa
+    conteo_reingresos = (
+        db.query(Detalle_Orden)
+        .join(Orden_Venta, Detalle_Orden.id_orden == Orden_Venta.id_orden)
+        .join(Activo_Inventariado, Detalle_Orden.id_activo == Activo_Inventariado.id_activo)
+        .filter(
+            Orden_Venta.estado_orden == "Anulada",
+            Detalle_Orden.estado_preparacion != "Reingresado",
+            Activo_Inventariado.estado == "Activo",
+            (Activo_Inventariado.id_sucursal_actual == target_sucursal) | (Orden_Venta.id_sucursal == target_sucursal),
+        )
+        .count()
+    )
+
+    total_tareas = conteo_preparacion + conteo_entregas + conteo_reingresos
+
+    return ResumenAlertasDTO(
+        total_tareas=total_tareas,
+        desglose_preparacion=conteo_preparacion,
+        desglose_entregas=conteo_entregas,
+        desglose_reingresos=conteo_reingresos,
+    )
+
+
+def _construir_etiqueta_data(
+    db: Session,
+    activo: Activo_Inventariado,
+    vehiculo: Optional[Vehiculo_Origen] = None,
+    motor: Optional[Detalle_Motor] = None,
+    caja: Optional[Detalle_Caja_Cambio] = None,
+) -> dict:
+    if vehiculo is None and activo.id_vehiculo:
+        vehiculo = db.query(Vehiculo_Origen).filter(Vehiculo_Origen.id_vehiculo == activo.id_vehiculo).first()
+
+    if motor is None:
+        if activo.id_categoria == 1:
+            motor = db.query(Detalle_Motor).filter(Detalle_Motor.id_activo == activo.id_activo).first()
+        elif activo.id_categoria == 2 and activo.id_vehiculo:
+            # Herencia de especificaciones del activo hermano Motor (SPEC-HU-TAREA-17)
+            motor = (
+                db.query(Detalle_Motor)
+                .join(Activo_Inventariado, Activo_Inventariado.id_activo == Detalle_Motor.id_activo)
+                .filter(
+                    Activo_Inventariado.id_vehiculo == activo.id_vehiculo,
+                    Activo_Inventariado.id_categoria == 1,
+                )
+                .first()
+            )
+
+    if caja is None and activo.id_categoria == 2:
+        caja = db.query(Detalle_Caja_Cambio).filter(Detalle_Caja_Cambio.id_activo == activo.id_activo).first()
+
+    if activo.id_categoria == 2 and caja:
+        transmision_val = caja.transmision_tipo
+    elif motor:
+        transmision_val = motor.transmision_tipo
+    else:
+        transmision_val = None
+
+    return {
+        "id_activo": str(activo.id_activo),
+        "numero_ingreso": vehiculo.numero_ingreso if vehiculo else "N/A",
+        "marca": vehiculo.marca if vehiculo else "Desconocida",
+        "modelo": vehiculo.modelo if vehiculo else "Desconocido",
+        "anio": vehiculo.anio if vehiculo else 0,
+        "traccion": vehiculo.traccion if vehiculo else None,
+        "cilindrada": motor.cilindrada if motor else None,
+        "combustible": motor.combustible if motor else None,
+        "transmision": transmision_val,
+        "numero_motor": motor.numero_motor if (motor and activo.id_categoria == 1) else None,
+        "galpon": activo.ubicacion_galpon or "",
+        "pasillo": activo.ubicacion_pasillo or "",
+        "pallet": activo.ubicacion_pallet or "",
+        "sku_qr_fisico": activo.sku_qr_fisico or "",
+    }
 
 
 @router.get("/tareas-pendientes", response_model=List[TareaAlertaResponse])
@@ -57,89 +199,27 @@ def obtener_tareas_pendientes(
     alertas = []
 
     # ---------------------------------------------------------
-    # REGLA 1: Pendiente de Impresión (FILTRADO POR SUCURSAL)
-    # ---------------------------------------------------------
-    activos_sin_qr = (
-        db.query(Activo_Inventariado, Vehiculo_Origen, Detalle_Motor, Detalle_Caja_Cambio)
-        .join(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
-        .outerjoin(Detalle_Motor, Activo_Inventariado.id_activo == Detalle_Motor.id_activo)
-        .outerjoin(Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo)
-        .filter(
-            Activo_Inventariado.qr_impreso == False,
-            Activo_Inventariado.id_estado == 1,  # Solo piezas Disponibles / ya paletizadas
-            Activo_Inventariado.estado == "Activo",
-            Activo_Inventariado.ubicacion_pasillo.isnot(None),
-            Activo_Inventariado.ubicacion_pasillo != "",
-            Activo_Inventariado.ubicacion_pasillo != "S/P",
-            Activo_Inventariado.ubicacion_pallet.isnot(None),
-            Activo_Inventariado.ubicacion_pallet != "",
-            Activo_Inventariado.ubicacion_pallet != "S/P",
-            Activo_Inventariado.id_sucursal_actual == sucursal_id,
-        )
-        .all()
-    )
-
-    for activo, vehiculo, motor, caja in activos_sin_qr:
-        if activo.id_categoria == 2 and caja:
-            transmision_val = caja.transmision_tipo
-        elif motor:
-            transmision_val = motor.transmision_tipo
-        else:
-            transmision_val = None
-
-        cat_nombre = "Motor" if activo.id_categoria == 1 else ("Caja de Cambios" if activo.id_categoria == 2 else "Repuesto")
-        titulo = f"{cat_nombre} - {vehiculo.marca} {vehiculo.modelo}" if vehiculo else cat_nombre
-
-        etiqueta_data = {
-            "id_activo": str(activo.id_activo),
-            "numero_ingreso": vehiculo.numero_ingreso if vehiculo else "N/A",
-            "marca": vehiculo.marca if vehiculo else "Desconocida",
-            "modelo": vehiculo.modelo if vehiculo else "Desconocido",
-            "anio": vehiculo.anio if vehiculo else 0,
-            "cilindrada": motor.cilindrada if motor else None,
-            "combustible": motor.combustible if motor else None,
-            "transmision": transmision_val,
-            "numero_motor": motor.numero_motor if motor else None,
-            "galpon": activo.ubicacion_galpon or "",
-            "pasillo": activo.ubicacion_pasillo or "",
-            "pallet": activo.ubicacion_pallet or "",
-            "sku_qr_fisico": activo.sku_qr_fisico,
-        }
-
-        alertas.append(
-            TareaAlertaResponse(
-                id_tarea=f"IMP-{str(activo.id_activo)[:8]}",
-                tipo_alerta="IMPRESION",
-                titulo_pieza=titulo,
-                categoria=cat_nombre,
-                tipo_repuesto=cat_nombre,
-                ubicacion=f"{activo.ubicacion_pasillo or 'S/P'} - {activo.ubicacion_pallet or 'S/P'}",
-                nota_especial="GENERAR Y PEGAR ETIQUETA QR",
-                accion_requerida="GENERAR QR AHORA",
-                etiqueta_data=etiqueta_data,
-                id_activo=activo.id_activo,
-                id_sucursal_origen=activo.id_sucursal_actual,
-                es_traslado=False,
-                estado_preparacion="Pendiente",
-            )
-        )
-
-    # ---------------------------------------------------------
-    # REGLAS 2 Y 3: Preparación, Traslado y Liberación (FILTRADO POR SUCURSAL)
+    # PRIORIDAD 1: Preparación, Traslado y Liberación (FILTRADO POR SUCURSAL)
     # ---------------------------------------------------------
     detalles_orden = (
         db.query(Detalle_Orden, Orden_Venta, Activo_Inventariado, Vehiculo_Origen)
         .join(Orden_Venta, Detalle_Orden.id_orden == Orden_Venta.id_orden)
         .join(Activo_Inventariado, Detalle_Orden.id_activo == Activo_Inventariado.id_activo)
-        .join(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
+        .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
         .filter(
-            Detalle_Orden.estado_preparacion != "Listo",
             Activo_Inventariado.id_estado.in_([2, 3]),  # 2: Reservado, 3: Vendido
             Activo_Inventariado.id_sucursal_actual == sucursal_id,
+            or_(
+                Detalle_Orden.estado_preparacion != "Listo",
+                Orden_Venta.estado_orden == "Pagada",
+            ),
             Orden_Venta.estado_orden.in_(["Reservada", "Pagada"]),
         )
         .all()
     )
+
+    liberadas_por_orden = {}
+    otras_alertas = []
 
     for detalle, orden, activo, vehiculo in detalles_orden:
         # Detectar si requiere traslado entre sucursales mediante Tracking_Logistico o discrepancia de sucursal
@@ -175,18 +255,28 @@ def obtener_tareas_pendientes(
                 bloqueo = None
                 accion = "ESCANEAR EN BARRERA"
 
+        if tipo == "LIBERADA":
+            liberadas_por_orden.setdefault(orden.id_orden, []).append((detalle, orden, activo, vehiculo))
+            continue
+
         cat_nombre = "Motor" if activo.id_categoria == 1 else ("Caja de Cambios" if activo.id_categoria == 2 else "Repuesto")
         titulo = f"{cat_nombre} - {vehiculo.marca} {vehiculo.modelo}" if vehiculo else cat_nombre
+        etiqueta_data = _construir_etiqueta_data(db, activo, vehiculo)
+        qr_impreso = bool(activo.qr_impreso)
 
-        alertas.append(
+        otras_alertas.append(
             TareaAlertaResponse(
                 id_tarea=f"ORD-{str(detalle.id_detalle)[:8]}",
                 tipo_alerta=tipo,
-                orden_ref=f"ORDEN #{str(orden.id_orden)[:8].upper()}",
+                orden_ref=orden.folio,
+                folio=orden.folio,
                 titulo_pieza=titulo,
                 categoria=cat_nombre,
                 tipo_repuesto=cat_nombre,
                 ubicacion=f"{activo.ubicacion_pasillo or 'S/P'} - {activo.ubicacion_pallet or 'S/P'}",
+                ubicacion_pasillo=activo.ubicacion_pasillo,
+                ubicacion_pallet=activo.ubicacion_pallet,
+                ubicacion_galpon=activo.ubicacion_galpon,
                 nota_especial=detalle.notas_preparacion,
                 estado_bloqueo=bloqueo,
                 accion_requerida=accion,
@@ -196,6 +286,258 @@ def obtener_tareas_pendientes(
                 id_sucursal_destino=sucursal_dest_id,
                 es_traslado=es_traslado,
                 estado_preparacion=detalle.estado_preparacion or "Pendiente",
+                id_orden=orden.id_orden,
+                sku_qr_fisico=activo.sku_qr_fisico,
+                qr_impreso=qr_impreso,
+                etiqueta_data=etiqueta_data,
+            )
+        )
+
+    # ---------------------------------------------------------
+    # PRIORIDAD 1.B: Ítems Manuales / Venta Libre con Preparación
+    # ---------------------------------------------------------
+    detalles_manuales = (
+        db.query(Detalle_Orden, Orden_Venta)
+        .join(Orden_Venta, Detalle_Orden.id_orden == Orden_Venta.id_orden)
+        .filter(
+            Detalle_Orden.id_activo.is_(None),
+            Orden_Venta.id_sucursal == sucursal_id,
+            Detalle_Orden.estado_preparacion != "Listo",
+            Orden_Venta.estado_orden.in_(["Reservada", "Pagada"]),
+        )
+        .all()
+    )
+
+    for detalle_m, orden_m in detalles_manuales:
+        tipo_m = "PREPARACION"
+        if orden_m.monto_pendiente > 0:
+            bloqueo_m = "ESPERANDO PAGO EN CAJA"
+            accion_m = "EN ESPERA"
+        else:
+            bloqueo_m = None
+            accion_m = "PREPARAR ITEM"
+
+        otras_alertas.append(
+            TareaAlertaResponse(
+                id_tarea=f"ORD-{str(detalle_m.id_detalle)[:8]}",
+                tipo_alerta=tipo_m,
+                orden_ref=orden_m.folio,
+                folio=orden_m.folio,
+                titulo_pieza=detalle_m.descripcion_manual or "Ítem Manual / Venta Libre",
+                categoria="Venta Libre",
+                tipo_repuesto="Ítem Manual",
+                ubicacion="Mostrador / Taller",
+                ubicacion_pasillo=None,
+                ubicacion_pallet=None,
+                ubicacion_galpon=None,
+                nota_especial=detalle_m.notas_preparacion,
+                estado_bloqueo=bloqueo_m,
+                accion_requerida=accion_m,
+                id_detalle=detalle_m.id_detalle,
+                id_activo=None,
+                id_sucursal_origen=orden_m.id_sucursal,
+                id_sucursal_destino=orden_m.id_sucursal,
+                es_traslado=False,
+                estado_preparacion=detalle_m.estado_preparacion or "Pendiente",
+                id_orden=orden_m.id_orden,
+                sku_qr_fisico=None,
+                qr_impreso=True,
+                etiqueta_data=None,
+            )
+        )
+
+    # Consolidar tareas de Barrera (LIBERADA) a 1 única tarea por orden
+    for id_ord, items in liberadas_por_orden.items():
+        if len(items) == 1:
+            detalle, orden, activo, vehiculo = items[0]
+            cat_nombre = "Motor" if activo.id_categoria == 1 else ("Caja de Cambios" if activo.id_categoria == 2 else "Repuesto")
+            titulo = f"{cat_nombre} - {vehiculo.marca} {vehiculo.modelo}" if vehiculo else cat_nombre
+            etiqueta_data = _construir_etiqueta_data(db, activo, vehiculo)
+            alertas.append(
+                TareaAlertaResponse(
+                    id_tarea=f"ORD-{str(detalle.id_detalle)[:8]}",
+                    tipo_alerta="LIBERADA",
+                    orden_ref=orden.folio,
+                    folio=orden.folio,
+                    titulo_pieza=titulo,
+                    categoria=cat_nombre,
+                    tipo_repuesto=cat_nombre,
+                    ubicacion=f"{activo.ubicacion_pasillo or 'S/P'} - {activo.ubicacion_pallet or 'S/P'}",
+                    ubicacion_pasillo=activo.ubicacion_pasillo,
+                    ubicacion_pallet=activo.ubicacion_pallet,
+                    ubicacion_galpon=activo.ubicacion_galpon,
+                    nota_especial=detalle.notas_preparacion,
+                    estado_bloqueo=None,
+                    accion_requerida="ESCANEAR EN BARRERA",
+                    id_detalle=detalle.id_detalle,
+                    id_activo=activo.id_activo,
+                    id_sucursal_origen=activo.id_sucursal_actual,
+                    id_sucursal_destino=orden.id_sucursal,
+                    es_traslado=False,
+                    estado_preparacion=detalle.estado_preparacion or "Listo",
+                    id_orden=orden.id_orden,
+                    sku_qr_fisico=activo.sku_qr_fisico,
+                    qr_impreso=bool(activo.qr_impreso),
+                    etiqueta_data=etiqueta_data,
+                )
+            )
+        else:
+            # Orden consolidada con múltiples repuestos (ej: Motor + Caja de Cambios)
+            primer_detalle, orden, primer_activo, primer_vehiculo = items[0]
+            categorias = [("Motor" if a.id_categoria == 1 else ("Caja de Cambios" if a.id_categoria == 2 else "Repuesto")) for _, _, a, _ in items]
+            vehiculos_nombres = [f"{v.marca} {v.modelo}".strip() for _, _, _, v in items if v]
+            vehiculo_str = vehiculos_nombres[0] if vehiculos_nombres else "Vehículo"
+            cats_str = " + ".join(dict.fromkeys(categorias))
+            titulo = f"{vehiculo_str} ({cats_str})"
+
+            skus = [a.sku_qr_fisico for _, _, a, _ in items if a.sku_qr_fisico]
+            ubicaciones = [f"{a.sku_qr_fisico}: {a.ubicacion_pasillo or 'S/P'}-{a.ubicacion_pallet or 'S/P'}" for _, _, a, _ in items]
+            todos_impresos = all([bool(a.qr_impreso) for _, _, a, _ in items])
+
+            alertas.append(
+                TareaAlertaResponse(
+                    id_tarea=f"BARRERA-{str(orden.id_orden)[:8]}",
+                    tipo_alerta="LIBERADA",
+                    orden_ref=orden.folio,
+                    folio=orden.folio,
+                    titulo_pieza=titulo,
+                    categoria="Múltiples Repuestos",
+                    tipo_repuesto="Múltiples Repuestos",
+                    ubicacion=" • ".join(ubicaciones),
+                    ubicacion_pasillo=primer_activo.ubicacion_pasillo,
+                    ubicacion_pallet=primer_activo.ubicacion_pallet,
+                    ubicacion_galpon=primer_activo.ubicacion_galpon,
+                    nota_especial=f"Orden consolidada con {len(items)} repuestos listos para salida conjunta.",
+                    estado_bloqueo=None,
+                    accion_requerida=f"ESCANEAR EN BARRERA ({len(items)} PIEZAS)",
+                    id_detalle=primer_detalle.id_detalle,
+                    id_activo=primer_activo.id_activo,
+                    id_sucursal_origen=primer_activo.id_sucursal_actual,
+                    id_sucursal_destino=orden.id_sucursal,
+                    es_traslado=False,
+                    estado_preparacion="Listo",
+                    id_orden=orden.id_orden,
+                    sku_qr_fisico=", ".join(skus),
+                    qr_impreso=todos_impresos,
+                    etiqueta_data=_construir_etiqueta_data(db, primer_activo, primer_vehiculo),
+                )
+            )
+
+    alertas.extend(otras_alertas)
+
+    # ---------------------------------------------------------
+    # PRIORIDAD 2: Reingresos de Logística Inversa (Órdenes Anuladas)
+    # ---------------------------------------------------------
+    reingresos = (
+        db.query(Detalle_Orden, Orden_Venta, Activo_Inventariado, Vehiculo_Origen)
+        .join(Orden_Venta, Detalle_Orden.id_orden == Orden_Venta.id_orden)
+        .join(Activo_Inventariado, Detalle_Orden.id_activo == Activo_Inventariado.id_activo)
+        .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
+        .filter(
+            Orden_Venta.estado_orden == "Anulada",
+            Detalle_Orden.estado_preparacion != "Reingresado",
+            Activo_Inventariado.estado == "Activo",
+            (Activo_Inventariado.id_sucursal_actual == sucursal_id) | (Orden_Venta.id_sucursal == sucursal_id),
+        )
+        .all()
+    )
+
+    for detalle, orden, activo, vehiculo in reingresos:
+        cat_nombre = "Motor" if activo.id_categoria == 1 else ("Caja de Cambios" if activo.id_categoria == 2 else "Repuesto")
+        if vehiculo:
+            anio_str = f" ({vehiculo.anio})" if vehiculo.anio else ""
+            titulo = f"{cat_nombre} - {vehiculo.marca} {vehiculo.modelo}{anio_str}"
+        else:
+            titulo = f"{cat_nombre} - {activo.sku_qr_fisico}" if activo.sku_qr_fisico else cat_nombre
+
+        alertas.append(
+            TareaAlertaResponse(
+                id_tarea=f"REING-{str(detalle.id_detalle)[:8]}",
+                tipo_alerta="REINGRESO",
+                orden_ref=orden.folio,
+                folio=orden.folio,
+                titulo_pieza=titulo,
+                categoria=cat_nombre,
+                tipo_repuesto=cat_nombre,
+                ubicacion=f"{activo.ubicacion_pasillo or 'S/P'} - {activo.ubicacion_pallet or 'S/P'}",
+                ubicacion_pasillo=activo.ubicacion_pasillo,
+                ubicacion_pallet=activo.ubicacion_pallet,
+                ubicacion_galpon=activo.ubicacion_galpon,
+                nota_especial="Reingreso a inventario / paletizado por anulación de orden",
+                estado_bloqueo=None,
+                accion_requerida="REINGRESAR / PALETIZAR",
+                id_detalle=detalle.id_detalle,
+                id_activo=activo.id_activo,
+                id_orden=orden.id_orden,
+                sku_qr_fisico=activo.sku_qr_fisico,
+                id_sucursal_origen=activo.id_sucursal_actual,
+                es_traslado=False,
+                estado_preparacion=detalle.estado_preparacion or "Reingreso Pendiente",
+            )
+        )
+
+    # ---------------------------------------------------------
+    # PRIORIDAD 3: Pendiente de Impresión (FILTRADO POR SUCURSAL)
+    # Activos en bodega sin QR impreso: Paletizado, Reservado, Vendido o Disponible
+    # ---------------------------------------------------------
+    activos_sin_qr = (
+        db.query(Activo_Inventariado, Vehiculo_Origen, Detalle_Motor, Detalle_Caja_Cambio)
+        .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
+        .outerjoin(Detalle_Motor, Activo_Inventariado.id_activo == Detalle_Motor.id_activo)
+        .outerjoin(Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo)
+        .join(Estado_Activo, Activo_Inventariado.id_estado == Estado_Activo.id_estado)
+        .filter(
+            or_(
+                Activo_Inventariado.qr_impreso == False,
+                Activo_Inventariado.qr_impreso.is_(None),
+            ),
+            Activo_Inventariado.estado == "Activo",
+            Activo_Inventariado.id_sucursal_actual == sucursal_id,
+            or_(
+                Activo_Inventariado.id_estado.in_([1, 2, 3, 7]),
+                func.lower(Estado_Activo.nombre_estado).in_(["disponible", "reservado", "vendido", "paletizado"]),
+            ),
+            Activo_Inventariado.id_estado != 5,
+            ~func.lower(Estado_Activo.nombre_estado).ilike("%desarme%"),
+        )
+        .all()
+    )
+
+    for activo, vehiculo, motor, caja in activos_sin_qr:
+        if activo.id_categoria == 2 and caja:
+            transmision_val = caja.transmision_tipo
+        elif motor:
+            transmision_val = motor.transmision_tipo
+        else:
+            transmision_val = None
+
+        cat_nombre = "Motor" if activo.id_categoria == 1 else ("Caja de Cambios" if activo.id_categoria == 2 else "Repuesto")
+        if vehiculo:
+            anio_str = f" ({vehiculo.anio})" if vehiculo.anio else ""
+            titulo = f"{cat_nombre} - {vehiculo.marca} {vehiculo.modelo}{anio_str}"
+        else:
+            titulo = f"{cat_nombre} - {activo.sku_qr_fisico}" if activo.sku_qr_fisico else cat_nombre
+
+        alertas.append(
+            TareaAlertaResponse(
+                id_tarea=f"IMP-{str(activo.id_activo)[:8]}",
+                tipo_alerta="IMPRESION",
+                titulo_pieza=titulo,
+                categoria=cat_nombre,
+                tipo_repuesto=cat_nombre,
+                ubicacion=f"{activo.ubicacion_pasillo or 'S/P'} - {activo.ubicacion_pallet or 'S/P'}",
+                ubicacion_pasillo=activo.ubicacion_pasillo,
+                ubicacion_pallet=activo.ubicacion_pallet,
+                ubicacion_galpon=activo.ubicacion_galpon,
+                nota_especial="GENERAR Y PEGAR ETIQUETA QR",
+                accion_requerida="GENERAR QR AHORA",
+                etiqueta_data=_construir_etiqueta_data(db, activo, vehiculo, motor, caja),
+                id_activo=activo.id_activo,
+                id_sucursal_origen=activo.id_sucursal_actual,
+                es_traslado=False,
+                estado_preparacion="Pendiente",
+                sku_qr_fisico=activo.sku_qr_fisico,
+                qr_impreso=False,
             )
         )
 
@@ -263,6 +605,15 @@ def verificar_qr_salida(
 
     orden = db.query(Orden_Venta).filter(Orden_Venta.qr_transaccional_salida == token).first()
     if not orden:
+        # Fallback: permitir también ingresar el número o folio comercial si el operador lo digita
+        if token.upper().startswith("ORD-"):
+            posible_num = token.upper().replace("ORD-", "").strip()
+            if posible_num.isdigit():
+                orden = db.query(Orden_Venta).filter(Orden_Venta.numero_orden == int(posible_num)).first()
+        elif token.isdigit():
+            orden = db.query(Orden_Venta).filter(Orden_Venta.numero_orden == int(token)).first()
+
+    if not orden:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Código QR transaccional no encontrado o inválido."
@@ -285,13 +636,13 @@ def verificar_qr_salida(
     if orden.estado_orden == "Completada":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"La orden #{str(orden.id_orden)[:8].upper()} ya fue entregada y completada anteriormente."
+            detail=f"La orden #{orden.folio} ya fue entregada y completada anteriormente."
         )
 
     if orden.estado_orden != "Pagada" or orden.monto_pendiente > 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"La orden #{str(orden.id_orden)[:8].upper()} no se encuentra pagada en caja (Saldo pendiente: ${orden.monto_pendiente})."
+            detail=f"La orden #{orden.folio} no se encuentra pagada en caja (Saldo pendiente: ${orden.monto_pendiente})."
         )
 
     # Datos del cliente
@@ -313,19 +664,32 @@ def verificar_qr_salida(
                 cat = db.query(Categoria_Activo).filter(Categoria_Activo.id_categoria == activo.id_categoria).first()
                 nombre_cat = cat.nombre_categoria if cat else "Repuesto"
                 titulo = f"{nombre_cat} - {vehiculo.marca} {vehiculo.modelo} ({vehiculo.anio})" if vehiculo else (d.descripcion_manual or nombre_cat)
-                ubicacion = f"{activo.ubicacion_pasillo or 'S/P'} - {activo.ubicacion_pallet or 'S/P'}"
-                sku = activo.sku_qr_fisico
+                partes_ub = []
+                if activo.ubicacion_galpon and activo.ubicacion_galpon.strip():
+                    partes_ub.append(f"Galpón: {activo.ubicacion_galpon.strip()}")
+                if activo.ubicacion_pasillo and activo.ubicacion_pasillo.strip():
+                    partes_ub.append(f"Pasillo: {activo.ubicacion_pasillo.strip()}")
+                if activo.ubicacion_pallet and activo.ubicacion_pallet.strip():
+                    partes_ub.append(f"Pallet: {activo.ubicacion_pallet.strip()}")
+                ubicacion = " | ".join(partes_ub) if partes_ub else "Sin ubicación registrada"
+                sku = activo.sku_qr_fisico or str(activo.id_activo)[:8]
+                qr_impreso = bool(activo.qr_impreso)
+                etiqueta_data = _construir_etiqueta_data(db, activo, vehiculo)
                 es_inv = True
                 total_fisicos += 1
             else:
-                titulo = d.descripcion_manual or "Repuesto Desconocido"
-                ubicacion = "N/A"
-                sku = None
+                titulo = d.descripcion_manual or "Repuesto no catalogado"
+                ubicacion = "Pieza eliminada de inventario"
+                sku = "DESCONOCIDO"
+                qr_impreso = False
+                etiqueta_data = None
                 es_inv = False
         else:
-            titulo = d.descripcion_manual or "Venta Libre / Servicio"
-            ubicacion = "Venta Libre"
-            sku = None
+            titulo = d.descripcion_manual or "Misceláneo / Servicio"
+            ubicacion = "Mostrador / Despacho"
+            sku = "MISCELÁNEO (No requiere escaneo físico)"
+            qr_impreso = True
+            etiqueta_data = None
             es_inv = False
 
         items_info.append(ItemSalidaInfo(
@@ -338,9 +702,11 @@ def verificar_qr_salida(
             notas_preparacion=d.notas_preparacion,
             cantidad=d.cantidad,
             precio_final=d.precio_final,
+            qr_impreso=qr_impreso,
+            etiqueta_data=etiqueta_data,
         ))
 
-    folio = f"ORD-{str(orden.id_orden)[:8].upper()}"
+    folio = orden.folio
     print(f"✅ [BARRERA] Inspección de orden {folio} exitosa: {len(items_info)} ítems ({total_fisicos} físicos requeridos).")
 
     return VerificarQrSalidaResponse(
@@ -376,6 +742,15 @@ def escanear_salida(
 
     orden = db.query(Orden_Venta).filter(Orden_Venta.qr_transaccional_salida == token).first()
     if not orden:
+        # Fallback: si se envió el número o folio comercial
+        if token.upper().startswith("ORD-"):
+            posible_num = token.upper().replace("ORD-", "").strip()
+            if posible_num.isdigit():
+                orden = db.query(Orden_Venta).filter(Orden_Venta.numero_orden == int(posible_num)).first()
+        elif token.isdigit():
+            orden = db.query(Orden_Venta).filter(Orden_Venta.numero_orden == int(token)).first()
+
+    if not orden:
         print(f"⚠️ [BARRERA] Token QR '{token}' no encontrado.")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -399,13 +774,13 @@ def escanear_salida(
     if orden.estado_orden == "Completada":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"La orden #{str(orden.id_orden)[:8].upper()} ya fue entregada anteriormente."
+            detail=f"La orden #{orden.folio} ya fue entregada anteriormente."
         )
 
     if orden.estado_orden != "Pagada" or orden.monto_pendiente > 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"La orden #{str(orden.id_orden)[:8].upper()} no ha sido pagada en su totalidad (Saldo pendiente: ${orden.monto_pendiente})."
+            detail=f"La orden #{orden.folio} no ha sido pagada en su totalidad (Saldo pendiente: ${orden.monto_pendiente})."
         )
 
     # 1. Obtener los activos físicos requeridos por la orden (ignorando ítems misceláneos/venta libre sin activo)
@@ -443,6 +818,15 @@ def escanear_salida(
                 detail=f"Falta escanear el QR físico de {len(skus_faltantes)} pieza(s) para autorizar la salida: {', '.join(skus_faltantes)}."
             )
 
+        # C. Validar que todas las piezas inventariadas requeridas tengan QR impreso
+        activos_sin_imprimir = [act.sku_qr_fisico for act in activos_requeridos if not act.qr_impreso]
+        if activos_sin_imprimir:
+            print(f"❌ [DUAL-SCAN] Error: Piezas sin QR impreso: {activos_sin_imprimir}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"No se puede autorizar la salida en barrera. Las siguientes piezas no registran impresión de QR físico: {', '.join(activos_sin_imprimir)}. Imprima la etiqueta antes de entregar."
+            )
+
     try:
         # 3. Transacción ACID: Cierre de Orden y Ciclo de Inventario
         estado_entregado = db.query(Estado_Activo).filter(Estado_Activo.nombre_estado == "Entregado").first()
@@ -455,6 +839,11 @@ def escanear_salida(
         orden.estado_orden = "Completada"
         orden.fecha_actualizacion = datetime.now()
 
+        # Marcar automáticamente todas las líneas de detalle como 'Listo' (cierre de ciclo para misceláneos y activos)
+        for d in detalles:
+            d.estado_preparacion = "Listo"
+            d.fecha_preparacion = datetime.now()
+
         # B. Actualizar cada Activo_Inventariado a 'Entregado' (ID 6) y liberar rack
         skus_entregados_nombres = []
         for act in activos_requeridos:
@@ -462,7 +851,7 @@ def escanear_salida(
             act.ubicacion_pasillo = None
             act.ubicacion_pallet = None
             act.ubicacion_galpon = None
-            act.observacion_estado = f"Entregado en barrera por {current_user.nombres} {current_user.apellidos} - Orden #{str(orden.id_orden)[:8].upper()}"
+            act.observacion_estado = f"Entregado en barrera por {current_user.nombres} {current_user.apellidos} - Orden #{orden.folio}"
             act.version_lock = (act.version_lock or 1) + 1
             act.fecha_actualizacion = datetime.now()
             skus_entregados_nombres.append(act.sku_qr_fisico)
@@ -482,7 +871,7 @@ def escanear_salida(
         db.commit()
         db.refresh(orden)
 
-        folio = f"ORD-{str(orden.id_orden)[:8].upper()}"
+        folio = orden.folio
         print(f"✅ [BARRERA] Orden {folio} completada exitosamente. Total piezas entregadas: {len(skus_entregados_nombres)}.")
 
         return EscanearSalidaResponse(
@@ -520,4 +909,188 @@ def obtener_pendientes_paletizado_bodega(
     """
     from routers.vehiculos import obtener_pendientes_paletizado
     return obtener_pendientes_paletizado(sucursal_id=sucursal_id, db=db, usuario_logeado=usuario_logeado)
+
+
+# ==========================================
+# MÓDULO: LOGÍSTICA INVERSA Y REINGRESOS (SPEC-HU-TAREA-4)
+# ==========================================
+
+@router.get(
+    "/reingresos-pendientes",
+    response_model=List[TareaReingresoDTO],
+    summary="Listado de Tareas de Reingreso y Paletizado (Logística Inversa)",
+    description="Lista los repuestos físicos que pertenecían a órdenes anuladas y requieren "
+                "reingreso, escaneo de QR físico y ubicación en pallet/rack por el bodeguero."
+)
+def obtener_reingresos_pendientes(
+    sucursal_id: Optional[int] = Query(None, description="ID de la sucursal (opcional)"),
+    db: Session = Depends(get_db),
+    usuario_logeado: Usuario = Depends(get_current_user),
+):
+    # Control de acceso RBAC: Bodeguero (id_rol == 1) o Administrador (id_rol == 5)
+    if usuario_logeado.id_rol not in [1, 4, 5]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso denegado. Solo personal de bodega o administradores pueden gestionar reingresos."
+        )
+
+    # Identificar sucursal objetivo
+    target_sucursal = sucursal_id if sucursal_id is not None else (usuario_logeado.id_sucursal or 1)
+
+    # Consulta con JOINs: Detalle_Orden -> Orden_Venta ('Anulada') -> Activo_Inventariado (id_estado not in [1, 7])
+    query = (
+        db.query(
+            Detalle_Orden,
+            Orden_Venta,
+            Activo_Inventariado,
+            Vehiculo_Origen,
+            Categoria_Activo,
+        )
+        .join(Orden_Venta, Detalle_Orden.id_orden == Orden_Venta.id_orden)
+        .join(Activo_Inventariado, Detalle_Orden.id_activo == Activo_Inventariado.id_activo)
+        .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
+        .outerjoin(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
+        .filter(
+            Orden_Venta.estado_orden == "Anulada",
+            Detalle_Orden.estado_preparacion != "Reingresado",
+            Activo_Inventariado.estado == "Activo",
+        )
+    )
+
+    if target_sucursal is not None:
+        query = query.filter(
+            (Activo_Inventariado.id_sucursal_actual == target_sucursal) | (Orden_Venta.id_sucursal == target_sucursal)
+        )
+
+    rows = query.order_by(Orden_Venta.fecha_actualizacion.desc()).all()
+
+    resultados = []
+    for detalle, orden, activo, vehiculo, categoria in rows:
+        folio = orden.folio
+
+        cat_nombre = categoria.nombre_categoria if categoria else "Repuesto"
+        if vehiculo:
+            desc_pieza = f"{cat_nombre} - {vehiculo.marca} {vehiculo.modelo} ({vehiculo.anio})"
+        else:
+            desc_pieza = detalle.descripcion_manual or cat_nombre
+
+        resultados.append(
+            TareaReingresoDTO(
+                id_orden=orden.id_orden,
+                id_activo=activo.id_activo,
+                sku_qr_fisico=activo.sku_qr_fisico,
+                ubicacion_pallet=activo.ubicacion_pallet,
+                ubicacion_pasillo=activo.ubicacion_pasillo,
+                descripcion_pieza=desc_pieza,
+                folio_orden=folio,
+            )
+        )
+
+    return resultados
+
+
+@router.post(
+    "/confirmar-reingreso",
+    response_model=ConfirmarReingresoResponse,
+    summary="Confirmar Reingreso de Activo con Control de Concurrencia Optimista",
+    description="Valida el SKU físico escaneado por PDA para una orden anulada, "
+                "actualiza la ubicación en rack y muta el estado del inventario a Paletizado (7) o Disponible (1) "
+                "incrementando atómicamente version_lock."
+)
+def confirmar_reingreso(
+    payload: ConfirmarReingresoRequest,
+    db: Session = Depends(get_db),
+    usuario_logeado: Usuario = Depends(get_current_user),
+):
+    # Control de acceso RBAC: Bodeguero (1) o Administrador (4, 5)
+    if usuario_logeado.id_rol not in [1, 4, 5]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso denegado. Solo personal de bodega o administradores pueden confirmar reingresos."
+        )
+
+    # 1. Validar existencia de la orden anulada
+    orden = db.query(Orden_Venta).filter(Orden_Venta.id_orden == payload.id_orden_anulada).first()
+    if not orden:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"La orden #{str(payload.id_orden_anulada)[:8].upper()} no fue encontrada."
+        )
+
+    if orden.estado_orden != "Anulada":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"La orden #{orden.folio} no está en estado 'Anulada' (Estado actual: '{orden.estado_orden}')."
+        )
+
+    # 2. Validar que el SKU escaneado pertenezca a la orden anulada
+    sku_busqueda = payload.sku_qr_fisico.strip().upper()
+    activo = (
+        db.query(Activo_Inventariado)
+        .filter(Activo_Inventariado.sku_qr_fisico == sku_busqueda)
+        .first()
+    )
+    if not activo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No se encontró ningún activo con el SKU/QR '{sku_busqueda}'."
+        )
+
+    detalle = (
+        db.query(Detalle_Orden)
+        .filter(
+            Detalle_Orden.id_orden == payload.id_orden_anulada,
+            Detalle_Orden.id_activo == activo.id_activo,
+        )
+        .first()
+    )
+    if not detalle:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"El repuesto '{sku_busqueda}' no pertenece a la orden anulada #{orden.folio}."
+        )
+
+    # 3. Validar si ya fue reingresado
+    if detalle.estado_preparacion == "Reingresado":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"El repuesto '{sku_busqueda}' ya fue reingresado y se encuentra en su ubicación de pallet."
+        )
+
+    try:
+        # Actualizar ubicación física si fue suministrada y válida
+        if payload.ubicacion_pasillo is not None and payload.ubicacion_pasillo.strip():
+            activo.ubicacion_pasillo = payload.ubicacion_pasillo.strip().upper()
+        if payload.ubicacion_pallet is not None and payload.ubicacion_pallet.strip():
+            activo.ubicacion_pallet = payload.ubicacion_pallet.strip().upper()
+
+        activo.fecha_actualizacion = datetime.now(timezone.utc)
+        activo.observacion_estado = f"Reingreso físico confirmado tras anulación orden #{orden.folio} por {usuario_logeado.nombres} {usuario_logeado.apellidos}"
+
+        # Marcar Detalle_Orden como Reingresado para limpiar de tareas en bodega
+        detalle.estado_preparacion = "Reingresado"
+        detalle.fecha_preparacion = datetime.now(timezone.utc)
+
+        db.commit()
+        db.refresh(activo)
+        db.refresh(detalle)
+
+        return ConfirmarReingresoResponse(
+            msg="Activo reingresado y paletizado exitosamente",
+            id_activo=activo.id_activo,
+            sku_qr_fisico=activo.sku_qr_fisico,
+            nuevo_estado="Disponible",
+            ubicacion_pasillo=activo.ubicacion_pasillo,
+            ubicacion_pallet=activo.ubicacion_pallet,
+        )
+
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error transaccional al confirmar el reingreso: {str(e)}"
+        )
 

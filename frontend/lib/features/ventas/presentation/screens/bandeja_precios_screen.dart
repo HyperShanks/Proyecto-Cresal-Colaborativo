@@ -1,28 +1,32 @@
 // lib/features/ventas/presentation/screens/bandeja_precios_screen.dart
 
 import 'package:flutter/material.dart';
+import '../../../../core/routes/route_observer.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../models/pendiente_precio_model.dart';
 import '../../services/inventario_service.dart';
 import '../widgets/pendiente_precio_card.dart';
 import '../widgets/asignar_precio_dialog.dart';
+import 'catalogo_screen.dart';
 
 /// Pantalla exclusiva para el Jefe de Ventas (id_rol == 6) (HU-3.8).
 /// Muestra la bandeja de entrada de activos ingresados por bodega que no tienen precio_referencia asignado.
 class BandejaPreciosScreen extends StatefulWidget {
   final VoidCallback? onOpenMenuDrawer;
+  final VoidCallback? onRefreshCatalogo;
 
   const BandejaPreciosScreen({
     super.key,
     this.onOpenMenuDrawer,
+    this.onRefreshCatalogo,
   });
 
   @override
-  State<BandejaPreciosScreen> createState() => _BandejaPreciosScreenState();
+  State<BandejaPreciosScreen> createState() => BandejaPreciosScreenState();
 }
 
-class _BandejaPreciosScreenState extends State<BandejaPreciosScreen> {
+class BandejaPreciosScreenState extends State<BandejaPreciosScreen> with RouteAware {
   List<ActivoPendientePrecioModel> _pendientes = [];
   bool _isLoading = true;
   String? _errorMessage;
@@ -31,6 +35,32 @@ class _BandejaPreciosScreenState extends State<BandejaPreciosScreen> {
   void initState() {
     super.initState();
     _cargarPendientes();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != null) {
+      routeObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void didPopNext() {
+    super.didPopNext();
+    refrescar();
+  }
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    super.dispose();
+  }
+
+  /// Método público para forzar recarga (Auto-Refresh SPEC-HU-TAREA-20)
+  Future<void> refrescar() async {
+    await _cargarPendientes();
   }
 
   Future<void> _cargarPendientes() async {
@@ -62,6 +92,8 @@ class _BandejaPreciosScreenState extends State<BandejaPreciosScreen> {
       activo: activo,
       onPrecioAsignado: () {
         _cargarPendientes();
+        CatalogoScreen.refreshNotifier.value++;
+        widget.onRefreshCatalogo?.call();
       },
     );
   }

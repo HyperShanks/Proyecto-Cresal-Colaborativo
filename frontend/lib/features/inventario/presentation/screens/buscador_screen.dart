@@ -45,6 +45,15 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
   String? _combustible;
   String? _transmision;
 
+  // Filtro de Estado Operativo (SPEC-HU-TAREA-16)
+  String _estadoFiltro = 'Todos';
+  static const List<String> _estadosOperativos = [
+    'Todos',
+    'Disponibles',
+    'Reservados',
+    'Paletizados',
+  ];
+
   int get _activeFiltersCount => [
         _categoria,
         _pasillo,
@@ -149,6 +158,7 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
         cilindrada: _cilindrada,
         combustible: _combustible,
         transmision: _transmision,
+        estado: _estadoFiltro,
         limit: _limit,
         offset: reset ? 0 : _offset,
       );
@@ -180,6 +190,68 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
     }
   }
 
+  /// Cambia reactivamente el filtro de estado operativo (SPEC-HU-TAREA-16).
+  /// Limpia la lista, muestra spinner y ejecuta la búsqueda. En caso de desconexión,
+  /// preserva el estado previo y despliega el aviso offline de la especificación.
+  Future<void> _cambiarFiltroEstado(String nuevoEstado) async {
+    if (_estadoFiltro == nuevoEstado) return;
+
+    final estadoAnterior = _estadoFiltro;
+    final resultadosPrevios = List<dynamic>.from(_resultados);
+
+    setState(() {
+      _estadoFiltro = nuevoEstado;
+      _resultados = [];
+      _isLoadingInitial = true;
+      _errorMessage = '';
+      _offset = 0;
+      _hasMore = true;
+    });
+
+    try {
+      final queryText = _searchController.text.trim();
+      final nuevosResultados = await InventarioService.buscarRepuestos(
+        q: queryText.isNotEmpty ? queryText : null,
+        categoria: _categoria,
+        pasillo: _pasillo,
+        pallet: _pallet,
+        marca: _marca,
+        modelo: _modelo,
+        cilindrada: _cilindrada,
+        combustible: _combustible,
+        transmision: _transmision,
+        estado: nuevoEstado,
+        limit: _limit,
+        offset: 0,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _resultados = nuevosResultados;
+        _offset = nuevosResultados.length;
+        _hasMore = nuevosResultados.length >= _limit;
+        _isLoadingInitial = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _estadoFiltro = estadoAnterior;
+        _resultados = resultadosPrevios;
+        _isLoadingInitial = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No hay conexión para aplicar este filtro. Mostrando caché temporal.'),
+          backgroundColor: AppPalette.secondary,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   void _limpiarFiltros() {
     setState(() {
       _categoria = null;
@@ -190,6 +262,7 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
       _cilindrada = null;
       _combustible = null;
       _transmision = null;
+      _estadoFiltro = 'Todos';
     });
     _cargarFiltros();
     _ejecutarBusqueda(reset: true);
@@ -394,7 +467,7 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
                       },
                       icon: const Icon(Icons.check, size: 20),
                       label: Text(
-                        'APLICAR FILTROS (${_activeFiltersCount})',
+                        'APLICAR FILTROS ($_activeFiltersCount)',
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       style: ElevatedButton.styleFrom(
@@ -553,6 +626,47 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
                 ],
               ),
             ),
+
+            // ── Fila de Filter Chips de Estado Operativo (SPEC-HU-TAREA-16) ──
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+              child: Row(
+                children: _estadosOperativos.map((estadoNom) {
+                  final isSelected = _estadoFiltro == estadoNom;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8.0),
+                    child: FilterChip(
+                      key: Key('chip_filtro_${estadoNom.toLowerCase()}'),
+                      label: Text(
+                        estadoNom,
+                        style: AppTypography.small.copyWith(
+                          color: isSelected ? Colors.white : AppPalette.textSecondary,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                          fontSize: 12.0,
+                        ),
+                      ),
+                      selected: isSelected,
+                      onSelected: _isLoadingInitial ? null : (_) => _cambiarFiltroEstado(estadoNom),
+                      selectedColor: AppPalette.primary,
+                      backgroundColor: AppPalette.surface,
+                      checkmarkColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20.0),
+                        side: BorderSide(
+                          color: isSelected
+                              ? AppPalette.primary
+                              : Colors.white.withValues(alpha: 0.12),
+                          width: 1.0,
+                        ),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+            const SizedBox(height: 6.0),
 
             // ── Conteo de Resultados ─────────────────────────────────────────
             Padding(
@@ -718,7 +832,7 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
         const SizedBox(height: 6),
         DropdownButtonFormField<String>(
           isExpanded: true,
-          value: value,
+          initialValue: value,
           decoration: InputDecoration(
             filled: true,
             fillColor: AppPalette.background,
@@ -767,7 +881,7 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
                   overflow: TextOverflow.ellipsis,
                 ),
               );
-            }).toList(),
+            }),
           ],
           onChanged: _isUpdatingFiltros ? null : onChanged,
         ),

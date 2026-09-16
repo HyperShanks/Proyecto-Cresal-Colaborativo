@@ -18,6 +18,28 @@ abstract class CartItem {
 
   Map<String, dynamic> toJson();
 
+  static CartItem? fromJson(Map<String, dynamic> json) {
+    final tipo = json['tipo']?.toString();
+    switch (tipo) {
+      case 'inventariado':
+        return InventariadoCartItem.fromJson(json);
+      case 'venta_libre':
+        return VentaLibreCartItem.fromJson(json);
+      case 'reserva_backorder':
+        return ReservaBackorderCartItem.fromJson(json);
+      default:
+        // Fallback detection heurística
+        if (json.containsKey('catalogo_item') || json.containsKey('id_activo')) {
+          return InventariadoCartItem.fromJson(json);
+        } else if (json.containsKey('id_reserva') || json.containsKey('marca_requerida')) {
+          return ReservaBackorderCartItem.fromJson(json);
+        } else if (json.containsKey('descripcion')) {
+          return VentaLibreCartItem.fromJson(json);
+        }
+        return null;
+    }
+  }
+
   static String _formatearMoneda(int monto) {
     final valor = monto.toString().replaceAllMapped(
           RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
@@ -74,7 +96,31 @@ class InventariadoCartItem extends CartItem {
       'subtotal': subtotal,
       'notas_preparacion': notasPreparacion,
       'id_sucursal_actual': catalogoItem.idSucursalActual,
+      'catalogo_item': catalogoItem.toJson(),
     };
+  }
+
+  factory InventariadoCartItem.fromJson(Map<String, dynamic> json) {
+    final CatalogoItem item;
+    if (json['catalogo_item'] != null && json['catalogo_item'] is Map) {
+      item = CatalogoItem.fromJson(Map<String, dynamic>.from(json['catalogo_item'] as Map));
+    } else {
+      item = CatalogoItem(
+        idActivo: json['id_activo']?.toString() ?? '',
+        skuQrFisico: json['sku_qr_fisico']?.toString() ?? '',
+        precioReferencia: json['precio_referencia_original'] as int?,
+        idCategoria: 0,
+        nombreCategoria: json['titulo']?.toString() ?? 'Repuesto',
+        idSucursalActual: json['id_sucursal_actual'] as int? ?? 0,
+        nombreSucursal: '',
+      );
+    }
+
+    return InventariadoCartItem(
+      catalogoItem: item,
+      precioFinal: json['precio_final'] as int? ?? item.precioReferencia ?? 0,
+      notasPreparacion: json['notas_preparacion'] as String?,
+    );
   }
 }
 
@@ -131,5 +177,93 @@ class VentaLibreCartItem extends CartItem {
       'subtotal': subtotal,
       'observacion': observacion,
     };
+  }
+
+  factory VentaLibreCartItem.fromJson(Map<String, dynamic> json) {
+    return VentaLibreCartItem(
+      id: json['id_item']?.toString() ?? json['id']?.toString() ?? 'VL-${DateTime.now().millisecondsSinceEpoch}',
+      descripcion: json['descripcion']?.toString() ?? '',
+      monto: json['monto_unitario'] as int? ?? json['monto'] as int? ?? 0,
+      cantidad: json['cantidad'] as int? ?? 1,
+      observacion: json['observacion'] as String?,
+    );
+  }
+}
+
+/// Representa una Reserva por Encargo (Compra en Verde / Backorder) en el carrito
+class ReservaBackorderCartItem extends CartItem {
+  @override
+  final String id;
+  final String marca;
+  final String modelo;
+  final int? anio;
+  final String categoriaNombre;
+  final int idCategoria;
+  final int precioAcordado;
+  final int montoAbonado;
+  final String? notas;
+
+  ReservaBackorderCartItem({
+    required this.id,
+    required this.marca,
+    required this.modelo,
+    this.anio,
+    required this.categoriaNombre,
+    required this.idCategoria,
+    required this.precioAcordado,
+    this.montoAbonado = 0,
+    this.notas,
+  });
+
+  @override
+  String get titulo => '[COMPRA EN VERDE] $categoriaNombre - $marca $modelo ${anio != null ? "($anio)" : ""}';
+
+  @override
+  String get subtitulo => 'Precio Acordado: \$${_montoFormateado(precioAcordado)} | Abono: \$${_montoFormateado(montoAbonado)}';
+
+  static String _montoFormateado(int monto) {
+    return monto.toString().replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (Match m) => '${m[1]}.',
+    );
+  }
+
+  @override
+  int get precioUnitario => precioAcordado;
+
+  @override
+  int get cantidad => 1;
+
+  @override
+  bool get esInventariado => false;
+
+  @override
+  Map<String, dynamic> toJson() {
+    return {
+      'tipo': 'reserva_backorder',
+      'id_reserva': id,
+      'id_categoria_requerida': idCategoria,
+      'categoria_nombre': categoriaNombre,
+      'marca_requerida': marca,
+      'modelo_requerido': modelo,
+      'anio_requerido': anio,
+      'precio_acordado': precioAcordado,
+      'monto_abonado': montoAbonado,
+      'notas_preparacion': notas,
+    };
+  }
+
+  factory ReservaBackorderCartItem.fromJson(Map<String, dynamic> json) {
+    return ReservaBackorderCartItem(
+      id: json['id_reserva']?.toString() ?? json['id']?.toString() ?? 'BO-${DateTime.now().millisecondsSinceEpoch}',
+      idCategoria: json['id_categoria_requerida'] as int? ?? 0,
+      categoriaNombre: json['categoria_nombre']?.toString() ?? 'Repuesto',
+      marca: json['marca_requerida']?.toString() ?? '',
+      modelo: json['modelo_requerido']?.toString() ?? '',
+      anio: json['anio_requerido'] as int?,
+      precioAcordado: json['precio_acordado'] as int? ?? 0,
+      montoAbonado: json['monto_abonado'] as int? ?? 0,
+      notas: json['notas_preparacion'] as String?,
+    );
   }
 }
