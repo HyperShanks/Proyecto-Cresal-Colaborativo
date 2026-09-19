@@ -49,7 +49,7 @@ def seed_data():
         print("- Categorias creados.")
 
         # 4. Poblar Estados del Activo (HU-3.6: incluye 'Entregado' y 'Paletizado' para ciclo de tasación)
-        estados_base = ["En Desarme", "Disponible", "Reservado", "Vendido", "En Importacion", "Entregado", "Paletizado"]
+        estados_base = ["En Desarme", "Disponible", "Reservado", "Vendido", "En Importación", "Entregado", "Paletizado"]
         for est in estados_base:
             if not db.query(Estado_Activo).filter_by(nombre_estado=est).first():
                 db.add(Estado_Activo(nombre_estado=est))
