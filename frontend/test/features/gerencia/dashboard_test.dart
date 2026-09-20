@@ -243,7 +243,7 @@ void main() {
 
       expect(find.text('CRESAL GERENCIA'), findsOneWidget);
       expect(find.text('Dashboard Ejecutivo y Pulso Operativo'), findsOneWidget);
-      expect(find.text('Sucursal 1: Casa Matriz (Viña)'), findsOneWidget);
+      expect(find.text('Viña del Mar (Casa Matriz)'), findsOneWidget);
       expect(find.text('Actualizar'), findsOneWidget);
     });
   });

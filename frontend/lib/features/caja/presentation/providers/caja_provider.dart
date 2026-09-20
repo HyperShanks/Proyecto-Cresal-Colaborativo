@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../../models/cobro_pendiente_model.dart';
 import '../../models/cobro_model.dart';
 import '../../services/caja_service.dart';
+import '../../../../core/services/api_service.dart';
 
 /// Proveedor de estado reactivo para la Bandeja de Cobros y Panel de Cobro de Caja (SPEC-HU-03).
 /// Maneja la lista de cobros pendientes, la selección activa Master-Detail,
@@ -126,8 +127,10 @@ class CajaProvider extends ChangeNotifier {
 
       _todosLosCobros = items;
       _aplicarFiltrosLocales();
+    } on CustomApiException catch (e) {
+      _errorMessage = e.messageUser;
     } catch (e) {
-      _errorMessage = e.toString().replaceAll('Exception: ', '');
+      _errorMessage = ApiService.limpiarMensajeExcepcion(e);
     } finally {
       _isLoading = false;
       _isRefreshing = false;
@@ -400,8 +403,13 @@ class CajaProvider extends ChangeNotifier {
       _validacionActivo = await _cajaService.validarActivoBackorder(req);
       _skuActivoAtribuido = sku;
       _forzarAtribucion = false;
+    } on CustomApiException catch (e) {
+      _errorMessage = e.messageUser;
+      _validacionActivo = null;
+      _skuActivoAtribuido = null;
+      _forzarAtribucion = false;
     } catch (e) {
-      _errorMessage = e.toString().replaceAll('Exception: ', '');
+      _errorMessage = ApiService.limpiarMensajeExcepcion(e);
       _validacionActivo = null;
       _skuActivoAtribuido = null;
       _forzarAtribucion = false;
@@ -439,8 +447,11 @@ class CajaProvider extends ChangeNotifier {
       _ultimoResultadoCobro = resultado;
 
       return resultado;
+    } on CustomApiException catch (e) {
+      _errorMessage = e.messageUser;
+      rethrow;
     } catch (e) {
-      _errorMessage = e.toString().replaceAll('Exception: ', '');
+      _errorMessage = ApiService.limpiarMensajeExcepcion(e);
       rethrow;
     } finally {
       _isProcesandoCobro = false;

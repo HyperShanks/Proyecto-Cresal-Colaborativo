@@ -41,6 +41,9 @@ class OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
 
   bool _isLoading = false;
   String? _errorMessage;
+  String? _codigoError;
+  String? _detalleTecnicoError;
+  bool _mostrarDetalleTecnico = false;
   HistorialCajaResponseModel? _data;
 
   /// Permite a vistas contenedoras (como [DashboardGerenciaView]) solicitar una recarga explícita.
@@ -96,6 +99,9 @@ class OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
+      _codigoError = null;
+      _detalleTecnicoError = null;
+      _mostrarDetalleTecnico = false;
       _paginaActual = pagina;
     });
 
@@ -126,17 +132,20 @@ class OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
       });
     } on CustomApiException catch (e) {
       if (!mounted) return;
-      debugPrint('📦 [GERENCIA-ORDENES] ❌ Error API al cargar órdenes: ${e.messageUser} (Código: ${e.errorCode})');
+      debugPrint('📦 [GERENCIA-ORDENES] ❌ Error API al cargar órdenes: ${e.messageUser} (Código: ${e.diagnosticCode})');
       setState(() {
         _errorMessage = e.messageUser;
+        _codigoError = e.diagnosticCode;
+        _detalleTecnicoError = e.messageDev;
         _isLoading = false;
       });
     } catch (e) {
       if (!mounted) return;
       debugPrint('📦 [GERENCIA-ORDENES] ❌ Error inesperado al cargar órdenes: $e');
       setState(() {
-        _errorMessage =
-            'Ocurrió un error inesperado al cargar las órdenes. Intente nuevamente.';
+        _errorMessage = ApiService.limpiarMensajeExcepcion(e);
+        _codigoError = 'GERENCIA_ORDENES_ERROR';
+        _detalleTecnicoError = e.toString();
         _isLoading = false;
       });
     }
@@ -245,6 +254,7 @@ class OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
     if (_errorMessage != null) {
       return Center(
         child: Container(
+          constraints: const BoxConstraints(maxWidth: 480),
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
             color: AppPalette.surfaceLight,
@@ -257,6 +267,29 @@ class OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
               const Icon(Icons.error_outline_rounded,
                   size: 40, color: AppPalette.error),
               const SizedBox(height: 12),
+              if (_codigoError != null && _codigoError!.isNotEmpty) ...[
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppPalette.error.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: AppPalette.error.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Text(
+                    'Código: ${_codigoError!}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: AppPalette.error,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
               Text(
                 _errorMessage!,
                 style: AppTypography.body.copyWith(
@@ -265,6 +298,53 @@ class OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
                 ),
                 textAlign: TextAlign.center,
               ),
+              if (_detalleTecnicoError != null &&
+                  _detalleTecnicoError!.trim().isNotEmpty) ...[
+                const SizedBox(height: 8),
+                InkWell(
+                  onTap: () {
+                    setState(() {
+                      _mostrarDetalleTecnico = !_mostrarDetalleTecnico;
+                    });
+                  },
+                  borderRadius: BorderRadius.circular(4),
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    child: Text(
+                      _mostrarDetalleTecnico
+                          ? 'Ocultar detalle técnico ▲'
+                          : 'Ver detalle técnico ▼',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppPalette.primary,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                ),
+                if (_mostrarDetalleTecnico) ...[
+                  const SizedBox(height: 6),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFFCBD5E1)),
+                    ),
+                    child: SelectableText(
+                      _detalleTecnicoError!,
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontFamily: 'monospace',
+                        color: Color(0xFF334155),
+                      ),
+                      textAlign: TextAlign.left,
+                    ),
+                  ),
+                ],
+              ],
               const SizedBox(height: 16),
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(

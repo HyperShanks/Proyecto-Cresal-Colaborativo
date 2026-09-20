@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../core/services/api_service.dart';
 import '../../models/backorder_gerencia_models.dart';
 import '../../services/gerencia_service.dart';
 import '../widgets/kpi_card_widget.dart';
@@ -40,6 +41,9 @@ class BackordersGerenciaViewState extends State<BackordersGerenciaView> {
 
   bool _isLoading = false;
   String? _errorMessage;
+  String? _codigoError;
+  String? _detalleTecnicoError;
+  bool _mostrarDetalleTecnico = false;
 
   BackordersKpisModel _kpis = BackordersKpisModel.empty();
   List<BackorderItemModel> _backorders = [];
@@ -91,6 +95,9 @@ class BackordersGerenciaViewState extends State<BackordersGerenciaView> {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
+      _codigoError = null;
+      _detalleTecnicoError = null;
+      _mostrarDetalleTecnico = false;
     });
 
     try {
@@ -119,11 +126,22 @@ class BackordersGerenciaViewState extends State<BackordersGerenciaView> {
         _totalRecaudadoSenas = listData.totalRecaudadoSenas;
         _isLoading = false;
       });
+    } on CustomApiException catch (e) {
+      if (!mounted) return;
+      debugPrint('🌱 [GERENCIA-VENTAS_EN_VERDE] ❌ Error API al cargar datos: ${e.messageUser} (Código: ${e.diagnosticCode})');
+      setState(() {
+        _errorMessage = e.messageUser;
+        _codigoError = e.diagnosticCode;
+        _detalleTecnicoError = e.messageDev;
+        _isLoading = false;
+      });
     } catch (e) {
       if (!mounted) return;
       debugPrint('🌱 [GERENCIA-VENTAS_EN_VERDE] ❌ Error al cargar datos: $e');
       setState(() {
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
+        _errorMessage = ApiService.limpiarMensajeExcepcion(e);
+        _codigoError = 'GERENCIA_BACKORDERS_ERROR';
+        _detalleTecnicoError = e.toString();
         _isLoading = false;
       });
     }
@@ -134,6 +152,9 @@ class BackordersGerenciaViewState extends State<BackordersGerenciaView> {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
+      _codigoError = null;
+      _detalleTecnicoError = null;
+      _mostrarDetalleTecnico = false;
     });
 
     try {
@@ -153,11 +174,22 @@ class BackordersGerenciaViewState extends State<BackordersGerenciaView> {
         _totalRecaudadoSenas = listData.totalRecaudadoSenas;
         _isLoading = false;
       });
+    } on CustomApiException catch (e) {
+      if (!mounted) return;
+      debugPrint('🌱 [GERENCIA-VENTAS_EN_VERDE] ❌ Error API al filtrar: ${e.messageUser} (Código: ${e.diagnosticCode})');
+      setState(() {
+        _errorMessage = e.messageUser;
+        _codigoError = e.diagnosticCode;
+        _detalleTecnicoError = e.messageDev;
+        _isLoading = false;
+      });
     } catch (e) {
       if (!mounted) return;
       debugPrint('🌱 [GERENCIA-VENTAS_EN_VERDE] ❌ Error al filtrar: $e');
       setState(() {
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
+        _errorMessage = ApiService.limpiarMensajeExcepcion(e);
+        _codigoError = 'GERENCIA_BACKORDERS_ERROR';
+        _detalleTecnicoError = e.toString();
         _isLoading = false;
       });
     }
@@ -939,27 +971,96 @@ class BackordersGerenciaViewState extends State<BackordersGerenciaView> {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppPalette.error.withValues(alpha: 0.3)),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(
-            Icons.error_outline_rounded,
-            color: AppPalette.error,
-            size: 20,
+          Row(
+            children: [
+              const Icon(
+                Icons.error_outline_rounded,
+                color: AppPalette.error,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              if (_codigoError != null && _codigoError!.isNotEmpty) ...[
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppPalette.error.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    _codigoError!,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: AppPalette.error,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
+              Expanded(
+                child: Text(
+                  _errorMessage ?? 'Ocurrió un error al consultar los datos.',
+                  style: const TextStyle(fontSize: 12, color: AppPalette.error),
+                ),
+              ),
+              TextButton(
+                onPressed: _cargarDatos,
+                child: const Text(
+                  'Reintentar',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              _errorMessage ?? 'Ocurrió un error al consultar los datos.',
-              style: const TextStyle(fontSize: 12, color: AppPalette.error),
+          if (_detalleTecnicoError != null &&
+              _detalleTecnicoError!.trim().isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.only(left: 30, top: 4),
+              child: InkWell(
+                onTap: () {
+                  setState(() {
+                    _mostrarDetalleTecnico = !_mostrarDetalleTecnico;
+                  });
+                },
+                child: Text(
+                  _mostrarDetalleTecnico
+                      ? 'Ocultar detalle técnico ▲'
+                      : 'Ver detalle técnico ▼',
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: AppPalette.primary,
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+              ),
             ),
-          ),
-          TextButton(
-            onPressed: _cargarDatos,
-            child: const Text(
-              'Reintentar',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-            ),
-          ),
+            if (_mostrarDetalleTecnico) ...[
+              const SizedBox(height: 6),
+              Container(
+                margin: const EdgeInsets.only(left: 30),
+                width: double.infinity,
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: const Color(0xFFCBD5E1)),
+                ),
+                child: SelectableText(
+                  _detalleTecnicoError!,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontFamily: 'monospace',
+                    color: Color(0xFF334155),
+                  ),
+                ),
+              ),
+            ],
+          ],
         ],
       ),
     );

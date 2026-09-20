@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../core/services/api_service.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../../ventas/models/catalogo_model.dart';
 import '../../../inventario/services/inventario_service.dart';
@@ -71,6 +72,9 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
 
   bool _isLoading = false;
   String? _errorMessage;
+  String? _codigoError;
+  String? _detalleTecnicoError;
+  bool _mostrarDetalleTecnico = false;
   List<CatalogoItem> _items = [];
   int _totalCount = 0;
   int _pendientesTasacionCount = 0;
@@ -154,6 +158,9 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
+      _codigoError = null;
+      _detalleTecnicoError = null;
+      _mostrarDetalleTecnico = false;
       _paginaActual = targetPage;
     });
 
@@ -201,11 +208,22 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
         _pendientesTasacionCount = res.pendientesTasacionCount;
         _isLoading = false;
       });
+    } on CustomApiException catch (e) {
+      if (!mounted) return;
+      debugPrint('🏭 [GERENCIA-INVENTARIO] ❌ Error API al cargar inventario: ${e.messageUser} (Código: ${e.diagnosticCode})');
+      setState(() {
+        _errorMessage = e.messageUser;
+        _codigoError = e.diagnosticCode;
+        _detalleTecnicoError = e.messageDev;
+        _isLoading = false;
+      });
     } catch (e) {
       if (!mounted) return;
       debugPrint('🏭 [GERENCIA-INVENTARIO] ❌ Error al cargar inventario: $e');
       setState(() {
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
+        _errorMessage = ApiService.limpiarMensajeExcepcion(e);
+        _codigoError = 'GERENCIA_INVENTARIO_ERROR';
+        _detalleTecnicoError = e.toString();
         _isLoading = false;
       });
     }
@@ -1762,6 +1780,7 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
 
   Widget _buildErrorState() {
     return Container(
+      constraints: const BoxConstraints(maxWidth: 480),
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -1774,11 +1793,84 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
           children: [
             const Icon(Icons.error_outline, color: AppPalette.error, size: 40),
             const SizedBox(height: 10),
+            if (_codigoError != null && _codigoError!.isNotEmpty) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppPalette.error.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: AppPalette.error.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Text(
+                  'Código: ${_codigoError!}',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: AppPalette.error,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
             Text(
               _errorMessage ?? 'Ocurrió un error al cargar el inventario.',
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF0F172A),
+              ),
               textAlign: TextAlign.center,
             ),
+            if (_detalleTecnicoError != null &&
+                _detalleTecnicoError!.trim().isNotEmpty) ...[
+              const SizedBox(height: 8),
+              InkWell(
+                onTap: () {
+                  setState(() {
+                    _mostrarDetalleTecnico = !_mostrarDetalleTecnico;
+                  });
+                },
+                borderRadius: BorderRadius.circular(4),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  child: Text(
+                    _mostrarDetalleTecnico
+                        ? 'Ocultar detalle técnico ▲'
+                        : 'Ver detalle técnico ▼',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppPalette.primary,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ),
+              ),
+              if (_mostrarDetalleTecnico) ...[
+                const SizedBox(height: 6),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFFCBD5E1)),
+                  ),
+                  child: SelectableText(
+                    _detalleTecnicoError!,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontFamily: 'monospace',
+                      color: Color(0xFF334155),
+                    ),
+                    textAlign: TextAlign.left,
+                  ),
+                ),
+              ],
+            ],
             const SizedBox(height: 14),
             ElevatedButton.icon(
               onPressed: () => _cargarInventario(),

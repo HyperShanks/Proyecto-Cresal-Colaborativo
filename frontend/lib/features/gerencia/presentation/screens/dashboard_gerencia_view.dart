@@ -1,6 +1,7 @@
 // frontend/lib/features/gerencia/presentation/screens/dashboard_gerencia_view.dart
 import 'package:flutter/material.dart';
 import '../../../../core/routes/route_observer.dart';
+import '../../../../core/services/api_service.dart';
 import '../../../../routes/app_routes.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/utils/currency_formatter.dart';
@@ -35,6 +36,9 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
   int? _sucursalSeleccionada;
   bool _cargando = false;
   String? _mensajeError;
+  String? _codigoError;
+  String? _detalleTecnicoError;
+  bool _mostrarDetalleTecnico = false;
 
   KpiFinancieroModel? _kpis;
   ResumenPagosModel? _pagos;
@@ -146,6 +150,9 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
     setState(() {
       _cargando = true;
       _mensajeError = null;
+      _codigoError = null;
+      _detalleTecnicoError = null;
+      _mostrarDetalleTecnico = false;
     });
     _spinController.repeat();
 
@@ -198,13 +205,28 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
     } catch (e) {
       if (!mounted) return;
 
-      final errorStr = e.toString().replaceFirst('Exception: ', '');
+      String errorStr;
+      String? codigoDiag;
+      String? devDetails;
+
+      if (e is CustomApiException) {
+        errorStr = e.messageUser;
+        codigoDiag = e.diagnosticCode;
+        devDetails = e.messageDev;
+      } else {
+        errorStr = ApiService.limpiarMensajeExcepcion(e);
+        codigoDiag = 'GERENCIA_NETWORK_ERROR';
+        devDetails = e.toString();
+      }
+
       debugPrint(
-        '📊 [GERENCIA-DASHBOARD] ❌ Error al cargar dashboard: $errorStr',
+        '📊 [GERENCIA-DASHBOARD] ❌ Error al cargar dashboard: $errorStr [$codigoDiag]',
       );
       setState(() {
         _cargando = false;
         _mensajeError = errorStr;
+        _codigoError = codigoDiag;
+        _detalleTecnicoError = devDetails;
       });
       _spinController.stop();
       _spinController.reset();
@@ -212,7 +234,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
       CustomErrorSnackbar.mostrar(
         context,
         mensaje: errorStr,
-        codigoError: 'GERENCIA_NETWORK_ERROR',
+        codigoError: codigoDiag,
         onReintentar: () => _cargarDashboard(),
       );
     }
@@ -2351,12 +2373,81 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
               ),
               textAlign: TextAlign.center,
             ),
+            if (_codigoError != null && _codigoError!.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppPalette.error.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: AppPalette.error.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Text(
+                  'Código: ${_codigoError!}',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: AppPalette.error,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 8),
             Text(
               _mensajeError ?? 'Ocurrió un error al consultar el servidor.',
-              style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+              style: const TextStyle(fontSize: 13, color: Color(0xFF64748B)),
               textAlign: TextAlign.center,
             ),
+            if (_detalleTecnicoError != null &&
+                _detalleTecnicoError!.trim().isNotEmpty) ...[
+              const SizedBox(height: 8),
+              InkWell(
+                onTap: () {
+                  setState(() {
+                    _mostrarDetalleTecnico = !_mostrarDetalleTecnico;
+                  });
+                },
+                borderRadius: BorderRadius.circular(4),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  child: Text(
+                    _mostrarDetalleTecnico
+                        ? 'Ocultar detalle técnico ▲'
+                        : 'Ver detalle técnico ▼',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppPalette.primary,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ),
+              ),
+              if (_mostrarDetalleTecnico) ...[
+                const SizedBox(height: 6),
+                Container(
+                  constraints: const BoxConstraints(maxWidth: 480),
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFFCBD5E1)),
+                  ),
+                  child: SelectableText(
+                    _detalleTecnicoError!,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontFamily: 'monospace',
+                      color: Color(0xFF334155),
+                    ),
+                    textAlign: TextAlign.left,
+                  ),
+                ),
+              ],
+            ],
             const SizedBox(height: 20),
             ElevatedButton.icon(
               onPressed: () => _cargarDashboard(),
