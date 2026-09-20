@@ -523,6 +523,29 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
     );
   }
 
+  Future<void> _ejecutarFlujoForzado() async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const Center(child: CircularProgressIndicator()),
+    );
+
+    final vehiculo = await _paletizadoService.obtenerSiguienteParaForzar();
+
+    if (mounted) Navigator.pop(context); // cerrar loading
+
+    if (vehiculo != null && mounted) {
+      Navigator.pushNamed(context, '/forzar-ingreso', arguments: vehiculo);
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No hay vehículos vírgenes disponibles para forzar.'),
+          backgroundColor: AppPalette.warning,
+        ),
+      );
+    }
+  }
+
   Future<void> _ejecutarBusqueda() async {
     if (_buscarPorNumeroMotor) {
       await _buscarPorMotor();
@@ -1021,26 +1044,31 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.edit_note, color: AppPalette.primary, size: 22),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Especificaciones Técnicas (Editables)',
-                              style: AppTypography.title.copyWith(
-                                color: AppPalette.primary,
-                                fontSize: 15,
+                        const Icon(Icons.edit_note, color: AppPalette.primary, size: 24),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Especificaciones Técnicas (Editables)',
+                                style: AppTypography.title.copyWith(
+                                  color: AppPalette.primary,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                        Text(
-                          'Modifica antes de etiquetar',
-                          style: AppTypography.small.copyWith(
-                            color: AppPalette.textSecondary,
-                            fontSize: 11,
+                              const SizedBox(height: 2),
+                              Text(
+                                'Modifica antes de etiquetar',
+                                style: AppTypography.small.copyWith(
+                                  color: AppPalette.textSecondary,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
@@ -1330,6 +1358,96 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
                   ),
                 ),
               ),
+              const SizedBox(height: 20),
+              // ── 3. BOTÓN / SECCIÓN DE PALETIZADO FORZADO ──
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: AppPalette.surface,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: AppPalette.warning.withValues(alpha: 0.35),
+                        width: 1.2,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: AppPalette.warning.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(
+                                Icons.warning_amber_rounded,
+                                color: AppPalette.warning,
+                                size: 24,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Forzado de Ingreso',
+                                    style: AppTypography.title.copyWith(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppPalette.textPrimary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Para repuestos sin N° de ingreso físico o sin trazabilidad',
+                                    style: AppTypography.small.copyWith(
+                                      fontSize: 11,
+                                      color: AppPalette.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppPalette.warning,
+                              foregroundColor: Colors.black,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              elevation: 0,
+                            ),
+                            onPressed: _isLoading ? null : _ejecutarFlujoForzado,
+                            icon: const Icon(Icons.bolt, color: Colors.black, size: 20),
+                            label: Text(
+                              'FORZAR PALETIZADO',
+                              style: AppTypography.button.copyWith(
+                                color: Colors.black,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
             ],
           ],
         ),

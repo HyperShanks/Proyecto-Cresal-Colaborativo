@@ -372,7 +372,7 @@ class CatalogoItemDetailSheet extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'PRECIO LISTA REF:',
+                    'PRECIO SUGERIDO:',
                     style: AppTypography.small.copyWith(
                       fontSize: 10,
                       letterSpacing: 0.8,
@@ -381,13 +381,24 @@ class CatalogoItemDetailSheet extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    item.precioFormateado,
+                    item.precioSugeridoFormateado,
                     style: AppTypography.headline.copyWith(
                       color: AppPalette.secondary,
-                      fontSize: 22,
+                      fontSize: 20,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+                  if (item.precioMinimo != null && item.precioMaximo != null && item.precioMinimo != item.precioMaximo) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      'Rango: ${item.rangoPrecioFormateado}',
+                      style: AppTypography.small.copyWith(
+                        fontSize: 11,
+                        color: AppPalette.textSecondary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

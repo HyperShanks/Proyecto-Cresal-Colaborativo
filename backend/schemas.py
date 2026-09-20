@@ -1,6 +1,6 @@
 import os
-from pydantic import BaseModel, Field, field_validator, ConfigDict
-from typing import Optional, List
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
+from typing import Optional, List, Any, Union
 from uuid import UUID
 from datetime import datetime
 from enum import Enum
@@ -98,6 +98,22 @@ class VehiculoCreate(BaseModel):
 
     # Datos que FastAPI usará para crear el Detalle_Caja_Cambio internamente
     transmision: str = Field(..., description="Ej: mec, at")
+
+class MotorUpdate(BaseModel):
+    cilindrada: str
+    combustible: str
+    transmision_tipo: str
+
+class CajaUpdate(BaseModel):
+    transmision_tipo: str
+
+class VehiculoForzadoUpdate(BaseModel):
+    marca: str
+    modelo: str
+    anio: int
+    traccion: str
+    motor: MotorUpdate
+    caja: CajaUpdate
 
 # ==========================================
 # ESQUEMAS PARA PALETIZADO / IMPRESIÓN (HU-2.4)
@@ -258,6 +274,18 @@ class ArticuloResumenDTO(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class HistorialAbonoItemDTO(BaseModel):
+    id_pago: UUID
+    monto: int
+    metodo_pago: str
+    fecha_pago: datetime
+    fecha_pago_formateada: str
+    hora_pago_formateada: str
+    estado_pago: str = "Procesado"
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class CobroPendienteItemResponse(BaseModel):
     id_referencia: UUID = Field(description="id_orden o id_reserva según la entidad de origen")
     folio_documento: str = Field(description="Ej: ORD-9780 o RES-5401")
@@ -279,7 +307,10 @@ class CobroPendienteItemResponse(BaseModel):
     # Datos Financieros
     total_operacion: int = Field(description="Total venta o precio acordado de reserva")
     abono_previo: int = Field(default=0, description="Monto ya pagado previamente")
+    abono_requerido: int = Field(default=0, description="Piso mínimo comercial requerido para el primer abono")
+    saldo_pendiente: int = Field(default=0, description="Monto restante para liquidar el 100% de la venta")
     monto_a_cobrar: int = Field(description="Saldo pendiente o abono fijado requerido")
+    historial_abonos: List[HistorialAbonoItemDTO] = Field(default_factory=list, description="Lista de abonos previos registrados")
 
     # Detalles complementarios
     articulos: List[ArticuloResumenDTO] = Field(default_factory=list)
@@ -351,6 +382,8 @@ class ActivoDetalleBackorderDTO(BaseModel):
     vin: Optional[str] = None
     ubicacion: Optional[str] = None
     precio_referencia: Optional[int] = None
+    precio_minimo: Optional[int] = None
+    precio_maximo: Optional[int] = None
     estado_conservacion: Optional[str] = None
 
 
@@ -464,6 +497,8 @@ class CatalogoItemResponse(BaseModel):
     id_activo: UUID
     sku_qr_fisico: str
     precio_referencia: Optional[int] = None
+    precio_minimo: Optional[int] = None
+    precio_maximo: Optional[int] = None
     
     # Categoría y Sucursal
     id_categoria: int
@@ -902,19 +937,42 @@ class ActivoPendientePrecioResponse(BaseModel):
     estado_activo: str
     fecha_creacion: Optional[str] = None
     fotografias: List[str] = Field(default_factory=list, description="URLs de fotografías registradas del activo")
+    precio_referencia: Optional[int] = None
+    precio_minimo: Optional[int] = None
+    precio_maximo: Optional[int] = None
 
 
 class AsignarPrecioRequest(BaseModel):
-    """Payload para fijar o actualizar el precio de referencia de un activo."""
-    precio_referencia: int = Field(..., gt=0, description="Precio de referencia en pesos chilenos (debe ser mayor a 0)")
+    """Payload para fijar o actualizar el rango de precio (mínimo y máximo) de un activo."""
+    precio_minimo: Optional[int] = Field(None, gt=0, description="Precio mínimo piso de negociación en pesos chilenos")
+    precio_maximo: Optional[int] = Field(None, gt=0, description="Precio máximo sugerido/de lista en pesos chilenos")
+    precio_referencia: Optional[int] = Field(None, description="Precio de referencia / sugerido")
+
+    @model_validator(mode="after")
+    def validar_rango(self):
+        if self.precio_minimo is None and self.precio_referencia is not None:
+            self.precio_minimo = self.precio_referencia
+        if self.precio_maximo is None and self.precio_referencia is not None:
+            self.precio_maximo = self.precio_referencia
+
+        if self.precio_minimo is None or self.precio_maximo is None:
+            raise ValueError("Se debe proporcionar al menos precio_minimo y precio_maximo, o precio_referencia.")
+
+        if self.precio_minimo > self.precio_maximo:
+            raise ValueError("El precio mínimo no puede ser mayor que el precio máximo.")
+        if self.precio_referencia is None:
+            self.precio_referencia = self.precio_maximo
+        return self
 
 
 class AsignarPrecioResponse(BaseModel):
-    """DTO de respuesta tras asignar exitosamente el precio."""
+    """DTO de respuesta tras asignar exitosamente el rango de precios."""
     model_config = ConfigDict(from_attributes=True)
 
     id_activo: UUID
     sku_qr_fisico: str
+    precio_minimo: int
+    precio_maximo: int
     precio_referencia: int
     estado_activo: str
     mensaje: str
@@ -1226,7 +1284,7 @@ class CheckoutWizardRequest(BaseModel):
     monto_pendiente: int
     monto_abono: Optional[int] = 0
     instrucciones_bodega: Optional[str] = None
-    items_inventariados: List[UUID] = Field(default_factory=list)
+    items_inventariados: List[Any] = Field(default_factory=list)
     items_manuales: List[dict] = Field(default_factory=list)
     reservas: Optional[List[ReservaBackorderDTO]] = None
     datos_despacho: Optional[DespachoDTO] = None

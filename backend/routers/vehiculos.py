@@ -43,6 +43,105 @@ def obtener_siguiente_ingreso(db: Session = Depends(get_db), usuario_logeado: mo
         
     return {"siguiente_ingreso": str(siguiente_numero)}
 
+@router.get("/siguiente-para-forzar", status_code=200)
+def obtener_siguiente_para_forzar(db: Session = Depends(get_db), usuario_logeado: models.Usuario = Depends(get_current_user)):
+    """
+    Busca el vehículo más antiguo (numero_ingreso) donde NINGUNO de sus activos inventariados
+    haya sido paletizado (ubicacion_pasillo no es nulo y es distinto de 'S/P').
+    """
+    estado_desarme = db.query(models.Estado_Activo).filter(models.Estado_Activo.nombre_estado == "Desarme").first()
+    id_desarme = estado_desarme.id_estado if estado_desarme else 5
+
+    vehiculo = db.query(models.Vehiculo_Origen).filter(
+        models.Vehiculo_Origen.numero_ingreso.isnot(None),
+        db.query(models.Activo_Inventariado).filter(
+            models.Activo_Inventariado.id_vehiculo == models.Vehiculo_Origen.id_vehiculo
+        ).exists(),
+        ~db.query(models.Activo_Inventariado).filter(
+            models.Activo_Inventariado.id_vehiculo == models.Vehiculo_Origen.id_vehiculo,
+            models.Activo_Inventariado.id_estado != id_desarme
+        ).exists()
+    ).order_by(cast(models.Vehiculo_Origen.numero_ingreso, Integer).asc()).first()
+
+    if not vehiculo:
+        raise HTTPException(
+            status_code=404,
+            detail="No hay vehículos vírgenes disponibles para forzar (todos tienen al menos un activo que no está en estado Desarme)."
+        )
+
+    # Fetch motor and caja details
+    activo_motor = db.query(models.Activo_Inventariado).filter(
+        models.Activo_Inventariado.id_vehiculo == vehiculo.id_vehiculo,
+        models.Activo_Inventariado.id_categoria == 1 # Motor
+    ).first()
+    
+    activo_caja = db.query(models.Activo_Inventariado).filter(
+        models.Activo_Inventariado.id_vehiculo == vehiculo.id_vehiculo,
+        models.Activo_Inventariado.id_categoria == 2 # Caja
+    ).first()
+
+    detalle_motor = db.query(models.Detalle_Motor).filter(models.Detalle_Motor.id_activo == activo_motor.id_activo).first() if activo_motor else None
+    detalle_caja = db.query(models.Detalle_Caja_Cambio).filter(models.Detalle_Caja_Cambio.id_activo == activo_caja.id_activo).first() if activo_caja else None
+
+    return {
+        "id_vehiculo": str(vehiculo.id_vehiculo),
+        "numero_ingreso": vehiculo.numero_ingreso,
+        "marca": vehiculo.marca,
+        "modelo": vehiculo.modelo,
+        "anio": vehiculo.anio,
+        "traccion": vehiculo.traccion,
+        "motor": {
+            "cilindrada": detalle_motor.cilindrada if detalle_motor else "",
+            "combustible": detalle_motor.combustible if detalle_motor else "",
+            "transmision_tipo": detalle_motor.transmision_tipo if detalle_motor else ""
+        },
+        "caja": {
+            "transmision_tipo": detalle_caja.transmision_tipo if detalle_caja else ""
+        }
+    }
+
+@router.put("/forzar/{id_vehiculo}", status_code=200)
+def forzar_ingreso_vehiculo(
+    id_vehiculo: str,
+    payload: schemas.VehiculoForzadoUpdate,
+    db: Session = Depends(get_db),
+    usuario_logeado: models.Usuario = Depends(get_current_user)
+):
+    vehiculo = db.query(models.Vehiculo_Origen).filter(models.Vehiculo_Origen.id_vehiculo == id_vehiculo).first()
+    if not vehiculo:
+        raise HTTPException(status_code=404, detail="Vehículo no encontrado")
+
+    # Update Vehiculo
+    vehiculo.marca = payload.marca
+    vehiculo.modelo = payload.modelo
+    vehiculo.anio = payload.anio
+    vehiculo.traccion = payload.traccion
+
+    # Update Motor
+    activo_motor = db.query(models.Activo_Inventariado).filter(
+        models.Activo_Inventariado.id_vehiculo == vehiculo.id_vehiculo,
+        models.Activo_Inventariado.id_categoria == 1
+    ).first()
+    if activo_motor:
+        detalle_motor = db.query(models.Detalle_Motor).filter(models.Detalle_Motor.id_activo == activo_motor.id_activo).first()
+        if detalle_motor:
+            detalle_motor.cilindrada = payload.motor.cilindrada
+            detalle_motor.combustible = payload.motor.combustible
+            detalle_motor.transmision_tipo = payload.motor.transmision_tipo
+
+    # Update Caja
+    activo_caja = db.query(models.Activo_Inventariado).filter(
+        models.Activo_Inventariado.id_vehiculo == vehiculo.id_vehiculo,
+        models.Activo_Inventariado.id_categoria == 2
+    ).first()
+    if activo_caja:
+        detalle_caja = db.query(models.Detalle_Caja_Cambio).filter(models.Detalle_Caja_Cambio.id_activo == activo_caja.id_activo).first()
+        if detalle_caja:
+            detalle_caja.transmision_tipo = payload.caja.transmision_tipo
+
+    db.commit()
+    return {"status": "success", "mensaje": "Datos forzados correctamente", "numero_ingreso": vehiculo.numero_ingreso}
+
 @router.post("/", response_model=schemas.VehiculoResponse, status_code=201)
 async def registrar_ingreso_vehiculo(
     # --- NUEVO: Recibimos los datos y la foto por separado (Multipart) ---

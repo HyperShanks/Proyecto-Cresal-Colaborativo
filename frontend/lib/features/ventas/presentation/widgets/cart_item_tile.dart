@@ -60,6 +60,14 @@ class _CartItemTileState extends State<CartItemTile> {
     }
   }
 
+  void _onPrecioChanged(String val) {
+    final nuevoPrecio = CurrencyFormatter.parse(val);
+    if (nuevoPrecio != widget.item.precioUnitario) {
+      CartController.instance.actualizarPrecio(widget.item.id, nuevoPrecio);
+      setState(() {});
+    }
+  }
+
   void _guardarPrecio() {
     final nuevoPrecio = CurrencyFormatter.parse(_precioController.text);
 
@@ -70,6 +78,7 @@ class _CartItemTileState extends State<CartItemTile> {
       _precioController.text =
           CurrencyFormatter.formatNumber(widget.item.precioUnitario);
     }
+    setState(() {});
   }
 
   void _editarNotas(BuildContext context) async {
@@ -134,6 +143,11 @@ class _CartItemTileState extends State<CartItemTile> {
   @override
   Widget build(BuildContext context) {
     final isInventario = widget.item.esInventariado;
+    final invItem = isInventario && widget.item is InventariadoCartItem
+        ? (widget.item as InventariadoCartItem)
+        : null;
+    final esInvalido = invItem != null && !invItem.esPrecioValido;
+    final errorMsg = invItem?.errorRangoPrecio;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12.0),
@@ -141,10 +155,12 @@ class _CartItemTileState extends State<CartItemTile> {
         color: AppPalette.surface,
         borderRadius: BorderRadius.circular(12.0),
         border: Border.all(
-          color: isInventario
-              ? AppPalette.primary.withValues(alpha: 0.2)
-              : AppPalette.secondary.withValues(alpha: 0.25),
-          width: 1.0,
+          color: esInvalido
+              ? AppPalette.error
+              : (isInventario
+                  ? AppPalette.primary.withValues(alpha: 0.2)
+                  : AppPalette.secondary.withValues(alpha: 0.25)),
+          width: esInvalido ? 1.5 : 1.0,
         ),
       ),
       child: Padding(
@@ -226,7 +242,11 @@ class _CartItemTileState extends State<CartItemTile> {
             // ── Título del Ítem ─────────────────────────────────────────────
             Text(
               widget.item.titulo,
-              style: AppTypography.cardTitle,
+              style: AppTypography.cardTitle.copyWith(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: AppPalette.textPrimary,
+              ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
@@ -237,7 +257,8 @@ class _CartItemTileState extends State<CartItemTile> {
               widget.item.subtitulo,
               style: AppTypography.small.copyWith(
                 color: AppPalette.textSecondary,
-                fontSize: 12,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
               ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
@@ -252,11 +273,11 @@ class _CartItemTileState extends State<CartItemTile> {
 
             // ── Fila Inferior: Edición de Precio / Cantidad y Subtotal ──────
             Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Columna 1: Precio Acordado / Unitario Editable
                 Expanded(
-                  flex: 3,
+                  flex: isInventario ? 5 : 4,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -265,20 +286,23 @@ class _CartItemTileState extends State<CartItemTile> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AppTypography.small.copyWith(
-                          fontSize: 10,
-                          letterSpacing: 0.8,
+                          fontSize: 12,
+                          letterSpacing: 0.5,
                           fontWeight: FontWeight.bold,
                           color: AppPalette.textSecondary,
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 6),
                       Container(
-                        height: 42,
+                        height: 46,
                         decoration: BoxDecoration(
                           color: AppPalette.background,
                           borderRadius: BorderRadius.circular(8.0),
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.1),
+                            color: esInvalido
+                                ? AppPalette.error
+                                : Colors.white.withValues(alpha: 0.15),
+                            width: esInvalido ? 1.5 : 1.0,
                           ),
                         ),
                         child: TextField(
@@ -288,38 +312,78 @@ class _CartItemTileState extends State<CartItemTile> {
                           inputFormatters: [MilesTextInputFormatter()],
                           textAlignVertical: TextAlignVertical.center,
                           style: AppTypography.body.copyWith(
-                            color: AppPalette.secondary,
+                            color: esInvalido ? AppPalette.error : AppPalette.secondary,
                             fontWeight: FontWeight.bold,
-                            fontSize: 14,
+                            fontSize: 16,
                           ),
                           decoration: InputDecoration(
+                            isDense: true,
+                            filled: true,
+                            fillColor: AppPalette.background,
                             prefixText: '\$ ',
                             prefixStyle: AppTypography.body.copyWith(
-                              color: AppPalette.secondary,
+                              color: esInvalido ? AppPalette.error : AppPalette.secondary,
                               fontWeight: FontWeight.bold,
-                              fontSize: 13,
+                              fontSize: 16,
                             ),
-                            suffixIcon: const Icon(
-                              Icons.edit_outlined,
-                              size: 14,
-                              color: AppPalette.neutral,
+                            suffixIcon: Icon(
+                              esInvalido ? Icons.error_outline : Icons.edit_outlined,
+                              size: 16,
+                              color: esInvalido ? AppPalette.error : AppPalette.neutral,
                             ),
-                            suffixIconConstraints: const BoxConstraints(minWidth: 20, minHeight: 20),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                            suffixIconConstraints: const BoxConstraints(minWidth: 28, minHeight: 20),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                             border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
                           ),
+                          onChanged: _onPrecioChanged,
                           onSubmitted: (_) => _guardarPrecio(),
                         ),
                       ),
+                      if (invItem != null) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          'Rango: ${invItem.rangoPrecioFormateado}',
+                          style: AppTypography.small.copyWith(
+                            fontSize: 12,
+                            color: esInvalido ? AppPalette.error : AppPalette.textSecondary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (esInvalido && errorMsg != null) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Icon(Icons.warning_amber_rounded, size: 14, color: AppPalette.error),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  errorMsg,
+                                  style: AppTypography.small.copyWith(
+                                    fontSize: 12,
+                                    color: AppPalette.error,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
                     ],
                   ),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 10),
 
                 // Columna 2 (si es Venta Libre): Selector de Cantidad
                 if (!isInventario) ...[
                   Expanded(
-                    flex: 2,
+                    flex: 3,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
@@ -328,20 +392,20 @@ class _CartItemTileState extends State<CartItemTile> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: AppTypography.small.copyWith(
-                            fontSize: 10,
-                            letterSpacing: 0.8,
+                            fontSize: 12,
+                            letterSpacing: 0.5,
                             fontWeight: FontWeight.bold,
                             color: AppPalette.textSecondary,
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 6),
                         Container(
-                          height: 42,
+                          height: 46,
                           decoration: BoxDecoration(
                             color: AppPalette.background,
                             borderRadius: BorderRadius.circular(8.0),
                             border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.1),
+                              color: Colors.white.withValues(alpha: 0.15),
                             ),
                           ),
                           child: Row(
@@ -351,7 +415,7 @@ class _CartItemTileState extends State<CartItemTile> {
                                 child: IconButton(
                                   padding: EdgeInsets.zero,
                                   visualDensity: VisualDensity.compact,
-                                  icon: const Icon(Icons.remove, size: 14),
+                                  icon: const Icon(Icons.remove, size: 16),
                                   color: widget.item.cantidad > 1
                                       ? AppPalette.textPrimary
                                       : AppPalette.neutral,
@@ -367,14 +431,14 @@ class _CartItemTileState extends State<CartItemTile> {
                                 padding: const EdgeInsets.symmetric(horizontal: 2),
                                 child: Text(
                                   '${widget.item.cantidad}',
-                                  style: AppTypography.title.copyWith(fontSize: 13),
+                                  style: AppTypography.title.copyWith(fontSize: 15),
                                 ),
                               ),
                               Expanded(
                                 child: IconButton(
                                   padding: EdgeInsets.zero,
                                   visualDensity: VisualDensity.compact,
-                                  icon: const Icon(Icons.add, size: 14),
+                                  icon: const Icon(Icons.add, size: 16),
                                   color: AppPalette.textPrimary,
                                   onPressed: () {
                                     CartController.instance.actualizarCantidad(
@@ -390,12 +454,12 @@ class _CartItemTileState extends State<CartItemTile> {
                       ],
                     ),
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 10),
                 ],
 
                 // Columna 3: Subtotal
                 Expanded(
-                  flex: 3,
+                  flex: isInventario ? 4 : 3,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
@@ -404,15 +468,15 @@ class _CartItemTileState extends State<CartItemTile> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AppTypography.small.copyWith(
-                          fontSize: 10,
-                          letterSpacing: 0.8,
+                          fontSize: 12,
+                          letterSpacing: 0.5,
                           fontWeight: FontWeight.bold,
                           color: AppPalette.textSecondary,
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 6),
                       SizedBox(
-                        height: 42,
+                        height: 46,
                         child: Align(
                           alignment: Alignment.centerRight,
                           child: FittedBox(
@@ -422,7 +486,7 @@ class _CartItemTileState extends State<CartItemTile> {
                               widget.item.subtotalFormateado,
                               style: AppTypography.headline.copyWith(
                                 color: AppPalette.secondary,
-                                fontSize: 17,
+                                fontSize: 19,
                                 fontWeight: FontWeight.bold,
                               ),
                               maxLines: 1,
@@ -452,40 +516,54 @@ class _CartItemTileState extends State<CartItemTile> {
     return Padding(
       padding: const EdgeInsets.only(top: 8.0),
       child: InkWell(
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(8),
         onTap: () => _editarNotas(context),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
             color: AppPalette.background,
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: Colors.white.withValues(alpha: 0.05),
+              color: notas != null && notas.isNotEmpty
+                  ? AppPalette.primary.withValues(alpha: 0.3)
+                  : Colors.white.withValues(alpha: 0.08),
             ),
           ),
           child: Row(
             children: [
-              const Icon(Icons.sticky_note_2_outlined, size: 14, color: AppPalette.primary),
-              const SizedBox(width: 6),
+              Icon(
+                Icons.assignment_outlined,
+                size: 16,
+                color: notas != null && notas.isNotEmpty ? AppPalette.primary : AppPalette.neutral,
+              ),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   notas != null && notas.isNotEmpty
-                      ? 'Nota: $notas'
-                      : 'Agregar nota de preparación...',
+                      ? 'Nota Bodega: $notas'
+                      : 'Agregar nota de preparación para bodega...',
                   style: AppTypography.small.copyWith(
-                    fontSize: 11,
+                    fontSize: 13,
                     color: notas != null && notas.isNotEmpty
                         ? AppPalette.textPrimary
-                        : AppPalette.neutral,
+                        : AppPalette.textSecondary,
+                    fontWeight: notas != null && notas.isNotEmpty
+                        ? FontWeight.w600
+                        : FontWeight.normal,
                     fontStyle: notas != null && notas.isNotEmpty
                         ? FontStyle.normal
                         : FontStyle.italic,
                   ),
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              const Icon(Icons.edit_outlined, size: 13, color: AppPalette.neutral),
+              const SizedBox(width: 6),
+              Icon(
+                Icons.edit_outlined,
+                size: 15,
+                color: notas != null && notas.isNotEmpty ? AppPalette.primary : AppPalette.neutral,
+              ),
             ],
           ),
         ),

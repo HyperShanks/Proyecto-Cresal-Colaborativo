@@ -13,6 +13,7 @@ import '../../controllers/checkout_wizard_controller.dart';
 import '../../services/ordenes_service.dart';
 import '../../services/ordenes_sync_notifier.dart';
 import '../widgets/modal_backorder_form.dart';
+import '../widgets/cart_item_tile.dart';
 import '../../../../core/constants/chile_geografia.dart';
 import 'catalogo_screen.dart';
 
@@ -67,7 +68,6 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
 
   // Controladores Paso 4 (Comercial / Abonos)
   final _montoAbonoController = TextEditingController();
-  final _notasGeneralesController = TextEditingController();
 
   @override
   void initState() {
@@ -90,6 +90,8 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
           precio: int.tryParse(item['precio']?.toString() ?? '0') ?? 0,
           pasillo: item['pasillo']?.toString() ?? item['ubicacion_pasillo']?.toString(),
           pallet: item['pallet']?.toString() ?? item['ubicacion_pallet']?.toString(),
+          precioMinimo: int.tryParse(item['precio_minimo']?.toString() ?? ''),
+          precioMaximo: int.tryParse(item['precio_maximo']?.toString() ?? ''),
         );
       }
     }
@@ -120,7 +122,6 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     _receptorTelefonoController.clear();
     _empresaTransporteController.text = 'Chilexpress';
     _montoAbonoController.clear();
-    _notasGeneralesController.clear();
     if (mounted) {
       setState(() {
         _esClienteAnonimo = false;
@@ -156,7 +157,6 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     if (cartItems.isEmpty) {
       _controller.clearAll();
       _montoAbonoController.clear();
-      _notasGeneralesController.clear();
       _controller.setAbonoAdicional(0);
       _controller.setNotasGenerales('');
       return;
@@ -179,6 +179,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
         precio: item.precioFinal,
         pasillo: item.catalogoItem.ubicacionPasillo,
         pallet: item.catalogoItem.ubicacionPallet,
+        precioMinimo: item.precioMinimo,
+        precioMaximo: item.precioMaximo,
+        notasPreparacion: item.notasPreparacion,
       );
     }
 
@@ -263,7 +266,6 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     _receptorTelefonoController.dispose();
     _empresaTransporteController.dispose();
     _montoAbonoController.dispose();
-    _notasGeneralesController.dispose();
     super.dispose();
   }
 
@@ -596,7 +598,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
 
   // ── Stepper Bar ───────────────────────────────────────────────────────────
   Widget _buildStepProgressBar() {
-    final stepLabels = ['Ítems & Reservas', 'Cliente CRM', 'Logística', 'Abonos / Notas', 'Confirmación'];
+    final stepLabels = ['Ítems', 'Cliente', 'Logística', 'Abonos', 'Confirmar'];
 
     return Container(
       color: AppPalette.surface,
@@ -636,25 +638,28 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        stepLabels[index],
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-                          color: isCurrent ? AppPalette.primary : AppPalette.textSecondary,
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          stepLabels[index],
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
+                            color: isCurrent ? AppPalette.primary : AppPalette.textSecondary,
+                          ),
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
                         ),
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
                 ),
                 if (index < 4)
                   Container(
-                    width: 12,
+                    width: 20,
                     height: 2,
-                    color: index < _controller.currentStep ? AppPalette.success : Colors.white12,
+                    color: isCompleted ? AppPalette.success : Colors.white12,
+                    margin: const EdgeInsets.symmetric(horizontal: 2),
                   ),
               ],
             ),
@@ -696,7 +701,14 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            Text('${_controller.totalItemsCount} artículos (${CurrencyFormatter.formatCLP(_controller.totalVenta)})', style: AppTypography.small.copyWith(color: AppPalette.secondary, fontWeight: FontWeight.bold)),
+            Flexible(
+              child: Text(
+                '${_controller.totalItemsCount} artículos (${CurrencyFormatter.formatCLP(_controller.totalVenta)})',
+                style: AppTypography.small.copyWith(color: AppPalette.secondary, fontWeight: FontWeight.bold),
+                textAlign: TextAlign.end,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 14),
@@ -796,32 +808,21 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
             Text('REPUESTOS EN INVENTARIO (${_controller.itemsInventariados.length})', style: AppTypography.small.copyWith(color: AppPalette.textSecondary, fontWeight: FontWeight.bold)),
             const SizedBox(height: 6),
             ..._controller.itemsInventariados.map((item) {
-              return Card(
-                color: AppPalette.surface,
-                margin: const EdgeInsets.only(bottom: 8),
-                child: ListTile(
-                  leading: const Icon(Icons.inventory_2_outlined, color: AppPalette.primary),
-                  title: Text(item['descripcion'] ?? 'Repuesto', style: AppTypography.body.copyWith(fontWeight: FontWeight.w600)),
-                  subtitle: Text(
-                    'SKU: ${item['sku']} • Pasillo: ${item['pasillo'] ?? 'S/P'}${item['pallet'] != null && item['pallet'].toString().isNotEmpty && item['pallet'] != 'S/P' ? " • Pallet: ${item['pallet']}" : ""}',
-                    style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(CurrencyFormatter.formatCLP(item['precio'] is int ? item['precio'] : int.tryParse(item['precio']?.toString() ?? '0') ?? 0), style: AppTypography.body.copyWith(fontWeight: FontWeight.bold, color: AppPalette.primary)),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline, color: AppPalette.error, size: 20),
-                        onPressed: () {
-                          _controller.removeItemInventariado(item['id_activo']);
-                          CartController.instance.eliminarItem(item['id_activo']);
-                          CatalogoScreen.refreshNotifier.value++;
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              );
+              final idActivo = item['id_activo']?.toString() ?? '';
+              final cartItem = CartController.instance.items
+                  .whereType<InventariadoCartItem>()
+                  .cast<InventariadoCartItem?>()
+                  .firstWhere(
+                    (ci) => ci?.id == idActivo,
+                    orElse: () => null,
+                  );
+              if (cartItem != null) {
+                return CartItemTile(
+                  key: ValueKey('cart_inv_${cartItem.id}'),
+                  item: cartItem,
+                );
+              }
+              return _buildFallbackItemInventariadoTile(item);
             }),
             const SizedBox(height: 12),
           ],
@@ -900,8 +901,210 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               );
             }),
           ],
+
+          if (CartController.instance.hayPreciosInvalidos) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppPalette.error.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppPalette.error.withValues(alpha: 0.4)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded, size: 20, color: AppPalette.error),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Hay repuestos con precio acordado fuera del rango de tasación permitido. Modifícalos dentro de su rango para continuar.',
+                      style: AppTypography.small.copyWith(color: AppPalette.error, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ],
+    );
+  }
+
+  Widget _buildFallbackItemInventariadoTile(Map<String, dynamic> item) {
+    final idActivo = item['id_activo']?.toString() ?? '';
+    final precio = item['precio'] is int ? item['precio'] as int : int.tryParse(item['precio']?.toString() ?? '0') ?? 0;
+    final min = item['precio_minimo'] is int ? item['precio_minimo'] as int : int.tryParse(item['precio_minimo']?.toString() ?? '');
+    final max = item['precio_maximo'] is int ? item['precio_maximo'] as int : int.tryParse(item['precio_maximo']?.toString() ?? '');
+    final bool esInvalido = (min != null && precio < min) || (max != null && precio > max);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12.0),
+      decoration: BoxDecoration(
+        color: AppPalette.surface,
+        borderRadius: BorderRadius.circular(12.0),
+        border: Border.all(
+          color: esInvalido ? AppPalette.error : AppPalette.primary.withValues(alpha: 0.2),
+          width: esInvalido ? 1.5 : 1.0,
+        ),
+      ),
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 3.0),
+                decoration: BoxDecoration(
+                  color: AppPalette.primary.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6.0),
+                  border: Border.all(color: AppPalette.primary, width: 1.0),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.inventory_2_outlined, size: 13, color: AppPalette.primary),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Inventario',
+                      style: AppTypography.small.copyWith(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: AppPalette.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline, color: AppPalette.error, size: 20),
+                onPressed: () {
+                  _controller.removeItemInventariado(idActivo);
+                  CartController.instance.eliminarItem(idActivo);
+                  CatalogoScreen.refreshNotifier.value++;
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            item['descripcion'] ?? 'Repuesto',
+            style: AppTypography.cardTitle.copyWith(fontSize: 16),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'SKU: ${item['sku']} • Pasillo: ${item['pasillo'] ?? 'S/P'}${item['pallet'] != null && item['pallet'].toString().isNotEmpty && item['pallet'] != 'S/P' ? " • Pallet: ${item['pallet']}" : ""}',
+            style: AppTypography.small.copyWith(color: AppPalette.textSecondary, fontSize: 13),
+          ),
+          if (item['notas_preparacion'] != null && item['notas_preparacion'].toString().trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppPalette.background,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: Colors.white12),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.assignment_outlined, size: 14, color: AppPalette.primary),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Preparación: ${item['notas_preparacion']}',
+                      style: AppTypography.small.copyWith(color: AppPalette.textSecondary, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          const Divider(color: Colors.white10, height: 1),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'PRECIO ACORDADO (CLP):',
+                      style: AppTypography.small.copyWith(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: AppPalette.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    TextFormField(
+                      initialValue: CurrencyFormatter.formatNumber(precio),
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [MilesTextInputFormatter()],
+                      style: AppTypography.body.copyWith(
+                        color: esInvalido ? AppPalette.error : AppPalette.secondary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                      decoration: InputDecoration(
+                        prefixText: '\$ ',
+                        prefixStyle: TextStyle(
+                          color: esInvalido ? AppPalette.error : AppPalette.secondary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        filled: true,
+                        fillColor: AppPalette.background,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(
+                            color: esInvalido ? AppPalette.error : Colors.white12,
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(
+                            color: esInvalido ? AppPalette.error : Colors.white12,
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(
+                            color: esInvalido ? AppPalette.error : AppPalette.primary,
+                            width: 1.5,
+                          ),
+                        ),
+                      ),
+                      onChanged: (val) {
+                        final nuevo = CurrencyFormatter.parse(val);
+                        _controller.updateItemInventariadoPrecio(idActivo, nuevo);
+                        CartController.instance.actualizarPrecio(idActivo, nuevo);
+                      },
+                    ),
+                    if (min != null && max != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Rango: ${CurrencyFormatter.formatCLP(min)} - ${CurrencyFormatter.formatCLP(max)}',
+                        style: AppTypography.small.copyWith(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: esInvalido ? AppPalette.error : AppPalette.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -1561,15 +1764,48 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
         ),
         const SizedBox(height: 16),
 
-        Text('Instrucciones Generales de Preparación / Bodega:', style: AppTypography.small.copyWith(fontWeight: FontWeight.bold)),
-        const SizedBox(height: 6),
-        TextField(
-          controller: _notasGeneralesController,
-          maxLines: 2,
-          style: AppTypography.body,
-          decoration: _inputDeco('Ej: Revisar empaque, coordinar con chofer de ruta...', Icons.notes),
-          onChanged: (val) => _controller.setNotasGenerales(val),
-        ),
+        if (_controller.tieneNotasPreparacion) ...[
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppPalette.surface,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppPalette.primary.withValues(alpha: 0.3)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.assignment_outlined, size: 16, color: AppPalette.primary),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Notas de Preparación para Bodega:',
+                      style: AppTypography.small.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: AppPalette.primary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ..._controller.resumenNotasPreparacion.map(
+                  (nota) => Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(
+                      '• $nota',
+                      style: AppTypography.small.copyWith(
+                        color: AppPalette.textPrimary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -1632,9 +1868,30 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: TextStyle(color: AppPalette.textSecondary, fontWeight: isBold ? FontWeight.bold : FontWeight.normal)),
-          Text(value, style: TextStyle(color: color ?? AppPalette.textPrimary, fontWeight: isBold ? FontWeight.bold : FontWeight.w600, fontSize: isBold ? 15 : 13)),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: AppPalette.textSecondary,
+                fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+                fontSize: isBold ? 14 : 13,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              style: TextStyle(
+                color: color ?? AppPalette.textPrimary,
+                fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+                fontSize: isBold ? 15 : 13,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -1642,7 +1899,10 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
 
   Widget _buildBottomNavigationButtons() {
     final bool puedeAvanzar;
-    if (_controller.currentStep == 1) {
+    if (_controller.currentStep == 0) {
+      puedeAvanzar = _controller.totalItemsCount > 0 &&
+          !CartController.instance.hayPreciosInvalidos;
+    } else if (_controller.currentStep == 1) {
       if (_esClienteAnonimo) {
         puedeAvanzar = true;
       } else {

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../core/utils/currency_formatter.dart';
 import '../../../auth/services/auth_service.dart';
 import '../../../paletizado/domain/models/etiqueta_data.dart';
 import '../../services/inventario_service.dart';
@@ -543,6 +544,91 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // ── VALORACIÓN COMERCIAL (RANGO DE PRECIO) ──
+                  Builder(
+                    builder: (context) {
+                      final pMin = _activo['precio_minimo'] as int?;
+                      final pMax = _activo['precio_maximo'] as int? ?? _activo['precio_referencia'] as int?;
+                      final pRef = _activo['precio_referencia'] as int?;
+                      if (pMin == null && pMax == null && pRef == null) {
+                        return const SizedBox.shrink();
+                      }
+
+                      final minStr = pMin != null && pMin > 0 ? CurrencyFormatter.formatNumber(pMin) : null;
+                      final maxStr = pMax != null && pMax > 0 ? CurrencyFormatter.formatNumber(pMax) : null;
+                      final refStr = pRef != null && pRef > 0 ? CurrencyFormatter.formatNumber(pRef) : null;
+
+                      String rangoDisplay = 'Sin tasación';
+                      if (minStr != null && maxStr != null) {
+                        rangoDisplay = minStr == maxStr ? '\$$minStr' : '\$$minStr - \$$maxStr';
+                      } else if (refStr != null) {
+                        rangoDisplay = '\$$refStr';
+                      }
+
+                      return Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppPalette.surface,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppPalette.secondary.withValues(alpha: 0.3)),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: AppPalette.secondary.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.price_change_outlined,
+                                color: AppPalette.secondary,
+                                size: 24,
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'VALORACIÓN COMERCIAL (RANGO TASADO)',
+                                    style: AppTypography.small.copyWith(
+                                      color: AppPalette.textSecondary,
+                                      letterSpacing: 1.0,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    rangoDisplay,
+                                    style: AppTypography.title.copyWith(
+                                      color: AppPalette.secondary,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  if (maxStr != null && minStr != null && minStr != maxStr) ...[
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Sugerido lista: \$$maxStr | Piso: \$$minStr',
+                                      style: AppTypography.small.copyWith(
+                                        color: AppPalette.textSecondary,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(20),

@@ -7,9 +7,9 @@ class ApiConstants {
   // URL DE DESARROLLO (Render)
   // static const String _baseUrl = 'https://cresal-backend-dev.onrender.com/api';
   // URL DE (Render test)
-  static const String _baseUrl = 'https://cresal-backend-dev.onrender.com/api';
+  //static const String _baseUrl = 'https://cresal-backend-dev.onrender.com/api';
   // Red local
-  //static const String _baseUrl = 'http://127.0.0.1:8000/api';
+  static const String _baseUrl = 'http://127.0.0.1:8000/api';
 
   // URL DE DESARROLLO (Emulador Android apuntando a localhost)
   //static const String _baseUrl = 'http://127.0.0.1:8000/api';

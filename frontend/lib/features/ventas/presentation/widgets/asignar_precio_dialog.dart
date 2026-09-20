@@ -42,13 +42,32 @@ class AsignarPrecioDialog extends StatefulWidget {
 
 class _AsignarPrecioDialogState extends State<AsignarPrecioDialog> {
   final _formKey = GlobalKey<FormState>();
-  final TextEditingController _precioController = TextEditingController();
+  late final TextEditingController _precioMinimoController;
+  late final TextEditingController _precioMaximoController;
   bool _isLoading = false;
   String? _errorMessage;
 
   @override
+  void initState() {
+    super.initState();
+    final minInicial = widget.activo.precioMinimo;
+    final maxInicial = widget.activo.precioMaximo ?? widget.activo.precioReferencia;
+
+    _precioMinimoController = TextEditingController(
+      text: minInicial != null && minInicial > 0 ? CurrencyFormatter.formatNumber(minInicial) : '',
+    );
+    _precioMaximoController = TextEditingController(
+      text: maxInicial != null && maxInicial > 0 ? CurrencyFormatter.formatNumber(maxInicial) : '',
+    );
+
+    _precioMinimoController.addListener(() => setState(() {}));
+    _precioMaximoController.addListener(() => setState(() {}));
+  }
+
+  @override
   void dispose() {
-    _precioController.dispose();
+    _precioMinimoController.dispose();
+    _precioMaximoController.dispose();
     super.dispose();
   }
 
@@ -60,10 +79,19 @@ class _AsignarPrecioDialogState extends State<AsignarPrecioDialog> {
   Future<void> _guardarPrecio() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final precio = _obtenerMontoLimpio(_precioController.text);
-    if (precio <= 0) {
+    final min = _obtenerMontoLimpio(_precioMinimoController.text);
+    final max = _obtenerMontoLimpio(_precioMaximoController.text);
+
+    if (min <= 0 || max <= 0) {
       setState(() {
-        _errorMessage = 'El precio debe ser un monto mayor a \$0.';
+        _errorMessage = 'Ambos precios deben ser mayores a \$0.';
+      });
+      return;
+    }
+
+    if (min > max) {
+      setState(() {
+        _errorMessage = 'El precio mínimo no puede ser superior al precio máximo.';
       });
       return;
     }
@@ -76,7 +104,9 @@ class _AsignarPrecioDialogState extends State<AsignarPrecioDialog> {
     try {
       final response = await InventarioService.asignarPrecio(
         widget.activo.idActivo,
-        precio,
+        precioMinimo: min,
+        precioMaximo: max,
+        precioReferencia: max,
       );
 
       if (!mounted) return;
@@ -96,7 +126,7 @@ class _AsignarPrecioDialogState extends State<AsignarPrecioDialog> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  '${response.mensaje} (${response.precioFormateado})',
+                  '${response.mensaje} (${response.rangoFormateado})',
                   style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
                 ),
               ),
@@ -203,9 +233,9 @@ class _AsignarPrecioDialogState extends State<AsignarPrecioDialog> {
 
                 const SizedBox(height: 16.0),
 
-                // Campo de entrada de precio
+                // Campo 1: Precio Mínimo (Piso de negociación)
                 Text(
-                  'PRECIO DE REFERENCIA (CLP)',
+                  'PRECIO MÍNIMO (PISO DE NEGOCIACIÓN CLP)',
                   style: AppTypography.small.copyWith(
                     fontWeight: FontWeight.bold,
                     fontSize: 11.0,
@@ -214,55 +244,173 @@ class _AsignarPrecioDialogState extends State<AsignarPrecioDialog> {
                   ),
                 ),
                 const SizedBox(height: 8.0),
-
-              TextFormField(
-                controller: _precioController,
-                keyboardType: TextInputType.number,
-                autofocus: true,
-                inputFormatters: [
-                  MilesTextInputFormatter(),
-                ],
-                style: AppTypography.title.copyWith(
-                  fontSize: 20.0,
-                  color: AppPalette.textPrimary,
-                  fontWeight: FontWeight.bold,
-                ),
-                decoration: InputDecoration(
-                  prefixText: '\$ ',
-                  prefixStyle: AppTypography.title.copyWith(
-                    fontSize: 20.0,
-                    color: AppPalette.primary,
+                TextFormField(
+                  controller: _precioMinimoController,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    MilesTextInputFormatter(),
+                  ],
+                  style: AppTypography.title.copyWith(
+                    fontSize: 18.0,
+                    color: AppPalette.textPrimary,
                     fontWeight: FontWeight.bold,
                   ),
-                  hintText: 'Ej. 450.000',
-                  hintStyle: AppTypography.body.copyWith(color: AppPalette.textSecondary),
-                  filled: true,
-                  fillColor: AppPalette.background,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Colors.white12),
+                  decoration: InputDecoration(
+                    prefixText: '\$ ',
+                    prefixStyle: AppTypography.title.copyWith(
+                      fontSize: 18.0,
+                      color: AppPalette.warning,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    hintText: 'Ej. 380.000',
+                    hintStyle: AppTypography.body.copyWith(color: AppPalette.textSecondary),
+                    filled: true,
+                    fillColor: AppPalette.background,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: Colors.white12),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: Colors.white12),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: AppPalette.primary, width: 1.5),
+                    ),
                   ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Colors.white12),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: AppPalette.primary, width: 1.5),
+                  validator: (val) {
+                    if (val == null || val.trim().isEmpty) {
+                      return 'Ingresa el precio mínimo piso';
+                    }
+                    final numVal = _obtenerMontoLimpio(val);
+                    if (numVal <= 0) {
+                      return 'El precio mínimo debe ser mayor a \$0';
+                    }
+                    final maxVal = _obtenerMontoLimpio(_precioMaximoController.text);
+                    if (maxVal > 0 && numVal > maxVal) {
+                      return 'No puede ser mayor al precio máximo';
+                    }
+                    return null;
+                  },
+                ),
+
+                const SizedBox(height: 16.0),
+
+                // Campo 2: Precio Máximo (Sugerido / Lista)
+                Text(
+                  'PRECIO MÁXIMO (PRECIO SUGERIDO / LISTA CLP)',
+                  style: AppTypography.small.copyWith(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11.0,
+                    letterSpacing: 0.8,
+                    color: AppPalette.textSecondary,
                   ),
                 ),
-                validator: (val) {
-                  if (val == null || val.trim().isEmpty) {
-                    return 'Ingresa un precio de referencia';
-                  }
-                  final numVal = _obtenerMontoLimpio(val);
-                  if (numVal <= 0) {
-                    return 'El precio debe ser mayor a \$0';
-                  }
-                  return null;
-                },
-              ),
+                const SizedBox(height: 8.0),
+                TextFormField(
+                  controller: _precioMaximoController,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    MilesTextInputFormatter(),
+                  ],
+                  style: AppTypography.title.copyWith(
+                    fontSize: 18.0,
+                    color: AppPalette.textPrimary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  decoration: InputDecoration(
+                    prefixText: '\$ ',
+                    prefixStyle: AppTypography.title.copyWith(
+                      fontSize: 18.0,
+                      color: AppPalette.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    hintText: 'Ej. 450.000',
+                    hintStyle: AppTypography.body.copyWith(color: AppPalette.textSecondary),
+                    filled: true,
+                    fillColor: AppPalette.background,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: Colors.white12),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: Colors.white12),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: AppPalette.primary, width: 1.5),
+                    ),
+                  ),
+                  validator: (val) {
+                    if (val == null || val.trim().isEmpty) {
+                      return 'Ingresa el precio máximo sugerido';
+                    }
+                    final numVal = _obtenerMontoLimpio(val);
+                    if (numVal <= 0) {
+                      return 'El precio máximo debe ser mayor a \$0';
+                    }
+                    final minVal = _obtenerMontoLimpio(_precioMinimoController.text);
+                    if (minVal > 0 && numVal < minVal) {
+                      return 'No puede ser menor al precio mínimo';
+                    }
+                    return null;
+                  },
+                ),
+
+                const SizedBox(height: 14.0),
+
+                // Previsualización del Rango de Negociación
+                Builder(
+                  builder: (context) {
+                    final min = _obtenerMontoLimpio(_precioMinimoController.text);
+                    final max = _obtenerMontoLimpio(_precioMaximoController.text);
+                    if (min > 0 && max > 0 && min <= max) {
+                      final margen = max - min;
+                      return Container(
+                        padding: const EdgeInsets.all(12.0),
+                        decoration: BoxDecoration(
+                          color: AppPalette.primary.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(8.0),
+                          border: Border.all(color: AppPalette.primary.withValues(alpha: 0.3)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.swap_horiz_rounded, color: AppPalette.primary, size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Rango Permitido en Carrito:',
+                                    style: AppTypography.small.copyWith(
+                                      color: AppPalette.textSecondary,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                  Text(
+                                    '\$${CurrencyFormatter.formatNumber(min)}  →  \$${CurrencyFormatter.formatNumber(max)}'
+                                    '${margen > 0 ? ' (Margen: \$${CurrencyFormatter.formatNumber(margen)})' : ''}',
+                                    style: AppTypography.small.copyWith(
+                                      color: AppPalette.textPrimary,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  },
+                ),
 
               if (_errorMessage != null) ...[
                 const SizedBox(height: 12.0),
@@ -342,7 +490,7 @@ class _AsignarPrecioDialogState extends State<AsignarPrecioDialog> {
                       : const FittedBox(
                           fit: BoxFit.scaleDown,
                           child: Text(
-                            'Confirmar Precio',
+                            'Confirmar Tasación',
                             style: TextStyle(fontWeight: FontWeight.bold),
                           ),
                         ),

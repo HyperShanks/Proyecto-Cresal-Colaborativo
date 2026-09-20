@@ -36,6 +36,7 @@ from schemas import (
     ValidarActivoBackorderRequest,
     ValidarActivoBackorderResponse,
     ActivoDetalleBackorderDTO,
+    HistorialAbonoItemDTO,
     HistorialPagoDetalleDTO,
     HistorialArticuloDTO,
     HistorialMovimientoDTO,
@@ -214,19 +215,44 @@ def obtener_cobros_pendientes(
 
             total_op = orden.total_venta
             abono_req = getattr(orden, "abono_requerido", 0) or 0
+            saldo_pendiente = orden.monto_pendiente
+
+            # Consultar transacciones previas registradas para la orden
+            pagos_query = (
+                db.query(Transaccion_Pago)
+                .filter(Transaccion_Pago.id_orden == orden.id_orden)
+                .order_by(Transaccion_Pago.fecha_pago.asc())
+                .all()
+            )
+            historial_dto: List[HistorialAbonoItemDTO] = []
+            abono_acumulado = 0
+            for p in pagos_query:
+                f_pago_fmt, h_pago_fmt, dt_p_utc = format_chile_datetime(p.fecha_pago)
+                historial_dto.append(
+                    HistorialAbonoItemDTO(
+                        id_pago=p.id_pago,
+                        monto=p.monto,
+                        metodo_pago=p.metodo_pago,
+                        fecha_pago=dt_p_utc,
+                        fecha_pago_formateada=f_pago_fmt,
+                        hora_pago_formateada=h_pago_fmt,
+                        estado_pago=p.estado_pago or "Procesado",
+                    )
+                )
+                abono_acumulado += p.monto
 
             if orden.monto_pendiente == total_op:
                 # El cliente no ha pagado nada aún
                 abono_prev = 0
                 if abono_req > 0:
-                    # Se requiere un abono comercial acordado
+                    # Se requiere un abono comercial acordado como sugerencia inicial
                     monto_cobrar = min(abono_req, orden.monto_pendiente)
                 else:
                     # Venta estándar sin abono: se cobra el total pendiente
                     monto_cobrar = orden.monto_pendiente
             else:
-                # El cliente ya abonó previamente y viene por el saldo faltante
-                abono_prev = max(0, total_op - orden.monto_pendiente)
+                # El cliente ya abonó previamente
+                abono_prev = abono_acumulado if abono_acumulado > 0 else max(0, total_op - orden.monto_pendiente)
                 monto_cobrar = orden.monto_pendiente
 
             fecha_fmt, hora_fmt, dt_utc = format_chile_datetime(orden.fecha_creacion)
@@ -246,7 +272,10 @@ def obtener_cobros_pendientes(
                 hora_emision_formateada=hora_fmt,
                 total_operacion=total_op,
                 abono_previo=abono_prev,
+                abono_requerido=abono_req,
+                saldo_pendiente=saldo_pendiente,
                 monto_a_cobrar=monto_cobrar,
+                historial_abonos=historial_dto,
                 articulos=articulos_dto,
                 especificaciones_backorder=None,
             )
@@ -270,6 +299,34 @@ def obtener_cobros_pendientes(
             folio_doc = f"RES-{str(res.id_reserva).replace('-', '')[:4].upper()}"
             total_op = res.precio_acordado
             abono_req = getattr(res, "abono_requerido", 0) or 0
+            saldo_pendiente = max(0, res.precio_acordado - res.monto_abonado)
+
+            # Consultar transacciones previas registradas para la reserva
+            pagos_reserva_query = (
+                db.query(Transaccion_Pago)
+                .filter(
+                    (Transaccion_Pago.id_reserva == res.id_reserva) |
+                    ((Transaccion_Pago.id_orden == res.id_orden) & (res.id_orden.isnot(None)))
+                )
+                .order_by(Transaccion_Pago.fecha_pago.asc())
+                .all()
+            )
+            historial_dto: List[HistorialAbonoItemDTO] = []
+            abono_acumulado = 0
+            for p in pagos_reserva_query:
+                f_pago_fmt, h_pago_fmt, dt_p_utc = format_chile_datetime(p.fecha_pago)
+                historial_dto.append(
+                    HistorialAbonoItemDTO(
+                        id_pago=p.id_pago,
+                        monto=p.monto,
+                        metodo_pago=p.metodo_pago,
+                        fecha_pago=dt_p_utc,
+                        fecha_pago_formateada=f_pago_fmt,
+                        hora_pago_formateada=h_pago_fmt,
+                        estado_pago=p.estado_pago or "Procesado",
+                    )
+                )
+                abono_acumulado += p.monto
 
             if res.monto_abonado == 0:
                 abono_prev = 0
@@ -278,7 +335,7 @@ def obtener_cobros_pendientes(
                 else:
                     monto_cobrar = res.precio_acordado
             else:
-                abono_prev = res.monto_abonado
+                abono_prev = res.monto_abonado if res.monto_abonado > 0 else abono_acumulado
                 monto_cobrar = res.precio_acordado - res.monto_abonado
 
             cat_nombre = categoria.nombre_categoria if categoria else "Repuesto Solicitado"
@@ -311,7 +368,10 @@ def obtener_cobros_pendientes(
                 hora_emision_formateada=hora_fmt,
                 total_operacion=total_op,
                 abono_previo=abono_prev,
+                abono_requerido=abono_req,
+                saldo_pendiente=saldo_pendiente,
                 monto_a_cobrar=monto_cobrar,
+                historial_abonos=historial_dto,
                 articulos=[],
                 especificaciones_backorder=specs_dto,
             )
@@ -438,6 +498,8 @@ def validar_activo_backorder(
         vin=vehiculo.vin if vehiculo else None,
         ubicacion=ubicacion_str,
         precio_referencia=activo.precio_referencia,
+        precio_minimo=activo.precio_minimo,
+        precio_maximo=activo.precio_maximo,
         estado_conservacion=estado_activo.nombre_estado if estado_activo else (activo.observacion_estado or activo.estado),
     )
 
@@ -520,6 +582,18 @@ def registrar_cobro(
                            f"supera el saldo pendiente de la orden (${orden.monto_pendiente:,})."
                 )
 
+            # Validación de Piso Comercial en Primer Abono:
+            total_op = orden.total_venta
+            abono_req = getattr(orden, "abono_requerido", 0) or 0
+            es_primer_abono = (orden.monto_pendiente == total_op)
+            if es_primer_abono and abono_req > 0:
+                # Si es el primer abono y no está liquidando el 100% de la venta de contado
+                if payload.monto_declarado < abono_req and payload.monto_declarado < orden.monto_pendiente:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"El primer abono no puede ser inferior al monto acordado de ${abono_req:,}."
+                    )
+
             nuevo_saldo = orden.monto_pendiente - payload.monto_declarado
             qr_hash: Optional[str] = None
 
@@ -581,6 +655,16 @@ def registrar_cobro(
                     detail=f"Sobrepago rechazado: El monto declarado (${payload.monto_declarado:,}) "
                            f"supera el saldo pendiente de la reserva (${saldo_pendiente_backorder:,})."
                 )
+
+            # Validación de Piso Comercial en Primer Abono:
+            abono_req = getattr(reserva, "abono_requerido", 0) or 0
+            es_primer_abono = (reserva.monto_abonado == 0)
+            if es_primer_abono and abono_req > 0:
+                if payload.monto_declarado < abono_req and payload.monto_declarado < saldo_pendiente_backorder:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"El primer abono no puede ser inferior al monto acordado de ${abono_req:,}."
+                    )
 
             reserva.monto_abonado += payload.monto_declarado
             reserva.fecha_actualizacion = now_utc

@@ -198,7 +198,7 @@ class CatalogoItemCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'PRECIO REFERENCIA',
+                            'PRECIO SUGERIDO',
                             style: AppTypography.small.copyWith(
                               fontSize: 10,
                               letterSpacing: 1.0,
@@ -208,15 +208,28 @@ class CatalogoItemCard extends StatelessWidget {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            item.precioFormateado,
+                            item.precioSugeridoFormateado,
                             style: AppTypography.headline.copyWith(
                               color: AppPalette.secondary,
-                              fontSize: 22,
+                              fontSize: 20,
                               fontWeight: FontWeight.bold,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
+                          if (item.precioMinimo != null && item.precioMaximo != null && item.precioMinimo != item.precioMaximo) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              'Rango: ${item.rangoPrecioFormateado}',
+                              style: AppTypography.small.copyWith(
+                                fontSize: 11,
+                                color: AppPalette.textSecondary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
                         ],
                       ),
                     ),

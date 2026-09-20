@@ -342,6 +342,9 @@ def buscar_inventario(
                 "observacion": getattr(activo, "observacion_estado", "Sin observaciones registradas."),
                 "version_lock": activo.version_lock or 1,
                 "imagenes": lista_fotos,
+                "precio_referencia": activo.precio_referencia,
+                "precio_minimo": activo.precio_minimo,
+                "precio_maximo": activo.precio_maximo,
             }
         )
 
@@ -520,6 +523,8 @@ def obtener_catalogo(
             id_activo=activo.id_activo,
             sku_qr_fisico=activo.sku_qr_fisico,
             precio_referencia=activo.precio_referencia,
+            precio_minimo=activo.precio_minimo,
+            precio_maximo=activo.precio_maximo,
             id_categoria=cat.id_categoria,
             nombre_categoria=cat.nombre_categoria,
             id_sucursal_actual=suc.id_sucursal,
@@ -595,6 +600,10 @@ def obtener_pendientes_precio(
             or_(
                 Activo_Inventariado.precio_referencia == None,
                 Activo_Inventariado.precio_referencia == 0,
+                Activo_Inventariado.precio_minimo == None,
+                Activo_Inventariado.precio_minimo == 0,
+                Activo_Inventariado.precio_maximo == None,
+                Activo_Inventariado.precio_maximo == 0,
             ),
             Activo_Inventariado.ubicacion_pasillo.isnot(None),
             Activo_Inventariado.ubicacion_pasillo != "",
@@ -669,6 +678,9 @@ def obtener_pendientes_precio(
             estado_activo=est.nombre_estado,
             fecha_creacion=activo.fecha_creacion.isoformat() if activo.fecha_creacion else None,
             fotografias=multimedia_por_activo.get(activo.id_activo, []),
+            precio_referencia=activo.precio_referencia,
+            precio_minimo=activo.precio_minimo,
+            precio_maximo=activo.precio_maximo,
         )
         respuesta.append(item)
 
@@ -912,6 +924,8 @@ def obtener_maestro_inventario(
             id_activo=activo.id_activo,
             sku_qr_fisico=activo.sku_qr_fisico,
             precio_referencia=activo.precio_referencia,
+            precio_minimo=activo.precio_minimo,
+            precio_maximo=activo.precio_maximo,
             id_categoria=cat.id_categoria,
             nombre_categoria=cat.nombre_categoria,
             id_sucursal_actual=suc.id_sucursal,
@@ -979,7 +993,9 @@ def asignar_precio_repuesto(
                 detail=f"No es posible modificar el precio de un repuesto en estado '{estado_actual.nombre_estado if estado_actual else activo.id_estado}'. Solo se permite tasar repuestos en estado 'Disponible' o 'Paletizado'.",
             )
 
-        activo.precio_referencia = payload.precio_referencia
+        activo.precio_minimo = payload.precio_minimo
+        activo.precio_maximo = payload.precio_maximo
+        activo.precio_referencia = payload.precio_referencia or payload.precio_maximo
         activo.fecha_actualizacion = datetime.now(timezone.utc).replace(tzinfo=None)
 
         estado_disponible = db.query(Estado_Activo).filter(Estado_Activo.nombre_estado == "Disponible").first()
@@ -997,9 +1013,11 @@ def asignar_precio_repuesto(
         return AsignarPrecioResponse(
             id_activo=activo.id_activo,
             sku_qr_fisico=activo.sku_qr_fisico,
+            precio_minimo=activo.precio_minimo,
+            precio_maximo=activo.precio_maximo,
             precio_referencia=activo.precio_referencia,
             estado_activo="Disponible",
-            mensaje="Precio asignado exitosamente. El repuesto ahora está disponible en el catálogo de ventas.",
+            mensaje="Rango de precios asignado exitosamente. El repuesto ahora está disponible en el catálogo de ventas.",
         )
     except HTTPException:
         db.rollback()
@@ -1098,6 +1116,8 @@ def obtener_detalle_activo(
         id_activo=activo.id_activo,
         sku_qr_fisico=activo.sku_qr_fisico,
         precio_referencia=activo.precio_referencia,
+        precio_minimo=activo.precio_minimo,
+        precio_maximo=activo.precio_maximo,
         id_categoria=cat.id_categoria,
         nombre_categoria=cat.nombre_categoria,
         id_sucursal_actual=suc.id_sucursal,

@@ -4,6 +4,8 @@ class CatalogoItem {
   final String idActivo;
   final String skuQrFisico;
   final int? precioReferencia;
+  final int? precioMinimo;
+  final int? precioMaximo;
   final int idCategoria;
   final String nombreCategoria;
   final int idSucursalActual;
@@ -31,6 +33,8 @@ class CatalogoItem {
     required this.idActivo,
     required this.skuQrFisico,
     this.precioReferencia,
+    this.precioMinimo,
+    this.precioMaximo,
     required this.idCategoria,
     required this.nombreCategoria,
     required this.idSucursalActual,
@@ -61,6 +65,8 @@ class CatalogoItem {
     String? idActivo,
     String? skuQrFisico,
     int? precioReferencia,
+    int? precioMinimo,
+    int? precioMaximo,
     int? idCategoria,
     String? nombreCategoria,
     int? idSucursalActual,
@@ -87,6 +93,8 @@ class CatalogoItem {
       idActivo: idActivo ?? this.idActivo,
       skuQrFisico: skuQrFisico ?? this.skuQrFisico,
       precioReferencia: precioReferencia ?? this.precioReferencia,
+      precioMinimo: precioMinimo ?? this.precioMinimo,
+      precioMaximo: precioMaximo ?? this.precioMaximo,
       idCategoria: idCategoria ?? this.idCategoria,
       nombreCategoria: nombreCategoria ?? this.nombreCategoria,
       idSucursalActual: idSucursalActual ?? this.idSucursalActual,
@@ -116,6 +124,8 @@ class CatalogoItem {
       idActivo: json['id_activo']?.toString() ?? '',
       skuQrFisico: json['sku_qr_fisico']?.toString() ?? '',
       precioReferencia: json['precio_referencia'] as int?,
+      precioMinimo: json['precio_minimo'] as int?,
+      precioMaximo: json['precio_maximo'] as int?,
       idCategoria: json['id_categoria'] as int? ?? 0,
       nombreCategoria: json['nombre_categoria']?.toString() ?? 'Sin categoría',
       idSucursalActual: json['id_sucursal_actual'] as int? ?? 0,
@@ -146,6 +156,8 @@ class CatalogoItem {
       'id_activo': idActivo,
       'sku_qr_fisico': skuQrFisico,
       'precio_referencia': precioReferencia,
+      'precio_minimo': precioMinimo,
+      'precio_maximo': precioMaximo,
       'id_categoria': idCategoria,
       'nombre_categoria': nombreCategoria,
       'id_sucursal_actual': idSucursalActual,
@@ -222,14 +234,38 @@ class CatalogoItem {
     return partes.join(' • ');
   }
 
-  /// Formato de moneda chilena (CLP) con separadores de miles
-  String get precioFormateado {
-    if (precioReferencia == null) return 'Consultar precio';
-    final valor = precioReferencia.toString().replaceAllMapped(
+  /// Formato de monto en pesos chilenos
+  static String formatMonto(int? monto) {
+    if (monto == null) return '\$0';
+    final valor = monto.toString().replaceAllMapped(
           RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
           (Match m) => '${m[1]}.',
         );
     return '\$$valor';
+  }
+
+  /// Formato de moneda chilena (CLP) con separadores de miles
+  String get precioFormateado {
+    if (precioReferencia == null) return 'Consultar precio';
+    return formatMonto(precioReferencia);
+  }
+
+  /// Precio sugerido / lista (precioMaximo o precioReferencia)
+  int? get precioSugerido => precioMaximo ?? precioReferencia;
+  String get precioSugeridoFormateado => formatMonto(precioSugerido);
+
+  /// Rango de precios formateado (ej. "$80.000 - $120.000")
+  String get rangoPrecioFormateado {
+    if (precioMinimo != null && precioMaximo != null) {
+      if (precioMinimo == precioMaximo) {
+        return formatMonto(precioMinimo);
+      }
+      return '${formatMonto(precioMinimo)} - ${formatMonto(precioMaximo)}';
+    }
+    if (precioReferencia != null) {
+      return formatMonto(precioReferencia);
+    }
+    return 'Consultar precio';
   }
 }
 

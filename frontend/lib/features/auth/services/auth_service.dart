@@ -61,7 +61,25 @@ class AuthResult {
 // SERVICIO PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
 class AuthService {
-  static const _storage = FlutterSecureStorage();
+  static const _storage = FlutterSecureStorage(
+    aOptions: AndroidOptions(
+      encryptedSharedPreferences: true,
+      resetOnError: true,
+    ),
+  );
+
+  /// Lectura segura de storage que previene crasheos por claves corruptas de Android KeyStore (BadPaddingException).
+  static Future<String?> _readSafe(String key) async {
+    try {
+      return await _storage.read(key: key);
+    } catch (e) {
+      debugPrint("⚠️ [AUTH_STORAGE] Error leyendo clave '$key': $e. Limpiando clave corrupta...");
+      try {
+        await _storage.delete(key: key);
+      } catch (_) {}
+      return null;
+    }
+  }
 
   /// Captura excepciones de red y genera una respuesta limpia sin filtrar IPs ni trazas técnicas.
   static AuthResult _manejarExcepcionAuth(Object e) {
@@ -313,13 +331,13 @@ class AuthService {
   }
 
   /// Recupera el ID del usuario previamente enrolado en este terminal.
-  static Future<String?> getEnrolledUserId() => _storage.read(key: _enrolledUserIdKey);
+  static Future<String?> getEnrolledUserId() => _readSafe(_enrolledUserIdKey);
 
   /// Recupera el email del usuario enrolado en este terminal.
-  static Future<String?> getEnrolledUserEmail() => _storage.read(key: _enrolledUserEmailKey);
+  static Future<String?> getEnrolledUserEmail() => _readSafe(_enrolledUserEmailKey);
 
   /// Recupera el nombre completo del usuario enrolado en este terminal.
-  static Future<String?> getEnrolledUserName() => _storage.read(key: _enrolledUserNameKey);
+  static Future<String?> getEnrolledUserName() => _readSafe(_enrolledUserNameKey);
 
   /// Comprueba si el terminal actual cuenta con un usuario enrolado.
   static Future<bool> isTerminalEnrolled() async {
@@ -336,14 +354,14 @@ class AuthService {
   }
 
   /// Recupera el token almacenado (útil para inyectarlo en peticiones futuras).
-  static Future<String?> getToken() => _storage.read(key: _tokenKey);
+  static Future<String?> getToken() => _readSafe(_tokenKey);
 
   /// Recupera el rol textual almacenado (ej. "Bodeguero", "Vendedor", "Caja", "Jefe de Ventas").
-  static Future<String?> getRol() => _storage.read(key: _rolKey);
+  static Future<String?> getRol() => _readSafe(_rolKey);
 
   /// Recupera el ID numérico del rol del usuario (ej. 1=Bodega, 2=Ventas, 3=Caja, 5=Admin, 6=Jefe).
   static Future<int?> getIdRol() async {
-    final val = await _storage.read(key: _idRolKey);
+    final val = await _readSafe(_idRolKey);
     return val != null ? int.tryParse(val) : null;
   }
 
@@ -407,7 +425,7 @@ class AuthService {
 
   /// Recupera el ID de sucursal del usuario autenticado (para Radar de Stock).
   static Future<int?> getSucursalId() async {
-    final val = await _storage.read(key: _sucursalKey);
+    final val = await _readSafe(_sucursalKey);
     return val != null ? int.tryParse(val) : null;
   }
 
@@ -416,14 +434,14 @@ class AuthService {
 
   /// Recupera el nombre de la sucursal del usuario autenticado.
   static Future<String?> getNombreSucursal() =>
-      _storage.read(key: _sucursalNombreKey);
+      _readSafe(_sucursalNombreKey);
 
   /// Recupera el nombre completo del usuario autenticado.
-  static Future<String?> getNombreUsuario() => _storage.read(key: _nombreUsuarioKey);
+  static Future<String?> getNombreUsuario() => _readSafe(_nombreUsuarioKey);
 
   /// Recupera el modelo completo de sesión AuthUserModel si está disponible.
   static Future<AuthUserModel?> getAuthUser() async {
-    final jsonStr = await _storage.read(key: _userModelKey);
+    final jsonStr = await _readSafe(_userModelKey);
     if (jsonStr != null && jsonStr.isNotEmpty) {
       try {
         final map = jsonDecode(jsonStr) as Map<String, dynamic>;

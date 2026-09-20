@@ -277,6 +277,54 @@ class PaletizadoService {
     }
   }
 
+  Future<Map<String, dynamic>?> obtenerSiguienteParaForzar() async {
+    try {
+      debugPrint('📌 [PALETIZADO_SERVICE] 🔍 Buscando vehículo para forzar ingreso...');
+      final url = Uri.parse('${ApiConstants.vehiculosEndpoint}/siguiente-para-forzar');
+      final token = await AuthService.getToken();
+      final headers = {
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      };
+      final response = await http.get(url, headers: headers);
+
+      if (response.statusCode == 200) {
+        return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      } else if (response.statusCode == 404) {
+        debugPrint('📌 [PALETIZADO_SERVICE] ⚠️ No hay vehículos vírgenes disponibles.');
+        return null;
+      }
+      return null;
+    } catch (e) {
+      debugPrint("📌 [PALETIZADO_SERVICE] ❌ Error al buscar vehículo para forzar: $e");
+      return null;
+    }
+  }
+
+  Future<bool> forzarIngresoVehiculo(String idVehiculo, Map<String, dynamic> payload) async {
+    try {
+      debugPrint('📌 [PALETIZADO_SERVICE] 🚀 Enviando payload forzado para $idVehiculo');
+      final url = Uri.parse('${ApiConstants.vehiculosEndpoint}/forzar/$idVehiculo');
+      final token = await AuthService.getToken();
+      final headers = {
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      };
+      final response = await http.put(url, headers: headers, body: jsonEncode(payload));
+
+      if (response.statusCode == 200) {
+        debugPrint('📌 [PALETIZADO_SERVICE] ✅ Vehículo $idVehiculo forzado exitosamente.');
+        return true;
+      } else {
+        debugPrint('📌 [PALETIZADO_SERVICE] ❌ Error al forzar: ${response.body}');
+        return false;
+      }
+    } catch (e) {
+      debugPrint("📌 [PALETIZADO_SERVICE] ❌ Error crítico de red al forzar: $e");
+      return false;
+    }
+  }
+
   /// Consulta la lista de piezas pendientes de paletizado en bodega
   Future<List<dynamic>> obtenerPendientesPaletizado({int? sucursalId}) async {
     try {

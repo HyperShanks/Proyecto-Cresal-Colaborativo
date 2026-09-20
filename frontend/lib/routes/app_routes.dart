@@ -8,6 +8,8 @@ import '../features/recepcion/presentation/screens/recepcion_vehiculo_screen.dar
 import '../features/tickets/presentation/screens/tickets_screen.dart';
 import '../features/paletizado/presentation/screens/paletizado_screen.dart';
 import '../features/paletizado/presentation/screens/etiqueta_preview_screen.dart';
+import '../features/paletizado/presentation/screens/forzar_ingreso_screen.dart';
+import '../features/paletizado/services/paletizado_service.dart';
 import '../features/alertas/presentation/screens/alertas_screen.dart';
 import '../features/inventario/presentation/screens/buscador_screen.dart';
 import '../features/ventas/presentation/screens/catalogo_screen.dart';
@@ -38,6 +40,7 @@ class AppRoutes {
   static const String bandejaPrecios = '/bandeja_precios';
   static const String entregasEnvios = '/entregas-envios';
   static const String reingresos = '/reingresos';
+  static const String forzarIngreso = '/forzar-ingreso';
 
   /// Rutas públicas y comunes a cualquier estado de autenticación.
   static const List<String> _publicAndCommonRoutes = [
@@ -56,6 +59,7 @@ class AppRoutes {
     buscador,
     alertas,
     reingresos,
+    forzarIngreso,
   ];
 
   /// Rutas autorizadas para Vendedor (id_rol == 2, 7) y Jefe de Ventas (id_rol == 6).
@@ -154,6 +158,13 @@ class AppRoutes {
       bandejaPrecios: (context) => const BandejaPreciosScreen(),
       entregasEnvios: (context) => const EntregasEnviosScreen(),
       reingresos: (context) => const AlertasScreen(),
+      forzarIngreso: (context) {
+        final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>;
+        return ForzarIngresoScreen(
+          vehiculoData: args,
+          paletizadoService: PaletizadoService(), // Import it if needed, or I'll just add the import at top
+        );
+      },
     };
   }
 }

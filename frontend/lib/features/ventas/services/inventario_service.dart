@@ -61,12 +61,14 @@ class InventarioService {
     }
   }
 
-  /// Asigna o actualiza el precio de referencia de un repuesto ingresado por bodega.
+  /// Asigna o actualiza el rango de precio (mínimo y máximo) de un repuesto ingresado por bodega.
   /// Cambia automáticamente el estado del activo a 'Disponible'.
-  /// Requiere rol de Jefe de Ventas (id_rol == 6).
+  /// Requiere rol de Jefe de Ventas (id_rol == 6) o Gerencia.
   static Future<AsignarPrecioResponseModel> asignarPrecio(
-    String idActivo,
-    int precioReferencia, {
+    String idActivo, {
+    required int precioMinimo,
+    required int precioMaximo,
+    int? precioReferencia,
     http.Client? client,
   }) async {
     final httpClient = client ?? http.Client();
@@ -82,7 +84,11 @@ class InventarioService {
               'Content-Type': 'application/json',
               if (token != null) 'Authorization': 'Bearer $token',
             },
-            body: jsonEncode({'precio_referencia': precioReferencia}),
+            body: jsonEncode({
+              'precio_minimo': precioMinimo,
+              'precio_maximo': precioMaximo,
+              'precio_referencia': precioReferencia ?? precioMaximo,
+            }),
           )
           .timeout(
             const Duration(seconds: 12),
