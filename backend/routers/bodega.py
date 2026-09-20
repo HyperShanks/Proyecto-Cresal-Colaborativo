@@ -22,6 +22,7 @@ from models import (
     Auditoria_Barrera,
     Tracking_Logistico,
     Despacho,
+    Reservas_Backorder,
 )
 from schemas import (
     TareaAlertaResponse,
@@ -295,6 +296,7 @@ def obtener_tareas_pendientes(
 
     # ---------------------------------------------------------
     # PRIORIDAD 1.B: Ítems Manuales / Venta Libre con Preparación
+    # (Excluye ventas en verde / reservas backorder, ya que no existen físicamente en bodega)
     # ---------------------------------------------------------
     detalles_manuales = (
         db.query(Detalle_Orden, Orden_Venta)
@@ -302,7 +304,15 @@ def obtener_tareas_pendientes(
         .filter(
             Detalle_Orden.id_activo.is_(None),
             Orden_Venta.id_sucursal == sucursal_id,
-            Detalle_Orden.estado_preparacion != "Listo",
+            Detalle_Orden.estado_preparacion.notin_(["Listo", "No Aplica"]),
+            ~func.coalesce(Detalle_Orden.descripcion_manual, "").ilike("%[RESERVA EN VERDE]%"),
+            ~func.coalesce(Detalle_Orden.descripcion_manual, "").ilike("%[VENTA EN VERDE]%"),
+            ~func.coalesce(Detalle_Orden.descripcion_manual, "").ilike("%[COMPRA EN VERDE]%"),
+            ~func.coalesce(Detalle_Orden.descripcion_manual, "").ilike("%[BACKORDER]%"),
+            ~db.query(Reservas_Backorder).filter(
+                Reservas_Backorder.id_orden == Orden_Venta.id_orden,
+                Reservas_Backorder.id_activo_asignado.is_(None),
+            ).exists(),
             Orden_Venta.estado_orden.in_(["Reservada", "Pagada"]),
         )
         .all()

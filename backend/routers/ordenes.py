@@ -2340,7 +2340,7 @@ def checkout_wizard(
                 cantidad=1,
                 precio_unitario=r.precio_acordado,
                 precio_final=r.precio_acordado,
-                estado_preparacion="Pendiente"
+                estado_preparacion="No Aplica"
             )
             db.add(detalle_res)
 
