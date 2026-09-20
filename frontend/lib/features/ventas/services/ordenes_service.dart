@@ -603,10 +603,12 @@ class OrdenesService {
   }
 
   /// Consulta el historial de órdenes generadas por el vendedor actual (HU-3.5).
+  /// Soporta segmentación por sección: 'normal' u 'por_asignar'.
   static Future<List<OrdenHistorialModel>> obtenerMisVentas({
     String? fecha,
     bool todas = false,
     String? estado,
+    String seccion = 'normal',
     http.Client? client,
   }) async {
     final httpClient = client ?? http.Client();
@@ -616,6 +618,7 @@ class OrdenesService {
         if (todas) 'todas': 'true',
         if (fecha != null && fecha.isNotEmpty) 'fecha': fecha,
         if (estado != null && estado.isNotEmpty) 'estado': estado,
+        if (seccion.isNotEmpty) 'seccion': seccion,
       };
 
       final uri = Uri.parse('${ApiConstants.ordenesEndpoint}/mis-ventas')
@@ -668,6 +671,94 @@ class OrdenesService {
       if (client == null) {
         httpClient.close();
       }
+    }
+  }
+
+  /// Valida que el activo ingresado sea compatible con la venta en verde de la orden.
+  static Future<Map<String, dynamic>> validarActivoBackorder(
+    String idOrden,
+    String skuActivo, {
+    http.Client? client,
+  }) async {
+    final httpClient = client ?? http.Client();
+    try {
+      final uri = Uri.parse('${ApiConstants.ordenesEndpoint}/$idOrden/validar-activo-backorder');
+      final token = await AuthService.getToken();
+      final headers = {
+        'Content-Type': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
+      final response = await httpClient
+          .post(
+            uri,
+            headers: headers,
+            body: jsonEncode({'sku_activo': skuActivo.trim()}),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      dynamic decodedBody;
+      try {
+        decodedBody = jsonDecode(utf8.decode(response.bodyBytes));
+      } catch (_) {
+        decodedBody = jsonDecode(response.body);
+      }
+
+      if (response.statusCode == 200 && decodedBody is Map<String, dynamic>) {
+        return decodedBody;
+      } else {
+        final detail = decodedBody is Map ? decodedBody['detail'] : null;
+        throw Exception(detail?.toString() ?? 'Error al validar activo (${response.statusCode})');
+      }
+    } finally {
+      if (client == null) httpClient.close();
+    }
+  }
+
+  /// Asigna un activo físico (Disponible o Paletizado) a una venta en verde pagada.
+  /// Emite el código QR transaccional para la Barrera de Salida.
+  static Future<Map<String, dynamic>> asignarActivoBackorder(
+    String idOrden,
+    String skuActivo, {
+    bool forzar = false,
+    http.Client? client,
+  }) async {
+    final httpClient = client ?? http.Client();
+    try {
+      final uri = Uri.parse('${ApiConstants.ordenesEndpoint}/$idOrden/asignar-activo-backorder');
+      final token = await AuthService.getToken();
+      final headers = {
+        'Content-Type': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
+      final response = await httpClient
+          .post(
+            uri,
+            headers: headers,
+            body: jsonEncode({
+              'sku_activo': skuActivo.trim(),
+              'forzar_atribucion': forzar,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      dynamic decodedBody;
+      try {
+        decodedBody = jsonDecode(utf8.decode(response.bodyBytes));
+      } catch (_) {
+        decodedBody = jsonDecode(response.body);
+      }
+
+      if (response.statusCode == 200 && decodedBody is Map<String, dynamic>) {
+        OrdenesSyncNotifier.instance.notificarCambio();
+        return decodedBody;
+      } else {
+        final detail = decodedBody is Map ? decodedBody['detail'] : null;
+        throw Exception(detail?.toString() ?? 'Error al asignar activo físico (${response.statusCode})');
+      }
+    } finally {
+      if (client == null) httpClient.close();
     }
   }
 

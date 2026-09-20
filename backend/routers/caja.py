@@ -451,6 +451,13 @@ def validar_activo_backorder(
     activo, vehiculo, motor, caja_cambio, categoria, estado_activo = activo_raw
     discrepancias = []
 
+    estados_validos = ["disponible", "paletizado"]
+    nombre_estado_actual = estado_activo.nombre_estado if estado_activo else ""
+    if nombre_estado_actual.lower() not in estados_validos:
+        discrepancias.append(
+            f"Estado del repuesto: '{nombre_estado_actual}'. Solo se pueden asignar repuestos en estado 'Disponible' o 'Paletizado'."
+        )
+
     if vehiculo and reserva.marca_requerida and vehiculo.marca.lower() != reserva.marca_requerida.lower():
         discrepancias.append(f"Marca requerida: {reserva.marca_requerida}, Marca del repuesto: {vehiculo.marca}")
 
@@ -607,7 +614,49 @@ def registrar_cobro(
                     Detalle_Orden.id_activo.isnot(None)
                 ).first() is not None
 
-                if tiene_activos_inventariados:
+                reserva_vinculada = db.query(Reservas_Backorder).filter(
+                    Reservas_Backorder.id_orden == orden.id_orden
+                ).first()
+
+                if reserva_vinculada:
+                    reserva_vinculada.monto_abonado = reserva_vinculada.precio_acordado
+                    reserva_vinculada.fecha_actualizacion = now_utc
+                    if payload.sku_activo_atribuido and payload.sku_activo_atribuido.strip():
+                        activo = db.query(Activo_Inventariado).filter(Activo_Inventariado.sku_qr_fisico == payload.sku_activo_atribuido.strip()).first()
+                        if not activo:
+                            raise HTTPException(status_code=404, detail=f"Activo con SKU {payload.sku_activo_atribuido} no encontrado.")
+                        estados_validos = ["disponible", "paletizado"]
+                        estado_obj = db.query(Estado_Activo).filter(Estado_Activo.id_estado == activo.id_estado).first()
+                        if not estado_obj or estado_obj.nombre_estado.lower() not in estados_validos:
+                            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="El activo no está Disponible o Paletizado.")
+                        
+                        estado_vendido = db.query(Estado_Activo).filter(Estado_Activo.nombre_estado == "Vendido").first()
+                        if not estado_vendido:
+                            estado_vendido = Estado_Activo(id_estado=3, nombre_estado="Vendido")
+                            db.add(estado_vendido)
+                            db.flush()
+                        activo.id_estado = estado_vendido.id_estado
+                        activo.reservado_por = None
+                        activo.reserva_expira_en = None
+                        reserva_vinculada.id_activo_asignado = activo.id_activo
+                        reserva_vinculada.estado_reserva = "Completada"
+
+                        qr_hash = f"TX-QR-{uuid.uuid4()}"
+                        orden.qr_transaccional_salida = qr_hash
+
+                        detalles_bo = db.query(Detalle_Orden).filter(
+                            Detalle_Orden.id_orden == orden.id_orden,
+                            Detalle_Orden.id_activo.is_(None)
+                        ).all()
+                        if detalles_bo:
+                            detalles_bo[0].id_activo = activo.id_activo
+                            detalles_bo[0].estado_preparacion = "Listo"
+                    else:
+                        reserva_vinculada.id_activo_asignado = None
+                        reserva_vinculada.estado_reserva = "Confirmada"
+                        qr_hash = None
+                        orden.qr_transaccional_salida = None
+                elif tiene_activos_inventariados:
                     qr_hash = f"TX-QR-{uuid.uuid4()}"
                     orden.qr_transaccional_salida = qr_hash
                 else:
@@ -674,68 +723,98 @@ def registrar_cobro(
             
             target_id_orden = None
             if nuevo_saldo == 0:
-                if not payload.sku_activo_atribuido:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Para saldar el backorder, debe atribuir el SKU del activo físico."
-                    )
-                
-                activo = db.query(Activo_Inventariado).filter(Activo_Inventariado.sku_qr_fisico == payload.sku_activo_atribuido).first()
-                if not activo:
-                    raise HTTPException(status_code=404, detail=f"Activo con SKU {payload.sku_activo_atribuido} no encontrado.")
-                
-                estado_disponible = db.query(Estado_Activo).filter(Estado_Activo.nombre_estado == "Disponible").first()
-                if not estado_disponible or activo.id_estado != estado_disponible.id_estado:
-                    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="El activo ingresado no está Disponible.")
-                
-                vehiculo = db.query(Vehiculo_Origen).filter(Vehiculo_Origen.id_vehiculo == activo.id_vehiculo).first()
-                hay_discrepancia = False
-                if vehiculo:
-                    if reserva.marca_requerida and vehiculo.marca.lower() != reserva.marca_requerida.lower(): hay_discrepancia = True
-                    if reserva.modelo_requerido and vehiculo.modelo.lower() != reserva.modelo_requerido.lower(): hay_discrepancia = True
-                
-                if hay_discrepancia and not payload.forzar_atribucion:
-                    raise HTTPException(status_code=400, detail="El activo físico no coincide con lo requerido por el Backorder. Active la sobreescritura si desea continuar.")
+                if payload.sku_activo_atribuido and payload.sku_activo_atribuido.strip():
+                    sku_clean = payload.sku_activo_atribuido.strip()
+                    activo = db.query(Activo_Inventariado).filter(Activo_Inventariado.sku_qr_fisico == sku_clean).first()
+                    if not activo:
+                        raise HTTPException(status_code=404, detail=f"Activo con SKU {sku_clean} no encontrado.")
+                    
+                    estados_validos = ["disponible", "paletizado"]
+                    estado_obj = db.query(Estado_Activo).filter(Estado_Activo.id_estado == activo.id_estado).first()
+                    if not estado_obj or estado_obj.nombre_estado.lower() not in estados_validos:
+                        raise HTTPException(
+                            status_code=status.HTTP_409_CONFLICT,
+                            detail=f"El activo ingresado está en estado '{estado_obj.nombre_estado if estado_obj else 'Desconocido'}'. Solo se permite asignar activos en estado Disponible o Paletizado."
+                        )
+                    
+                    vehiculo = db.query(Vehiculo_Origen).filter(Vehiculo_Origen.id_vehiculo == activo.id_vehiculo).first()
+                    hay_discrepancia = False
+                    if vehiculo:
+                        if reserva.marca_requerida and vehiculo.marca.lower() != reserva.marca_requerida.lower(): hay_discrepancia = True
+                        if reserva.modelo_requerido and vehiculo.modelo.lower() != reserva.modelo_requerido.lower(): hay_discrepancia = True
+                    
+                    if hay_discrepancia and not payload.forzar_atribucion:
+                        raise HTTPException(status_code=400, detail="El activo físico no coincide con lo requerido por el Backorder. Active la sobreescritura si desea continuar.")
 
-                estado_vendido = db.query(Estado_Activo).filter(Estado_Activo.nombre_estado == "Vendido").first()
-                if not estado_vendido:
-                    estado_vendido = Estado_Activo(id_estado=3, nombre_estado="Vendido")
-                    db.add(estado_vendido)
-                    db.flush()
-                activo.id_estado = estado_vendido.id_estado
-                activo.reservado_por = None
-                activo.reserva_expira_en = None
-                
-                reserva.id_activo_asignado = activo.id_activo
-                reserva.estado_reserva = "Completada"
+                    estado_vendido = db.query(Estado_Activo).filter(Estado_Activo.nombre_estado == "Vendido").first()
+                    if not estado_vendido:
+                        estado_vendido = Estado_Activo(id_estado=3, nombre_estado="Vendido")
+                        db.add(estado_vendido)
+                        db.flush()
+                    activo.id_estado = estado_vendido.id_estado
+                    activo.reservado_por = None
+                    activo.reserva_expira_en = None
+                    
+                    reserva.id_activo_asignado = activo.id_activo
+                    reserva.estado_reserva = "Completada"
 
-                qr_hash = f"TX-QR-{uuid.uuid4()}"
+                    qr_hash = f"TX-QR-{uuid.uuid4()}"
 
-                orden_existente = None
-                if reserva.id_orden:
-                    orden_existente = db.query(Orden_Venta).filter(Orden_Venta.id_orden == reserva.id_orden).first()
+                    orden_existente = None
+                    if reserva.id_orden:
+                        orden_existente = db.query(Orden_Venta).filter(Orden_Venta.id_orden == reserva.id_orden).first()
 
-                if orden_existente:
-                    orden_existente.estado_orden = "Pagada"
-                    orden_existente.monto_pendiente = 0
-                    orden_existente.qr_transaccional_salida = qr_hash
-                    orden_existente.id_cajera = current_user.id_usuario
-                    orden_existente.fecha_actualizacion = now_utc
-                    orden_operativa = orden_existente
+                    if orden_existente:
+                        orden_existente.estado_orden = "Pagada"
+                        orden_existente.monto_pendiente = 0
+                        orden_existente.qr_transaccional_salida = qr_hash
+                        orden_existente.id_cajera = current_user.id_usuario
+                        orden_existente.fecha_actualizacion = now_utc
+                        orden_operativa = orden_existente
 
-                    # Asociar activo al detalle backorder de la orden
-                    detalles_bo = db.query(Detalle_Orden).filter(
-                        Detalle_Orden.id_orden == orden_existente.id_orden,
-                        Detalle_Orden.id_activo.is_(None)
-                    ).all()
-                    if detalles_bo:
-                        det_target = detalles_bo[0]
-                        det_target.id_activo = activo.id_activo
-                        det_target.estado_preparacion = "Listo"
-                        det_target.descripcion_manual = f"[BACKORDER ASIGNADO] {activo.sku_qr_fisico} - {reserva.marca_requerida} {reserva.modelo_requerido}"
+                        # Asociar activo al detalle backorder de la orden
+                        detalles_bo = db.query(Detalle_Orden).filter(
+                            Detalle_Orden.id_orden == orden_existente.id_orden,
+                            Detalle_Orden.id_activo.is_(None)
+                        ).all()
+                        if detalles_bo:
+                            det_target = detalles_bo[0]
+                            det_target.id_activo = activo.id_activo
+                            det_target.estado_preparacion = "Listo"
+                            det_target.descripcion_manual = f"[BACKORDER ASIGNADO] {activo.sku_qr_fisico} - {reserva.marca_requerida} {reserva.modelo_requerido}"
+                        else:
+                            detalle = Detalle_Orden(
+                                id_orden=orden_existente.id_orden,
+                                id_activo=activo.id_activo,
+                                descripcion_manual=f"[BACKORDER] {reserva.marca_requerida} {reserva.modelo_requerido}",
+                                notas_preparacion="Entregado en caja por backorder",
+                                cantidad=1,
+                                precio_unitario=reserva.precio_acordado,
+                                precio_final=reserva.precio_acordado,
+                                estado_preparacion="Listo",
+                            )
+                            db.add(detalle)
                     else:
+                        nueva_orden = Orden_Venta(
+                            id_cliente=reserva.id_cliente,
+                            id_vendedor=reserva.id_vendedor,
+                            id_cajera=current_user.id_usuario,
+                            id_sucursal=reserva.id_sucursal_registro,
+                            estado_orden="Pagada",
+                            qr_transaccional_salida=qr_hash,
+                            total_venta=reserva.precio_acordado,
+                            monto_pendiente=0,
+                            abono_requerido=0,
+                            fecha_creacion=now_utc,
+                            fecha_actualizacion=now_utc,
+                        )
+                        db.add(nueva_orden)
+                        db.flush()
+                        reserva.id_orden = nueva_orden.id_orden
+                        orden_operativa = nueva_orden
+
                         detalle = Detalle_Orden(
-                            id_orden=orden_existente.id_orden,
+                            id_orden=nueva_orden.id_orden,
                             id_activo=activo.id_activo,
                             descripcion_manual=f"[BACKORDER] {reserva.marca_requerida} {reserva.modelo_requerido}",
                             notas_preparacion="Entregado en caja por backorder",
@@ -745,43 +824,74 @@ def registrar_cobro(
                             estado_preparacion="Listo",
                         )
                         db.add(detalle)
+                        db.flush()
+
+                    db.query(Transaccion_Pago).filter(Transaccion_Pago.id_reserva == reserva.id_reserva).update({"id_orden": orden_operativa.id_orden})
+
+                    folio_doc = orden_operativa.folio or f"ORD-{str(orden_operativa.id_orden).replace('-', '')[:4].upper()}"
+                    estado_resultado = "Completada"
+                    target_id_orden = orden_operativa.id_orden
                 else:
-                    nueva_orden = Orden_Venta(
-                        id_cliente=reserva.id_cliente,
-                        id_vendedor=reserva.id_vendedor,
-                        id_cajera=current_user.id_usuario,
-                        id_sucursal=reserva.id_sucursal_registro,
-                        estado_orden="Pagada",
-                        qr_transaccional_salida=qr_hash,
-                        total_venta=reserva.precio_acordado,
-                        monto_pendiente=0,
-                        abono_requerido=0,
-                        fecha_creacion=now_utc,
-                        fecha_actualizacion=now_utc,
-                    )
-                    db.add(nueva_orden)
-                    db.flush()
-                    reserva.id_orden = nueva_orden.id_orden
-                    orden_operativa = nueva_orden
+                    # Pago total del Backorder sin atribuir activo aún (repuesto pendiente de arribar a bodega)
+                    reserva.id_activo_asignado = None
+                    reserva.estado_reserva = "Confirmada"
+                    qr_hash = None
 
-                    detalle = Detalle_Orden(
-                        id_orden=nueva_orden.id_orden,
-                        id_activo=activo.id_activo,
-                        descripcion_manual=f"[BACKORDER] {reserva.marca_requerida} {reserva.modelo_requerido}",
-                        notas_preparacion="Entregado en caja por backorder",
-                        cantidad=1,
-                        precio_unitario=reserva.precio_acordado,
-                        precio_final=reserva.precio_acordado,
-                        estado_preparacion="Listo",
-                    )
-                    db.add(detalle)
-                    db.flush()
+                    orden_existente = None
+                    if reserva.id_orden:
+                        orden_existente = db.query(Orden_Venta).filter(Orden_Venta.id_orden == reserva.id_orden).first()
 
-                db.query(Transaccion_Pago).filter(Transaccion_Pago.id_reserva == reserva.id_reserva).update({"id_orden": orden_operativa.id_orden})
+                    if orden_existente:
+                        orden_existente.estado_orden = "Pagada"
+                        orden_existente.monto_pendiente = 0
+                        orden_existente.qr_transaccional_salida = None  # No hay QR hasta que el vendedor asigne el activo
+                        orden_existente.id_cajera = current_user.id_usuario
+                        orden_existente.fecha_actualizacion = now_utc
+                        orden_operativa = orden_existente
 
-                folio_doc = orden_operativa.folio or f"ORD-{str(orden_operativa.id_orden).replace('-', '')[:4].upper()}"
-                estado_resultado = "Completada"
-                target_id_orden = orden_operativa.id_orden
+                        detalles_bo = db.query(Detalle_Orden).filter(
+                            Detalle_Orden.id_orden == orden_existente.id_orden,
+                            Detalle_Orden.id_activo.is_(None)
+                        ).all()
+                        for det in detalles_bo:
+                            det.estado_preparacion = "No Aplica"
+                    else:
+                        nueva_orden = Orden_Venta(
+                            id_cliente=reserva.id_cliente,
+                            id_vendedor=reserva.id_vendedor,
+                            id_cajera=current_user.id_usuario,
+                            id_sucursal=reserva.id_sucursal_registro,
+                            estado_orden="Pagada",
+                            qr_transaccional_salida=None,
+                            total_venta=reserva.precio_acordado,
+                            monto_pendiente=0,
+                            abono_requerido=0,
+                            fecha_creacion=now_utc,
+                            fecha_actualizacion=now_utc,
+                        )
+                        db.add(nueva_orden)
+                        db.flush()
+                        reserva.id_orden = nueva_orden.id_orden
+                        orden_operativa = nueva_orden
+
+                        detalle = Detalle_Orden(
+                            id_orden=nueva_orden.id_orden,
+                            id_activo=None,
+                            descripcion_manual=f"[VENTA EN VERDE PENDIENTE DE ASIGNACIÓN] {reserva.marca_requerida} {reserva.modelo_requerido}",
+                            notas_preparacion="Pagado sin asignar. Esperando arribo de activo a bodega.",
+                            cantidad=1,
+                            precio_unitario=reserva.precio_acordado,
+                            precio_final=reserva.precio_acordado,
+                            estado_preparacion="No Aplica",
+                        )
+                        db.add(detalle)
+                        db.flush()
+
+                    db.query(Transaccion_Pago).filter(Transaccion_Pago.id_reserva == reserva.id_reserva).update({"id_orden": orden_operativa.id_orden})
+
+                    folio_doc = orden_operativa.folio or f"ORD-{str(orden_operativa.id_orden).replace('-', '')[:4].upper()}"
+                    estado_resultado = "Pagada"
+                    target_id_orden = orden_operativa.id_orden
             else:
                 reserva.estado_reserva = "Confirmada"
                 qr_hash = None

@@ -456,7 +456,7 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
               final messenger = ScaffoldMessenger.of(context);
               final reserva = await ModalBackorderForm.mostrar(context);
               if (!mounted || reserva == null) return;
-              CartController.instance.agregarReservaBackorder(
+              final ok = CartController.instance.agregarReservaBackorder(
                 idCategoria: reserva.idCategoriaRequerida,
                 categoriaNombre: reserva.categoriaNombre,
                 marca: reserva.marcaRequerida,
@@ -466,6 +466,15 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
                 montoAbonado: reserva.montoAbonado,
                 notas: reserva.notasPreparacion,
               );
+              if (!ok) {
+                messenger.showSnackBar(
+                  const SnackBar(
+                    content: Text('Las ventas en verde deben tramitarse de manera individual. Por favor vacía el carrito antes de agregar una venta en verde.'),
+                    backgroundColor: AppPalette.error,
+                  ),
+                );
+                return;
+              }
               messenger.showSnackBar(
                 SnackBar(
                   content: Text('Venta en verde (${reserva.marcaRequerida} ${reserva.modeloRequerido}) añadida al Checkout Wizard.'),
@@ -801,7 +810,7 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
                     final messenger = ScaffoldMessenger.of(context);
                     final reserva = await ModalBackorderForm.mostrar(context);
                     if (!mounted || reserva == null) return;
-                    CartController.instance.agregarReservaBackorder(
+                    final ok = CartController.instance.agregarReservaBackorder(
                       idCategoria: reserva.idCategoriaRequerida,
                       categoriaNombre: reserva.categoriaNombre,
                       marca: reserva.marcaRequerida,
@@ -811,6 +820,15 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
                       montoAbonado: reserva.montoAbonado,
                       notas: reserva.notasPreparacion,
                     );
+                    if (!ok) {
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text('Las ventas en verde deben tramitarse de manera individual. Por favor vacía el carrito antes de agregar una venta en verde.'),
+                          backgroundColor: AppPalette.error,
+                        ),
+                      );
+                      return;
+                    }
                     messenger.showSnackBar(
                       SnackBar(
                         content: Text('Venta en verde (${reserva.marcaRequerida} ${reserva.modeloRequerido}) añadida al Checkout Wizard.'),

@@ -13,7 +13,7 @@ class AsignarActivoBackorderModal extends StatefulWidget {
   final CobroPendienteModel orden;
   final CajaProvider provider;
   final int montoALiquidar;
-  final Future<void> Function(String sku, bool forzar) onConfirmar;
+  final Future<void> Function(String? sku, bool forzar) onConfirmar;
 
   const AsignarActivoBackorderModal({
     super.key,
@@ -31,7 +31,6 @@ class AsignarActivoBackorderModal extends StatefulWidget {
 class _AsignarActivoBackorderModalState
     extends State<AsignarActivoBackorderModal> {
   late final TextEditingController _skuController;
-  int _intentosFallidosSku = 0;
   bool _isConfirmando = false;
 
   @override
@@ -83,6 +82,71 @@ class _AsignarActivoBackorderModalState
             backgroundColor: AppPalette.error,
             content: Text(
               'Error al confirmar atribución: ${e.toString().replaceAll("Exception: ", "")}',
+              style: AppTypography.body.copyWith(color: Colors.white),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _confirmarSinAsignar() async {
+    final bool? confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppPalette.surfaceLight,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.info_outline, color: AppPalette.secondary, size: 24),
+            SizedBox(width: 10),
+            Text('Cobrar sin Asignar', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          ],
+        ),
+        content: const Text(
+          '¿Desea registrar el pago completo al 100% sin asignar un activo físico?\n\n'
+          'La orden quedará Pagada con saldo \$0 y pasará a la sección "Por Asignar" del vendedor, '
+          'quien le asignará el SKU físico una vez que bodega lo paletice. No se emitirá QR hasta dicha asignación.',
+          style: TextStyle(fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppPalette.secondary,
+              foregroundColor: AppPalette.background,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Sí, Cobrar al 100%'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar != true) return;
+
+    setState(() {
+      _isConfirmando = true;
+    });
+
+    try {
+      await widget.onConfirmar(null, false);
+      if (mounted) {
+        Navigator.of(context).pop(true);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isConfirmando = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppPalette.error,
+            content: Text(
+              'Error al procesar cobro: ${e.toString().replaceAll("Exception: ", "")}',
               style: AppTypography.body.copyWith(color: Colors.white),
             ),
           ),
@@ -374,7 +438,6 @@ class _AsignarActivoBackorderModalState
                   // ── Forzar Atribución Manual ───────────────────────
                   if (validacion != null &&
                       !validacion.coincide &&
-                      _intentosFallidosSku >= 2 &&
                       !forzar) ...[
                     const SizedBox(height: 14),
                     SizedBox(
@@ -431,7 +494,64 @@ class _AsignarActivoBackorderModalState
                     ),
                   ],
 
-                  const SizedBox(height: 24),
+                  // ── Opción alternativa: Cobrar sin Asignar (Repuesto aún no llega) ──
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(top: 16),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppPalette.secondary.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppPalette.secondary.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.access_time_filled_rounded, color: AppPalette.secondary, size: 20),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '¿El repuesto aún no llega a bodega?',
+                                style: AppTypography.small.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: AppPalette.textPrimaryLight,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Permite pagar el 100% ahora. El vendedor asignará el SKU físico cuando arribe.',
+                                style: AppTypography.small.copyWith(
+                                  fontSize: 11,
+                                  color: AppPalette.textSecondaryLight,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppPalette.secondary,
+                            foregroundColor: AppPalette.background,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          ),
+                          icon: const Icon(Icons.payments_outlined, size: 16),
+                          label: const Text(
+                            'Cobrar sin Asignar',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                          ),
+                          onPressed: _isConfirmando ? null : _confirmarSinAsignar,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
 
                   // ── Botones de Acción ──────────────────────────────
                   Row(
