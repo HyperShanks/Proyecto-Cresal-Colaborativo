@@ -421,12 +421,15 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
             children: [
               const Icon(Icons.article_outlined, size: 20, color: AppPalette.primary),
               const SizedBox(width: 8),
-              Text(
-                'ESPECIFICACIONES TÉCNICAS',
-                style: AppTypography.title.copyWith(
-                  fontSize: 15,
-                  letterSpacing: 1.0,
-                  fontWeight: FontWeight.bold,
+              Expanded(
+                child: Text(
+                  'ESPECIFICACIONES TÉCNICAS',
+                  style: AppTypography.title.copyWith(
+                    fontSize: 15,
+                    letterSpacing: 1.0,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -456,18 +459,24 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: AppTypography.small.copyWith(
-              color: AppPalette.textSecondary,
-              fontSize: 14,
+          Expanded(
+            child: Text(
+              label,
+              style: AppTypography.small.copyWith(
+                color: AppPalette.textSecondary,
+                fontSize: 14,
+              ),
             ),
           ),
-          Text(
-            value,
-            style: AppTypography.body.copyWith(
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              style: AppTypography.body.copyWith(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
             ),
           ),
         ],
@@ -492,12 +501,15 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
             children: [
               const Icon(Icons.location_on_outlined, size: 20, color: AppPalette.secondary),
               const SizedBox(width: 8),
-              Text(
-                'UBICACIÓN FÍSICA EN BODEGA',
-                style: AppTypography.title.copyWith(
-                  fontSize: 15,
-                  letterSpacing: 1.0,
-                  fontWeight: FontWeight.bold,
+              Expanded(
+                child: Text(
+                  'UBICACIÓN FÍSICA EN BODEGA',
+                  style: AppTypography.title.copyWith(
+                    fontSize: 15,
+                    letterSpacing: 1.0,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],

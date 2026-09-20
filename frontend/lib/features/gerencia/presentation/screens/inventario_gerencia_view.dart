@@ -787,7 +787,8 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
   }
 
   Widget _buildItemCard(CatalogoItem item) {
-    final tienePrecio = item.precioReferencia != null && item.precioReferencia! > 0;
+    final tienePrecio = (item.precioReferencia != null && item.precioReferencia! > 0) ||
+        (item.precioMaximo != null && item.precioMaximo! > 0);
     final estadoNombre = item.estadoActivo ?? 'Disponible';
     final estLower = estadoNombre.toLowerCase().trim();
     final esPaletizado = estLower == 'paletizado';
@@ -990,9 +991,9 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
-                                'PRECIO COMERCIAL',
-                                style: TextStyle(
+                              Text(
+                                tienePrecio ? 'PRECIO SUGERIDO' : 'PRECIO COMERCIAL',
+                                style: const TextStyle(
                                   fontSize: 9,
                                   fontWeight: FontWeight.w800,
                                   letterSpacing: 0.5,
@@ -1001,13 +1002,32 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                tienePrecio ? _formatoCLP(item.precioReferencia) : '⚠️ Sin Tasar',
+                                tienePrecio ? _formatoCLP(item.precioSugerido) : '⚠️ Sin Tasar',
                                 style: TextStyle(
                                   fontSize: tienePrecio ? 16 : 12,
                                   fontWeight: FontWeight.w900,
                                   color: tienePrecio ? const Color(0xFF0F172A) : const Color(0xFFEA580C),
                                 ),
                               ),
+                              if (tienePrecio && item.precioMinimo != null && item.precioMaximo != null) ...[
+                                const SizedBox(height: 2),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF1F5F9),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: AppPalette.borderLight),
+                                  ),
+                                  child: Text(
+                                    'Rango: ${item.rangoPrecioFormateado}',
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF475569),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
 
@@ -1282,7 +1302,8 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
   }
 
   Widget _buildTableRow(CatalogoItem item) {
-    final tienePrecio = item.precioReferencia != null && item.precioReferencia! > 0;
+    final tienePrecio = (item.precioReferencia != null && item.precioReferencia! > 0) ||
+        (item.precioMaximo != null && item.precioMaximo! > 0);
     final estadoNombre = item.estadoActivo ?? 'Disponible';
     final estLower = estadoNombre.toLowerCase().trim();
     final esPaletizado = estLower == 'paletizado';
@@ -1505,13 +1526,30 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                 child: Align(
                   alignment: Alignment.centerRight,
                   child: tienePrecio
-                      ? Text(
-                          _formatoCLP(item.precioReferencia),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w900,
-                            fontSize: 13,
-                            color: Color(0xFF0F172A),
-                          ),
+                      ? Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              _formatoCLP(item.precioSugerido),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 13,
+                                color: Color(0xFF0F172A),
+                              ),
+                            ),
+                            if (item.precioMinimo != null && item.precioMaximo != null) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                'Rango: ${item.rangoPrecioFormateado}',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF64748B),
+                                ),
+                              ),
+                            ],
+                          ],
                         )
                       : Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -1700,21 +1738,22 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
       return;
     }
 
-    final bool esEdicionPrevia = item.precioReferencia != null && item.precioReferencia! > 0;
+    final bool esEdicionPrevia = (item.precioReferencia != null && item.precioReferencia! > 0) ||
+        (item.precioMaximo != null && item.precioMaximo! > 0);
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => _TasacionDialog(
         item: item,
-        onSuccess: (nuevoPrecio) {
+        onSuccess: (precioMin, precioMax) {
           _cargarInventario();
           widget.onStockMutado?.call();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
                 esEdicionPrevia
-                    ? '¡Precio de ${item.skuQrFisico} actualizado a ${_formatoCLP(nuevoPrecio)}!'
-                    : '¡Precio de ${item.skuQrFisico} fijado a ${_formatoCLP(nuevoPrecio)}! Repuesto disponible en catálogo.',
+                    ? '¡Rango de precio de ${item.skuQrFisico} actualizado a ${_formatoCLP(precioMin)} - ${_formatoCLP(precioMax)}!'
+                    : '¡Tasación de ${item.skuQrFisico} fijada (${_formatoCLP(precioMin)} - ${_formatoCLP(precioMax)})! Repuesto disponible en catálogo.',
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
               backgroundColor: AppPalette.success,
@@ -1796,7 +1835,7 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
 /// Diálogo Modal de Tasación Gerencial con Cabecera Azul Corporativa `#004C89`
 class _TasacionDialog extends StatefulWidget {
   final CatalogoItem item;
-  final ValueChanged<int> onSuccess;
+  final void Function(int precioMinimo, int precioMaximo) onSuccess;
 
   const _TasacionDialog({
     required this.item,
@@ -1809,8 +1848,10 @@ class _TasacionDialog extends StatefulWidget {
 
 class _TasacionDialogState extends State<_TasacionDialog> {
   final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _precioController;
-  late final int _precioOriginal;
+  late final TextEditingController _precioMinController;
+  late final TextEditingController _precioMaxController;
+  late final int _precioMinOriginal;
+  late final int _precioMaxOriginal;
   late final bool _esEdicion;
   bool _enviando = false;
   String? _errorMsg;
@@ -1818,19 +1859,37 @@ class _TasacionDialogState extends State<_TasacionDialog> {
   @override
   void initState() {
     super.initState();
-    final bool tienePrecio = widget.item.precioReferencia != null && widget.item.precioReferencia! > 0;
-    _esEdicion = tienePrecio;
-    _precioOriginal = tienePrecio ? widget.item.precioReferencia! : 0;
-    final valorInicial = tienePrecio ? CurrencyFormatter.formatNumber(_precioOriginal) : '';
-    _precioController = TextEditingController(text: valorInicial);
-    _precioController.addListener(() {
+    final int? minInicial = widget.item.precioMinimo ??
+        (widget.item.precioReferencia != null && widget.item.precioReferencia! > 0
+            ? widget.item.precioReferencia
+            : null);
+    final int? maxInicial = widget.item.precioMaximo ??
+        (widget.item.precioReferencia != null && widget.item.precioReferencia! > 0
+            ? widget.item.precioReferencia
+            : null);
+    _precioMinOriginal = minInicial ?? 0;
+    _precioMaxOriginal = maxInicial ?? 0;
+    _esEdicion = _precioMaxOriginal > 0 || _precioMinOriginal > 0;
+
+    _precioMinController = TextEditingController(
+      text: _precioMinOriginal > 0 ? CurrencyFormatter.formatNumber(_precioMinOriginal) : '',
+    );
+    _precioMaxController = TextEditingController(
+      text: _precioMaxOriginal > 0 ? CurrencyFormatter.formatNumber(_precioMaxOriginal) : '',
+    );
+
+    _precioMinController.addListener(() {
+      if (mounted) setState(() {});
+    });
+    _precioMaxController.addListener(() {
       if (mounted) setState(() {});
     });
   }
 
   @override
   void dispose() {
-    _precioController.dispose();
+    _precioMinController.dispose();
+    _precioMaxController.dispose();
     super.dispose();
   }
 
@@ -1838,14 +1897,25 @@ class _TasacionDialogState extends State<_TasacionDialog> {
     return CurrencyFormatter.parse(texto);
   }
 
+  String _formatoCLP(num? monto) {
+    if (monto == null) return '\$0';
+    return CurrencyFormatter.formatCLP(monto.round());
+  }
+
   Future<void> _guardarTasacion() async {
-    final monto = _extraerMontoLimpio(_precioController.text);
-    if (monto <= 0) {
-      setState(() => _errorMsg = 'El precio debe ser un monto entero positivo mayor a \$0.');
+    final min = _extraerMontoLimpio(_precioMinController.text);
+    final max = _extraerMontoLimpio(_precioMaxController.text);
+
+    if (min <= 0 || max <= 0) {
+      setState(() => _errorMsg = 'Ambos precios (mínimo y máximo) deben ser enteros positivos mayores a \$0.');
       return;
     }
-    if (_esEdicion && monto == _precioOriginal) {
-      setState(() => _errorMsg = 'No se han detectado cambios en el precio.');
+    if (min > max) {
+      setState(() => _errorMsg = 'El precio mínimo no puede ser superior al precio máximo sugerido.');
+      return;
+    }
+    if (_esEdicion && min == _precioMinOriginal && max == _precioMaxOriginal) {
+      setState(() => _errorMsg = 'No se han detectado cambios en el rango de precios.');
       return;
     }
 
@@ -1857,12 +1927,14 @@ class _TasacionDialogState extends State<_TasacionDialog> {
     try {
       await GerenciaService.tasarActivo(
         idActivo: widget.item.idActivo,
-        precioReferencia: monto,
+        precioMinimo: min,
+        precioMaximo: max,
+        precioReferencia: max,
       );
 
       if (!mounted) return;
       Navigator.of(context).pop();
-      widget.onSuccess(monto);
+      widget.onSuccess(min, max);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -1874,16 +1946,17 @@ class _TasacionDialogState extends State<_TasacionDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final montoActual = _extraerMontoLimpio(_precioController.text);
-    final bool puedeGuardar = _esEdicion
-        ? (montoActual > 0 && montoActual != _precioOriginal)
-        : (montoActual > 0);
+    final minActual = _extraerMontoLimpio(_precioMinController.text);
+    final maxActual = _extraerMontoLimpio(_precioMaxController.text);
+    final bool montosValidos = minActual > 0 && maxActual > 0 && minActual <= maxActual;
+    final bool cambiosDetectados = !_esEdicion || (minActual != _precioMinOriginal || maxActual != _precioMaxOriginal);
+    final bool puedeGuardar = montosValidos && cambiosDetectados;
 
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 480),
+        constraints: const BoxConstraints(maxWidth: 500),
         child: Container(
           decoration: BoxDecoration(
             color: Colors.white,
@@ -1925,7 +1998,7 @@ class _TasacionDialogState extends State<_TasacionDialog> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            _esEdicion ? 'Actualizar Precio Comercial' : 'Fijar Precio de Tasación',
+                            _esEdicion ? 'Actualizar Rango de Tasación' : 'Fijar Rango de Tasación',
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 15,
@@ -1935,7 +2008,7 @@ class _TasacionDialogState extends State<_TasacionDialog> {
                           const SizedBox(height: 2),
                           Text(
                             _esEdicion
-                                ? 'Modificación de precio autorizado para catálogo'
+                                ? 'Modificación de rango mínimo y máximo autorizado'
                                 : 'Autorización comercial Jefe de Ventas / Gerencia',
                             style: const TextStyle(
                               color: Color(0xFFBAE6FD),
@@ -2104,36 +2177,6 @@ class _TasacionDialogState extends State<_TasacionDialog> {
                                       fontWeight: FontWeight.w500,
                                     ),
                                   ),
-                                  if (widget.item.imagenes.isNotEmpty) ...[
-                                    const SizedBox(height: 6),
-                                    InkWell(
-                                      onTap: () => VisorImagenCompletaDialog.show(
-                                        context,
-                                        fotografias: widget.item.imagenes,
-                                        initialIndex: 0,
-                                        titulo: widget.item.tituloRepuesto,
-                                        sku: widget.item.skuQrFisico,
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          const Icon(Icons.fullscreen, size: 14, color: AppPalette.primary),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            widget.item.imagenes.length > 1
-                                                ? 'Ver las ${widget.item.imagenes.length} fotos en alta resolución'
-                                                : 'Ver foto en alta resolución',
-                                            style: const TextStyle(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.w700,
-                                              color: AppPalette.primary,
-                                              decoration: TextDecoration.underline,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
                                 ],
                               ),
                             ),
@@ -2142,9 +2185,9 @@ class _TasacionDialogState extends State<_TasacionDialog> {
                       ),
                       const SizedBox(height: 16),
 
-                      // Input de Precio Autorizado en CLP
+                      // Campo 1: Precio Mínimo (Piso de negociación)
                       const Text(
-                        'PRECIO DE VENTA AUTORIZADO (\$ CLP):',
+                        'PRECIO MÍNIMO (PISO DE NEGOCIACIÓN CLP):',
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w900,
@@ -2154,7 +2197,7 @@ class _TasacionDialogState extends State<_TasacionDialog> {
                       ),
                       const SizedBox(height: 6),
                       TextField(
-                        controller: _precioController,
+                        controller: _precioMinController,
                         keyboardType: TextInputType.number,
                         inputFormatters: [
                           MilesTextInputFormatter(),
@@ -2176,54 +2219,177 @@ class _TasacionDialogState extends State<_TasacionDialog> {
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w900,
-                                color: Color(0xFF64748B),
+                                color: Color(0xFFD97706),
                               ),
                             ),
                           ),
                           prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
-                          hintText: 'Ej: 1.200.000',
+                          hintText: 'Ej: 380.000',
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
                             borderSide: const BorderSide(
-                              color: Color(0xFFFB923C),
+                              color: Color(0xFFFBBF24),
                               width: 1.5,
                             ),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
                             borderSide: const BorderSide(
-                              color: Color(0xFFFB923C),
+                              color: Color(0xFFFBBF24),
                               width: 1.5,
                             ),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
                             borderSide: const BorderSide(
-                              color: Color(0xFFEA580C),
+                              color: Color(0xFFD97706),
                               width: 2.0,
                             ),
                           ),
                         ),
                       ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Piso mínimo autorizado para el vendedor al negociar en el carrito.',
+                        style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Campo 2: Precio Máximo (Precio Sugerido / Lista)
+                      const Text(
+                        'PRECIO MÁXIMO (PRECIO SUGERIDO / LISTA CLP):',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.5,
+                          color: Color(0xFF1E293B),
+                        ),
+                      ),
                       const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Icon(
-                            _esEdicion ? Icons.info_outline_rounded : Icons.verified,
-                            size: 14,
-                            color: _esEdicion ? AppPalette.tertiary : const Color(0xFF059669),
-                          ),
-                          const SizedBox(width: 4),
-                          Expanded(
+                      TextField(
+                        controller: _precioMaxController,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          MilesTextInputFormatter(),
+                        ],
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF0F172A),
+                        ),
+                        decoration: InputDecoration(
+                          isDense: true,
+                          filled: true,
+                          fillColor: const Color(0xFFFFFBF5),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          prefixIcon: const Padding(
+                            padding: EdgeInsets.only(left: 14, right: 8),
                             child: Text(
-                              _esEdicion
-                                  ? 'El nuevo precio se actualizará inmediatamente en el catálogo de ventas.'
-                                  : 'Al confirmar, el estado pasará a "Disponible" y se habilitará en el catálogo.',
-                              style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                              '\$',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF059669),
+                              ),
+                            ),
+                          ),
+                          prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+                          hintText: 'Ej: 450.000',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(
+                              color: Color(0xFF34D399),
+                              width: 1.5,
+                            ),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(
+                              color: Color(0xFF34D399),
+                              width: 1.5,
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(
+                              color: Color(0xFF059669),
+                              width: 2.0,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Precio de lista inicial visible al cliente en el catálogo.',
+                        style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Previsualización interactiva del Rango de Negociación
+                      if (minActual > 0 && maxActual > 0) ...[
+                        if (minActual <= maxActual) ...[
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF0FDF4),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: const Color(0xFFBBF7D0)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.swap_horiz_rounded, size: 20, color: Color(0xFF059669)),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Rango Autorizado: ${_formatoCLP(minActual)} - ${_formatoCLP(maxActual)}',
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w900,
+                                          color: Color(0xFF166534),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      const Text(
+                                        'El vendedor podrá acordar cualquier valor dentro de este rango en el carrito.',
+                                        style: TextStyle(fontSize: 11, color: Color(0xFF15803D)),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ] else ...[
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF2F2),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: const Color(0xFFFECACA)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.error_outline_rounded, size: 20, color: AppPalette.error),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    'El precio mínimo (${_formatoCLP(minActual)}) no puede superar al precio máximo (${_formatoCLP(maxActual)}).',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppPalette.error,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
-                      ),
+                        const SizedBox(height: 10),
+                      ],
 
                       if (_errorMsg != null) ...[
                         const SizedBox(height: 8),
@@ -2276,7 +2442,7 @@ class _TasacionDialogState extends State<_TasacionDialog> {
                         _enviando
                             ? 'Guardando...'
                             : _esEdicion
-                                ? 'Confirmar'
+                                ? 'Confirmar Rango'
                                 : 'Aprobar y Habilitar Venta',
                       ),
                       style: ElevatedButton.styleFrom(

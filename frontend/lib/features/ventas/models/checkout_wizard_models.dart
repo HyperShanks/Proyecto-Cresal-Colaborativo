@@ -215,7 +215,7 @@ class CheckoutWizardRequestModel {
   final int montoPendiente;
   final int? montoAbono;
   final String? instruccionesBodega;
-  final List<String> itemsInventariados;
+  final List<dynamic> itemsInventariados;
   final List<ItemManualModel> itemsManuales;
   final List<ReservaBackorderModel> reservas;
   final DespachoModel? datosDespacho;
@@ -246,7 +246,11 @@ class CheckoutWizardRequestModel {
     'monto_pendiente': montoPendiente,
     if (montoAbono != null) 'monto_abono': montoAbono,
     if (instruccionesBodega != null) 'instrucciones_bodega': instruccionesBodega,
-    'items_inventariados': itemsInventariados,
+    'items_inventariados': itemsInventariados.map((i) {
+      if (i is Map) return i;
+      if (i is String) return i;
+      return i.toString();
+    }).toList(),
     'items_manuales': itemsManuales.map((m) => m.toJson()).toList(),
     if (reservas.isNotEmpty) 'reservas': reservas.map((r) => r.toJson()).toList(),
     if (datosDespacho != null) 'datos_despacho': datosDespacho!.toJson(),

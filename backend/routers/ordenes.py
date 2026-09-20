@@ -2177,13 +2177,43 @@ def checkout_wizard(
 
         # B. Procesar Ítems Inventariados
         activos_reservados = 0
-        for act_id in (request.items_inventariados or []):
+        for item_inv in (request.items_inventariados or []):
+            if isinstance(item_inv, dict):
+                act_id = item_inv.get("id_activo") or item_inv.get("id")
+                precio_final_custom = item_inv.get("precio_final") or item_inv.get("precio")
+                notas_prep = item_inv.get("notas_preparacion") or request.instrucciones_bodega
+            elif hasattr(item_inv, "id_activo"):
+                act_id = getattr(item_inv, "id_activo")
+                precio_final_custom = getattr(item_inv, "precio_final", None)
+                notas_prep = getattr(item_inv, "notas_preparacion", None) or request.instrucciones_bodega
+            else:
+                act_id = item_inv
+                precio_final_custom = None
+                notas_prep = request.instrucciones_bodega
+
             activo = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == act_id).first()
             if not activo:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"El activo con ID '{act_id}' no fue encontrado en inventario."
                 )
+
+            # Validar rango de tasación permitido
+            min_permitido = activo.precio_minimo if activo.precio_minimo is not None else (activo.precio_referencia or 0)
+            max_permitido = activo.precio_maximo if activo.precio_maximo is not None else (activo.precio_referencia or 0)
+
+            if precio_final_custom is not None:
+                p_final = int(precio_final_custom)
+            else:
+                p_final = activo.precio_referencia or 0
+
+            if min_permitido > 0 or max_permitido > 0:
+                if p_final < min_permitido or p_final > max_permitido:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"El precio acordado (${p_final:,}) para el repuesto SKU '{activo.sku_qr_fisico}' se encuentra fuera del rango de tasación permitido (${min_permitido:,} - ${max_permitido:,})."
+                    )
+
             # Permitir si está Disponible (1), Paletizado (7) o Reservado por el mismo vendedor en su carrito (2)
             es_su_reserva = (
                 activo.id_estado == 2
@@ -2237,10 +2267,10 @@ def checkout_wizard(
                 id_orden=orden.id_orden,
                 id_activo=activo.id_activo,
                 descripcion_manual=desc,
-                notas_preparacion=request.instrucciones_bodega,
+                notas_preparacion=notas_prep,
                 cantidad=1,
-                precio_unitario=activo.precio_referencia or 0,
-                precio_final=activo.precio_referencia or 0,
+                precio_unitario=activo.precio_referencia or p_final,
+                precio_final=p_final,
                 estado_preparacion="Pendiente"
             )
             db.add(detalle)

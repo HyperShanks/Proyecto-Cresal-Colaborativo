@@ -1,6 +1,6 @@
 import os
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
-from typing import Optional, List
+from typing import Optional, List, Any, Union
 from uuid import UUID
 from datetime import datetime
 from enum import Enum
@@ -1284,7 +1284,7 @@ class CheckoutWizardRequest(BaseModel):
     monto_pendiente: int
     monto_abono: Optional[int] = 0
     instrucciones_bodega: Optional[str] = None
-    items_inventariados: List[UUID] = Field(default_factory=list)
+    items_inventariados: List[Any] = Field(default_factory=list)
     items_manuales: List[dict] = Field(default_factory=list)
     reservas: Optional[List[ReservaBackorderDTO]] = None
     datos_despacho: Optional[DespachoDTO] = None

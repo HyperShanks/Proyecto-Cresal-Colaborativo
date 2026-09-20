@@ -288,16 +288,22 @@ class GerenciaService {
     }
   }
 
-  /// Fija o actualiza el precio de tasación comercial de un repuesto paletizado (HU-5.3).
+  /// Fija o actualiza el rango de tasación comercial de un repuesto (HU-5.3).
   static Future<Map<String, dynamic>> tasarActivo({
     required String idActivo,
-    required int precioReferencia,
+    required int precioMinimo,
+    required int precioMaximo,
+    int? precioReferencia,
   }) async {
     try {
       final uri = Uri.parse('${ApiConstants.inventarioEndpoint}/$idActivo/precio');
       final response = await ApiService.patch(
         uri,
-        body: jsonEncode({'precio_referencia': precioReferencia}),
+        body: jsonEncode({
+          'precio_minimo': precioMinimo,
+          'precio_maximo': precioMaximo,
+          'precio_referencia': precioReferencia ?? precioMaximo,
+        }),
       );
 
       if (response.statusCode == 200) {

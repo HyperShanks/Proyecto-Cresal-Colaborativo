@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/checkout_wizard_models.dart';
 import '../services/ventas_service.dart';
+import 'cart_controller.dart';
 
 /// Controlador reactivo del estado para el Checkout Wizard por Pasos (SPEC-HU-05)
 class CheckoutWizardController extends ChangeNotifier {
@@ -73,7 +74,9 @@ class CheckoutWizardController extends ChangeNotifier {
   bool nextStep() {
     _errorMessage = null;
     if (_currentStep == 0 && !validateStep1()) {
-      _errorMessage = 'Debes agregar al menos un artículo o servicio para proceder.';
+      _errorMessage = CartController.instance.hayPreciosInvalidos
+          ? 'Hay repuestos con precio acordado fuera del rango de tasación permitido. Modifícalos dentro de su rango para continuar.'
+          : 'Debes agregar al menos un artículo o servicio para proceder.';
       notifyListeners();
       return false;
     }
@@ -109,8 +112,8 @@ class CheckoutWizardController extends ChangeNotifier {
     }
   }
 
-  // ── Validaciones ──────────────────────────────────────────────────────────
-  bool validateStep1() => totalItemsCount > 0;
+  bool validateStep1() =>
+      totalItemsCount > 0 && !CartController.instance.hayPreciosInvalidos;
   bool validateStep2() => _clienteSeleccionado != null && _clienteSeleccionado!.rut.trim().isNotEmpty;
   bool validateStep3() {
     if (_tipoEntrega == 'Retiro' || _tipoEntrega == 'Traslado') return true;
@@ -144,8 +147,34 @@ class CheckoutWizardController extends ChangeNotifier {
     required int precio,
     String? pasillo,
     String? pallet,
+    int? precioMinimo,
+    int? precioMaximo,
+    String? notasPreparacion,
   }) {
-    if (!_itemsInventariados.any((i) => i['id_activo'] == idActivo)) {
+    final idx = _itemsInventariados.indexWhere((i) => i['id_activo'] == idActivo);
+    if (idx != -1) {
+      final prev = _itemsInventariados[idx];
+      bool cambio = false;
+      if (prev['precio'] != precio) {
+        prev['precio'] = precio;
+        cambio = true;
+      }
+      if (precioMinimo != null && prev['precio_minimo'] != precioMinimo) {
+        prev['precio_minimo'] = precioMinimo;
+        cambio = true;
+      }
+      if (precioMaximo != null && prev['precio_maximo'] != precioMaximo) {
+        prev['precio_maximo'] = precioMaximo;
+        cambio = true;
+      }
+      if (notasPreparacion != null && prev['notas_preparacion'] != notasPreparacion) {
+        prev['notas_preparacion'] = notasPreparacion;
+        cambio = true;
+      }
+      if (cambio) {
+        notifyListeners();
+      }
+    } else {
       _itemsInventariados.add({
         'id_activo': idActivo,
         'sku': sku,
@@ -153,15 +182,59 @@ class CheckoutWizardController extends ChangeNotifier {
         'precio': precio,
         'pasillo': pasillo,
         'pallet': pallet,
+        'precio_minimo': precioMinimo,
+        'precio_maximo': precioMaximo,
+        'notas_preparacion': notasPreparacion,
       });
       _limpiarErrorStep1SiAplica();
       notifyListeners();
-    } else {
-      if (_limpiarErrorStep1SiAplica()) {
+    }
+  }
+
+  void updateItemInventariadoPrecio(String idActivo, int nuevoPrecio) {
+    final idx = _itemsInventariados.indexWhere((i) => i['id_activo'] == idActivo);
+    if (idx != -1) {
+      if (_itemsInventariados[idx]['precio'] != nuevoPrecio) {
+        _itemsInventariados[idx]['precio'] = nuevoPrecio;
         notifyListeners();
       }
     }
   }
+
+  void updateItemInventariadoNotas(String idActivo, String? notas) {
+    final idx = _itemsInventariados.indexWhere((i) => i['id_activo'] == idActivo);
+    if (idx != -1) {
+      if (_itemsInventariados[idx]['notas_preparacion'] != notas) {
+        _itemsInventariados[idx]['notas_preparacion'] = notas;
+        notifyListeners();
+      }
+    }
+  }
+
+  List<String> get resumenNotasPreparacion {
+    final List<String> list = [];
+    for (final i in _itemsInventariados) {
+      final n = i['notas_preparacion']?.toString().trim();
+      if (n != null && n.isNotEmpty) {
+        list.add('${i['descripcion']} (${i['sku']}): $n');
+      }
+    }
+    for (final m in _itemsManuales) {
+      final n = m.notasPreparacion?.trim();
+      if (n != null && n.isNotEmpty) {
+        list.add('${m.descripcion}: $n');
+      }
+    }
+    for (final r in _reservas) {
+      final n = r.notasPreparacion?.trim();
+      if (n != null && n.isNotEmpty) {
+        list.add('${r.categoriaNombre} (${r.marcaRequerida} ${r.modeloRequerido}): $n');
+      }
+    }
+    return list;
+  }
+
+  bool get tieneNotasPreparacion => resumenNotasPreparacion.isNotEmpty;
 
   void removeItemInventariado(String idActivo) {
     _itemsInventariados.removeWhere((i) => i['id_activo'] == idActivo);
@@ -269,6 +342,11 @@ class CheckoutWizardController extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // Consolidar notas de preparación de todos los ítems para bodega
+      final String bodegaNotas = resumenNotasPreparacion.isNotEmpty
+          ? resumenNotasPreparacion.join(' • ')
+          : _notasGenerales;
+
       final request = CheckoutWizardRequestModel(
         idCliente: _clienteSeleccionado!.idCliente,
         cliente: _clienteSeleccionado,
@@ -278,8 +356,13 @@ class CheckoutWizardController extends ChangeNotifier {
         totalVenta: totalVenta,
         montoPendiente: montoPendiente,
         montoAbono: totalAbonos,
-        instruccionesBodega: _notasGenerales,
-        itemsInventariados: _itemsInventariados.map((i) => i['id_activo'].toString()).toList(),
+        instruccionesBodega: bodegaNotas,
+        itemsInventariados: _itemsInventariados.map((i) => {
+          'id_activo': i['id_activo'].toString(),
+          'precio_final': int.tryParse(i['precio']?.toString() ?? '0') ?? 0,
+          if (i['notas_preparacion'] != null && i['notas_preparacion'].toString().isNotEmpty)
+            'notas_preparacion': i['notas_preparacion'].toString(),
+        }).toList(),
         itemsManuales: _itemsManuales,
         reservas: _reservas,
         datosDespacho: _tipoEntrega == 'Despacho Domicilio' || _tipoEntrega == 'Despacho' || _tipoEntrega == 'Traslado'
