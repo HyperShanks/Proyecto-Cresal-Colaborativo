@@ -87,7 +87,7 @@ class BackordersGerenciaViewState extends State<BackordersGerenciaView> {
     setState(() {
       _filtroEstado = 'todos';
     });
-    _cargarBackorders();
+    _cargarDatos();
   }
 
   Future<void> _cargarDatos() async {

@@ -50,6 +50,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
   bool _filtroSinTasar = false;
   bool _bellHovered = false;
   String? _filtroEstadoOrdenes;
+  bool _dashboardDirty = false;
 
   late AnimationController _spinController;
 
@@ -105,7 +106,12 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
   @override
   void didPopNext() {
     super.didPopNext();
-    _cargarDashboard();
+    // Solo recargamos si el dashboard quedó marcado como sucio por una mutación
+    // y la vista visible es el Dashboard, evitando falsos refrescos al cerrar modales o cancelar diálogos.
+    if (_dashboardDirty && _vistaActiva == VistaGerencia.dashboard) {
+      _dashboardDirty = false;
+      _cargarDashboard();
+    }
   }
 
   @override
@@ -310,6 +316,26 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
     }
   }
 
+  void _navegarAOrdenesConEstado(String estado) {
+    setState(() {
+      _filtroEstadoOrdenes = estado;
+      _vistaActiva = VistaGerencia.ordenes;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _ordenesKey.currentState?.aplicarFiltroEstado(estado);
+    });
+  }
+
+  void _navegarAInventarioSinTasar() {
+    setState(() {
+      _filtroSinTasar = true;
+      _vistaActiva = VistaGerencia.inventario;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _inventarioKey.currentState?.aplicarFiltroSinTasar(true);
+    });
+  }
+
   String _formatearFechaHoy() {
     final ahora = DateTime.now();
     final dias = [
@@ -372,7 +398,12 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                           key: _inventarioKey,
                           idSucursalInicial: _sucursalSeleccionada,
                           filtroSinTasarInicial: _filtroSinTasar,
-                          onStockMutado: () => _cargarDashboard(),
+                          onStockMutado: () {
+                            _dashboardDirty = true;
+                            if (_vistaActiva == VistaGerencia.dashboard) {
+                              _cargarDashboard();
+                            }
+                          },
                         )
                       : _vistaActiva == VistaGerencia.backorders
                       ? BackordersGerenciaView(
@@ -527,6 +558,9 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                         );
                         setState(() => _vistaActiva = VistaGerencia.dashboard);
                         _cargarDashboard();
+                      } else {
+                        // Re-clic en la pestaña activa: refresca intencionalmente
+                        _cargarDashboard(mostrarToast: true);
                       }
                     },
                   ),
@@ -547,6 +581,9 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                           _filtroEstadoOrdenes = null;
                           _vistaActiva = VistaGerencia.ordenes;
                         });
+                      } else {
+                        // Re-clic en la pestaña activa: refresca intencionalmente
+                        _refrescarVistaActiva(mostrarToast: true);
                       }
                     },
                   ),
@@ -570,6 +607,9 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                           _vistaActiva = VistaGerencia.inventario;
                           _filtroSinTasar = false;
                         });
+                      } else {
+                        // Re-clic en la pestaña activa: refresca intencionalmente
+                        _refrescarVistaActiva(mostrarToast: true);
                       }
                     },
                   ),
@@ -590,6 +630,9 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                         setState(() {
                           _vistaActiva = VistaGerencia.backorders;
                         });
+                      } else {
+                        // Re-clic en la pestaña activa: refresca intencionalmente
+                        _refrescarVistaActiva(mostrarToast: true);
                       }
                     },
                   ),
@@ -1098,15 +1141,9 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                     ],
                     onSelected: (val) {
                       if (val == 'tasacion') {
-                        setState(() {
-                          _vistaActiva = VistaGerencia.inventario;
-                          _filtroSinTasar = true;
-                        });
+                        _navegarAInventarioSinTasar();
                       } else if (val == 'ordenes') {
-                        setState(() {
-                          _filtroEstadoOrdenes = 'Reservada';
-                          _vistaActiva = VistaGerencia.ordenes;
-                        });
+                        _navegarAOrdenesConEstado('Reservada');
                       }
                     },
                   ),
@@ -1494,6 +1531,9 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
         initialValue: idActivo,
         onSelected: (nuevoId) {
           final idNormalizado = nuevoId == -1 ? null : nuevoId;
+          // Evita peticiones y spinners redundantes si se selecciona la misma sucursal activa
+          if (idNormalizado == _sucursalSeleccionada) return;
+
           setState(() {
             _sucursalSeleccionada = idNormalizado;
           });
@@ -1900,12 +1940,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
 
               // Alerta 1: Saldos por Cobrar (Clic para auditar órdenes con saldo pendiente)
               InkWell(
-                onTap: () {
-                  setState(() {
-                    _filtroEstadoOrdenes = 'Reservada';
-                    _vistaActiva = VistaGerencia.ordenes;
-                  });
-                },
+                onTap: () => _navegarAOrdenesConEstado('Reservada'),
                 borderRadius: BorderRadius.circular(12),
                 child: Container(
                   padding: const EdgeInsets.all(12),
@@ -1979,12 +2014,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
 
               // Alerta 2: Cuellos de Botella de Tasación (Clic para tasar stock)
               InkWell(
-                onTap: () {
-                  setState(() {
-                    _vistaActiva = VistaGerencia.inventario;
-                    _filtroSinTasar = true;
-                  });
-                },
+                onTap: _navegarAInventarioSinTasar,
                 borderRadius: BorderRadius.circular(12),
                 child: Container(
                   padding: const EdgeInsets.all(12),
@@ -2203,6 +2233,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                   conteo: flujo.enPreparacion,
                   badgeBg: const Color(0xFFFEF3C7),
                   badgeTextColor: const Color(0xFF92400E),
+                  onTap: () => _navegarAOrdenesConEstado('Reservada'),
                 ),
                 const SizedBox(height: 10),
 
@@ -2213,6 +2244,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                   conteo: flujo.listosMostrador,
                   badgeBg: const Color(0xFFDCFCE7),
                   badgeTextColor: const Color(0xFF166534),
+                  onTap: () => _navegarAOrdenesConEstado('Pagada'),
                 ),
                 const SizedBox(height: 10),
 
@@ -2223,6 +2255,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                   conteo: flujo.enviadosCourier,
                   badgeBg: const Color(0xFFE0F2FE),
                   badgeTextColor: const Color(0xFF075985),
+                  onTap: () => _navegarAOrdenesConEstado('Despachada'),
                 ),
               ],
             ),
@@ -2274,8 +2307,9 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
     required int conteo,
     required Color badgeBg,
     required Color badgeTextColor,
+    VoidCallback? onTap,
   }) {
-    return Container(
+    final contenido = Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
@@ -2353,6 +2387,22 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
         ],
       ),
     );
+
+    if (onTap != null) {
+      return Tooltip(
+        message: 'Ver órdenes en etapa "$titulo"',
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(10),
+            child: contenido,
+          ),
+        ),
+      );
+    }
+
+    return contenido;
   }
 
   Widget _buildErrorState() {

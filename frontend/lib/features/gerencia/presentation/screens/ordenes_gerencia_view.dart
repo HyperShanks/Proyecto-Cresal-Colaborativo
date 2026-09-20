@@ -55,6 +55,16 @@ class OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
     await _cargarOrdenes(pagina: 1);
   }
 
+  /// Aplica un filtro de estado específico y recarga inmediatamente
+  Future<void> aplicarFiltroEstado(String estado) async {
+    setState(() {
+      _estado = estado;
+      _periodo = 'todos';
+      _paginaActual = 1;
+    });
+    await _cargarOrdenes(pagina: 1);
+  }
+
   @override
   void initState() {
     super.initState();

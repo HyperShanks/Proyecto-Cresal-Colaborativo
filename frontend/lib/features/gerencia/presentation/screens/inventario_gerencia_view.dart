@@ -48,6 +48,15 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
     await _cargarInventario(pagina: 1);
   }
 
+  /// Aplica el filtro de repuestos sin tasar y recarga inmediatamente
+  Future<void> aplicarFiltroSinTasar(bool soloSinTasar) async {
+    setState(() {
+      _soloSinTasar = soloSinTasar;
+      _paginaActual = 1;
+    });
+    await _cargarInventario(pagina: 1);
+  }
+
   int? _idSucursal;
   bool _soloSinTasar = false;
   ModoVistaStock _modoVista = ModoVistaStock.tarjetas;
