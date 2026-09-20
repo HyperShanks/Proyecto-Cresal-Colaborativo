@@ -1863,16 +1863,35 @@ def pagar_orden(
         detalles = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == orden.id_orden).all()
         tiene_activo_fisico = any(d.id_activo is not None for d in detalles)
 
+        despacho_pendiente = db.query(Despacho).filter(
+            Despacho.id_orden == orden.id_orden,
+            Despacho.estado_despacho == "Por Enviar"
+        ).first()
+
         if nuevo_saldo == 0:
-            orden.estado_orden = "Pagada"
             if tiene_activo_fisico:
+                orden.estado_orden = "Pagada"
                 token_entropy = uuid.uuid4().hex[:12].upper()
                 qr_token = f"TX-QR-{str(orden.id_orden)[:8].upper()}-{token_entropy}"
                 orden.qr_transaccional_salida = qr_token
                 print(f"🔑 [PAGO] QR Transaccional generado: {qr_token}")
+                # En orden mixta, los misceláneos de mesón quedan listos inmediatamente
+                for d in detalles:
+                    if d.id_activo is None:
+                        d.estado_preparacion = "Listo"
+                        d.fecha_preparacion = now_utc
             else:
                 orden.qr_transaccional_salida = None
-                print("ℹ️ [PAGO] Orden pagada sin activos inventariados (misceláneos/servicios). QR permanece nulo.")
+                for d in detalles:
+                    d.estado_preparacion = "Listo"
+                    d.fecha_preparacion = now_utc
+
+                if despacho_pendiente:
+                    orden.estado_orden = "Pagada"
+                    print("ℹ️ [PAGO] Orden pagada sin activos físicos (misceláneos en espera de despacho courier).")
+                else:
+                    orden.estado_orden = "Completada"
+                    print("✅ [PAGO] Orden de solo misceláneos saldada en mesón: completada automáticamente.")
         else:
             orden.estado_orden = "Reservada"
             orden.qr_transaccional_salida = None
@@ -1895,7 +1914,7 @@ def pagar_orden(
                         activo.fecha_actualizacion = now_utc
                         activos_vendidos += 1
 
-        print(f"📦 [PAGO] {activos_vendidos} repuesto(s) físico(s) actualizados a estado 'Vendido' (ID {estado_vendido.id_estado}).")
+            print(f"📦 [PAGO] {activos_vendidos} repuesto(s) físico(s) actualizados a estado 'Vendido' (ID {estado_vendido.id_estado}).")
 
         # 4. Confirmación atómica ACID
         db.commit()
@@ -1917,7 +1936,15 @@ def pagar_orden(
             metodo_pago=nuevo_pago.metodo_pago,
             qr_transaccional_salida=orden.qr_transaccional_salida,
             id_cajera=orden.id_cajera,
-            mensaje="Pago registrado exitosamente. Código QR transaccional emitido para entrega en bodega.",
+            mensaje=(
+                "Pago registrado exitosamente. Orden completada y repuestos misceláneos entregados en mostrador."
+                if orden.estado_orden == "Completada"
+                else (
+                    "Pago registrado exitosamente. Código QR transaccional emitido para entrega en bodega."
+                    if orden.qr_transaccional_salida
+                    else "Pago registrado exitosamente."
+                )
+            ),
             fecha_pago=nuevo_pago.fecha_pago.isoformat() if nuevo_pago.fecha_pago else datetime.now().isoformat(),
         )
 

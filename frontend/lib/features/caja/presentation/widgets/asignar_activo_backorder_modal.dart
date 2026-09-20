@@ -32,6 +32,7 @@ class _AsignarActivoBackorderModalState
     extends State<AsignarActivoBackorderModal> {
   late final TextEditingController _skuController;
   bool _isConfirmando = false;
+  int _intentosFallidosSku = 0;
 
   @override
   void initState() {

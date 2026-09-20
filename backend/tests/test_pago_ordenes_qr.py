@@ -452,9 +452,10 @@ def test_impacto_en_alertas_bodega_tras_pago(client, db_session, auth_headers_ca
 
 def test_pago_orden_miscelaneos_sin_qr(client, db_session, auth_headers_cajera):
     """
-    Tarea 2: Verifica que al liquidar una orden en /pagar cuyos ítems no tienen id_activo
-    (solo servicios o piezas misceláneas sin serial físico), la orden pasa a 'Pagada'
-    pero el campo qr_transaccional_salida permanece en None.
+    Tarea 1: Verifica que al liquidar una orden en /pagar cuyos ítems no tienen id_activo
+    (solo servicios o piezas misceláneas sin serial físico) y sin despacho, la orden pasa
+    automáticamente a 'Completada' (cero clics para el vendedor), con qr_transaccional_salida en None
+    y la preparación marcada como 'Listo'.
     """
     db = TestingSessionLocal()
     try:
@@ -472,8 +473,9 @@ def test_pago_orden_miscelaneos_sin_qr(client, db_session, auth_headers_cajera):
         )
         db.add(ord_misc)
 
+        det_misc_id = uuid.uuid4()
         det_misc = Detalle_Orden(
-            id_detalle=uuid.uuid4(),
+            id_detalle=det_misc_id,
             id_orden=ord_misc_id,
             id_activo=None,
             descripcion_manual="Mano de Obra y Montaje",
@@ -499,7 +501,7 @@ def test_pago_orden_miscelaneos_sin_qr(client, db_session, auth_headers_cajera):
     )
     assert response.status_code == 200
     data = response.json()
-    assert data["estado_orden"] == "Pagada"
+    assert data["estado_orden"] == "Completada"
     assert data["monto_pendiente"] == 0
     assert data["qr_transaccional_salida"] is None
 
@@ -507,7 +509,10 @@ def test_pago_orden_miscelaneos_sin_qr(client, db_session, auth_headers_cajera):
     db = TestingSessionLocal()
     try:
         ord_db = db.query(Orden_Venta).filter(Orden_Venta.id_orden == ord_misc_id).first()
-        assert ord_db.estado_orden == "Pagada"
+        assert ord_db.estado_orden == "Completada"
         assert ord_db.qr_transaccional_salida is None
+
+        det_db = db.query(Detalle_Orden).filter(Detalle_Orden.id_detalle == det_misc_id).first()
+        assert det_db.estado_preparacion == "Listo"
     finally:
         db.close()

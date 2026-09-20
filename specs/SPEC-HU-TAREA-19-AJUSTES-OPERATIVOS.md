@@ -1,41 +1,78 @@
-# SPEC-HU-TAREA-19: Ajustes Operativos y Refinamiento de Flujos (Backorders, Barreras y Bodega)
+# SPEC-HU-TAREA-19: Ajustes Operativos y Ciclo de Vida Unificado (Mesón, Barrera de Bodega y Misceláneos)
 
-## 1. Contexto y Archivos Afectados
-- **Objetivo**: Implementar correcciones operativas solicitadas por el negocio para agilizar el mesón de ventas y proteger el flujo de bodega. Incluye renombramientos, eliminación de bypasses en entregas, corrección de concurrencia en la liberación de stock por anulación, y retención de tareas de preparación en bodega post-pago.
-- **Archivos a modificar**:
-  - **Frontend (Renombramiento)**: `lib/features/caja/presentation/widgets/bandeja_cobros_panel.dart`, `checkout_wizard_screen.dart`, y cualquier otra UI (Mesón/Gerencia) que diga "Reservas Backorder" debe decir "Ventas en Verde".
-  - **Frontend (Entregas)**: `lib/features/ventas/presentation/screens/entregas_envios_screen.dart` (Para eliminar el botón `Confirmar Entrega`).
-  - **Frontend (Bodega Tareas)**: `lib/features/alertas/presentation/widgets/task_card.dart` (Para no ocultar el botón "LISTO" cuando la tarea pasa a estado `LIBERADA`).
-  - **Backend (Logística Inversa)**: `backend/routers/bodega.py` (Endpoint `confirmar_reingreso`).
+---
 
-## 2. Contratos de Datos y Firmas de API
-- **Modelos**: No hay cambios en la firma de las peticiones ni en las respuestas JSON.
-- **Base de Datos**: Ninguna tabla es modificada estructuralmente, pero se altera el flujo de mutación de `Activo_Inventariado.id_estado` durante la logística inversa.
+## 1. Contexto, Objetivos y Alcance Operativo
 
-## 3. Reglas de Negocio, Casos de Borde y Seguridad (Matriz de Resolución)
+Este documento consolida y actualiza de forma definitiva las especificaciones operativas de **Mesón de Ventas**, **Caja**, y **Bodega PDA**, resolviendo la coexistencia entre repuestos físicos inventariados (Motores, Cajas de Cambio) y productos de venta libre / misceláneos / servicios.
 
-1. **Renombramiento Comercial (Ventas en Verde)**:
-   - *Regla*: El término técnico "Backorder" o "Reservas Backorder" causa fricción comercial. Debe ser reemplazado visualmente en todos los *labels*, *tabs*, y *botones* por **"Ventas en Verde"**. (Nota: A nivel de código interno/variables puede mantenerse `backorder` para no quebrar lógica subyacente).
+### Objetivos Clave
+1. **Cero-Clics para el Vendedor en Misceláneos**: Eliminar la obligación de marcar manualmente "Listo" o "Confirmar Entrega" en el mesón cuando una orden de puros misceláneos/servicios ya fue pagada al 100% en caja.
+2. **Protección Total de Barrera (Zero Bypass en Activos Físicos)**: Los activos inventariados (motores, transmisiones) NUNCA pueden ser marcados como entregados desde el mesón; su salida exige obligatoriamente el escaneo Dual-Scan en la Barrera de Salida de Bodega PDA (`/escanear-salida`).
+3. **Manejo Robusto de Órdenes Mixtas**: En órdenes que combinan repuestos físicos de rack + misceláneos de mostrador, los misceláneos se marcan como listos inmediatamente al pagar para no ensuciar la bandeja de bodega, mientras que la orden permanece en `Pagada` hasta que el activo físico pase por barrera.
+4. **Coexistencia en Bodega PDA**: Mantener visible el botón `BARRERA` en tareas pagadas (`LIBERADA`) incluso si el bodeguero ya completó la preparación física (`Listo`).
+5. **Logística Inversa Desacoplada**: Al anular una orden, el repuesto vuelve a estar `Disponible` comercialmente de inmediato en el mesón; el reingreso en PDA solo actualiza pasillo/pallet físico.
+6. **Renombramiento Comercial**: Reemplazo de "Reservas Backorder" por "Ventas en Verde" en todas las interfaces de usuario.
 
-2. **Eliminación del Bypass en Entregas y Envíos**:
-   - *Problema*: Cuando una orden se paga, aparece en la vista de Entregas/Envíos con un botón de "Confirmar Entrega", el cual marca la orden como completada saltándose el flujo obligatorio de "Barrera de Salida" (PDA del bodeguero).
-   - *Solución*: Eliminar ese botón y su modal de confirmación en la UI. La tarjeta solo debe ser informativa y el cambio a "Entregado" debe ocurrir obligatoria y exclusivamente por el escaneo de la pistola/PDA en la Barrera de Salida de bodega.
+---
 
-3. **Inmediatez de Disponibilidad al Anular y Bodega Notificada**:
-   - *Problema*: Al anular una orden, el vendedor libera los repuestos, pero el bodeguero, al pulsar "Confirmar Reingreso" en su PDA, sobrescribía el estado a `Disponible`. El botón en bodega no debe ser responsable de cambiar el estado comercial.
-   - *Solución*: En el endpoint `confirmar_reingreso` de `bodega.py`, **se debe eliminar** la mutación `activo.id_estado = 1` y el incremento de su `version_lock`. La responsabilidad del endpoint se limita estricta y únicamente a cambiar `estado_preparacion = 'Reingresado'` y actualizar los campos físicos de `ubicacion_pasillo`/`pallet`. El activo comercialmente *ya es Disponible* gracias al backend de ventas que lo liberó al momento de la anulación.
+## 2. Matriz Definitiva de Transición de Estados tras Pago en Caja (`saldo == 0`)
 
-4. **Supervivencia de la Tarea de Pre-Entrega Post-Pago**:
-   - *Problema*: Cuando un vendedor envía una pieza a pre-entrega (con notas de preparación para el bodeguero) y el cliente paga inmediatamente en caja, el activo reduce su `monto_pendiente` a 0 y la tarea en la PDA cambia a tipo `LIBERADA`. El componente visual `task_card.dart` estaba ocultando el botón "LISTO" para forzar el botón "BARRERA", impidiendo que el bodeguero termine de leer y marcar su trabajo de preparación física.
-   - *Solución*: En `task_card.dart`, si la alerta es `LIBERADA`, **no se debe ocultar el botón "LISTO"**. El operario de bodega DEBE poder marcar como "LISTO" la preparación (lo que elimina la tarea de la lista de Alertas) independientemente de que el cliente ya haya pagado.
+| Tipo de Carrito | ¿Tiene Despacho Courier? | Estado Orden Resultante | QR Transaccional Emitido | Estado Repuestos Físicos | Estado Líneas Misceláneas | Acción Requerida del Vendedor | Hito de Cierre |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| **Solo Misceláneos / Servicios** (0 activos en rack) | **No** (Retiro / Mesón) | **`Completada`** | `None` | N/A | `estado_preparacion = 'Listo'` | **Ninguna (0 clics)** | Cerrada automáticamente en el pago en Caja. |
+| **Solo Misceláneos / Servicios** | **Sí** (Despacho a Domicilio) | **`Pagada`** | `None` | N/A | `estado_preparacion = 'Listo'` | **Ninguna** | Pasa al módulo de Despachos/Courier para guía y envío. |
+| **Solo Activos Inventariados** (Motores, Cajas) | Indiferente | **`Pagada`** | `TX-QR-...` | `id_estado = 3 (Vendido)` | N/A | **Ninguna** | Bodeguero escanea Dual-Scan en Barrera $\rightarrow$ Orden a `Completada` y activo a `Entregado` (ID 6). |
+| **Mixta** (Activo Físico + Misceláneos) | Indiferente | **`Pagada`** | `TX-QR-...` | `id_estado = 3 (Vendido)` | `estado_preparacion = 'Listo'` | **Ninguna** | Misceláneos listos de inmediato. Activo físico se valida en Barrera PDA $\rightarrow$ toda la orden pasa a `Completada`. |
+| **Ventas en Verde (Backorder)** | Indiferente | `Confirmada` / `Pagada` | `TX-QR-...` solo al atribuir SKU | Según arribo/atribución | `estado_preparacion = 'Listo'` | Según arribo de repuesto | Asignación de SKU físico arribado a bodega. |
 
-## 4. Checklist de Tareas de Implementación (TDD)
-- [ ] **Tarea 1 (Refactor Textos)**: Buscar globalmente la frase "Reservas Backorder" y "Backorder" en la UI de Flutter y reemplazar por "Ventas en Verde".
-- [ ] **Tarea 2 (Remover Bypass)**: Borrar el `ElevatedButton` ("Confirmar Entrega") y sus callbacks asociados en la vista `entregas_envios_screen.dart` del vendedor.
-- [ ] **Tarea 3 (Backend Reingreso)**: Editar `confirmar_reingreso` en `routers/bodega.py` para extirpar la lógica de alteración de `id_estado` de la tabla `Activo_Inventariado`.
-- [ ] **Tarea 4 (Bodega Tareas)**: Editar `task_card.dart` para que el renderizado condicional de los botones incluya "LISTO" incluso cuando `tarea.tipoAlerta == 'LIBERADA'`.
-- [ ] **Tarea 5 (Testing)**: Probar el flujo completo creando una orden con notas, pagándola en caja, verificando que la PDA de bodega aún permita tocar el botón "LISTO" de la pre-entrega.
+---
+
+## 3. Comportamiento por Módulo y Rol
+
+### A. Mesón de Ventas (Vendedor)
+* **Venta de Misceláneos**: Al saldarse en Caja, la orden se actualiza automáticamente a `Completada`. Al abrir el detalle en `OrdenDetailSheet`, la UI muestra directamente la tarjeta verde *"Orden Completada - Los repuestos misceláneos fueron entregados exitosamente al cliente en mesón"*, suprimiendo botones redundantes de "Marcar como Entregado".
+* **Venta de Activos o Mixta**: La orden queda en `Pagada`. El vendedor únicamente dispone del botón para visualizar o imprimir el ticket QR para que el cliente lo presente en bodega.
+* **No Bypass**: No existe ningún botón que permita a ventas saltarse el escaneo de bodega para repuestos inventariados.
+
+### B. Bodega PDA (Bodeguero)
+* **Órdenes de Misceláneos**: Como sus líneas pasan inmediatamente a `estado_preparacion = 'Listo'` y la orden a `Completada`, **la PDA de bodega no recibe alertas parásitas** de preparación para productos ya entregados en mostrador.
+* **Órdenes Mixtas y Físicas**: La PDA recibe exclusivamente la tarea de preparación y salida de los activos inventariados con rack asignado.
+* **Ciclo de Tareas en PDA**:
+  * `Reservada` + `Pendiente`: Tarea `PREPARACION` con botón `[ LISTO ]` (avisa que la pieza fue bajada del rack).
+  * `Pagada` + `Pendiente`: Tarea `LIBERADA` con botones `[ LISTO ]` y `[ BARRERA ]`.
+  * `Pagada` + `Listo`: Tarea `LIBERADA` con botón verde ancho completo `[ BARRERA ]` (habilita escaneo Dual-Scan).
+  * `Completada`: Tarea finalizada, desaparece reactivamente del panel.
+
+### C. Caja Desktop (Cajera)
+* Al ejecutar `POST /api/v1/caja/cobros/registrar` o `/api/v1/ordenes/{id_orden}/pagar` y liquidar el saldo a `$0`:
+  * El backend detecta de forma atómica si la orden contiene repuestos físicos o es puramente miscelánea.
+  * Emite `qr_generado = 'TX-QR-...'` solo si hay activos físicos que retirar en bodega.
+  * Para misceláneos de mostrador, retorna `estado_actualizado = 'Completada'` y `qr_generado = None`.
+
+---
+
+## 4. Endpoints y Lógica Transaccional (Backend ACID)
+
+1. **`backend/routers/caja.py` (`/cobros/registrar`)**:
+   * Valida cuadratura matemática del pago (único o split).
+   * Al alcanzar `nuevo_saldo == 0`:
+     * Si no hay activos inventariados ni backorders pendientes ni despacho courier: `orden.estado_orden = 'Completada'`, `d.estado_preparacion = 'Listo'`.
+     * Si hay activos físicos: `orden.estado_orden = 'Pagada'`, activos a `Vendido (ID 3)`, misceláneos a `Listo`.
+2. **`backend/routers/ordenes.py` (`/{id_orden}/pagar`)**:
+   * Comportamiento análogo garantizando sincronía completa entre pagos directos y pagos por módulo de caja.
+3. **`backend/routers/bodega.py` (`/escanear-salida`)**:
+   * Realiza Dual-Scan match entre el ticket QR y los SKUs físicos escaneados.
+   * Actualiza la orden a `Completada`, los repuestos a `Entregado (ID 6)` y libera ubicaciones físicas de rack.
+
+---
 
 ## 5. Criterios de Validación Automatizada
-- Backend Tests: El unit test de anulación debe comprobar que el stock vuelve a estado 1 (Disponible) instantáneamente sin requerir el paso de bodega.
-- Frontend Linter: Ejecutar `flutter analyze` tras los refactors visuales.
+
+* **Backend Tests**:
+  * `pytest tests/test_pago_ordenes_qr.py`: Valida que `test_pago_orden_miscelaneos_sin_qr` pase la orden a `Completada`, con `monto_pendiente == 0`, sin QR y con detalle `Listo`.
+  * `pytest tests/test_caja_cobros.py`: Valida que `test_registrar_cobro_orden_sin_activos_mantiene_qr_nulo` retorne `estado_actualizado = 'Completada'`.
+  * Ejecutar suite con `pytest tests/test_pago_ordenes_qr.py tests/test_caja_cobros.py -v` (100% aprobado).
+* **Frontend Tests**:
+  * `flutter test test/historial_screen_test.dart`: 100% de tests aprobados para ordenes completadas y mixtas.
+  * `flutter test test/entregas_envios_screen_test.dart`: 100% de tests aprobados para retiros y despachos.

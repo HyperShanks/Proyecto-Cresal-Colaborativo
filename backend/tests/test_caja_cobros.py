@@ -647,9 +647,9 @@ def test_registrar_cobro_documento_no_encontrado_404(client, db_session):
 
 def test_registrar_cobro_orden_sin_activos_mantiene_qr_nulo(client, db_session):
     """
-    Tarea 2: Verifica que al liquidar una orden de venta cuyos ítems son únicamente
-    misceláneos o servicios (todos con id_activo = NULL), la orden pasa a 'Pagada'
-    pero el campo qr_transaccional_salida permanece en None.
+    Tarea 1: Verifica que al liquidar una orden de venta cuyos ítems son únicamente
+    misceláneos o servicios (todos con id_activo = NULL), la orden pasa automáticamente
+    a 'Completada' (cero clics para el vendedor) y el campo qr_transaccional_salida permanece en None.
     """
     user_caja = db_session["caja_user"]
     user_vendedor = db_session["vendedor_user"]
@@ -702,14 +702,14 @@ def test_registrar_cobro_orden_sin_activos_mantiene_qr_nulo(client, db_session):
     data = response.json()
     assert data["success"] is True
     assert data["nuevo_saldo_pendiente"] == 0
-    assert data["estado_actualizado"] == "Pagada"
+    assert data["estado_actualizado"] == "Completada"
     assert data["qr_generado"] is None
 
     # Verificar en BD
     db = TestingSessionLocal()
     try:
         orden_db = db.query(Orden_Venta).filter(Orden_Venta.id_orden == id_orden_misc).first()
-        assert orden_db.estado_orden == "Pagada"
+        assert orden_db.estado_orden == "Completada"
         assert orden_db.monto_pendiente == 0
         assert orden_db.qr_transaccional_salida is None
     finally:

@@ -22,6 +22,7 @@ from models import (
     Auditoria_Barrera,
     Detalle_Motor,
     Detalle_Caja_Cambio,
+    Despacho,
 )
 from schemas import (
     CajaVerificarAccesoResponse,
@@ -608,7 +609,6 @@ def registrar_cobro(
 
             # Transiciones de Estado y Hash QR (SPEC-HU-04 Sec 3.2 / Tarea 2)
             if nuevo_saldo == 0:
-                orden.estado_orden = "Pagada"
                 tiene_activos_inventariados = db.query(Detalle_Orden).filter(
                     Detalle_Orden.id_orden == orden.id_orden,
                     Detalle_Orden.id_activo.isnot(None)
@@ -619,6 +619,7 @@ def registrar_cobro(
                 ).first()
 
                 if reserva_vinculada:
+                    orden.estado_orden = "Pagada"
                     reserva_vinculada.monto_abonado = reserva_vinculada.precio_acordado
                     reserva_vinculada.fecha_actualizacion = now_utc
                     if payload.sku_activo_atribuido and payload.sku_activo_atribuido.strip():
@@ -657,11 +658,48 @@ def registrar_cobro(
                         qr_hash = None
                         orden.qr_transaccional_salida = None
                 elif tiene_activos_inventariados:
+                    orden.estado_orden = "Pagada"
                     qr_hash = f"TX-QR-{uuid.uuid4()}"
                     orden.qr_transaccional_salida = qr_hash
+
+                    # En órdenes mixtas (activos + misceláneos), marcar los misceláneos como 'Listo' y activos como 'Vendido'
+                    detalles_orden = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == orden.id_orden).all()
+                    estado_vendido = db.query(Estado_Activo).filter(Estado_Activo.nombre_estado == "Vendido").first()
+                    if not estado_vendido:
+                        estado_vendido = Estado_Activo(id_estado=3, nombre_estado="Vendido")
+                        db.add(estado_vendido)
+                        db.flush()
+
+                    for d in detalles_orden:
+                        if d.id_activo is None:
+                            d.estado_preparacion = "Listo"
+                            d.fecha_preparacion = now_utc
+                        else:
+                            act = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == d.id_activo).first()
+                            if act:
+                                act.id_estado = estado_vendido.id_estado
+                                act.version_lock = (act.version_lock or 1) + 1
+                                act.fecha_actualizacion = now_utc
                 else:
-                    qr_hash = None
-                    orden.qr_transaccional_salida = None
+                    # Sin activos inventariados ni backorder (Solo misceláneos / servicios)
+                    despacho_pendiente = db.query(Despacho).filter(
+                        Despacho.id_orden == orden.id_orden,
+                        Despacho.estado_despacho == "Por Enviar"
+                    ).first()
+
+                    detalles_orden = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == orden.id_orden).all()
+                    for d in detalles_orden:
+                        d.estado_preparacion = "Listo"
+                        d.fecha_preparacion = now_utc
+
+                    if despacho_pendiente:
+                        orden.estado_orden = "Pagada"
+                        qr_hash = None
+                        orden.qr_transaccional_salida = None
+                    else:
+                        orden.estado_orden = "Completada"
+                        qr_hash = None
+                        orden.qr_transaccional_salida = None
             else:
                 orden.estado_orden = "Reservada"
                 orden.qr_transaccional_salida = None
