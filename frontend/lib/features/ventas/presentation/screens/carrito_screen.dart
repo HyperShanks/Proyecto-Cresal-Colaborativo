@@ -413,6 +413,20 @@ class _CarritoScreenState extends State<CarritoScreen> {
       return;
     }
 
+    // 1.1. Validar que no existan repuestos con precios fuera de rango de tasación
+    if (cart.hayPreciosInvalidos) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: AppPalette.surface,
+          content: Text(
+            'Hay repuestos con precio acordado fuera del rango permitido de tasación. Corrige los montos antes de derivar.',
+            style: TextStyle(color: AppPalette.error),
+          ),
+        ),
+      );
+      return;
+    }
+
     // 2. Validar Formulario
     if (_esClienteAnonimo || _rutController.text.trim() == '6.666.666-6' || _rutController.text.trim() == '66666666-6') {
       _rutController.text = '6.666.666-6';
@@ -1802,49 +1816,79 @@ class _CarritoScreenState extends State<CarritoScreen> {
       ),
       child: SafeArea(
         top: false,
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // Total Carrito
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'TOTAL CARRITO:',
-                    style: AppTypography.small.copyWith(
-                      fontSize: 10,
-                      letterSpacing: 0.8,
-                      fontWeight: FontWeight.bold,
-                      color: AppPalette.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      cart.totalMontoFormateado,
-                      style: AppTypography.headline.copyWith(
-                        color: AppPalette.secondary,
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
+            if (cart.hayPreciosInvalidos) ...[
+              Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppPalette.error.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppPalette.error.withValues(alpha: 0.4)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, size: 16, color: AppPalette.error),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Corrige los precios fuera de rango para continuar',
+                        style: AppTypography.small.copyWith(
+                          color: AppPalette.error,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
+            ],
+            Row(
+              children: [
+                // Total Carrito
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'TOTAL CARRITO:',
+                        style: AppTypography.small.copyWith(
+                          fontSize: 10,
+                          letterSpacing: 0.8,
+                          fontWeight: FontWeight.bold,
+                          color: AppPalette.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          cart.totalMontoFormateado,
+                          style: AppTypography.headline.copyWith(
+                            color: AppPalette.secondary,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
 
-            // Botón Derivar a Caja (>= 48px, Verde corporativo)
-            Flexible(
-              child: SizedBox(
-                height: 48,
-                child: ElevatedButton.icon(
-                  onPressed: (!_isSubmitting && cart.totalMonto > 0)
-                      ? () => _onDerivarACaja(context)
-                      : null,
+                // Botón Derivar a Caja (>= 48px, Verde corporativo)
+                Flexible(
+                  child: SizedBox(
+                    height: 48,
+                    child: ElevatedButton.icon(
+                      onPressed: (!_isSubmitting && cart.totalMonto > 0 && !cart.hayPreciosInvalidos)
+                          ? () => _onDerivarACaja(context)
+                          : null,
                   icon: _isSubmitting
                       ? const SizedBox(
                           width: 18,
@@ -1886,7 +1930,9 @@ class _CarritoScreenState extends State<CarritoScreen> {
             ),
           ],
         ),
-      ),
-    );
+      ],
+    ),
+  ),
+);
   }
 }

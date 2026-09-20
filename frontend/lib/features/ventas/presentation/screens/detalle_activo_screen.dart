@@ -599,7 +599,7 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'PRECIO REFERENCIA',
+                  'PRECIO SUGERIDO',
                   style: AppTypography.small.copyWith(
                     fontSize: 11,
                     letterSpacing: 1.0,
@@ -609,13 +609,24 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  widget.item.precioFormateado,
+                  widget.item.precioSugeridoFormateado,
                   style: AppTypography.headline.copyWith(
                     color: AppPalette.secondary,
-                    fontSize: 24,
+                    fontSize: 22,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
+                if (widget.item.precioMinimo != null && widget.item.precioMaximo != null && widget.item.precioMinimo != widget.item.precioMaximo) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'Rango: ${widget.item.rangoPrecioFormateado}',
+                    style: AppTypography.small.copyWith(
+                      fontSize: 11,
+                      color: AppPalette.textSecondary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../core/utils/currency_formatter.dart';
 import '../screens/detalle_activo_screen.dart';
 
 class ResultadoCard extends StatelessWidget {
@@ -235,6 +236,53 @@ class ResultadoCard extends StatelessWidget {
                           ],
                         ),
                       ],
+                      // ── Rango de Precio / Tasación ──
+                      Builder(
+                        builder: (context) {
+                          final pMin = itemCompleto['precio_minimo'] as int?;
+                          final pMax = itemCompleto['precio_maximo'] as int? ?? itemCompleto['precio_referencia'] as int?;
+                          final pRef = itemCompleto['precio_referencia'] as int?;
+
+                          String? rangoTexto;
+                          if (pMin != null && pMax != null && pMin > 0 && pMax > 0) {
+                            if (pMin == pMax) {
+                              rangoTexto = 'Precio: \$${CurrencyFormatter.formatNumber(pMin)}';
+                            } else {
+                              rangoTexto = 'Rango: \$${CurrencyFormatter.formatNumber(pMin)} - \$${CurrencyFormatter.formatNumber(pMax)}';
+                            }
+                          } else if (pRef != null && pRef > 0) {
+                            rangoTexto = 'Sugerido: \$${CurrencyFormatter.formatNumber(pRef)}';
+                          }
+
+                          if (rangoTexto == null) return const SizedBox.shrink();
+
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 6.0),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.sell_outlined,
+                                  size: 13,
+                                  color: AppPalette.secondary,
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    rangoTexto,
+                                    style: AppTypography.small.copyWith(
+                                      color: AppPalette.secondary,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 11,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
                     ],
                   ),
                 ),

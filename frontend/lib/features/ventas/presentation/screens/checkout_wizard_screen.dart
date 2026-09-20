@@ -891,6 +891,30 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               );
             }),
           ],
+
+          if (CartController.instance.hayPreciosInvalidos) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppPalette.error.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppPalette.error.withValues(alpha: 0.4)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded, size: 20, color: AppPalette.error),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Hay repuestos con precio acordado fuera del rango de tasación permitido. Modifícalos dentro de su rango para continuar.',
+                      style: AppTypography.small.copyWith(color: AppPalette.error, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ],
     );
@@ -1633,7 +1657,10 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
 
   Widget _buildBottomNavigationButtons() {
     final bool puedeAvanzar;
-    if (_controller.currentStep == 1) {
+    if (_controller.currentStep == 0) {
+      puedeAvanzar = _controller.totalItemsCount > 0 &&
+          !CartController.instance.hayPreciosInvalidos;
+    } else if (_controller.currentStep == 1) {
       if (_esClienteAnonimo) {
         puedeAvanzar = true;
       } else {

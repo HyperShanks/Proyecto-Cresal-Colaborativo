@@ -1,5 +1,5 @@
 import os
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 from typing import Optional, List
 from uuid import UUID
 from datetime import datetime
@@ -367,6 +367,8 @@ class ActivoDetalleBackorderDTO(BaseModel):
     vin: Optional[str] = None
     ubicacion: Optional[str] = None
     precio_referencia: Optional[int] = None
+    precio_minimo: Optional[int] = None
+    precio_maximo: Optional[int] = None
     estado_conservacion: Optional[str] = None
 
 
@@ -480,6 +482,8 @@ class CatalogoItemResponse(BaseModel):
     id_activo: UUID
     sku_qr_fisico: str
     precio_referencia: Optional[int] = None
+    precio_minimo: Optional[int] = None
+    precio_maximo: Optional[int] = None
     
     # Categoría y Sucursal
     id_categoria: int
@@ -918,19 +922,42 @@ class ActivoPendientePrecioResponse(BaseModel):
     estado_activo: str
     fecha_creacion: Optional[str] = None
     fotografias: List[str] = Field(default_factory=list, description="URLs de fotografías registradas del activo")
+    precio_referencia: Optional[int] = None
+    precio_minimo: Optional[int] = None
+    precio_maximo: Optional[int] = None
 
 
 class AsignarPrecioRequest(BaseModel):
-    """Payload para fijar o actualizar el precio de referencia de un activo."""
-    precio_referencia: int = Field(..., gt=0, description="Precio de referencia en pesos chilenos (debe ser mayor a 0)")
+    """Payload para fijar o actualizar el rango de precio (mínimo y máximo) de un activo."""
+    precio_minimo: Optional[int] = Field(None, gt=0, description="Precio mínimo piso de negociación en pesos chilenos")
+    precio_maximo: Optional[int] = Field(None, gt=0, description="Precio máximo sugerido/de lista en pesos chilenos")
+    precio_referencia: Optional[int] = Field(None, description="Precio de referencia / sugerido")
+
+    @model_validator(mode="after")
+    def validar_rango(self):
+        if self.precio_minimo is None and self.precio_referencia is not None:
+            self.precio_minimo = self.precio_referencia
+        if self.precio_maximo is None and self.precio_referencia is not None:
+            self.precio_maximo = self.precio_referencia
+
+        if self.precio_minimo is None or self.precio_maximo is None:
+            raise ValueError("Se debe proporcionar al menos precio_minimo y precio_maximo, o precio_referencia.")
+
+        if self.precio_minimo > self.precio_maximo:
+            raise ValueError("El precio mínimo no puede ser mayor que el precio máximo.")
+        if self.precio_referencia is None:
+            self.precio_referencia = self.precio_maximo
+        return self
 
 
 class AsignarPrecioResponse(BaseModel):
-    """DTO de respuesta tras asignar exitosamente el precio."""
+    """DTO de respuesta tras asignar exitosamente el rango de precios."""
     model_config = ConfigDict(from_attributes=True)
 
     id_activo: UUID
     sku_qr_fisico: str
+    precio_minimo: int
+    precio_maximo: int
     precio_referencia: int
     estado_activo: str
     mensaje: str

@@ -155,6 +155,8 @@ class Activo_Inventariado(Base):
     ubicacion_galpon = Column(String(50), nullable=True)
     ubicacion_pallet = Column(String(50), nullable=True)
     precio_referencia = Column(Integer, nullable=True)
+    precio_minimo = Column(Integer, nullable=True)
+    precio_maximo = Column(Integer, nullable=True)
     observacion_estado = Column(String(255), nullable=True)
     version_lock = Column(Integer, nullable=False, default=1)
     estado = Column(String(20), nullable=False, server_default="Activo")

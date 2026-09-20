@@ -83,6 +83,35 @@ class InventariadoCartItem extends CartItem {
   @override
   bool get esInventariado => true;
 
+  int? get precioMinimo => catalogoItem.precioMinimo;
+  int? get precioMaximo => catalogoItem.precioMaximo ?? catalogoItem.precioReferencia;
+  int? get precioSugerido => catalogoItem.precioSugerido;
+
+  bool get tieneRango => precioMinimo != null && precioMaximo != null;
+
+  String get rangoPrecioFormateado => catalogoItem.rangoPrecioFormateado;
+
+  /// Valida si el precio acordado actual se encuentra dentro del rango de tasación estipulado
+  bool get esPrecioValido {
+    if (precioMinimo != null && precioFinal < precioMinimo!) return false;
+    if (precioMaximo != null && precioFinal > precioMaximo!) return false;
+    return precioFinal > 0;
+  }
+
+  /// Retorna un mensaje descriptivo si el precio acordado está fuera del rango
+  String? get errorRangoPrecio {
+    if (precioMinimo != null && precioFinal < precioMinimo!) {
+      return 'Bajo el mínimo permitido (${CartItem._formatearMoneda(precioMinimo!)})';
+    }
+    if (precioMaximo != null && precioFinal > precioMaximo!) {
+      return 'Sobre el máximo permitido (${CartItem._formatearMoneda(precioMaximo!)})';
+    }
+    if (precioFinal <= 0) {
+      return 'El precio debe ser mayor a \$0';
+    }
+    return null;
+  }
+
   @override
   Map<String, dynamic> toJson() {
     return {

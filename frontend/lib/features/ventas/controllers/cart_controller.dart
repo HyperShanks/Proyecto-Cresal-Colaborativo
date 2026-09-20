@@ -55,6 +55,12 @@ class CartController extends ChangeNotifier {
   /// Indica si el carrito está actualmente vacío
   bool get estaVacio => _items.isEmpty;
 
+  /// Verifica si existe algún repuesto inventariado cuyo precio final acordado
+  /// esté fuera del rango de tasación permitido (mínimo y máximo).
+  bool get hayPreciosInvalidos {
+    return _items.any((item) => item is InventariadoCartItem && !item.esPrecioValido);
+  }
+
   /// Verifica si un activo inventariado específico ya se encuentra en el carrito
   bool estaEnCarrito(String idActivo) {
     return _items.any((item) => item.esInventariado && item.id == idActivo);
@@ -160,7 +166,7 @@ class CartController extends ChangeNotifier {
 
     final cartItem = InventariadoCartItem(
       catalogoItem: item,
-      precioFinal: precioFinal ?? item.precioReferencia ?? 0,
+      precioFinal: precioFinal ?? item.precioSugerido ?? item.precioReferencia ?? 0,
       notasPreparacion: notas,
     );
 

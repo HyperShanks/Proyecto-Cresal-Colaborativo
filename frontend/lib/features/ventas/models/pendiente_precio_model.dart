@@ -24,6 +24,9 @@ class ActivoPendientePrecioModel {
   final String estadoActivo;
   final DateTime? fechaCreacion;
   final List<String> fotografias;
+  final int? precioReferencia;
+  final int? precioMinimo;
+  final int? precioMaximo;
 
   const ActivoPendientePrecioModel({
     required this.idActivo,
@@ -48,6 +51,9 @@ class ActivoPendientePrecioModel {
     required this.estadoActivo,
     this.fechaCreacion,
     this.fotografias = const [],
+    this.precioReferencia,
+    this.precioMinimo,
+    this.precioMaximo,
   });
 
   factory ActivoPendientePrecioModel.fromJson(Map<String, dynamic> json) {
@@ -99,6 +105,9 @@ class ActivoPendientePrecioModel {
       estadoActivo: json['estado_activo']?.toString() ?? 'En Desarme',
       fechaCreacion: fecha,
       fotografias: fotosList,
+      precioReferencia: (json['precio_referencia'] as num?)?.toInt(),
+      precioMinimo: (json['precio_minimo'] as num?)?.toInt(),
+      precioMaximo: (json['precio_maximo'] as num?)?.toInt(),
     );
   }
 
@@ -174,6 +183,8 @@ class ActivoPendientePrecioModel {
 class AsignarPrecioResponseModel {
   final String idActivo;
   final String skuQrFisico;
+  final int precioMinimo;
+  final int precioMaximo;
   final int precioReferencia;
   final String estadoActivo;
   final String mensaje;
@@ -181,22 +192,33 @@ class AsignarPrecioResponseModel {
   const AsignarPrecioResponseModel({
     required this.idActivo,
     required this.skuQrFisico,
+    required this.precioMinimo,
+    required this.precioMaximo,
     required this.precioReferencia,
     required this.estadoActivo,
     required this.mensaje,
   });
 
   factory AsignarPrecioResponseModel.fromJson(Map<String, dynamic> json) {
+    final maxP = (json['precio_maximo'] as num?)?.toInt() ?? (json['precio_referencia'] as num?)?.toInt() ?? 0;
+    final minP = (json['precio_minimo'] as num?)?.toInt() ?? maxP;
     return AsignarPrecioResponseModel(
       idActivo: json['id_activo']?.toString() ?? '',
       skuQrFisico: json['sku_qr_fisico']?.toString() ?? '',
-      precioReferencia: (json['precio_referencia'] as num?)?.toInt() ?? 0,
+      precioMinimo: minP,
+      precioMaximo: maxP,
+      precioReferencia: (json['precio_referencia'] as num?)?.toInt() ?? maxP,
       estadoActivo: json['estado_activo']?.toString() ?? 'Disponible',
       mensaje: json['mensaje']?.toString() ?? 'Precio asignado exitosamente.',
     );
   }
 
   String get precioFormateado => _formatearMonto(precioReferencia);
+  String get precioMinimoFormateado => _formatearMonto(precioMinimo);
+  String get precioMaximoFormateado => _formatearMonto(precioMaximo);
+  String get rangoFormateado => precioMinimo == precioMaximo
+      ? _formatearMonto(precioMinimo)
+      : '${_formatearMonto(precioMinimo)} - ${_formatearMonto(precioMaximo)}';
 
   static String _formatearMonto(int monto) {
     final str = monto.toString();

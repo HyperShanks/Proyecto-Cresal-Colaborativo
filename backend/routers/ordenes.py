@@ -176,6 +176,20 @@ def crear_orden(
                            f"Estado actual: {estado.nombre_estado}."
                 )
 
+            # Validar rango de precios permitido por tasación (mínimo y máximo)
+            min_permitido = activo.precio_minimo if activo.precio_minimo is not None else activo.precio_referencia
+            max_permitido = activo.precio_maximo if activo.precio_maximo is not None else activo.precio_referencia
+
+            if min_permitido is not None and max_permitido is not None:
+                if item.precio_final < min_permitido or item.precio_final > max_permitido:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=(
+                            f"El precio acordado (${item.precio_final}) para el repuesto '{activo.sku_qr_fisico}' "
+                            f"está fuera del rango de tasación permitido (${min_permitido} - ${max_permitido})."
+                        ),
+                    )
+
             if tipo_entrega_final == "Traslado" and orden_in.id_sucursal_destino and activo.id_sucursal_actual == id_sucursal_dest_traslado:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,

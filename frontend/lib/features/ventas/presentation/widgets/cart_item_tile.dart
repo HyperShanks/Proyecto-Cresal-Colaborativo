@@ -60,6 +60,14 @@ class _CartItemTileState extends State<CartItemTile> {
     }
   }
 
+  void _onPrecioChanged(String val) {
+    final nuevoPrecio = CurrencyFormatter.parse(val);
+    if (nuevoPrecio != widget.item.precioUnitario) {
+      CartController.instance.actualizarPrecio(widget.item.id, nuevoPrecio);
+      setState(() {});
+    }
+  }
+
   void _guardarPrecio() {
     final nuevoPrecio = CurrencyFormatter.parse(_precioController.text);
 
@@ -70,6 +78,7 @@ class _CartItemTileState extends State<CartItemTile> {
       _precioController.text =
           CurrencyFormatter.formatNumber(widget.item.precioUnitario);
     }
+    setState(() {});
   }
 
   void _editarNotas(BuildContext context) async {
@@ -134,6 +143,11 @@ class _CartItemTileState extends State<CartItemTile> {
   @override
   Widget build(BuildContext context) {
     final isInventario = widget.item.esInventariado;
+    final invItem = isInventario && widget.item is InventariadoCartItem
+        ? (widget.item as InventariadoCartItem)
+        : null;
+    final esInvalido = invItem != null && !invItem.esPrecioValido;
+    final errorMsg = invItem?.errorRangoPrecio;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12.0),
@@ -141,10 +155,12 @@ class _CartItemTileState extends State<CartItemTile> {
         color: AppPalette.surface,
         borderRadius: BorderRadius.circular(12.0),
         border: Border.all(
-          color: isInventario
-              ? AppPalette.primary.withValues(alpha: 0.2)
-              : AppPalette.secondary.withValues(alpha: 0.25),
-          width: 1.0,
+          color: esInvalido
+              ? AppPalette.error
+              : (isInventario
+                  ? AppPalette.primary.withValues(alpha: 0.2)
+                  : AppPalette.secondary.withValues(alpha: 0.25)),
+          width: esInvalido ? 1.5 : 1.0,
         ),
       ),
       child: Padding(
@@ -278,7 +294,10 @@ class _CartItemTileState extends State<CartItemTile> {
                           color: AppPalette.background,
                           borderRadius: BorderRadius.circular(8.0),
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.1),
+                            color: esInvalido
+                                ? AppPalette.error
+                                : Colors.white.withValues(alpha: 0.1),
+                            width: esInvalido ? 1.5 : 1.0,
                           ),
                         ),
                         child: TextField(
@@ -288,29 +307,64 @@ class _CartItemTileState extends State<CartItemTile> {
                           inputFormatters: [MilesTextInputFormatter()],
                           textAlignVertical: TextAlignVertical.center,
                           style: AppTypography.body.copyWith(
-                            color: AppPalette.secondary,
+                            color: esInvalido ? AppPalette.error : AppPalette.secondary,
                             fontWeight: FontWeight.bold,
                             fontSize: 14,
                           ),
                           decoration: InputDecoration(
                             prefixText: '\$ ',
                             prefixStyle: AppTypography.body.copyWith(
-                              color: AppPalette.secondary,
+                              color: esInvalido ? AppPalette.error : AppPalette.secondary,
                               fontWeight: FontWeight.bold,
                               fontSize: 13,
                             ),
-                            suffixIcon: const Icon(
-                              Icons.edit_outlined,
-                              size: 14,
-                              color: AppPalette.neutral,
+                            suffixIcon: Icon(
+                              esInvalido ? Icons.error_outline : Icons.edit_outlined,
+                              size: 15,
+                              color: esInvalido ? AppPalette.error : AppPalette.neutral,
                             ),
-                            suffixIconConstraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+                            suffixIconConstraints: const BoxConstraints(minWidth: 24, minHeight: 20),
                             contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
                             border: InputBorder.none,
                           ),
+                          onChanged: _onPrecioChanged,
                           onSubmitted: (_) => _guardarPrecio(),
                         ),
                       ),
+                      if (invItem != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          'Rango: ${invItem.rangoPrecioFormateado}',
+                          style: AppTypography.small.copyWith(
+                            fontSize: 10,
+                            color: esInvalido ? AppPalette.error : AppPalette.textSecondary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (esInvalido && errorMsg != null) ...[
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              const Icon(Icons.warning_amber_rounded, size: 12, color: AppPalette.error),
+                              const SizedBox(width: 3),
+                              Expanded(
+                                child: Text(
+                                  errorMsg,
+                                  style: AppTypography.small.copyWith(
+                                    fontSize: 10,
+                                    color: AppPalette.error,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
                     ],
                   ),
                 ),

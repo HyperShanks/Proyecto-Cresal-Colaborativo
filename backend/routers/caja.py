@@ -438,6 +438,8 @@ def validar_activo_backorder(
         vin=vehiculo.vin if vehiculo else None,
         ubicacion=ubicacion_str,
         precio_referencia=activo.precio_referencia,
+        precio_minimo=activo.precio_minimo,
+        precio_maximo=activo.precio_maximo,
         estado_conservacion=estado_activo.nombre_estado if estado_activo else (activo.observacion_estado or activo.estado),
     )
 
