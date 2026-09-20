@@ -199,8 +199,8 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
         metodosResumen: resumenMetodos,
         onSiguienteOrden: () {
           Navigator.of(dialogCtx).pop();
-          if (res.qrGenerado != null) {
-            // Liquidación completa: orden completada y despachable
+          if (res.nuevoSaldoPendiente == 0 || res.qrGenerado != null) {
+            // Liquidación completa (con o sin asignación física): orden pagada
             widget.provider.removerOrdenProcesada(orden.idReferencia);
           } else {
             // Abono parcial: recargar bandeja para reflejar saldos actualizados y deseleccionar

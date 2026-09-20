@@ -749,6 +749,11 @@ void main() {
         detalles: [],
       );
 
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
       await tester.pumpWidget(
         MaterialApp(
           home: HistorialScreen(
@@ -867,6 +872,24 @@ void main() {
       await tester.pump();
       expect(find.text('ORD-TEST-001'), findsOneWidget);
       expect(find.text('ORD-PAGADA-002'), findsOneWidget);
+    });
+
+    testWidgets('Pestañas de Historial vs Por Asignar se renderizan y permiten alternar sección', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: HistorialScreen(
+            initialOrdenes: [orden1],
+          ),
+        ),
+      );
+
+      expect(find.text('Historial de Órdenes'), findsOneWidget);
+      expect(find.text('Por Asignar'), findsOneWidget);
+      expect(find.byKey(const Key('tab_seccion_normal')), findsOneWidget);
+      expect(find.byKey(const Key('tab_seccion_por_asignar')), findsOneWidget);
+
+      // Verificamos que inicialmente está en normal y renderiza la orden1
+      expect(find.text('ORD-TEST-001'), findsOneWidget);
     });
   });
 }

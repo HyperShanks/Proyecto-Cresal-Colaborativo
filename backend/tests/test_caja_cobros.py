@@ -825,7 +825,7 @@ def test_flujo_completo_backorder_dos_pagos_abono_y_liquidacion_con_atribucion(c
     finally:
         db.close()
 
-    # ── FASE 2: INTENTO DE SALDAR SIN SKU FÍSICO (DEBE FALLAR 400) ───────────
+    # ── FASE 2: LIQUIDACIÓN COMPLETA SIN SKU FÍSICO (EL ACTIVO AÚN NO LLEGA) ──
     payload_sin_sku = {
         "tipo_operacion": "BACKORDER",
         "id_documento": str(id_reserva),
@@ -837,45 +837,86 @@ def test_flujo_completo_backorder_dos_pagos_abono_y_liquidacion_con_atribucion(c
         ]
     }
 
-    resp_falla = client.post("/api/v1/caja/cobros/registrar", json=payload_sin_sku, headers=headers)
-    assert resp_falla.status_code == 400
-    assert "Para saldar el backorder, debe atribuir el SKU" in resp_falla.json()["detail"]
+    resp_sin_sku = client.post("/api/v1/caja/cobros/registrar", json=payload_sin_sku, headers=headers)
+    assert resp_sin_sku.status_code == 200, f"Error en liquidación sin SKU: {resp_sin_sku.text}"
+    data_sin_sku = resp_sin_sku.json()
+    assert data_sin_sku["success"] is True
+    assert data_sin_sku["monto_cobrado"] == 800000
+    assert data_sin_sku["nuevo_saldo_pendiente"] == 0
+    assert data_sin_sku["qr_generado"] is None  # Sin QR hasta que el vendedor asigne el activo
 
-    # ── FASE 3: SEGUNDO PAGO (LIQUIDACIÓN FINAL CON ATRIBUCIÓN DE SKU) ────────
-    payload_liquidacion = {
-        "tipo_operacion": "BACKORDER",
-        "id_documento": str(id_reserva),
-        "modalidad": "LIQUIDACION",
-        "monto_declarado": 800000,
-        "sku_activo_atribuido": "MOT-TEST-9999",
-        "forzar_atribucion": True,  # Coincidencia con sobreescritura si no tiene vehículo asociado
-        "pagos": [
-            {"metodo": "Debito", "monto": 800000}
-        ]
-    }
-
-    resp_liq = client.post("/api/v1/caja/cobros/registrar", json=payload_liquidacion, headers=headers)
-    assert resp_liq.status_code == 200, f"Error en liquidación: {resp_liq.text}"
-    data_liq = resp_liq.json()
-    assert data_liq["success"] is True
-    assert data_liq["monto_cobrado"] == 800000
-    assert data_liq["nuevo_saldo_pendiente"] == 0
-    assert data_liq["estado_actualizado"] == "Completada"
-    assert data_liq["qr_generado"] is not None
-    assert data_liq["qr_generado"].startswith("TX-QR-")
-
-    # Verificar estado en BD tras Fase 3
+    # Verificar estado en BD: Orden pagada pero sin activo ni QR
     db = TestingSessionLocal()
     try:
         res_db2 = db.query(Reservas_Backorder).filter(Reservas_Backorder.id_reserva == id_reserva).first()
         assert res_db2.monto_abonado == 1000000
-        assert res_db2.estado_reserva == "Completada"
-        assert res_db2.id_activo_asignado == id_activo
+        assert res_db2.id_activo_asignado is None
 
         ord_db2 = db.query(Orden_Venta).filter(Orden_Venta.id_orden == id_orden).first()
         assert ord_db2.estado_orden == "Pagada"
         assert ord_db2.monto_pendiente == 0
-        assert ord_db2.qr_transaccional_salida == data_liq["qr_generado"]
+        assert ord_db2.qr_transaccional_salida is None
+    finally:
+        db.close()
+
+    # Verificar segregación en Mis Ventas: NO aparece en normal, SÍ aparece en por_asignar
+    user_vendedor = db_session["vendedor_user"]
+    headers_vendedor = get_auth_header(user_vendedor)
+
+    resp_mis_ventas_normal = client.get("/api/v1/ordenes/mis-ventas?todas=true&seccion=normal", headers=headers_vendedor)
+    assert resp_mis_ventas_normal.status_code == 200
+    ids_normal = [o["id_orden"] for o in resp_mis_ventas_normal.json()]
+    assert str(id_orden) not in ids_normal, "La orden por asignar no debe aparecer en el historial normal"
+
+    resp_mis_ventas_por_asignar = client.get("/api/v1/ordenes/mis-ventas?seccion=por_asignar", headers=headers_vendedor)
+    assert resp_mis_ventas_por_asignar.status_code == 200
+    ids_por_asignar = [o["id_orden"] for o in resp_mis_ventas_por_asignar.json()]
+    assert str(id_orden) in ids_por_asignar, "La orden por asignar debe aparecer en la sección por_asignar"
+
+    # ── FASE 3: LLEGA EL ACTIVO A BODEGA (PALETIZADO) Y EL VENDEDOR LO ASIGNA ──
+    # Cambiar estado del activo a Paletizado para verificar que lo acepte
+    db = TestingSessionLocal()
+    try:
+        est_pal = db.query(Estado_Activo).filter(Estado_Activo.nombre_estado == "Paletizado").first()
+        if not est_pal:
+            est_pal = Estado_Activo(id_estado=7, nombre_estado="Paletizado")
+            db.add(est_pal)
+            db.flush()
+        act_db = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == id_activo).first()
+        act_db.id_estado = est_pal.id_estado
+        db.commit()
+    finally:
+        db.close()
+
+    payload_asignacion = {
+        "sku_activo": "MOT-TEST-9999",
+        "forzar_atribucion": True
+    }
+    resp_asig = client.post(f"/api/v1/ordenes/{id_orden}/asignar-activo-backorder", json=payload_asignacion, headers=headers_vendedor)
+    assert resp_asig.status_code == 200, f"Error al asignar activo: {resp_asig.text}"
+    data_asig = resp_asig.json()
+    assert data_asig["success"] is True
+    assert data_asig["qr_transaccional_salida"] is not None
+    assert data_asig["qr_transaccional_salida"].startswith("TX-QR-")
+
+    # Verificar que ahora SÍ aparece en normal con su QR y NO en por_asignar
+    resp_mis_ventas_normal2 = client.get("/api/v1/ordenes/mis-ventas?todas=true&seccion=normal", headers=headers_vendedor)
+    ids_normal2 = [o["id_orden"] for o in resp_mis_ventas_normal2.json()]
+    assert str(id_orden) in ids_normal2, "Tras ser asignada, debe aparecer en el historial normal"
+
+    resp_mis_ventas_por_asignar2 = client.get("/api/v1/ordenes/mis-ventas?seccion=por_asignar", headers=headers_vendedor)
+    ids_por_asignar2 = [o["id_orden"] for o in resp_mis_ventas_por_asignar2.json()]
+    assert str(id_orden) not in ids_por_asignar2, "Tras ser asignada, ya no debe aparecer en por_asignar"
+
+    # Verificar estado en BD: Activo vendido y orden con QR
+    db = TestingSessionLocal()
+    try:
+        res_db3 = db.query(Reservas_Backorder).filter(Reservas_Backorder.id_reserva == id_reserva).first()
+        assert res_db3.id_activo_asignado == id_activo
+        assert res_db3.estado_reserva == "Completada"
+
+        ord_db3 = db.query(Orden_Venta).filter(Orden_Venta.id_orden == id_orden).first()
+        assert ord_db3.qr_transaccional_salida == data_asig["qr_transaccional_salida"]
 
         activo_db = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == id_activo).first()
         assert activo_db.id_estado == 3  # Vendido

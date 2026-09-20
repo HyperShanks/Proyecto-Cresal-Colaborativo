@@ -8,6 +8,7 @@ import '../../services/ordenes_sync_notifier.dart';
 import '../widgets/orden_card.dart';
 import '../widgets/orden_detail_sheet.dart';
 import '../widgets/historial_filtros_drawer.dart';
+import '../widgets/asignar_activo_vendedor_dialog.dart';
 
 /// Pantalla principal para la visualización y monitoreo de órdenes de venta del vendedor (HU-3.5).
 class HistorialScreen extends StatefulWidget {
@@ -44,6 +45,10 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
   // Filtros temporales mientras el drawer está abierto
   bool _tempVerTodas = false;
   String? _tempFiltroEstado;
+
+  // Sección actual: 'normal' (Historial de Órdenes) o 'por_asignar' (Ventas en Verde Pagadas sin activo asignado)
+  String _seccionActual = 'normal';
+  int _conteoPorAsignar = 0;
 
   @override
   void initState() {
@@ -125,6 +130,7 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
       final ordenes = await OrdenesService.obtenerMisVentas(
         todas: _verTodas,
         estado: _filtroEstado,
+        seccion: _seccionActual,
         client: widget.client,
       );
 
@@ -133,8 +139,22 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
       // Ordenar: Activas al principio, completadas al final y anuladas al final absoluto
       _ordenarOrdenes(ordenes);
 
+      int conteo = _conteoPorAsignar;
+      if (_seccionActual == 'por_asignar') {
+        conteo = ordenes.length;
+      } else {
+        try {
+          final porAsignar = await OrdenesService.obtenerMisVentas(
+            seccion: 'por_asignar',
+            client: widget.client,
+          );
+          conteo = porAsignar.length;
+        } catch (_) {}
+      }
+
       setState(() {
         _ordenes = ordenes;
+        _conteoPorAsignar = conteo;
         _isLoading = false;
       });
     } catch (e) {
@@ -281,6 +301,338 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
     );
   }
 
+  Widget _buildSeccionTabs() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+      child: Container(
+        padding: const EdgeInsets.all(4.0),
+        decoration: BoxDecoration(
+          color: AppPalette.surface,
+          borderRadius: BorderRadius.circular(10.0),
+          border: Border.all(color: Colors.white10),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: _buildTabButton(
+                titulo: 'Historial de Órdenes',
+                seccion: 'normal',
+                icon: Icons.history,
+              ),
+            ),
+            const SizedBox(width: 4.0),
+            Expanded(
+              child: _buildTabButton(
+                titulo: 'Por Asignar',
+                seccion: 'por_asignar',
+                icon: Icons.pending_actions,
+                badgeCount: _conteoPorAsignar,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTabButton({
+    required String titulo,
+    required String seccion,
+    required IconData icon,
+    int badgeCount = 0,
+  }) {
+    final isSelected = _seccionActual == seccion;
+    return InkWell(
+      key: Key('tab_seccion_$seccion'),
+      onTap: () {
+        if (_seccionActual != seccion) {
+          setState(() {
+            _seccionActual = seccion;
+          });
+          _cargarOrdenes();
+        }
+      },
+      borderRadius: BorderRadius.circular(8.0),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 8.0),
+        decoration: BoxDecoration(
+          color: isSelected ? AppPalette.primary.withValues(alpha: 0.2) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8.0),
+          border: isSelected
+              ? Border.all(color: AppPalette.primary.withValues(alpha: 0.6), width: 1.0)
+              : Border.all(color: Colors.transparent, width: 1.0),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 16.0,
+              color: isSelected ? AppPalette.primary : AppPalette.textSecondary,
+            ),
+            const SizedBox(width: 6.0),
+            Text(
+              titulo,
+              style: TextStyle(
+                fontSize: 13.0,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                color: isSelected ? AppPalette.textPrimary : AppPalette.textSecondary,
+                fontFamily: AppTypography.fontFamily,
+              ),
+            ),
+            if (badgeCount > 0) ...[
+              const SizedBox(width: 6.0),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 2.0),
+                decoration: BoxDecoration(
+                  color: isSelected ? AppPalette.secondary : AppPalette.warning,
+                  borderRadius: BorderRadius.circular(10.0),
+                ),
+                child: Text(
+                  '$badgeCount',
+                  style: const TextStyle(
+                    fontSize: 10.0,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOrdenPorAsignarCard(OrdenHistorialModel orden) {
+    return Container(
+      key: Key('orden_por_asignar_${orden.idOrden}'),
+      margin: const EdgeInsets.only(bottom: 12.0),
+      decoration: BoxDecoration(
+        color: AppPalette.surface,
+        borderRadius: BorderRadius.circular(12.0),
+        border: Border.all(
+          color: AppPalette.warning.withValues(alpha: 0.4),
+          width: 1.0,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(12.0),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12.0),
+          onTap: () => _abrirDetalleOrden(orden),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Cabecera: Folio y Badge de Advertencia
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6.0),
+                            decoration: BoxDecoration(
+                              color: AppPalette.warning.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(8.0),
+                            ),
+                            child: const Icon(
+                              Icons.hourglass_top,
+                              size: 18.0,
+                              color: AppPalette.warning,
+                            ),
+                          ),
+                          const SizedBox(width: 8.0),
+                          Expanded(
+                            child: Text(
+                              orden.folioDisplay,
+                              style: AppTypography.title.copyWith(
+                                fontSize: 16.0,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8.0),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 4.0),
+                      decoration: BoxDecoration(
+                        color: AppPalette.warning.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(20.0),
+                        border: Border.all(
+                          color: AppPalette.warning.withValues(alpha: 0.6),
+                          width: 1.0,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.pending_actions, size: 13.0, color: AppPalette.warning),
+                          const SizedBox(width: 4.0),
+                          Text(
+                            'Por Asignar Activo',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.bold,
+                              color: AppPalette.warning,
+                              fontFamily: AppTypography.fontFamily,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 12.0),
+                const Divider(color: Colors.white10, height: 1.0),
+                const SizedBox(height: 12.0),
+
+                // Cliente
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.person_outline,
+                      size: 16.0,
+                      color: AppPalette.textSecondary,
+                    ),
+                    const SizedBox(width: 6.0),
+                    Expanded(
+                      child: Text(
+                        orden.cliente != null && orden.cliente!.nombres.isNotEmpty
+                            ? '${orden.cliente!.nombreCompleto} (${orden.cliente!.rutCliente})'
+                            : 'Cliente General',
+                        style: AppTypography.body.copyWith(
+                          fontSize: 14.0,
+                          color: AppPalette.textPrimary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6.0),
+
+                // Fecha y estado de pago
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.calendar_today_outlined,
+                      size: 14.0,
+                      color: AppPalette.textSecondary,
+                    ),
+                    const SizedBox(width: 6.0),
+                    Text(
+                      orden.fechaFormateada,
+                      style: AppTypography.small.copyWith(
+                        fontSize: 12.5,
+                        color: AppPalette.textSecondary,
+                      ),
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 2.0),
+                      decoration: BoxDecoration(
+                        color: AppPalette.success.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(4.0),
+                        border: Border.all(color: AppPalette.success.withValues(alpha: 0.4)),
+                      ),
+                      child: Text(
+                        'Pagada al 100% (${orden.totalVentaFormateado})',
+                        style: const TextStyle(
+                          fontSize: 11.0,
+                          fontWeight: FontWeight.bold,
+                          color: AppPalette.success,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                // Detalle del ítem en verde
+                if (orden.detalles.isNotEmpty) ...[
+                  const SizedBox(height: 10.0),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10.0),
+                    decoration: BoxDecoration(
+                      color: Colors.black12,
+                      borderRadius: BorderRadius.circular(8.0),
+                      border: Border.all(color: Colors.white10),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Repuesto en Verde Solicitado:',
+                          style: AppTypography.small.copyWith(
+                            fontSize: 11.0,
+                            color: AppPalette.textSecondary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 2.0),
+                        Text(
+                          orden.detalles.first.titulo,
+                          style: AppTypography.body.copyWith(
+                            fontSize: 13.0,
+                            fontWeight: FontWeight.w600,
+                            color: AppPalette.textPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
+                const SizedBox(height: 12.0),
+                // Botón de asignación física
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppPalette.primary,
+                      foregroundColor: AppPalette.textPrimary,
+                      padding: const EdgeInsets.symmetric(vertical: 12.0),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8.0),
+                      ),
+                    ),
+                    icon: const Icon(Icons.qr_code_scanner, size: 18.0),
+                    label: const Text(
+                      'Asignar Activo Físico (Llegó a Bodega)',
+                      style: TextStyle(
+                        fontSize: 13.0,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    onPressed: () {
+                      AsignarActivoVendedorDialog.mostrar(
+                        context,
+                        orden: orden,
+                        onAsignadoExitoso: _cargarOrdenes,
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildNoSearchResultsState() {
     return Center(
       child: SingleChildScrollView(
@@ -336,6 +688,7 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
   }
 
   Widget _buildEmptyState() {
+    final bool esPorAsignar = _seccionActual == 'por_asignar';
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(32.0),
@@ -349,34 +702,40 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
                 shape: BoxShape.circle,
                 border: Border.all(color: Colors.white10),
               ),
-              child: const Icon(
-                Icons.receipt_long_outlined,
+              child: Icon(
+                esPorAsignar
+                    ? Icons.assignment_turned_in_outlined
+                    : Icons.receipt_long_outlined,
                 size: 54.0,
-                color: AppPalette.textSecondary,
+                color: esPorAsignar ? AppPalette.success : AppPalette.textSecondary,
               ),
             ),
             const SizedBox(height: 20.0),
             Text(
-              _filtroEstado != null
-                  ? 'No hay órdenes en estado "$_filtroEstado"'
-                  : _verTodas
-                      ? 'No tienes órdenes en tu historial'
-                      : 'No has generado órdenes hoy',
+              esPorAsignar
+                  ? 'Sin ventas en verde por asignar'
+                  : _filtroEstado != null
+                      ? 'No hay órdenes en estado "$_filtroEstado"'
+                      : _verTodas
+                          ? 'No tienes órdenes en tu historial'
+                          : 'No has generado órdenes hoy',
               style: AppTypography.title.copyWith(fontSize: 18.0),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8.0),
             Text(
-              _filtroEstado != null
-                  ? 'Prueba cambiando o limpiando los filtros para ver otras ventas.'
-                  : _verTodas
-                      ? 'Tus ventas derivadas a caja aparecerán aquí con su estado en tiempo real.'
-                      : 'Las ventas creadas durante el día se listarán aquí para su seguimiento y gestión.',
+              esPorAsignar
+                  ? 'Todas tus ventas en verde pagadas ya cuentan con su activo físico asignado o están en proceso.'
+                  : _filtroEstado != null
+                      ? 'Prueba cambiando o limpiando los filtros para ver otras ventas.'
+                      : _verTodas
+                          ? 'Tus ventas derivadas a caja aparecerán aquí con su estado en tiempo real.'
+                          : 'Las ventas creadas durante el día se listarán aquí para su seguimiento y gestión.',
               style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24.0),
-            if (_filtroEstado != null || !_verTodas)
+            if (!esPorAsignar && (_filtroEstado != null || !_verTodas))
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppPalette.primary,
@@ -467,14 +826,18 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
               style: AppTypography.title,
             ),
             Text(
-              _filtroEstado != null
-                  ? 'Filtro: $_filtroEstado (${_verTodas ? "Historial" : "Hoy"})'
-                  : _verTodas
-                      ? 'Historial completo de ventas'
-                      : 'Ventas del día (Hoy)',
+              _seccionActual == 'por_asignar'
+                  ? 'Ventas en verde pagadas pendientes de activo'
+                  : _filtroEstado != null
+                      ? 'Filtro: $_filtroEstado (${_verTodas ? "Historial" : "Hoy"})'
+                      : _verTodas
+                          ? 'Historial completo de ventas'
+                          : 'Ventas del día (Hoy)',
               style: AppTypography.small.copyWith(
                 fontSize: 12.0,
-                color: hayFiltrosActivos ? AppPalette.secondary : AppPalette.textSecondary,
+                color: (_seccionActual == 'por_asignar' || hayFiltrosActivos)
+                    ? AppPalette.secondary
+                    : AppPalette.textSecondary,
               ),
             ),
           ],
@@ -551,6 +914,7 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
       body: Column(
         children: [
           _buildSearchBar(),
+          _buildSeccionTabs(),
           Expanded(
             child: _isLoading
                 ? const Center(
@@ -601,6 +965,9 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
                                   itemCount: ordenesMostradas.length,
                                   itemBuilder: (context, index) {
                                     final orden = ordenesMostradas[index];
+                                    if (_seccionActual == 'por_asignar') {
+                                      return _buildOrdenPorAsignarCard(orden);
+                                    }
                                     return OrdenCard(
                                       orden: orden,
                                       onTap: () => _abrirDetalleOrden(orden),

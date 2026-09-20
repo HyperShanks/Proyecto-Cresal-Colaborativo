@@ -1458,3 +1458,23 @@ class RegionGeografiaDTO(BaseModel):
 class GeografiaResponseDTO(BaseModel):
     regiones: List[RegionGeografiaDTO]
 
+
+# ==========================================
+# ESQUEMAS PARA ASIGNACIÓN DE ACTIVOS EN VENTAS (MIS ÓRDENES)
+# ==========================================
+
+class AsignarActivoBackorderRequest(BaseModel):
+    sku_activo: str
+    forzar_atribucion: bool = False
+
+
+class AsignarActivoBackorderResponse(BaseModel):
+    success: bool
+    mensaje: str
+    id_orden: UUID
+    folio: str
+    sku_asignado: str
+    qr_transaccional_salida: str
+
+    model_config = ConfigDict(from_attributes=True)
+

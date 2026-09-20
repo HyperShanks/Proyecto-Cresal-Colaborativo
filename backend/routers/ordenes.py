@@ -33,6 +33,8 @@ from schemas import (
     HistorialCajaResponse, HistorialOrdenItemResponse,
     HistorialPagoDetalleDTO, HistorialArticuloDTO, HistorialMovimientoDTO,
     GeografiaResponseDTO, RegionGeografiaDTO, ComunaItemDTO,
+    AsignarActivoBackorderRequest, AsignarActivoBackorderResponse,
+    ValidarActivoBackorderResponse, ActivoDetalleBackorderDTO,
 )
 from core.security import get_current_user, require_auditoria_or_caja_role, require_caja_role
 from core.policies import validar_horario_operativo_ordenes
@@ -762,50 +764,96 @@ def listar_ordenes_auditoria(
     summary="Historial y Monitoreo de Ventas del Vendedor (HU-3.5)",
     description="Consulta las órdenes generadas por el usuario actual. "
                 "Por defecto filtra solo las ventas de la fecha actual (hoy). "
+                "Permite segmentar por sección: 'normal' u 'por_asignar'. "
                 "Incluye estado de la orden, datos del cliente, despacho y desglose de líneas."
 )
 def obtener_mis_ventas(
     fecha: Optional[str] = None,
     todas: bool = False,
     estado: Optional[str] = None,
+    seccion: Optional[str] = Query("normal", description="Sección: 'normal' u 'por_asignar'"),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    query = db.query(Orden_Venta).filter(Orden_Venta.id_vendedor == current_user.id_usuario)
+    subquery_por_asignar = (
+        db.query(Reservas_Backorder.id_orden)
+        .filter(
+            Reservas_Backorder.id_orden.isnot(None),
+            Reservas_Backorder.id_activo_asignado.is_(None),
+            func.lower(Reservas_Backorder.estado_reserva) != "anulada",
+            func.lower(Reservas_Backorder.estado_reserva) != "cancelada",
+        )
+    )
 
-    # Filtro de Rendimiento: Por defecto solo órdenes de hoy
-    if not todas:
-        try:
-            tz_chile = ZoneInfo("America/Santiago")
-        except Exception:
-            tz_chile = timezone(timedelta(hours=-4))
-
+    if seccion == "por_asignar":
+        # Apartado exclusivo: Ventas en verde pagadas que están pendientes de asignación física de activo
+        query = db.query(Orden_Venta).filter(
+            Orden_Venta.id_vendedor == current_user.id_usuario,
+            Orden_Venta.monto_pendiente == 0,
+            Orden_Venta.qr_transaccional_salida.is_(None),
+            Orden_Venta.id_orden.in_(subquery_por_asignar)
+        )
         if fecha and fecha.strip():
+            try:
+                tz_chile = ZoneInfo("America/Santiago")
+            except Exception:
+                tz_chile = timezone(timedelta(hours=-4))
             try:
                 target_date = datetime.strptime(fecha.strip(), "%Y-%m-%d").date()
                 dt_start_chile = datetime.combine(target_date, datetime_time.min, tzinfo=tz_chile)
                 dt_end_chile = datetime.combine(target_date, datetime_time.max, tzinfo=tz_chile)
                 inicio_utc = dt_start_chile.astimezone(timezone.utc).replace(tzinfo=None)
                 fin_utc = dt_end_chile.astimezone(timezone.utc).replace(tzinfo=None)
-            except ValueError:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Formato de fecha no válido. Use 'YYYY-MM-DD'."
+                query = query.filter(
+                    Orden_Venta.fecha_creacion >= inicio_utc,
+                    Orden_Venta.fecha_creacion <= fin_utc
                 )
-        else:
-            ahora_chile = datetime.now(tz_chile)
-            inicio_dia_chile = datetime.combine(ahora_chile.date(), datetime_time.min, tzinfo=tz_chile)
-            fin_dia_chile = datetime.combine(ahora_chile.date(), datetime_time.max, tzinfo=tz_chile)
-            inicio_utc = inicio_dia_chile.astimezone(timezone.utc).replace(tzinfo=None)
-            fin_utc = fin_dia_chile.astimezone(timezone.utc).replace(tzinfo=None)
-
-        query = query.filter(
-            Orden_Venta.fecha_creacion >= inicio_utc,
-            Orden_Venta.fecha_creacion <= fin_utc
+            except ValueError:
+                pass
+    else:
+        # Apartado normal: Excluir estrictamente órdenes pendientes de asignación para evitar duplicidad o botones Ver QR inválidos
+        query = db.query(Orden_Venta).filter(
+            Orden_Venta.id_vendedor == current_user.id_usuario,
+            ~and_(
+                Orden_Venta.monto_pendiente == 0,
+                Orden_Venta.qr_transaccional_salida.is_(None),
+                Orden_Venta.id_orden.in_(subquery_por_asignar)
+            )
         )
 
-    if estado and estado.strip():
-        query = query.filter(Orden_Venta.estado_orden == estado.strip())
+        # Filtro de Rendimiento: Por defecto solo órdenes de hoy
+        if not todas:
+            try:
+                tz_chile = ZoneInfo("America/Santiago")
+            except Exception:
+                tz_chile = timezone(timedelta(hours=-4))
+
+            if fecha and fecha.strip():
+                try:
+                    target_date = datetime.strptime(fecha.strip(), "%Y-%m-%d").date()
+                    dt_start_chile = datetime.combine(target_date, datetime_time.min, tzinfo=tz_chile)
+                    dt_end_chile = datetime.combine(target_date, datetime_time.max, tzinfo=tz_chile)
+                    inicio_utc = dt_start_chile.astimezone(timezone.utc).replace(tzinfo=None)
+                    fin_utc = dt_end_chile.astimezone(timezone.utc).replace(tzinfo=None)
+                except ValueError:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Formato de fecha no válido. Use 'YYYY-MM-DD'."
+                    )
+            else:
+                ahora_chile = datetime.now(tz_chile)
+                inicio_dia_chile = datetime.combine(ahora_chile.date(), datetime_time.min, tzinfo=tz_chile)
+                fin_dia_chile = datetime.combine(ahora_chile.date(), datetime_time.max, tzinfo=tz_chile)
+                inicio_utc = inicio_dia_chile.astimezone(timezone.utc).replace(tzinfo=None)
+                fin_utc = fin_dia_chile.astimezone(timezone.utc).replace(tzinfo=None)
+
+            query = query.filter(
+                Orden_Venta.fecha_creacion >= inicio_utc,
+                Orden_Venta.fecha_creacion <= fin_utc
+            )
+
+        if estado and estado.strip():
+            query = query.filter(Orden_Venta.estado_orden == estado.strip())
 
     ordenes = query.order_by(
         case(
@@ -859,6 +907,7 @@ def obtener_mis_ventas(
             )
 
         # Detalle de líneas
+        reserva_asociada = db.query(Reservas_Backorder).filter(Reservas_Backorder.id_orden == orden.id_orden).first()
         detalles_db = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == orden.id_orden).all()
         detalles_resumen = []
         for d in detalles_db:
@@ -887,6 +936,21 @@ def obtener_mis_ventas(
                         titulo_item = f"{nombre_cat} - {veh.marca} {veh.modelo} {veh.anio or ''}".strip()
                     else:
                         titulo_item = f"{nombre_cat} ({sku_fisico})"
+            elif reserva_asociada:
+                cat_bo = db.query(Categoria_Activo).filter(Categoria_Activo.id_categoria == reserva_asociada.id_categoria_requerida).first()
+                id_cat = cat_bo.id_categoria if cat_bo else None
+                nom_cat = cat_bo.nombre_categoria if cat_bo else "Venta en Verde"
+                if not d.descripcion_manual or "VENTA EN VERDE" in d.descripcion_manual.upper() or "BACKORDER" in d.descripcion_manual.upper():
+                    titulo_item = f"{nom_cat}: {reserva_asociada.marca_requerida} {reserva_asociada.modelo_requerido} ({reserva_asociada.anio_requerido or 'Año N/A'})"
+
+            notas_final = d.notas_preparacion
+            if reserva_asociada and (not notas_final or "PAGADO" in notas_final.upper() or "ESPERANDO" in notas_final.upper()):
+                especs = []
+                if reserva_asociada.cilindrada_requerida: especs.append(f"Cil: {reserva_asociada.cilindrada_requerida}")
+                if reserva_asociada.transmision_requerida: especs.append(f"Trans: {reserva_asociada.transmision_requerida}")
+                if reserva_asociada.combustible_requerido: especs.append(f"Comb: {reserva_asociada.combustible_requerido}")
+                if especs:
+                    notas_final = f"Requerido: {' • '.join(especs)}"
 
             detalles_resumen.append(
                 DetalleOrdenItemResponse(
@@ -897,7 +961,7 @@ def obtener_mis_ventas(
                     titulo=titulo_item,
                     sku_qr_fisico=sku_fisico,
                     descripcion_manual=d.descripcion_manual,
-                    notas_preparacion=d.notas_preparacion,
+                    notas_preparacion=notas_final,
                     cantidad=d.cantidad,
                     precio_unitario=d.precio_unitario,
                     precio_final=d.precio_final,
@@ -927,6 +991,238 @@ def obtener_mis_ventas(
         )
 
     return resultado
+
+
+@router.post(
+    "/{id_orden}/validar-activo-backorder",
+    response_model=ValidarActivoBackorderResponse,
+    summary="Validar Activo para Backorder desde Mis Ventas",
+    description="Permite al vendedor validar un SKU físico antes de asignarlo a una venta en verde pagada."
+)
+def validar_activo_backorder_orden(
+    id_orden: uuid.UUID,
+    payload: AsignarActivoBackorderRequest,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    orden = db.query(Orden_Venta).filter(Orden_Venta.id_orden == id_orden).first()
+    if not orden:
+        raise HTTPException(status_code=404, detail="Orden no encontrada.")
+
+    reserva = db.query(Reservas_Backorder).filter(Reservas_Backorder.id_orden == id_orden).first()
+    if not reserva:
+        raise HTTPException(status_code=404, detail="No se encontró una reserva en verde para esta orden.")
+
+    sku_clean = payload.sku_activo.strip().upper()
+    activo_raw = (
+        db.query(Activo_Inventariado, Vehiculo_Origen, Detalle_Motor, Detalle_Caja_Cambio, Categoria_Activo, Estado_Activo)
+        .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
+        .outerjoin(Detalle_Motor, Activo_Inventariado.id_activo == Detalle_Motor.id_activo)
+        .outerjoin(Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo)
+        .outerjoin(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
+        .outerjoin(Estado_Activo, Activo_Inventariado.id_estado == Estado_Activo.id_estado)
+        .filter(func.upper(Activo_Inventariado.sku_qr_fisico) == sku_clean)
+        .first()
+    )
+
+    if not activo_raw:
+        raise HTTPException(status_code=404, detail=f"Activo con SKU '{payload.sku_activo}' no encontrado en inventario.")
+
+    activo, vehiculo, motor, caja_cambio, categoria, estado_activo = activo_raw
+    discrepancias = []
+
+    estados_validos = ["disponible", "paletizado"]
+    nombre_estado_actual = estado_activo.nombre_estado if estado_activo else ""
+    if nombre_estado_actual.lower() not in estados_validos:
+        discrepancias.append(
+            f"Estado del repuesto: '{nombre_estado_actual}'. Solo se pueden asignar repuestos en estado 'Disponible' o 'Paletizado'."
+        )
+
+    if vehiculo and reserva.marca_requerida and vehiculo.marca.lower() != reserva.marca_requerida.lower():
+        discrepancias.append(f"Marca requerida: {reserva.marca_requerida}, Marca del repuesto: {vehiculo.marca}")
+
+    if vehiculo and reserva.modelo_requerido and vehiculo.modelo.lower() != reserva.modelo_requerido.lower():
+        discrepancias.append(f"Modelo requerido: {reserva.modelo_requerido}, Modelo del repuesto: {vehiculo.modelo}")
+
+    if motor and reserva.cilindrada_requerida and motor.cilindrada:
+        req_c = reserva.cilindrada_requerida.lower().replace("l", "").replace("cc", "").strip()
+        act_c = motor.cilindrada.lower().replace("l", "").replace("cc", "").strip()
+        if req_c != act_c:
+            discrepancias.append(f"Cilindrada requerida: {reserva.cilindrada_requerida}, Cilindrada del repuesto: {motor.cilindrada}")
+
+    if motor and reserva.combustible_requerido and motor.combustible and motor.combustible.lower() != reserva.combustible_requerido.lower():
+        discrepancias.append(f"Combustible requerido: {reserva.combustible_requerido}, Combustible del repuesto: {motor.combustible}")
+
+    transmision_act = None
+    if caja_cambio and caja_cambio.transmision_tipo:
+        transmision_act = caja_cambio.transmision_tipo
+    elif motor and motor.transmision_tipo:
+        transmision_act = motor.transmision_tipo
+
+    if transmision_act and reserva.transmision_requerida and transmision_act.lower() != reserva.transmision_requerida.lower():
+        discrepancias.append(f"Transmisión requerida: {reserva.transmision_requerida}, Transmisión del repuesto: {transmision_act}")
+
+    coincide = len(discrepancias) == 0
+    mensaje = "El repuesto cumple con todas las especificaciones solicitadas." if coincide else "Hay discrepancias en los atributos técnicos o de estado."
+
+    ubicacion_partes = []
+    if activo.ubicacion_galpon:
+        ubicacion_partes.append(f"Galpón {activo.ubicacion_galpon}")
+    if activo.ubicacion_pasillo:
+        ubicacion_partes.append(f"Pasillo {activo.ubicacion_pasillo}")
+    if activo.ubicacion_pallet:
+        ubicacion_partes.append(f"Pallet {activo.ubicacion_pallet}")
+    ubicacion_str = " • ".join(ubicacion_partes) if ubicacion_partes else None
+
+    activo_detalle = ActivoDetalleBackorderDTO(
+        sku=activo.sku_qr_fisico,
+        categoria=categoria.nombre_categoria if categoria else None,
+        marca=vehiculo.marca if vehiculo else None,
+        modelo=vehiculo.modelo if vehiculo else None,
+        anio=vehiculo.anio if vehiculo else None,
+        cilindrada=motor.cilindrada if motor else None,
+        combustible=motor.combustible if motor else None,
+        transmision=transmision_act,
+        patente=vehiculo.patente if vehiculo else None,
+        vin=vehiculo.vin if vehiculo else None,
+        ubicacion=ubicacion_str,
+        precio_referencia=activo.precio_referencia,
+        precio_minimo=activo.precio_minimo,
+        precio_maximo=activo.precio_maximo,
+        estado_conservacion=estado_activo.nombre_estado if estado_activo else (activo.observacion_estado or activo.estado),
+    )
+
+    return ValidarActivoBackorderResponse(
+        coincide=coincide,
+        discrepancias=discrepancias,
+        mensaje=mensaje,
+        activo_detalle=activo_detalle
+    )
+
+
+@router.post(
+    "/{id_orden}/asignar-activo-backorder",
+    response_model=AsignarActivoBackorderResponse,
+    summary="Asignar Activo Físico Paletizado a Venta en Verde Pagada",
+    description="Permite al vendedor asignar un activo físico (Disponible o Paletizado) a una venta en verde ya pagada, generando el QR transaccional para la Barrera de Salida."
+)
+def asignar_activo_backorder(
+    id_orden: uuid.UUID,
+    payload: AsignarActivoBackorderRequest,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    orden = db.query(Orden_Venta).filter(Orden_Venta.id_orden == id_orden).first()
+    if not orden:
+        raise HTTPException(status_code=404, detail="Orden de venta no encontrada.")
+
+    reserva = db.query(Reservas_Backorder).filter(Reservas_Backorder.id_orden == id_orden).first()
+    if not reserva:
+        raise HTTPException(status_code=404, detail="No se encontró una Venta en Verde asociada a esta orden.")
+
+    if reserva.id_activo_asignado is not None:
+        raise HTTPException(status_code=400, detail="Esta orden ya tiene un activo físico asignado.")
+
+    if orden.monto_pendiente > 0 or orden.estado_orden != "Pagada":
+        raise HTTPException(status_code=400, detail="La orden debe estar totalmente pagada antes de asignar el activo físico.")
+
+    sku_clean = payload.sku_activo.strip().upper()
+    activo_raw = (
+        db.query(Activo_Inventariado, Vehiculo_Origen, Detalle_Motor, Detalle_Caja_Cambio, Categoria_Activo, Estado_Activo)
+        .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
+        .outerjoin(Detalle_Motor, Activo_Inventariado.id_activo == Detalle_Motor.id_activo)
+        .outerjoin(Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo)
+        .outerjoin(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
+        .outerjoin(Estado_Activo, Activo_Inventariado.id_estado == Estado_Activo.id_estado)
+        .filter(func.upper(Activo_Inventariado.sku_qr_fisico) == sku_clean)
+        .first()
+    )
+
+    if not activo_raw:
+        raise HTTPException(status_code=404, detail=f"Activo con SKU '{payload.sku_activo}' no encontrado en inventario.")
+
+    activo, vehiculo, motor, caja_cambio, categoria, estado_activo = activo_raw
+
+    estados_validos = ["disponible", "paletizado"]
+    nombre_estado = estado_activo.nombre_estado if estado_activo else ""
+    if nombre_estado.lower() not in estados_validos:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"El repuesto con SKU {activo.sku_qr_fisico} está en estado '{nombre_estado}'. Solo se pueden asignar piezas en estado 'Disponible' o 'Paletizado'."
+        )
+
+    discrepancias = []
+    if vehiculo and reserva.marca_requerida and vehiculo.marca.lower() != reserva.marca_requerida.lower():
+        discrepancias.append(f"Marca requerida: {reserva.marca_requerida}, Marca repuesto: {vehiculo.marca}")
+    if vehiculo and reserva.modelo_requerido and vehiculo.modelo.lower() != reserva.modelo_requerido.lower():
+        discrepancias.append(f"Modelo requerido: {reserva.modelo_requerido}, Modelo repuesto: {vehiculo.modelo}")
+
+    if discrepancias and not payload.forzar_atribucion:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Discrepancia técnica: {'; '.join(discrepancias)}. Confirme 'forzar atribución' si desea continuar."
+        )
+
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    # Actualizar estado del activo a Vendido
+    estado_vendido = db.query(Estado_Activo).filter(Estado_Activo.nombre_estado == "Vendido").first()
+    if not estado_vendido:
+        estado_vendido = Estado_Activo(id_estado=3, nombre_estado="Vendido")
+        db.add(estado_vendido)
+        db.flush()
+
+    activo.id_estado = estado_vendido.id_estado
+    activo.reservado_por = None
+    activo.reserva_expira_en = None
+    activo.fecha_actualizacion = now_utc
+
+    # Asignar a la reserva y marcarla como completada
+    reserva.id_activo_asignado = activo.id_activo
+    reserva.estado_reserva = "Completada"
+    reserva.fecha_actualizacion = now_utc
+
+    # Generar QR transaccional para la orden
+    qr_hash = f"TX-QR-{uuid.uuid4()}"
+    orden.qr_transaccional_salida = qr_hash
+    orden.fecha_actualizacion = now_utc
+
+    # Actualizar línea de Detalle_Orden
+    detalles_bo = db.query(Detalle_Orden).filter(
+        Detalle_Orden.id_orden == orden.id_orden,
+        Detalle_Orden.id_activo.is_(None)
+    ).all()
+    if detalles_bo:
+        det = detalles_bo[0]
+        det.id_activo = activo.id_activo
+        det.estado_preparacion = "Listo"
+        det.descripcion_manual = f"[VENTA EN VERDE ASIGNADA] {activo.sku_qr_fisico} - {reserva.marca_requerida} {reserva.modelo_requerido}"
+        det.notas_preparacion = f"Asignado físicamente por vendedor {current_user.nombres} {current_user.apellidos}"
+    else:
+        detalle = Detalle_Orden(
+            id_orden=orden.id_orden,
+            id_activo=activo.id_activo,
+            descripcion_manual=f"[VENTA EN VERDE ASIGNADA] {activo.sku_qr_fisico} - {reserva.marca_requerida} {reserva.modelo_requerido}",
+            notas_preparacion=f"Asignado físicamente por vendedor {current_user.nombres} {current_user.apellidos}",
+            cantidad=1,
+            precio_unitario=reserva.precio_acordado,
+            precio_final=reserva.precio_acordado,
+            estado_preparacion="Listo",
+        )
+        db.add(detalle)
+
+    db.commit()
+
+    folio_doc = orden.folio or f"ORD-{str(orden.id_orden).replace('-', '')[:4].upper()}"
+
+    return AsignarActivoBackorderResponse(
+        success=True,
+        mensaje="Activo físico asignado exitosamente a la orden. QR de salida generado para Barrera de Salida.",
+        id_orden=orden.id_orden,
+        folio=folio_doc,
+        sku_asignado=activo.sku_qr_fisico,
+        qr_transaccional_salida=qr_hash
+    )
 
 
 @router.get(

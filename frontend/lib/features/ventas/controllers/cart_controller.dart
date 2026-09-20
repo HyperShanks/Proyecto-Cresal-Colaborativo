@@ -154,12 +154,16 @@ class CartController extends ChangeNotifier {
   }
 
   /// Agrega un Activo Inventariado al carrito.
-  /// Retorna `true` si se agregó exitosamente, o `false` si ya existía en el carrito.
+  /// Retorna `true` si se agregó exitosamente, o `false` si ya existía en el carrito
+  /// o si el carrito contiene una Venta en Verde (las ventas en verde van solas).
   bool agregarInventariado(
     CatalogoItem item, {
     int? precioFinal,
     String? notas,
   }) {
+    if (_items.any((i) => i is ReservaBackorderCartItem)) {
+      return false;
+    }
     if (estaEnCarrito(item.idActivo)) {
       return false;
     }
@@ -177,12 +181,16 @@ class CartController extends ChangeNotifier {
   }
 
   /// Agrega un artículo de Venta Libre / Misceláneo al carrito
-  void agregarVentaLibre({
+  bool agregarVentaLibre({
     required String descripcion,
     required int monto,
     int cantidad = 1,
     String? observacion,
   }) {
+    if (_items.any((i) => i is ReservaBackorderCartItem)) {
+      return false;
+    }
+
     final cartItem = VentaLibreCartItem(
       id: 'VL-${DateTime.now().millisecondsSinceEpoch}',
       descripcion: descripcion.trim(),
@@ -194,10 +202,13 @@ class CartController extends ChangeNotifier {
     _items.add(cartItem);
     notifyListeners();
     unawaited(guardarEnAlmacenamiento());
+    return true;
   }
 
-  /// Agrega una Reserva por Encargo (Compra en Verde / Backorder) al carrito
-  void agregarReservaBackorder({
+  /// Agrega una Reserva por Encargo (Compra en Verde / Backorder) al carrito.
+  /// Regla de Negocio: Las ventas en verde van solas y de a una por orden.
+  /// Retorna `true` si se agregó, o `false` si el carrito no está vacío.
+  bool agregarReservaBackorder({
     required int idCategoria,
     required String categoriaNombre,
     required String marca,
@@ -207,6 +218,10 @@ class CartController extends ChangeNotifier {
     int montoAbonado = 0,
     String? notas,
   }) {
+    if (_items.isNotEmpty) {
+      return false;
+    }
+
     final cartItem = ReservaBackorderCartItem(
       id: 'BO-${DateTime.now().millisecondsSinceEpoch}',
       idCategoria: idCategoria,
@@ -222,6 +237,7 @@ class CartController extends ChangeNotifier {
     _items.add(cartItem);
     notifyListeners();
     unawaited(guardarEnAlmacenamiento());
+    return true;
   }
 
   /// Actualiza el precio acordado de un ítem (inventariado, venta libre o backorder)
