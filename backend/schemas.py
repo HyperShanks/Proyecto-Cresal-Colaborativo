@@ -99,6 +99,22 @@ class VehiculoCreate(BaseModel):
     # Datos que FastAPI usará para crear el Detalle_Caja_Cambio internamente
     transmision: str = Field(..., description="Ej: mec, at")
 
+class MotorUpdate(BaseModel):
+    cilindrada: str
+    combustible: str
+    transmision_tipo: str
+
+class CajaUpdate(BaseModel):
+    transmision_tipo: str
+
+class VehiculoForzadoUpdate(BaseModel):
+    marca: str
+    modelo: str
+    anio: int
+    traccion: str
+    motor: MotorUpdate
+    caja: CajaUpdate
+
 # ==========================================
 # ESQUEMAS PARA PALETIZADO / IMPRESIÓN (HU-2.4)
 # ==========================================

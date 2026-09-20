@@ -55,26 +55,31 @@ class _SplashScreenState extends State<SplashScreen>
 
     if (!mounted) return;
 
-    final token = await AuthService.getToken();
+    try {
+      final token = await AuthService.getToken();
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    if (token != null && token.isNotEmpty) {
-      final idRol = await AuthService.getIdRol();
-      ThemeController.actualizarPorRol(idRol);
-      if (!mounted) return;
-      final targetRoute = AppRoutes.getHomeRouteForRole(idRol);
-      Navigator.of(context).pushReplacementNamed(targetRoute);
-    } else {
-      final isEnrolled = await AuthService.isTerminalEnrolled();
-      if (!mounted) return;
-      if (isEnrolled) {
-        Navigator.of(context).pushReplacementNamed('/login');
+      if (token != null && token.isNotEmpty) {
+        final idRol = await AuthService.getIdRol();
+        ThemeController.actualizarPorRol(idRol);
+        if (!mounted) return;
+        final targetRoute = AppRoutes.getHomeRouteForRole(idRol);
+        Navigator.of(context).pushReplacementNamed(targetRoute);
       } else {
-        Navigator.of(context).pushReplacementNamed('/enrolamiento');
+        final isEnrolled = await AuthService.isTerminalEnrolled();
+        if (!mounted) return;
+        if (isEnrolled) {
+          Navigator.of(context).pushReplacementNamed('/login');
+        } else {
+          Navigator.of(context).pushReplacementNamed('/enrolamiento');
+        }
       }
+    } catch (e) {
+      debugPrint("⚠️ [SPLASH] Error al verificar sesión en KeyStore: $e. Redirigiendo a pantalla de acceso.");
+      if (!mounted) return;
+      Navigator.of(context).pushReplacementNamed('/enrolamiento');
     }
-
   }
 
   @override
