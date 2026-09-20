@@ -274,6 +274,18 @@ class ArticuloResumenDTO(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class HistorialAbonoItemDTO(BaseModel):
+    id_pago: UUID
+    monto: int
+    metodo_pago: str
+    fecha_pago: datetime
+    fecha_pago_formateada: str
+    hora_pago_formateada: str
+    estado_pago: str = "Procesado"
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class CobroPendienteItemResponse(BaseModel):
     id_referencia: UUID = Field(description="id_orden o id_reserva según la entidad de origen")
     folio_documento: str = Field(description="Ej: ORD-9780 o RES-5401")
@@ -295,7 +307,10 @@ class CobroPendienteItemResponse(BaseModel):
     # Datos Financieros
     total_operacion: int = Field(description="Total venta o precio acordado de reserva")
     abono_previo: int = Field(default=0, description="Monto ya pagado previamente")
+    abono_requerido: int = Field(default=0, description="Piso mínimo comercial requerido para el primer abono")
+    saldo_pendiente: int = Field(default=0, description="Monto restante para liquidar el 100% de la venta")
     monto_a_cobrar: int = Field(description="Saldo pendiente o abono fijado requerido")
+    historial_abonos: List[HistorialAbonoItemDTO] = Field(default_factory=list, description="Lista de abonos previos registrados")
 
     # Detalles complementarios
     articulos: List[ArticuloResumenDTO] = Field(default_factory=list)

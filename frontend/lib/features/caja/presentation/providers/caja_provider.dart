@@ -75,18 +75,43 @@ class CajaProvider extends ChangeNotifier {
 
   int get diferenciaCuadratura => _montoDeclarado - totalPagosIngresados;
 
-  /// Valida que el monto declarado esté dentro del rango permitido (1 <= monto <= saldo pendiente).
-  bool get esMontoValido {
+  int get saldoPendienteActual =>
+      _ordenSeleccionada?.saldoPendiente ?? (_ordenSeleccionada?.montoACobrar ?? 0);
+
+  bool get esLiquidacionCompleta =>
+      _ordenSeleccionada != null && _montoDeclarado >= saldoPendienteActual && saldoPendienteActual > 0;
+
+  bool get esPrimerAbonoInvalido {
     if (_ordenSeleccionada == null) return false;
-    final maxPermitido = _ordenSeleccionada!.montoACobrar;
-    return _montoDeclarado > 0 && _montoDeclarado <= maxPermitido;
+    if (!_ordenSeleccionada!.esPrimerAbono) return false;
+    final piso = _ordenSeleccionada!.pisoPrimerAbono;
+    if (piso <= 0) return false;
+    // Si el cliente liquida el 100% de una vez, es válido
+    return _montoDeclarado < piso && _montoDeclarado < saldoPendienteActual;
   }
 
-  /// Indica si el monto declarado excede el saldo pendiente de la orden.
-  bool get esMontoExcedido {
-    if (_ordenSeleccionada == null) return false;
-    return _montoDeclarado > _ordenSeleccionada!.montoACobrar;
+  String? get errorMontoAbono {
+    if (_ordenSeleccionada == null) return null;
+    if (_montoDeclarado <= 0) {
+      return 'El monto a pagar debe ser mayor a \$0.';
+    }
+    if (_montoDeclarado > saldoPendienteActual) {
+      final maxFmt = saldoPendienteActual.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
+      return 'El monto supera el saldo pendiente de \$$maxFmt.';
+    }
+    if (esPrimerAbonoInvalido) {
+      final pisoFmt = _ordenSeleccionada!.pisoPrimerAbono.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
+      return 'El primer abono no puede ser inferior al mínimo acordado de \$$pisoFmt.';
+    }
+    return null;
   }
+
+  /// Valida que el monto declarado esté dentro del rango permitido.
+  bool get esMontoValido => errorMontoAbono == null;
+
+  /// Indica si el monto declarado excede el saldo pendiente de la orden.
+  bool get esMontoExcedido =>
+      _ordenSeleccionada != null && _montoDeclarado > saldoPendienteActual;
 
   bool get esCuadraturaValida =>
       diferenciaCuadratura == 0 &&
@@ -187,12 +212,16 @@ class CajaProvider extends ChangeNotifier {
     _ordenSeleccionada = orden;
     _ultimoResultadoCobro = null;
     if (orden != null) {
-      final esBackorderInicial = orden.esBackorder && (orden.abonoPrevio == 0);
-      _modalidad = esBackorderInicial ? 'ABONO' : 'LIQUIDACION';
+      if (orden.esPrimerAbono && orden.pisoPrimerAbono > 0) {
+        _modalidad = 'ABONO';
+        _montoDeclarado = orden.pisoPrimerAbono;
+      } else {
+        _modalidad = 'LIQUIDACION';
+        _montoDeclarado = orden.saldoPendiente > 0 ? orden.saldoPendiente : orden.totalOperacion;
+      }
       _modalidadPago = 'UNICO';
-      _montoDeclarado = orden.montoACobrar;
       _pagosDivididos = [
-        TransaccionPagoItemModel(metodo: 'Efectivo', monto: orden.montoACobrar),
+        TransaccionPagoItemModel(metodo: 'Efectivo', monto: _montoDeclarado),
       ];
     } else {
       _modalidad = 'LIQUIDACION';
@@ -211,40 +240,42 @@ class CajaProvider extends ChangeNotifier {
     final modNorm = nuevaModalidad.toUpperCase();
     if (_modalidad == modNorm) return;
 
-    // Si es un backorder en etapa de abono inicial (sin abono previo), no permitir cambiar a Liquidación
-    // ya que el activo físico aún no existe ni ha ingresado a inventario.
-    if (_ordenSeleccionada?.esBackorder == true &&
-        _ordenSeleccionada?.abonoPrevio == 0 &&
-        modNorm == 'LIQUIDACION') {
-      return;
-    }
-
     _modalidad = modNorm;
 
     if (_ordenSeleccionada != null) {
+      final saldo = _ordenSeleccionada!.saldoPendiente > 0
+          ? _ordenSeleccionada!.saldoPendiente
+          : _ordenSeleccionada!.totalOperacion;
+
       if (_modalidad == 'LIQUIDACION') {
-        _montoDeclarado = _ordenSeleccionada!.montoACobrar;
+        _montoDeclarado = saldo;
       } else if (_modalidad == 'ABONO') {
-        // En abono, si el monto declarado supera el saldo pendiente o es <= 0, sugerir monto a cobrar o 50%
-        if (_montoDeclarado >= _ordenSeleccionada!.montoACobrar || _montoDeclarado <= 0) {
-          if (_ordenSeleccionada!.esBackorder && _ordenSeleccionada!.abonoPrevio == 0) {
-            _montoDeclarado = _ordenSeleccionada!.montoACobrar;
-          } else {
-            _montoDeclarado = (_ordenSeleccionada!.montoACobrar * 0.5).round();
-            if (_montoDeclarado <= 0) {
-              _montoDeclarado = _ordenSeleccionada!.montoACobrar;
-            }
-          }
+        if (_ordenSeleccionada!.esPrimerAbono && _ordenSeleccionada!.pisoPrimerAbono > 0) {
+          _montoDeclarado = _ordenSeleccionada!.pisoPrimerAbono;
+        } else {
+          final sugerido = (saldo * 0.5).round();
+          _montoDeclarado = sugerido > 0 ? sugerido : saldo;
         }
       }
-      if (_modalidadPago == 'UNICO' || _pagosDivididos.length <= 1) {
-        final metodoActual = _pagosDivididos.isNotEmpty ? _pagosDivididos.first.metodo : 'Efectivo';
-        _pagosDivididos = [
-          TransaccionPagoItemModel(metodo: metodoActual, monto: _montoDeclarado),
-        ];
-      }
+      _sincronizarMontoConMetodos();
     }
     notifyListeners();
+  }
+
+  /// Actualiza directamente el monto declarado (por ejemplo al ingresar un Abono Personalizado).
+  void setMontoDeclarado(int nuevoMonto) {
+    _montoDeclarado = nuevoMonto;
+    _sincronizarMontoConMetodos();
+    notifyListeners();
+  }
+
+  void _sincronizarMontoConMetodos() {
+    if (_modalidadPago == 'UNICO' || _pagosDivididos.length <= 1) {
+      final metodoActual = _pagosDivididos.isNotEmpty ? _pagosDivididos.first.metodo : 'Efectivo';
+      _pagosDivididos = [
+        TransaccionPagoItemModel(metodo: metodoActual, monto: _montoDeclarado),
+      ];
+    }
   }
 
   /// Cambia la modalidad de la pasarela ('UNICO' | 'SPLIT').
@@ -258,17 +289,6 @@ class CajaProvider extends ChangeNotifier {
       _pagosDivididos = [
         TransaccionPagoItemModel(metodo: primerMetodo, monto: _montoDeclarado),
       ];
-    }
-    notifyListeners();
-  }
-
-  /// Establece el monto total acordado a cobrar.
-  void setMontoDeclarado(int nuevoMonto) {
-    _montoDeclarado = nuevoMonto;
-    if (_modalidadPago == 'UNICO' || _pagosDivididos.length == 1) {
-      if (_pagosDivididos.isNotEmpty) {
-        _pagosDivididos[0] = _pagosDivididos[0].copyWith(monto: nuevoMonto);
-      }
     }
     notifyListeners();
   }
@@ -417,8 +437,14 @@ class CajaProvider extends ChangeNotifier {
   }
 
   /// Procesa el cobro enviando la petición atómica al Backend (FastAPI).
-  Future<RegistrarCobroResponseModel?> procesarCobro() async {
+  Future<RegistrarCobroResponseModel?> procesarCobro({
+    String? skuOverride,
+    bool? forzarOverride,
+  }) async {
     if (_ordenSeleccionada == null || !esCuadraturaValida) return null;
+
+    final sku = skuOverride ?? _skuActivoAtribuido;
+    final forzar = forzarOverride ?? _forzarAtribucion;
 
     _isProcesandoCobro = true;
     _errorMessage = null;
@@ -431,8 +457,8 @@ class CajaProvider extends ChangeNotifier {
         modalidad: _modalidad,
         montoDeclarado: _montoDeclarado,
         pagos: _pagosDivididos,
-        skuActivoAtribuido: _skuActivoAtribuido,
-        forzarAtribucion: _forzarAtribucion,
+        skuActivoAtribuido: sku,
+        forzarAtribucion: forzar,
       );
 
       final resultado = await _cajaService.registrarCobro(request);

@@ -263,25 +263,28 @@ class CobroPendienteCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            isVenta
-                                ? (orden.abonoPrevio > 0
-                                    ? 'Saldo a Pagar:'
+                            orden.abonoPrevio > 0
+                                ? 'Saldo Pendiente:'
+                                : (!isVenta
+                                    ? (orden.montoACobrar < orden.totalOperacion
+                                        ? 'Abono Inicial:'
+                                        : 'Total Reserva:')
                                     : (orden.montoACobrar < orden.totalOperacion
                                         ? 'Abono Acordado:'
-                                        : 'Total a Pagar:'))
-                                : 'Abono Inicial:',
+                                        : 'Total a Pagar:')),
                             style: AppTypography.small.copyWith(
                               color: AppPalette.textSecondaryLight,
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-                          if (orden.abonoPrevio > 0 && isVenta) ...[
+                          if (orden.abonoPrevio > 0) ...[
                             Text(
-                              'Total: ${formatClp(orden.totalOperacion)} (Abono: ${formatClp(orden.abonoPrevio)})',
+                              'Total: ${formatClp(orden.totalOperacion)} • Abonos: ${formatClp(orden.abonoPrevio)}',
                               style: AppTypography.small.copyWith(
                                 color: AppPalette.textSecondaryLight,
                                 fontSize: 10,
+                                fontWeight: FontWeight.w600,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -292,7 +295,7 @@ class CobroPendienteCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      formatClp(orden.montoACobrar),
+                      formatClp(orden.saldoPendiente > 0 ? orden.saldoPendiente : orden.montoACobrar),
                       style: AppTypography.title.copyWith(
                         fontSize: 18,
                         fontWeight: FontWeight.w900,
