@@ -28,9 +28,9 @@ def poblar_datos_prueba():
             db.commit()
 
         # 2. Sucursal
-        sucursal = db.query(Sucursal).first()
+        sucursal = db.query(Sucursal).filter((Sucursal.id_sucursal == 1) | (Sucursal.nombre_sucursal.ilike("%Viña%"))).first()
         if not sucursal:
-            sucursal = Sucursal(nombre_sucursal="Casa Matriz", direccion="Avenida Uno 123", id_comuna=comuna.id_comuna)
+            sucursal = Sucursal(id_sucursal=1, nombre_sucursal="Viña del Mar", direccion="Camino Internacional 4105", id_comuna=comuna.id_comuna)
             db.add(sucursal)
             db.commit()
 

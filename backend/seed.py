@@ -57,7 +57,7 @@ def seed_data():
         db.commit()
         print("- Estados de activo verificados y creados.")
 
-        # 5. Crear Geografía y Sucursal Casa Matriz (Necesario para el Admin)
+        # 5. Configurar Geografía y Sucursales Oficiales (1: Viña del Mar - Casa Matriz, 2: Limache)
         region_valpo = db.query(Region).filter_by(nombre_region="Valparaíso").first()
         if not region_valpo:
             region_valpo = Region(nombre_region="Valparaíso")
@@ -70,17 +70,51 @@ def seed_data():
             db.add(comuna_vina)
             db.commit()
 
-        sucursal_matriz = db.query(Sucursal).filter_by(nombre_sucursal="Casa Matriz").first()
+        comuna_limache = db.query(Comuna).filter_by(nombre_comuna="Limache").first()
+        if not comuna_limache:
+            comuna_limache = Comuna(nombre_comuna="Limache", id_region=region_valpo.id_region)
+            db.add(comuna_limache)
+            db.commit()
+
+        # Sucursal 1: Viña del Mar (Casa Matriz)
+        sucursal_matriz = db.query(Sucursal).filter(
+            (Sucursal.id_sucursal == 1) | (Sucursal.nombre_sucursal.ilike("%Viña%")) | (Sucursal.nombre_sucursal.ilike("%Matriz%"))
+        ).first()
         if not sucursal_matriz:
             sucursal_matriz = Sucursal(
-                nombre_sucursal="Casa Matriz",
+                id_sucursal=1,
+                nombre_sucursal="Viña del Mar",
                 direccion="Camino Internacional 4105",
                 sector="Barrio Industrial",
                 id_comuna=comuna_vina.id_comuna
             )
             db.add(sucursal_matriz)
             db.commit()
-        print("- Sucursal Casa Matriz configurada.")
+        else:
+            if sucursal_matriz.nombre_sucursal != "Viña del Mar":
+                sucursal_matriz.nombre_sucursal = "Viña del Mar"
+                db.commit()
+        print("- Sucursal 1 (Viña del Mar - Casa Matriz) configurada.")
+
+        # Sucursal 2: Limache
+        sucursal_limache = db.query(Sucursal).filter(
+            (Sucursal.id_sucursal == 2) | (Sucursal.nombre_sucursal.ilike("%Limache%"))
+        ).first()
+        if not sucursal_limache:
+            sucursal_limache = Sucursal(
+                id_sucursal=2,
+                nombre_sucursal="Limache",
+                direccion="Avenida Palmira Romano Sur 1200",
+                sector="Sector Industrial Limache",
+                id_comuna=comuna_limache.id_comuna
+            )
+            db.add(sucursal_limache)
+            db.commit()
+        else:
+            if sucursal_limache.nombre_sucursal != "Limache":
+                sucursal_limache.nombre_sucursal = "Limache"
+                db.commit()
+        print("- Sucursal 2 (Limache) configurada.")
 
         # 6. Crear el Usuario Administrador
         rol_admin = db.query(Rol).filter_by(nombre_rol="Administrador").first()
