@@ -698,6 +698,8 @@ class _PaletizadoScreenState extends State<PaletizadoScreen> {
       backgroundColor: AppPalette.background,
       appBar: AppBar(
         backgroundColor: AppPalette.background,
+        foregroundColor: AppPalette.textPrimary,
+        iconTheme: const IconThemeData(color: AppPalette.textPrimary),
         title: const Text(
           'Paletizado y Enriquecimiento',
           style: AppTypography.title,

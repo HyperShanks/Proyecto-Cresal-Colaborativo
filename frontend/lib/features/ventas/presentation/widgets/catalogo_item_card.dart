@@ -5,6 +5,7 @@ import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../models/catalogo_model.dart';
 import '../screens/detalle_activo_screen.dart';
+import 'visor_imagen_completa_dialog.dart';
 
 /// Tarjeta de repuesto en Flat Design para Mesón de Ventas / Catálogo (HU-3.2).
 /// Contenido simplificado y tipografía aumentada para lectura rápida en tablets.
@@ -84,55 +85,73 @@ class CatalogoItemCard extends StatelessWidget {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Miniatura / Thumbnail
-                    Container(
-                      width: 64,
-                      height: 64,
-                      decoration: BoxDecoration(
-                        color: AppPalette.background,
+                    // Miniatura / Thumbnail interactiva
+                    Material(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(10.0),
+                      child: InkWell(
                         borderRadius: BorderRadius.circular(10.0),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.06),
-                        ),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(10.0),
-                        child: item.imagenes.isNotEmpty
-                            ? Image.network(
-                                item.imagenes.first,
-                                width: 64,
-                                height: 64,
-                                fit: BoxFit.cover,
-                                cacheWidth: 200,
-                                cacheHeight: 200,
-                                errorBuilder: (ctx, err, stack) => Center(
-                                  child: Icon(
-                                    iconoPieza,
-                                    size: 32,
-                                    color: AppPalette.primary,
-                                  ),
-                                ),
-                                loadingBuilder: (ctx, child, progress) {
-                                  if (progress == null) return child;
-                                  return const Center(
-                                    child: SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
+                        onTap: item.imagenes.isNotEmpty
+                            ? () {
+                                VisorImagenCompletaDialog.show(
+                                  context,
+                                  fotografias: item.imagenes,
+                                  initialIndex: 0,
+                                  titulo: item.tituloRepuesto,
+                                  sku: item.skuQrFisico,
+                                );
+                              }
+                            : null,
+                        child: Container(
+                          width: 64,
+                          height: 64,
+                          decoration: BoxDecoration(
+                            color: AppPalette.background,
+                            borderRadius: BorderRadius.circular(10.0),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.06),
+                            ),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10.0),
+                            child: item.imagenes.isNotEmpty
+                                ? Image.network(
+                                    item.imagenes.first,
+                                    width: 64,
+                                    height: 64,
+                                    fit: BoxFit.cover,
+                                    cacheWidth: 200,
+                                    cacheHeight: 200,
+                                    errorBuilder: (ctx, err, stack) => Center(
+                                      child: Icon(
+                                        iconoPieza,
+                                        size: 32,
                                         color: AppPalette.primary,
                                       ),
                                     ),
-                                  );
-                                },
-                              )
-                            : Center(
-                                child: Icon(
-                                  iconoPieza,
-                                  size: 32,
-                                  color: AppPalette.primary,
-                                ),
-                              ),
+                                    loadingBuilder: (ctx, child, progress) {
+                                      if (progress == null) return child;
+                                      return const Center(
+                                        child: SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: AppPalette.primary,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  )
+                                : Center(
+                                    child: Icon(
+                                      iconoPieza,
+                                      size: 32,
+                                      color: AppPalette.primary,
+                                    ),
+                                  ),
+                          ),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 14),

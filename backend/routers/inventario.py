@@ -535,6 +535,8 @@ def obtener_catalogo(
             ubicacion_pasillo=activo.ubicacion_pasillo,
             ubicacion_galpon=activo.ubicacion_galpon,
             ubicacion_pallet=activo.ubicacion_pallet,
+            observacion_estado=activo.observacion_estado,
+            numero_motor=numero_motor_val,
             id_estado=activo.id_estado,
             estado_activo=est.nombre_estado,
             version_lock=activo.version_lock or 1,

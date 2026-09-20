@@ -233,6 +233,39 @@ void main() {
       expect(find.text('Requerido'), findsWidgets);
     });
 
+    testWidgets('ModalBackorderForm selector de categorías solo contiene Motor y Caja de Cambios', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () => ModalBackorderForm.mostrar(context),
+                child: const Text('Abrir Modal'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Abrir Modal'));
+      await tester.pumpAndSettle();
+
+      // Abrir el dropdown de categorías
+      await tester.tap(find.text('Motor').first);
+      await tester.pumpAndSettle();
+
+      // Verificar que están disponibles únicamente Motor y Caja de Cambios
+      expect(find.text('Motor'), findsWidgets);
+      expect(find.text('Caja de Cambios'), findsWidgets);
+
+      // Verificar que NO existen opciones adicionales descartadas
+      expect(find.text('Culata'), findsNothing);
+      expect(find.text('Alternador'), findsNothing);
+      expect(find.text('Diferencial'), findsNothing);
+      expect(find.text('Motor de Arranque'), findsNothing);
+      expect(find.text('Computador ECU'), findsNothing);
+    });
+
     testWidgets('CheckoutWizardScreen renderiza el Stepper de 5 pasos', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(

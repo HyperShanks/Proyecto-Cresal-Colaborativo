@@ -5,6 +5,7 @@ import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../controllers/cart_controller.dart';
 import '../../models/catalogo_model.dart';
+import '../widgets/visor_imagen_completa_dialog.dart';
 
 /// Pantalla Completa de Detalle del Repuesto (HU-3.2 / Fase 3 Mesón de Ventas).
 /// Incluye carrusel de imágenes en gran formato con indicador interactivo,
@@ -219,28 +220,80 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
               },
               itemBuilder: (context, index) {
                 if (imagenes.isNotEmpty) {
-                  return Image.network(
-                    imagenes[index],
-                    fit: BoxFit.cover,
-                    errorBuilder: (ctx, err, stack) => _buildPlaceholderImage(),
-                    loadingBuilder: (ctx, child, progress) {
-                      if (progress == null) return child;
-                      return const Center(
-                        child: SizedBox(
-                          width: 32,
-                          height: 32,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            color: AppPalette.primary,
-                          ),
-                        ),
+                  return GestureDetector(
+                    onTap: () {
+                      VisorImagenCompletaDialog.show(
+                        context,
+                        fotografias: imagenes,
+                        initialIndex: index,
+                        titulo: widget.item.tituloRepuesto,
+                        sku: widget.item.skuQrFisico,
                       );
                     },
+                    child: Image.network(
+                      imagenes[index],
+                      fit: BoxFit.cover,
+                      errorBuilder: (ctx, err, stack) => _buildPlaceholderImage(),
+                      loadingBuilder: (ctx, child, progress) {
+                        if (progress == null) return child;
+                        return const Center(
+                          child: SizedBox(
+                            width: 32,
+                            height: 32,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              color: AppPalette.primary,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
                   );
                 }
                 return _buildPlaceholderImage();
               },
             ),
+
+            // Contador estilo "1/3" en la esquina superior derecha
+            if (imagenes.isNotEmpty)
+              Positioned(
+                top: 12,
+                right: 12,
+                child: GestureDetector(
+                  onTap: () {
+                    VisorImagenCompletaDialog.show(
+                      context,
+                      fotografias: imagenes,
+                      initialIndex: _currentImageIndex,
+                      titulo: widget.item.tituloRepuesto,
+                      sku: widget.item.skuQrFisico,
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.65),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.fullscreen, color: Colors.white70, size: 14),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${_currentImageIndex + 1}/$totalSlides',
+                          style: AppTypography.small.copyWith(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
 
             // Indicador de Puntos / Páginas si hay más de 1
             if (totalSlides > 1)
@@ -435,8 +488,15 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
           _buildSpecRow('Marca', widget.item.marca ?? 'N/A'),
           _buildSpecRow('Modelo', widget.item.modelo ?? 'N/A'),
           _buildSpecRow('Año', widget.item.anio?.toString() ?? 'N/A'),
-          if (widget.item.idCategoria == 1 && widget.item.numeroMotor != null && widget.item.numeroMotor!.isNotEmpty)
-            _buildSpecRow('Número de Motor', widget.item.numeroMotor!),
+          if (widget.item.idCategoria == 1)
+            _buildSpecRow(
+              'Número de Motor',
+              (widget.item.numeroMotor != null &&
+                      widget.item.numeroMotor!.trim().isNotEmpty &&
+                      widget.item.numeroMotor!.trim() != 'null')
+                  ? widget.item.numeroMotor!.trim()
+                  : 'N/A',
+            ),
           if (widget.item.cilindrada != null && widget.item.cilindrada!.isNotEmpty)
             _buildSpecRow('Cilindrada', widget.item.cilindrada!),
           if (widget.item.transmisionTipo != null && widget.item.transmisionTipo!.isNotEmpty)

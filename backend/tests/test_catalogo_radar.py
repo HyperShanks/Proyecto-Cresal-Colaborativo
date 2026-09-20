@@ -104,7 +104,8 @@ def db_session(setup_database):
             id_activo=a1_id,
             cilindrada="1.5L",
             combustible="Gasolina",
-            transmision_tipo="Manual"
+            transmision_tipo="Manual",
+            numero_motor="1NZ-FE-SUC2",
         )
         
         # Activo 2: Sucursal 1 (Santiago), Toyota Yaris Motor, Creado hace 1 día
@@ -124,7 +125,8 @@ def db_session(setup_database):
             id_activo=a2_id,
             cilindrada="1.5L",
             combustible="Gasolina",
-            transmision_tipo="Manual"
+            transmision_tipo="Manual",
+            numero_motor="1NZ-FE-SUC1",
         )
 
         # Activo 3: Sucursal 1 (Santiago), Caja Chevrolet Sail
@@ -253,6 +255,7 @@ def test_catalogo_filtro_categoria_y_detalles_tecnicos(client, db_session):
     assert caja["transmision_tipo"] == "Mecánica 5V"
     assert caja["cilindrada"] is None
     assert caja["marca"] == "Chevrolet"
+    assert caja["numero_motor"] is None
 
     # Categoría 1: Motores
     response_motores = client.get("/api/v1/inventario/catalogo?id_categoria=1", headers=headers)
@@ -263,6 +266,7 @@ def test_catalogo_filtro_categoria_y_detalles_tecnicos(client, db_session):
     assert motor["nombre_categoria"] == "Motor"
     assert motor["cilindrada"] == "1.5L"
     assert motor["combustible"] == "Gasolina"
+    assert motor["numero_motor"] in ["1NZ-FE-SUC1", "1NZ-FE-SUC2"]
 
 
 def test_catalogo_busqueda_q(client, db_session):

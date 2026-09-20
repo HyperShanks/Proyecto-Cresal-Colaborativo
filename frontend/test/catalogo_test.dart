@@ -6,6 +6,7 @@ import 'package:frontend/features/ventas/presentation/widgets/catalogo_item_deta
 import 'package:frontend/features/ventas/presentation/widgets/filtros_drawer.dart';
 import 'package:frontend/features/ventas/presentation/screens/ventas_main_screen.dart';
 import 'package:frontend/features/ventas/presentation/screens/catalogo_screen.dart';
+import 'package:frontend/features/ventas/presentation/screens/detalle_activo_screen.dart';
 
 void main() {
   group('CatalogoItem Model Tests', () {
@@ -373,6 +374,41 @@ void main() {
       expect(find.text('Agregar'), findsOneWidget);
     });
 
+    testWidgets('Tap en miniatura de CatalogoItemCard abre VisorImagenCompletaDialog', (tester) async {
+      final itemConFotos = CatalogoItem(
+        idActivo: '22222222-2222-2222-2222-222222222222',
+        skuQrFisico: 'SKU-FOTO-1',
+        precioReferencia: 500000,
+        idCategoria: 1,
+        nombreCategoria: 'Motor',
+        idSucursalActual: 1,
+        nombreSucursal: 'Casa Matriz',
+        marca: 'Toyota',
+        modelo: 'Corolla',
+        anio: 2021,
+        imagenes: const ['https://example.com/foto1.jpg', 'https://example.com/foto2.jpg'],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: CatalogoItemCard(
+              item: itemConFotos,
+              vendedorSucursalId: 1,
+            ),
+          ),
+        ),
+      );
+
+      // Tap en la miniatura interactiva (primer InkWell)
+      await tester.tap(find.byType(InkWell).first);
+      await tester.pump();
+
+      // Debe abrir el diálogo visor a pantalla completa
+      expect(find.byType(Dialog), findsOneWidget);
+      expect(find.text('SKU-FOTO-1'), findsOneWidget);
+    });
+
     testWidgets('Buscador en tiempo real en CatalogoScreen permite escribir y limpiar', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
@@ -401,6 +437,88 @@ void main() {
       final textField = tester.widget<TextField>(searchFieldFinder);
       expect(textField.controller?.text, isEmpty);
       expect(find.byTooltip('Limpiar búsqueda'), findsNothing);
+    });
+
+    testWidgets('DetalleActivoScreen: Motor con número de motor lo renderiza correctamente', (tester) async {
+      final motorConNum = CatalogoItem(
+        idActivo: 'mot-001',
+        skuQrFisico: 'SKU-MOT-001',
+        precioReferencia: 850000,
+        idCategoria: 1,
+        nombreCategoria: 'Motor',
+        idSucursalActual: 1,
+        nombreSucursal: 'Viña del Mar',
+        marca: 'Toyota',
+        modelo: 'Hilux',
+        anio: 2022,
+        numeroMotor: '1GD-FTV-9988',
+        cilindrada: '2.8L',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: DetalleActivoScreen(item: motorConNum),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('ESPECIFICACIONES TÉCNICAS'), findsOneWidget);
+      expect(find.text('Número de Motor'), findsOneWidget);
+      expect(find.text('1GD-FTV-9988'), findsOneWidget);
+    });
+
+    testWidgets('DetalleActivoScreen: Motor sin número de motor muestra siempre N/A sin desaparecer la fila', (tester) async {
+      final motorSinNum = CatalogoItem(
+        idActivo: 'mot-002',
+        skuQrFisico: 'SKU-MOT-002',
+        precioReferencia: 750000,
+        idCategoria: 1,
+        nombreCategoria: 'Motor',
+        idSucursalActual: 1,
+        nombreSucursal: 'Viña del Mar',
+        marca: 'Toyota',
+        modelo: 'Yaris',
+        anio: 2020,
+        numeroMotor: null,
+        cilindrada: '1.5L',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: DetalleActivoScreen(item: motorSinNum),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('ESPECIFICACIONES TÉCNICAS'), findsOneWidget);
+      expect(find.text('Número de Motor'), findsOneWidget);
+      expect(find.text('N/A'), findsWidgets);
+    });
+
+    testWidgets('DetalleActivoScreen: Caja de Cambios (idCategoria == 2) NO renderiza Número de Motor', (tester) async {
+      final cajaItem = CatalogoItem(
+        idActivo: 'caj-001',
+        skuQrFisico: 'SKU-CAJ-001',
+        precioReferencia: 600000,
+        idCategoria: 2,
+        nombreCategoria: 'Caja de Cambios',
+        idSucursalActual: 1,
+        nombreSucursal: 'Viña del Mar',
+        marca: 'Toyota',
+        modelo: 'Hilux',
+        anio: 2022,
+        numeroMotor: null,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: DetalleActivoScreen(item: cajaItem),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('ESPECIFICACIONES TÉCNICAS'), findsOneWidget);
+      expect(find.text('Número de Motor'), findsNothing);
     });
   });
 }

@@ -45,13 +45,6 @@ class _ModalBackorderFormState extends State<ModalBackorderForm> {
   final List<Map<String, dynamic>> _categoriasDisponibles = [
     {'id': 1, 'nombre': 'Motor'},
     {'id': 2, 'nombre': 'Caja de Cambios'},
-    {'id': 3, 'nombre': 'Diferencial'},
-    {'id': 4, 'nombre': 'Alternador'},
-    {'id': 5, 'nombre': 'Motor de Arranque'},
-    {'id': 6, 'nombre': 'Culata'},
-    {'id': 7, 'nombre': 'Computador ECU'},
-    {'id': 8, 'nombre': 'Suspensión / Dirección'},
-    {'id': 9, 'nombre': 'Otros Repuestos Mecánicos'},
   ];
 
   @override

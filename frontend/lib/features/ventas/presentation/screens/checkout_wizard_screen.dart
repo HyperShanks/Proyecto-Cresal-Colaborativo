@@ -774,9 +774,18 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                 const SizedBox(height: 16),
                 if (widget.onNavigateToCatalogo != null)
                   ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(backgroundColor: AppPalette.primary, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)),
-                    icon: const Icon(Icons.storefront, size: 18),
-                    label: const Text('IR AL CATÁLOGO DE REPUESTOS'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppPalette.primary,
+                      foregroundColor: AppPalette.textPrimary,
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      elevation: 0,
+                    ),
+                    icon: const Icon(Icons.storefront, size: 20),
+                    label: const Text(
+                      'Ir al Catálogo',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
                     onPressed: widget.onNavigateToCatalogo,
                   ),
               ],

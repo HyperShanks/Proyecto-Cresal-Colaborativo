@@ -1001,8 +1001,17 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen>
       backgroundColor: AppPalette.background,
       appBar: AppBar(
         backgroundColor: AppPalette.surface,
+        foregroundColor: AppPalette.textPrimary,
+        iconTheme: const IconThemeData(color: AppPalette.textPrimary),
         elevation: 0,
         titleSpacing: 12,
+        leading: Navigator.canPop(context)
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back, color: AppPalette.textPrimary),
+                onPressed: () => Navigator.of(context).pop(),
+                tooltip: 'Volver',
+              )
+            : null,
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [

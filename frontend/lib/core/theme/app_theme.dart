@@ -47,6 +47,11 @@ class AppTheme {
       iconButtonTheme: AppComponents.iconButtonTheme,
       cardTheme: AppComponents.cardTheme,
       inputDecorationTheme: AppComponents.inputDecorationTheme,
+      appBarTheme: const AppBarTheme(
+        backgroundColor: AppPalette.surface,
+        foregroundColor: AppPalette.textPrimary,
+        iconTheme: IconThemeData(color: AppPalette.textPrimary),
+      ),
     );
   }
 

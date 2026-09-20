@@ -148,6 +148,8 @@ class _EtiquetaPreviewScreenState extends State<EtiquetaPreviewScreen> {
       backgroundColor: AppPalette.background,
       appBar: AppBar(
         backgroundColor: AppPalette.background,
+        foregroundColor: AppPalette.textPrimary,
+        iconTheme: const IconThemeData(color: AppPalette.textPrimary),
         elevation: 0,
         title: const Text('Vista Previa', style: AppTypography.title),
         centerTitle: true,
