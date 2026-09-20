@@ -302,12 +302,14 @@ def obtener_cobros_pendientes(
             saldo_pendiente = max(0, res.precio_acordado - res.monto_abonado)
 
             # Consultar transacciones previas registradas para la reserva
+            if res.id_orden is not None:
+                filtro_pagos = (Transaccion_Pago.id_reserva == res.id_reserva) | (Transaccion_Pago.id_orden == res.id_orden)
+            else:
+                filtro_pagos = (Transaccion_Pago.id_reserva == res.id_reserva)
+
             pagos_reserva_query = (
                 db.query(Transaccion_Pago)
-                .filter(
-                    (Transaccion_Pago.id_reserva == res.id_reserva) |
-                    ((Transaccion_Pago.id_orden == res.id_orden) & (res.id_orden.isnot(None)))
-                )
+                .filter(filtro_pagos)
                 .order_by(Transaccion_Pago.fecha_pago.asc())
                 .all()
             )
