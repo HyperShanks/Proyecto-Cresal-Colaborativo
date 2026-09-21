@@ -101,6 +101,7 @@ class HistorialCajaProvider extends ChangeNotifier {
   HistorialCajaState get state => _state;
 
   Timer? _debounceTimer;
+  bool _isDisposed = false;
 
   HistorialCajaProvider({
     ICajaService? cajaService,
@@ -144,7 +145,9 @@ class HistorialCajaProvider extends ChangeNotifier {
         errorMessage: 'Error al obtener historial de auditoría: $e',
       );
     } finally {
-      notifyListeners();
+      if (!_isDisposed) {
+        notifyListeners();
+      }
     }
   }
 
@@ -218,6 +221,7 @@ class HistorialCajaProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _isDisposed = true;
     _debounceTimer?.cancel();
     super.dispose();
   }

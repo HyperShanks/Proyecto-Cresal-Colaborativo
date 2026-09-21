@@ -343,7 +343,7 @@ def obtener_cobros_pendientes(
                 monto_cobrar = res.precio_acordado - res.monto_abonado
 
             cat_nombre = categoria.nombre_categoria if categoria else "Repuesto Solicitado"
-            transito_str = res.notas_preparacion or "En Tránsito Marítimo (Arribo est.: 10 días)"
+            transito_str = res.notas_preparacion or "Pendiente de Recepción"
 
             specs_dto = BackorderEspecificacionesDTO(
                 marca=res.marca_requerida,

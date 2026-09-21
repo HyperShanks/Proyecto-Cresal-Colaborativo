@@ -80,8 +80,8 @@ void main() {
       );
       expect(controller.subtotalReservas, equals(400000));
 
-      // Totales
-      expect(controller.totalItemsCount, equals(3));
+      // Totales: 1 inventariado + 2 unidades manuales + 1 reserva = 4
+      expect(controller.totalItemsCount, equals(4));
       expect(controller.totalVenta, equals(1100000)); // 650.000 + 50.000 + 400.000
       expect(controller.abonoReservas, equals(150000));
       expect(controller.montoPendiente, equals(950000)); // 1.100.000 - 150.000
@@ -442,7 +442,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Ingresar Dirección
-      final dirFinder = find.widgetWithText(TextField, 'Dirección de entrega (Calle, Número, Depto) *');
+      final dirFinder = find.widgetWithText(TextField, 'Dirección de Entrega *');
       await tester.enterText(dirFinder, 'Av. Libertad 123');
       await tester.pumpAndSettle();
 

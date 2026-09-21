@@ -315,31 +315,72 @@ class PanelFiltrosAvanzados extends StatelessWidget {
     );
   }
 
+  int get _cantidadFiltrosActivos {
+    int count = 0;
+    if (busquedaController.text.trim().isNotEmpty) count++;
+    if (periodoSeleccionado != 'hoy') count++;
+    if (estadoSeleccionado.isNotEmpty && estadoSeleccionado.toLowerCase() != 'todos') count++;
+    if (metodoPagoSeleccionado.isNotEmpty && metodoPagoSeleccionado.toLowerCase() != 'todos') count++;
+    return count;
+  }
+
   Widget _buildBotonLimpiar() {
+    final count = _cantidadFiltrosActivos;
+    final hayFiltros = count > 0;
+
     return OutlinedButton.icon(
       style: OutlinedButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        backgroundColor: hayFiltros
+            ? AppPalette.tertiary.withValues(alpha: 0.1)
+            : Colors.transparent,
         side: BorderSide(
-          color: AppPalette.neutral.withValues(alpha: 0.3),
+          color: hayFiltros
+              ? AppPalette.tertiary
+              : AppPalette.neutral.withValues(alpha: 0.3),
+          width: hayFiltros ? 1.5 : 1.0,
         ),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
         ),
       ),
-      icon: const Icon(
+      icon: Icon(
         Icons.filter_alt_off_rounded,
         size: 16,
-        color: AppPalette.textSecondaryLight,
+        color: hayFiltros ? AppPalette.tertiary : AppPalette.textSecondaryLight,
       ),
-      label: Text(
-        'Limpiar',
-        style: AppTypography.button.copyWith(
-          color: AppPalette.textSecondaryLight,
-          fontWeight: FontWeight.w700,
-          fontSize: 12,
-        ),
+      label: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Limpiar',
+            style: AppTypography.button.copyWith(
+              color: hayFiltros ? AppPalette.tertiary : AppPalette.textSecondaryLight,
+              fontWeight: FontWeight.w700,
+              fontSize: 12,
+            ),
+          ),
+          if (hayFiltros) ...[
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                color: AppPalette.tertiary,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '$count',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
-      onPressed: onLimpiar,
+      onPressed: hayFiltros ? onLimpiar : null,
     );
   }
 }

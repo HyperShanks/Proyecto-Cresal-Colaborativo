@@ -743,6 +743,7 @@ def listar_ordenes_auditoria(
                 modalidad_pago="split" if len(pagos_db) > 1 else "unico",
                 metodos_resumen=metodos_resumen,
                 total_venta=orden.total_venta,
+                descuento=getattr(orden, "descuento", 0) or 0,
                 abono_previo=0,
                 monto_pendiente=orden.monto_pendiente or 0,
                 total_liquidado=sum(p.monto for p in pagos_db),

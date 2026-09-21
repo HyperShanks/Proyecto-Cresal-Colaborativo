@@ -69,7 +69,10 @@ class CheckoutWizardController extends ChangeNotifier {
     return saldo < 0 ? 0 : saldo;
   }
 
-  int get totalItemsCount => _itemsInventariados.length + _itemsManuales.length + _reservas.length;
+  int get totalItemsCount =>
+      _itemsInventariados.length +
+      _itemsManuales.fold<int>(0, (sum, m) => sum + m.cantidad) +
+      _reservas.length;
 
   // ── Gestión de Pasos ──────────────────────────────────────────────────────
   void setStep(int step) {

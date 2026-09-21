@@ -570,32 +570,6 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
               ),
             ],
           ),
-          if (orden.descuento > 0) ...[
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.confirmation_num_outlined, size: 14, color: Color(0xFFEF9A9A)),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Descuento a Favor aplicado: - ${CobroPendienteCard.formatClp(orden.descuento)}',
-                    style: AppTypography.small.copyWith(
-                      color: const Color(0xFFFFCDD2),
-                      fontWeight: FontWeight.w700,
-                      fontSize: 11.5,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -804,17 +778,9 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
           ],
         ),
         const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: _buildSpecTile(
-                'Motor / Combustible',
-                '${bo.cilindrada ?? "-"} • ${bo.combustible ?? "-"}',
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(child: _buildSpecTile('Estado de Tránsito', bo.transito)),
-          ],
+        _buildSpecTile(
+          'Motor / Combustible',
+          '${bo.cilindrada ?? "-"} • ${bo.combustible ?? "-"}',
         ),
       ],
     );
@@ -1310,87 +1276,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Fila de Resumen de Cuadratura
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'TOTAL A COBRAR',
-                      style: AppTypography.small.copyWith(
-                        color: AppPalette.textSecondaryLight,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      CobroPendienteCard.formatClp(montoDeclarado),
-                      style: AppTypography.title.copyWith(
-                        color: montoExcedido ? AppPalette.error : AppPalette.textPrimaryLight,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 20,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'TOTAL INGRESADO',
-                      style: AppTypography.small.copyWith(
-                        color: AppPalette.textSecondaryLight,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      CobroPendienteCard.formatClp(totalIngresado),
-                      style: AppTypography.title.copyWith(
-                        color: AppPalette.textPrimaryLight,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 20,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'DIFERENCIA',
-                      style: AppTypography.small.copyWith(
-                        color: AppPalette.textSecondaryLight,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      CobroPendienteCard.formatClp(diferencia),
-                      style: AppTypography.title.copyWith(
-                        color: diferencia == 0
-                            ? AppPalette.successText
-                            : (diferencia > 0 ? AppPalette.warningText : AppPalette.error),
-                        fontWeight: FontWeight.w900,
-                        fontSize: 20,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
 
-          const SizedBox(height: 16),
 
           // Píldora de Estado de Cuadratura
           Container(
@@ -1732,7 +1618,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
           if (!isLiquidacion) ...[
             const SizedBox(height: 16),
             Text(
-              'MONTO A ABONAR EN ESTE PAGO',
+              'MONTO A COBRAR',
               style: AppTypography.small.copyWith(
                 fontSize: 11,
                 fontWeight: FontWeight.w800,
@@ -1760,7 +1646,12 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                         fontWeight: FontWeight.w800,
                         fontSize: 18,
                       ),
-                      hintText: '0',
+                      hintText: 'Ej: 50.000',
+                      hintStyle: AppTypography.title.copyWith(
+                        color: AppPalette.textSecondaryLight.withValues(alpha: 0.5),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                      ),
                       filled: true,
                       fillColor: AppPalette.backgroundLight,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),

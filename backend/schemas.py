@@ -253,7 +253,7 @@ class BackorderEspecificacionesDTO(BaseModel):
     categoria: str
     cilindrada: Optional[str] = None
     combustible: Optional[str] = None
-    transito: Optional[str] = "En Tránsito Marítimo / Bodega"
+    transito: Optional[str] = "Pendiente de Recepción"
 
     model_config = ConfigDict(from_attributes=True)
 

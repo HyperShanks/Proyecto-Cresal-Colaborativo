@@ -711,7 +711,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
           children: [
             Expanded(
               child: Text(
-                '1. Selección de Repuestos y Encargos',
+                '1. Artículos y Encargos',
                 style: AppTypography.title.copyWith(fontSize: 16),
                 overflow: TextOverflow.ellipsis,
               ),
@@ -918,50 +918,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
             }),
           ],
 
-          // Descuento por Vale a Favor (Paso 1)
-          const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: AppPalette.surface,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.white12),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.confirmation_number_outlined, size: 16, color: AppPalette.primary),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Descuento por Vale a Favor (\$):',
-                      style: AppTypography.small.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _descuentoController,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [MilesTextInputFormatter()],
-                  style: AppTypography.body,
-                  decoration: _inputDeco('Ej: 50.000 (Monto a descontar del total)', Icons.local_offer_outlined),
-                  onChanged: (val) {
-                    final desc = CurrencyFormatter.parse(val);
-                    _controller.setDescuento(desc);
-                  },
-                ),
-                if (_controller.descuento > 0) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    'Descuento aplicado: - ${CurrencyFormatter.formatCLP(_controller.descuento)} • Total Venta: ${CurrencyFormatter.formatCLP(_controller.totalVenta)}',
-                    style: AppTypography.small.copyWith(color: const Color(0xFFEF5350), fontSize: 12, fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ],
-            ),
-          ),
+
 
           if (CartController.instance.hayPreciosInvalidos) ...[
             const SizedBox(height: 12),
@@ -1296,11 +1253,12 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                             key: const Key('input_rut_cliente'),
                             controller: _rutController,
                             focusNode: _rutFocusNode,
-                            style: AppTypography.body,
+                            style: AppTypography.body.copyWith(color: Colors.white),
                             inputFormatters: [RutFormatter()],
                             decoration: _inputDeco(
-                              'RUT Cliente (ej: 12.345.678-9) *',
-                              Icons.badge_outlined,
+                              label: 'RUT Cliente *',
+                              hint: 'Ej: 12.345.678-9',
+                              icon: Icons.badge_outlined,
                               errorText: rutError,
                               suffix: _isSearchingCliente
                                   ? const SizedBox(
@@ -1332,8 +1290,12 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                           child: TextField(
                             key: const Key('input_cliente_nombres'),
                             controller: _clienteNombresController,
-                            style: AppTypography.body,
-                            decoration: _inputDeco('Nombres *', Icons.person),
+                            style: AppTypography.body.copyWith(color: Colors.white),
+                            decoration: _inputDeco(
+                              label: 'Nombres *',
+                              hint: 'Ej: Juan',
+                              icon: Icons.person,
+                            ),
                             onChanged: (val) {
                               setState(() {});
                               _actualizarClienteLocal();
@@ -1345,8 +1307,12 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                           child: TextField(
                             key: const Key('input_cliente_apellidos'),
                             controller: _clienteApellidosController,
-                            style: AppTypography.body,
-                            decoration: _inputDeco('Apellidos *', Icons.person_outline),
+                            style: AppTypography.body.copyWith(color: Colors.white),
+                            decoration: _inputDeco(
+                              label: 'Apellidos *',
+                              hint: 'Ej: Pérez',
+                              icon: Icons.person_outline,
+                            ),
                             onChanged: (val) => _actualizarClienteLocal(),
                           ),
                         ),
@@ -1359,9 +1325,13 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                     Expanded(
                       child: TextField(
                         controller: _clienteTelefonoController,
-                        style: AppTypography.body,
+                        style: AppTypography.body.copyWith(color: Colors.white),
                         keyboardType: TextInputType.phone,
-                        decoration: _inputDeco('Teléfono (+569...)', Icons.phone),
+                        decoration: _inputDeco(
+                          label: 'Teléfono (Opcional)',
+                          hint: 'Ej: +56 9 1234 5678',
+                          icon: Icons.phone,
+                        ),
                         onChanged: (val) => _actualizarClienteLocal(),
                       ),
                     ),
@@ -1369,9 +1339,13 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                     Expanded(
                       child: TextField(
                         controller: _clienteEmailController,
-                        style: AppTypography.body,
+                        style: AppTypography.body.copyWith(color: Colors.white),
                         keyboardType: TextInputType.emailAddress,
-                        decoration: _inputDeco('Correo Electrónico (Opcional)', Icons.email_outlined),
+                        decoration: _inputDeco(
+                          label: 'Correo Electrónico (Opcional)',
+                          hint: 'Ej: cliente@correo.com',
+                          icon: Icons.email_outlined,
+                        ),
                         onChanged: (val) => _actualizarClienteLocal(),
                       ),
                     ),
@@ -1385,12 +1359,25 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                         isExpanded: true,
                         value: _regionCliente,
                         dropdownColor: AppPalette.surface,
-                        style: AppTypography.body,
-                        decoration: _inputDeco('Región Cliente', Icons.map_outlined),
-                        hint: const Text('Seleccione Región...', overflow: TextOverflow.ellipsis),
+                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                        icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF94A3B8)),
+                        decoration: _inputDeco(
+                          label: 'Región (Opcional)',
+                          hint: 'Seleccione región...',
+                          icon: Icons.map_outlined,
+                        ),
+                        hint: const Text(
+                          'Seleccione región...',
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                        ),
                         items: ChileGeografia.regiones.map((r) => DropdownMenuItem(
                           value: r,
-                          child: Text(r, overflow: TextOverflow.ellipsis),
+                          child: Text(
+                            r,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: Colors.white, fontSize: 13),
+                          ),
                         )).toList(),
                         onChanged: (val) {
                           setState(() {
@@ -1409,28 +1396,35 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                             ? _comunaCliente
                             : null,
                         dropdownColor: AppPalette.surface,
-                        style: AppTypography.body,
+                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                        icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF94A3B8)),
                         decoration: _inputDeco(
-                          'Comuna Cliente',
-                          Icons.location_city,
+                          label: 'Comuna (Opcional)',
+                          hint: 'Seleccione comuna...',
+                          icon: Icons.location_city,
                         ).copyWith(
                           enabled: _regionCliente != null && _regionCliente!.isNotEmpty,
                         ),
                         hint: Text(
                           _regionCliente != null && _regionCliente!.isNotEmpty
-                              ? 'Seleccione Comuna...'
+                              ? 'Seleccione comuna...'
                               : 'Seleccione región primero',
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: _regionCliente != null && _regionCliente!.isNotEmpty
-                                ? null
-                                : AppPalette.neutral.withValues(alpha: 0.6),
+                                ? const Color(0xFF94A3B8)
+                                : const Color(0xFF64748B),
+                            fontSize: 13,
                           ),
                         ),
                         items: (_regionCliente != null && _regionCliente!.isNotEmpty)
                             ? ChileGeografia.obtenerComunas(_regionCliente).map((c) => DropdownMenuItem(
                                 value: c,
-                                child: Text(c, overflow: TextOverflow.ellipsis),
+                                child: Text(
+                                  c,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                                ),
                               )).toList()
                             : const [],
                         onChanged: (_regionCliente != null && _regionCliente!.isNotEmpty)
@@ -1520,8 +1514,12 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: _direccionController,
-                      style: AppTypography.body,
-                      decoration: _inputDeco('Dirección de entrega (Calle, Número, Depto) *', Icons.home_outlined),
+                      style: AppTypography.body.copyWith(color: Colors.white),
+                      decoration: _inputDeco(
+                        label: 'Dirección de Entrega *',
+                        hint: 'Ej: Av. Libertad 1234, Depto 402',
+                        icon: Icons.home_outlined,
+                      ),
                       onChanged: (val) {
                         setState(() {});
                         _actualizarDatosDespachoLocal();
@@ -1535,12 +1533,25 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                             isExpanded: true,
                             value: _regionDespacho,
                             dropdownColor: AppPalette.surface,
-                            style: AppTypography.body,
-                            decoration: _inputDeco('Región Destino *', Icons.map_outlined),
-                            hint: const Text('Seleccione Región...', overflow: TextOverflow.ellipsis),
+                            style: const TextStyle(color: Colors.white, fontSize: 13),
+                            icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF94A3B8)),
+                            decoration: _inputDeco(
+                              label: 'Región Destino *',
+                              hint: 'Seleccione región...',
+                              icon: Icons.map_outlined,
+                            ),
+                            hint: const Text(
+                              'Seleccione región...',
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                            ),
                             items: ChileGeografia.regiones.map((r) => DropdownMenuItem(
                               value: r,
-                              child: Text(r, overflow: TextOverflow.ellipsis),
+                              child: Text(
+                                r,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(color: Colors.white, fontSize: 13),
+                              ),
                             )).toList(),
                             onChanged: (val) {
                               setState(() {
@@ -1559,25 +1570,35 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                                 ? _comunaDespacho
                                 : null,
                             dropdownColor: AppPalette.surface,
-                            style: AppTypography.body,
-                            decoration: _inputDeco('Comuna Destino *', Icons.map).copyWith(
+                            style: const TextStyle(color: Colors.white, fontSize: 13),
+                            icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF94A3B8)),
+                            decoration: _inputDeco(
+                              label: 'Comuna Destino *',
+                              hint: 'Seleccione comuna...',
+                              icon: Icons.location_city,
+                            ).copyWith(
                               enabled: _regionDespacho != null && _regionDespacho!.isNotEmpty,
                             ),
                             hint: Text(
                               _regionDespacho != null && _regionDespacho!.isNotEmpty
-                                  ? 'Seleccione Comuna...'
+                                  ? 'Seleccione comuna...'
                                   : 'Seleccione región primero',
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: _regionDespacho != null && _regionDespacho!.isNotEmpty
-                                    ? null
-                                    : AppPalette.neutral.withValues(alpha: 0.6),
+                                    ? const Color(0xFF94A3B8)
+                                    : const Color(0xFF64748B),
+                                fontSize: 13,
                               ),
                             ),
                             items: (_regionDespacho != null && _regionDespacho!.isNotEmpty)
                                 ? ChileGeografia.obtenerComunas(_regionDespacho).map((c) => DropdownMenuItem(
                                     value: c,
-                                    child: Text(c, overflow: TextOverflow.ellipsis),
+                                    child: Text(
+                                      c,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                                    ),
                                   )).toList()
                                 : const [],
                             onChanged: (_regionDespacho != null && _regionDespacho!.isNotEmpty)
@@ -1593,8 +1614,12 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                     const SizedBox(height: 10),
                     TextField(
                       controller: _empresaTransporteController,
-                      style: AppTypography.body,
-                      decoration: _inputDeco('Empresa de Transporte *', Icons.local_shipping),
+                      style: AppTypography.body.copyWith(color: Colors.white),
+                      decoration: _inputDeco(
+                        label: 'Empresa de Transporte *',
+                        hint: 'Ej: Starken, Chilexpress, Correos',
+                        icon: Icons.local_shipping,
+                      ),
                       onChanged: (val) {
                         setState(() {});
                         _actualizarDatosDespachoLocal();
@@ -1604,11 +1629,12 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                     TextField(
                       key: const Key('input_receptor_rut'),
                       controller: _receptorRutController,
-                      style: AppTypography.body,
+                      style: AppTypography.body.copyWith(color: Colors.white),
                       inputFormatters: [RutFormatter()],
                       decoration: _inputDeco(
-                        'RUT Receptor *',
-                        Icons.badge,
+                        label: 'RUT Receptor *',
+                        hint: 'Ej: 15.678.901-2',
+                        icon: Icons.badge,
                         errorText: receptorRutError,
                       ),
                       onChanged: (val) {
@@ -1619,8 +1645,12 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                     const SizedBox(height: 10),
                     TextField(
                       controller: _receptorNombresController,
-                      style: AppTypography.body,
-                      decoration: _inputDeco('Nombre Receptor *', Icons.person),
+                      style: AppTypography.body.copyWith(color: Colors.white),
+                      decoration: _inputDeco(
+                        label: 'Nombre Receptor *',
+                        hint: 'Ej: María González',
+                        icon: Icons.person,
+                      ),
                       onChanged: (val) {
                         setState(() {});
                         _actualizarDatosDespachoLocal();
@@ -1630,8 +1660,12 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                     TextField(
                       controller: _receptorTelefonoController,
                       keyboardType: TextInputType.phone,
-                      style: AppTypography.body,
-                      decoration: _inputDeco('Teléfono Receptor *', Icons.phone),
+                      style: AppTypography.body.copyWith(color: Colors.white),
+                      decoration: _inputDeco(
+                        label: 'Teléfono Receptor *',
+                        hint: 'Ej: +56 9 8765 4321',
+                        icon: Icons.phone,
+                      ),
                       onChanged: (val) {
                         setState(() {});
                         _actualizarDatosDespachoLocal();
@@ -1679,8 +1713,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                   isExpanded: true,
                   value: _idSucursalDestino,
                   dropdownColor: AppPalette.surface,
-                  style: AppTypography.body,
-                  decoration: _inputDeco('Sucursal de Destino *', Icons.swap_horiz),
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF94A3B8)),
+                  decoration: _inputDeco(label: 'Sucursal Destino *', icon: Icons.swap_horiz),
                   items: [
                     DropdownMenuItem(
                       value: 1,
@@ -1692,7 +1727,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                         style: TextStyle(
                           color: _idSucursalActual == 1
                               ? AppPalette.textSecondary.withValues(alpha: 0.4)
-                              : AppPalette.textPrimary,
+                              : Colors.white,
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1707,7 +1742,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                         style: TextStyle(
                           color: _idSucursalActual == 2
                               ? AppPalette.textSecondary.withValues(alpha: 0.4)
-                              : AppPalette.textPrimary,
+                              : Colors.white,
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1729,15 +1764,23 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                 const SizedBox(height: 10),
                 TextField(
                   controller: _receptorRutController,
-                  style: AppTypography.body,
-                  decoration: _inputDeco('RUT quien retira en destino (Opcional)', Icons.badge),
+                  style: AppTypography.body.copyWith(color: Colors.white),
+                  decoration: _inputDeco(
+                    label: 'RUT quien retira en destino (Opcional)',
+                    hint: 'Ej: 12.345.678-9',
+                    icon: Icons.badge,
+                  ),
                   onChanged: (val) => _actualizarDatosDespachoLocal(),
                 ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: _receptorNombresController,
-                  style: AppTypography.body,
-                  decoration: _inputDeco('Nombre quien retira (Opcional)', Icons.person),
+                  style: AppTypography.body.copyWith(color: Colors.white),
+                  decoration: _inputDeco(
+                    label: 'Nombre quien retira (Opcional)',
+                    hint: 'Ej: Pedro Soto',
+                    icon: Icons.person,
+                  ),
                   onChanged: (val) => _actualizarDatosDespachoLocal(),
                 ),
               ],
@@ -1877,8 +1920,12 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                 controller: _descuentoController,
                 keyboardType: TextInputType.number,
                 inputFormatters: [MilesTextInputFormatter()],
-                style: AppTypography.body,
-                decoration: _inputDeco('Ej: 50.000 (Monto a descontar del total)', Icons.local_offer_outlined),
+                style: AppTypography.body.copyWith(color: Colors.white),
+                decoration: _inputDeco(
+                  label: 'Descuento por Vale a Favor (\$) (Opcional)',
+                  hint: 'Ej: 50.000',
+                  icon: Icons.local_offer_outlined,
+                ),
                 onChanged: (val) {
                   final desc = CurrencyFormatter.parse(val);
                   _controller.setDescuento(desc);
@@ -1903,14 +1950,24 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Monto de Abono / Anticipo Inicial (\$):', style: AppTypography.small.copyWith(fontWeight: FontWeight.bold)),
+              Row(
+                children: [
+                  const Icon(Icons.payments_outlined, size: 16, color: AppPalette.primary),
+                  const SizedBox(width: 6),
+                  Text('Abono / Anticipo Inicial (\$):', style: AppTypography.small.copyWith(fontWeight: FontWeight.bold)),
+                ],
+              ),
               const SizedBox(height: 6),
               TextField(
                 controller: _montoAbonoController,
                 keyboardType: TextInputType.number,
                 inputFormatters: [MilesTextInputFormatter()],
-                style: AppTypography.body,
-                decoration: _inputDeco('Ej: 50.000 (Dejar vacío o 0 para pagar total en caja)', Icons.payments_outlined),
+                style: AppTypography.body.copyWith(color: Colors.white),
+                decoration: _inputDeco(
+                  label: 'Monto de Abono / Anticipo (\$) (Opcional)',
+                  hint: 'Ej: 50.000 (0 para pagar total en caja)',
+                  icon: Icons.payments_outlined,
+                ),
                 onChanged: (val) {
                   final ab = CurrencyFormatter.parse(val);
                   _controller.setAbonoAdicional(ab);
@@ -2183,11 +2240,32 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     VentaLibreDialog.show(context);
   }
 
-  InputDecoration _inputDeco(String hint, IconData icon, {Widget? suffix, String? errorText}) {
+  InputDecoration _inputDeco({
+    required String label,
+    String? hint,
+    required IconData icon,
+    Widget? suffix,
+    String? errorText,
+  }) {
     return InputDecoration(
       isDense: true,
+      labelText: label,
+      labelStyle: const TextStyle(
+        color: Color(0xFF94A3B8),
+        fontSize: 13,
+        fontWeight: FontWeight.w500,
+      ),
+      floatingLabelStyle: const TextStyle(
+        color: AppPalette.primary,
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+      ),
+      floatingLabelBehavior: FloatingLabelBehavior.always,
       hintText: hint,
-      hintStyle: AppTypography.small.copyWith(color: AppPalette.textSecondary, fontSize: 13),
+      hintStyle: const TextStyle(
+        color: Color(0xFF64748B),
+        fontSize: 13,
+      ),
       prefixIcon: Icon(icon, color: AppPalette.primary, size: 18),
       prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 36),
       suffixIcon: suffix,
@@ -2195,7 +2273,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
       errorStyle: const TextStyle(color: AppPalette.error, fontSize: 11, fontWeight: FontWeight.bold),
       filled: true,
       fillColor: AppPalette.background,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white24)),
       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white24)),
       errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppPalette.error, width: 1.5)),
