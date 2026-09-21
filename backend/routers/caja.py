@@ -682,24 +682,14 @@ def registrar_cobro(
                                 act.fecha_actualizacion = now_utc
                 else:
                     # Sin activos inventariados ni backorder (Solo misceláneos / servicios)
-                    despacho_pendiente = db.query(Despacho).filter(
-                        Despacho.id_orden == orden.id_orden,
-                        Despacho.estado_despacho == "Por Enviar"
-                    ).first()
-
                     detalles_orden = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == orden.id_orden).all()
                     for d in detalles_orden:
                         d.estado_preparacion = "Listo"
                         d.fecha_preparacion = now_utc
 
-                    if despacho_pendiente:
-                        orden.estado_orden = "Pagada"
-                        qr_hash = None
-                        orden.qr_transaccional_salida = None
-                    else:
-                        orden.estado_orden = "Completada"
-                        qr_hash = None
-                        orden.qr_transaccional_salida = None
+                    orden.estado_orden = "Completada"
+                    qr_hash = None
+                    orden.qr_transaccional_salida = None
             else:
                 orden.estado_orden = "Reservada"
                 orden.qr_transaccional_salida = None

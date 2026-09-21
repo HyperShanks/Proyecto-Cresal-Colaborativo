@@ -345,7 +345,7 @@ class Despacho(Base):
     receptor_telefono = Column(String(20), nullable=False)
     empresa_transporte = Column(String(100), nullable=True)
     costo_envio = Column(Integer, nullable=True)
-    estado_despacho = Column(String(30), nullable=False, server_default="Por Enviar")
+    estado_despacho = Column(String(30), nullable=False, server_default="Enviado")
     estado = Column(String(20), nullable=False, server_default="Activo")
     fecha_creacion = Column(DateTime, nullable=False, server_default=text("now()"))
     fecha_actualizacion = Column(DateTime, nullable=True)

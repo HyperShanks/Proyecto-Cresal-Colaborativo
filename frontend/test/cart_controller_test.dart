@@ -223,7 +223,7 @@ void main() {
         ),
       );
 
-      expect(find.text('Venta Libre / Misceláneo'), findsOneWidget);
+      expect(find.text('Venta Libre'), findsOneWidget);
       expect(find.text('DESCRIPCIÓN DEL ARTÍCULO / SERVICIO *'), findsOneWidget);
       expect(find.text('MONTO UNITARIO (CLP) *'), findsOneWidget);
       expect(find.text('CANTIDAD'), findsOneWidget);

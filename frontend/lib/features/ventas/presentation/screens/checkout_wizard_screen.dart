@@ -14,6 +14,7 @@ import '../../services/ordenes_service.dart';
 import '../../services/ordenes_sync_notifier.dart';
 import '../widgets/modal_backorder_form.dart';
 import '../widgets/cart_item_tile.dart';
+import '../widgets/venta_libre_dialog.dart';
 import '../../../../core/constants/chile_geografia.dart';
 import 'catalogo_screen.dart';
 
@@ -757,14 +758,14 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
-                icon: const Icon(Icons.edit_note, size: 20),
+                icon: const Icon(Icons.add_shopping_cart, size: 20),
                 label: const Text(
-                  '+ Ítem Manual',
+                  'Venta libre',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                onPressed: _abrirDialogoItemManual,
+                onPressed: () => VentaLibreDialog.show(context),
               ),
             ),
           ],
@@ -1898,6 +1899,10 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
   }
 
   Widget _buildBottomNavigationButtons() {
+    if (_controller.currentStep == 0 && _controller.totalItemsCount == 0) {
+      return const SizedBox.shrink();
+    }
+
     final bool puedeAvanzar;
     if (_controller.currentStep == 0) {
       puedeAvanzar = _controller.totalItemsCount > 0 &&
@@ -2000,45 +2005,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
   }
 
   void _abrirDialogoItemManual() {
-    final descCtrl = TextEditingController();
-    final cantCtrl = TextEditingController();
-    final precioCtrl = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppPalette.surface,
-        title: Text('Añadir Ítem Manual', style: AppTypography.title.copyWith(fontSize: 16)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: descCtrl, style: AppTypography.body, decoration: _inputDeco('Descripción del ítem', Icons.edit)),
-            const SizedBox(height: 10),
-            TextField(controller: cantCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], style: AppTypography.body, decoration: _inputDeco('Cantidad', Icons.numbers)),
-            const SizedBox(height: 10),
-            TextField(controller: precioCtrl, keyboardType: TextInputType.number, inputFormatters: [MilesTextInputFormatter()], style: AppTypography.body, decoration: _inputDeco('Precio Unitario (\$)', Icons.attach_money)),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancelar')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppPalette.secondary, foregroundColor: AppPalette.background),
-            onPressed: () {
-              final desc = descCtrl.text.trim();
-              final cantParsed = int.tryParse(cantCtrl.text.trim());
-              final cant = (cantParsed != null && cantParsed > 0) ? cantParsed : 1;
-              final precio = CurrencyFormatter.parse(precioCtrl.text.trim());
-              if (desc.isNotEmpty && precio > 0) {
-                _controller.addItemManual(ItemManualModel(descripcion: desc, cantidad: cant, precioUnitario: precio, precioFinal: precio * cant));
-                CartController.instance.agregarVentaLibre(descripcion: desc, monto: precio, cantidad: cant);
-                Navigator.of(ctx).pop();
-              }
-            },
-            child: const Text('Añadir'),
-          ),
-        ],
-      ),
-    );
+    VentaLibreDialog.show(context);
   }
 
   InputDecoration _inputDeco(String hint, IconData icon, {Widget? suffix, String? errorText}) {

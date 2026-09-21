@@ -317,7 +317,7 @@ def crear_orden(
                 receptor_telefono=rec_tel,
                 empresa_transporte=desp_obj.empresa_transporte,
                 costo_envio=desp_obj.costo_envio or 0,
-                estado_despacho="Por Enviar",
+                estado_despacho="Enviado",
                 estado="Activo"
             )
             db.add(despacho)
@@ -1886,12 +1886,8 @@ def pagar_orden(
                     d.estado_preparacion = "Listo"
                     d.fecha_preparacion = now_utc
 
-                if despacho_pendiente:
-                    orden.estado_orden = "Pagada"
-                    print("ℹ️ [PAGO] Orden pagada sin activos físicos (misceláneos en espera de despacho courier).")
-                else:
-                    orden.estado_orden = "Completada"
-                    print("✅ [PAGO] Orden de solo misceláneos saldada en mesón: completada automáticamente.")
+                orden.estado_orden = "Completada"
+                print("✅ [PAGO] Orden de solo misceláneos saldada: completada automáticamente.")
         else:
             orden.estado_orden = "Reservada"
             orden.qr_transaccional_salida = None
@@ -2681,7 +2677,7 @@ def checkout_wizard(
                 receptor_telefono=d_data.receptor_telefono.strip(),
                 empresa_transporte=d_data.empresa_transporte or "Chilexpress",
                 costo_envio=0,
-                estado_despacho="Por Enviar",
+                estado_despacho="Enviado",
                 estado="Activo",
                 fecha_creacion=datetime.now(timezone.utc)
             )
@@ -2704,7 +2700,7 @@ def checkout_wizard(
                 receptor_telefono=rec_tel,
                 empresa_transporte="Interno",
                 costo_envio=0,
-                estado_despacho="Por Enviar",
+                estado_despacho="Enviado",
                 estado="Activo",
                 fecha_creacion=datetime.now(timezone.utc)
             )

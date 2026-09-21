@@ -219,12 +219,6 @@ class CheckoutWizardController extends ChangeNotifier {
         list.add('${i['descripcion']} (${i['sku']}): $n');
       }
     }
-    for (final m in _itemsManuales) {
-      final n = m.notasPreparacion?.trim();
-      if (n != null && n.isNotEmpty) {
-        list.add('${m.descripcion}: $n');
-      }
-    }
     for (final r in _reservas) {
       final n = r.notasPreparacion?.trim();
       if (n != null && n.isNotEmpty) {

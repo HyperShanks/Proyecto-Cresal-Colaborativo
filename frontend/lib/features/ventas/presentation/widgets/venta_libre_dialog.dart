@@ -29,14 +29,12 @@ class _VentaLibreDialogState extends State<VentaLibreDialog> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _descController = TextEditingController();
   final TextEditingController _montoController = TextEditingController();
-  final TextEditingController _notasController = TextEditingController();
   int _cantidad = 1;
 
   @override
   void dispose() {
     _descController.dispose();
     _montoController.dispose();
-    _notasController.dispose();
     super.dispose();
   }
 
@@ -76,9 +74,6 @@ class _VentaLibreDialogState extends State<VentaLibreDialog> {
       descripcion: _descController.text.trim(),
       monto: monto,
       cantidad: _cantidad,
-      observacion: _notasController.text.trim().isNotEmpty
-          ? _notasController.text.trim()
-          : null,
     );
 
     Navigator.of(context).pop();
@@ -154,7 +149,7 @@ class _VentaLibreDialogState extends State<VentaLibreDialog> {
                       ),
                       const SizedBox(width: 10),
                       Text(
-                        'Venta Libre / Misceláneo',
+                        'Venta Libre',
                         style: AppTypography.title.copyWith(fontSize: 16),
                       ),
                     ],
@@ -186,13 +181,15 @@ class _VentaLibreDialogState extends State<VentaLibreDialog> {
               TextFormField(
                 controller: _descController,
                 textCapitalization: TextCapitalization.sentences,
+                minLines: 2,
+                maxLines: 3,
                 style: AppTypography.body.copyWith(color: AppPalette.textPrimary),
                 decoration: InputDecoration(
                   hintText: 'Ej. Perno culata especial, Mano de obra, etc.',
                   hintStyle: AppTypography.small.copyWith(color: AppPalette.neutral),
                   filled: true,
                   fillColor: AppPalette.background,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                     borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
@@ -339,44 +336,6 @@ class _VentaLibreDialogState extends State<VentaLibreDialog> {
                     ),
                   ),
                 ],
-              ),
-              const SizedBox(height: 14),
-
-              // ── Campo: Observaciones / Notas Opcionales ───────────────────
-              Text(
-                'NOTAS / OBSERVACIONES (OPCIONAL)',
-                style: AppTypography.small.copyWith(
-                  fontSize: 11,
-                  letterSpacing: 0.8,
-                  fontWeight: FontWeight.bold,
-                  color: AppPalette.textSecondary,
-                ),
-              ),
-              const SizedBox(height: 6),
-              TextFormField(
-                controller: _notasController,
-                textCapitalization: TextCapitalization.sentences,
-                style: AppTypography.small.copyWith(color: AppPalette.textPrimary),
-                maxLines: 2,
-                decoration: InputDecoration(
-                  hintText: 'Detalles para la preparación o factura...',
-                  hintStyle: AppTypography.small.copyWith(color: AppPalette.neutral),
-                  filled: true,
-                  fillColor: AppPalette.background,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: AppPalette.primary, width: 1.5),
-                  ),
-                ),
               ),
               const SizedBox(height: 20),
 

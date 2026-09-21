@@ -264,8 +264,10 @@ class _CartItemTileState extends State<CartItemTile> {
               overflow: TextOverflow.ellipsis,
             ),
 
-            // ── Fila de Notas de Preparación / Observación ───────────────────
-            _buildNotasRow(context),
+            // ── Fila de Notas de Preparación (Solo aplica a ítems inventariados) ─────
+            if (widget.item is InventariadoCartItem) ...[
+              _buildNotasRow(context),
+            ],
 
             const SizedBox(height: 12),
             const Divider(color: Colors.white10, height: 1),

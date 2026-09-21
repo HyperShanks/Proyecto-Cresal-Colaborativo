@@ -356,7 +356,6 @@ void main() {
 
       // Verificación de Información Completa de Despacho
       expect(find.text('Datos de Despacho'), findsOneWidget);
-      expect(find.text('Por Enviar'), findsWidgets);
       expect(find.text('Despacho: Calle Los Aromos 555 • Villa Alemana'), findsOneWidget);
       expect(find.text('Receptor: Pedro Pascal (22.222.222-2)'), findsOneWidget);
       expect(find.text('Tel: +56922222222 • Transporte: Chilexpress'), findsOneWidget);
@@ -375,7 +374,7 @@ void main() {
       expect(find.text('...'), findsOneWidget);
     });
 
-    testWidgets('Tap en badge de despacho en OrdenCard abre diálogo para cambiar estado sin alterar orden', (tester) async {
+    testWidgets('OrdenCard no muestra botón interactivo de despacho Por Enviar', (tester) async {
       final ordenDespacho = OrdenHistorialModel(
         idOrden: 'ord-888',
         folio: 'ORD-DESP-888',
@@ -393,7 +392,7 @@ void main() {
           receptorRut: '11.111.111-1',
           receptorTelefono: '+56911111111',
           empresaTransporte: 'Starken',
-          estadoDespacho: 'Por Enviar',
+          estadoDespacho: 'Enviado',
         ),
       );
 
@@ -405,23 +404,9 @@ void main() {
         ),
       );
 
-      expect(find.text('Por Enviar'), findsOneWidget);
-
-      // Tap en el badge interactivo de despacho
-      await tester.tap(find.text('Por Enviar'));
-      await tester.pumpAndSettle();
-
-      // Debe desplegar diálogo de confirmación
-      expect(find.text('Estado de Despacho'), findsOneWidget);
-      expect(find.textContaining('¿Deseas cambiar el estado de despacho a "Enviado"?'), findsOneWidget);
-      expect(find.textContaining('no altera el estado de la orden (Pagada)'), findsOneWidget);
-      expect(find.text('CAMBIAR A Enviado'), findsOneWidget);
-      expect(find.text('CANCELAR'), findsOneWidget);
-
-      // Cancelar diálogo
-      await tester.tap(find.text('CANCELAR'));
-      await tester.pumpAndSettle();
-      expect(find.text('Estado de Despacho'), findsNothing);
+      expect(find.text('Datos de Despacho'), findsOneWidget);
+      expect(find.text('Por Enviar'), findsNothing);
+      expect(find.byIcon(Icons.sync_alt_rounded), findsNothing);
     });
   });
 

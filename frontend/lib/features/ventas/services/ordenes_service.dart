@@ -216,7 +216,7 @@ class DespachoOrdenResumenModel {
       receptorTelefono: json['receptor_telefono']?.toString() ?? '',
       empresaTransporte: json['empresa_transporte']?.toString(),
       costoEnvio: json['costo_envio'] as int? ?? 0,
-      estadoDespacho: json['estado_despacho']?.toString() ?? 'Por Enviar',
+      estadoDespacho: json['estado_despacho']?.toString() ?? 'Enviado',
       comunaDestino: json['comuna_destino']?.toString(),
     );
   }

@@ -275,10 +275,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Checkout Transaccional'), findsOneWidget);
-      expect(find.text('Ítems & Reservas'), findsOneWidget);
-      expect(find.text('Cliente CRM'), findsOneWidget);
-      expect(find.text('Siguiente'), findsOneWidget);
+      expect(find.text('Ítems'), findsOneWidget);
+      expect(find.text('Cliente'), findsOneWidget);
       expect(find.text('Venta en Verde'), findsOneWidget);
+      expect(find.text('Venta libre'), findsOneWidget);
+      expect(find.text('Siguiente'), findsNothing);
     });
 
     testWidgets('CheckoutWizardScreen permite activar Consumidor Final y avanzar de paso', (tester) async {
@@ -314,7 +315,7 @@ void main() {
       expect(find.text('Traslado Sucursal'), findsOneWidget);
     });
 
-    testWidgets('CheckoutWizardScreen diálogo ítem manual no precarga el número 1 y muestra placeholder Cantidad', (tester) async {
+    testWidgets('CheckoutWizardScreen botón Venta libre abre VentaLibreDialog, agrega ítem y oculta botón Siguiente si está vacío', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: CheckoutWizardScreen(),
@@ -322,28 +323,36 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Abrir diálogo Ítem Manual
-      await tester.tap(find.text('+ Ítem Manual'));
+      // Cuando el carrito está vacío, el botón Siguiente NO aparece en pantalla
+      expect(find.byKey(const Key('btn_siguiente_wizard')), findsNothing);
+
+      // Abrir modal Venta libre
+      await tester.tap(find.text('Venta libre'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Añadir Ítem Manual'), findsOneWidget);
-      expect(find.text('Descripción del ítem'), findsOneWidget);
-      expect(find.text('Cantidad'), findsOneWidget);
-      expect(find.text('Precio Unitario (\$)'), findsOneWidget);
+      expect(find.text('Venta Libre'), findsOneWidget);
+      expect(find.text('DESCRIPCIÓN DEL ARTÍCULO / SERVICIO *'), findsOneWidget);
+      expect(find.text('MONTO UNITARIO (CLP) *'), findsOneWidget);
+      expect(find.text('CANTIDAD'), findsOneWidget);
+      expect(find.text('Agregar al Carrito'), findsOneWidget);
 
-      // Verificar que el campo de cantidad no tiene '1' precargado como texto
-      final textFields = tester.widgetList<TextField>(find.byType(TextField)).toList();
-      expect(textFields.length, equals(3));
-      expect(textFields[1].controller?.text, isEmpty);
-
-      // Ingresar ítem manual sin escribir cantidad (toma 1 por defecto)
-      await tester.enterText(find.byWidget(textFields[0]), 'Aceite Motor 1L');
-      await tester.enterText(find.byWidget(textFields[2]), '15000');
-      await tester.tap(find.text('Añadir'));
+      // Ingresar ítem de venta libre
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Ej. Perno culata especial, Mano de obra, etc.'),
+        'Aceite Motor 1L',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, '0'),
+        '15000',
+      );
+      await tester.tap(find.text('Agregar al Carrito'));
       await tester.pumpAndSettle();
 
       expect(find.text('Aceite Motor 1L'), findsOneWidget);
       expect(find.textContaining('Cantidad: 1'), findsOneWidget);
+
+      // Ahora que hay un artículo, el botón Siguiente aparece
+      expect(find.byKey(const Key('btn_siguiente_wizard')), findsOneWidget);
     });
 
     testWidgets('CheckoutWizardScreen Paso 3 Despacho Domicilio sincroniza datos y avanza a Paso 4 sin error', (tester) async {

@@ -499,14 +499,6 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _onVentaRapida,
-        backgroundColor: AppPalette.secondary,
-        foregroundColor: AppPalette.background,
-        elevation: 0,
-        shape: const CircleBorder(),
-        child: const Icon(Icons.add, color: AppPalette.background, size: 28),
-      ),
       body: SafeArea(
         child: Column(
           children: [
