@@ -80,7 +80,14 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     campos_invalidos: List[str] = []
     for err in exc.errors():
         loc = err.get("loc", ())
-        campo = str(loc[-1]) if loc else "campo desconocido"
+        if loc:
+            if isinstance(loc[-1], int) and len(loc) > 1:
+                campo = f"{loc[-2]}[{loc[-1]}]"
+            else:
+                campo = str(loc[-1])
+        else:
+            campo = "campo desconocido"
+
         tipo = err.get("type", "")
         if "missing" in tipo:
             campos_invalidos.append(f"El campo '{campo}' es obligatorio.")
