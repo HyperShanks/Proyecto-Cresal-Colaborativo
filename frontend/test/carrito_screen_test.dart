@@ -169,7 +169,8 @@ void main() {
       );
       expect(find.text('SELECCIONA SUCURSAL DESTINO *'), findsOneWidget);
       expect(find.text('Sucursal de Destino'), findsOneWidget);
-      expect(find.text('Viña del Mar'), findsWidgets);
+      expect(find.textContaining('Viña del Mar'), findsWidgets);
+      expect(find.text('Limache'), findsWidgets);
     });
 
     testWidgets('Edición in-line de precio recalcula subtotal y total en tiempo real', (tester) async {

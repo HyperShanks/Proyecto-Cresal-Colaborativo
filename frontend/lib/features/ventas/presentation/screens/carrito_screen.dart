@@ -62,7 +62,8 @@ class _CarritoScreenState extends State<CarritoScreen> {
   String? _regionDespacho;
   String? _comunaDespacho;
   String _tipoEntrega = 'Retiro'; // 'Retiro', 'Despacho', 'Traslado'
-  int _idSucursalDestino = 1; // 1: Viña del Mar, 2: Limache
+  int _idSucursalActual = 1; // 1: Viña del Mar, 2: Limache
+  int _idSucursalDestino = 2; // 1: Viña del Mar, 2: Limache
   bool get _requiereDespacho => _tipoEntrega != 'Retiro';
   bool _isSubmitting = false;
   bool _isSearchingClient = false;
@@ -97,9 +98,14 @@ class _CarritoScreenState extends State<CarritoScreen> {
   Future<void> _cargarVendedores() async {
     try {
       final rolId = await AuthService.getIdRol();
+      final sucursalId = await AuthService.getSucursalId();
       if (mounted) {
         setState(() {
           _userRolId = rolId;
+          if (sucursalId != null && (sucursalId == 1 || sucursalId == 2)) {
+            _idSucursalActual = sucursalId;
+            _idSucursalDestino = (_idSucursalActual == 1) ? 2 : 1;
+          }
         });
       }
       if (_esVendedorOnline) {
@@ -346,7 +352,7 @@ class _CarritoScreenState extends State<CarritoScreen> {
       _regionDespacho = null;
       _comunaDespacho = null;
       _tipoEntrega = 'Retiro';
-      _idSucursalDestino = 1;
+      _idSucursalDestino = (_idSucursalActual == 1 ? 2 : 1);
     });
   }
 
@@ -1438,12 +1444,32 @@ class _CarritoScreenState extends State<CarritoScreen> {
                             ),
                           ],
                         ),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: AppPalette.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: AppPalette.primary.withValues(alpha: 0.3)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.storefront_outlined, size: 16, color: AppPalette.primary),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Sucursal actual (Origen): ${_idSucursalActual == 1 ? "Viña del Mar" : "Limache"}',
+                                style: AppTypography.small.copyWith(color: AppPalette.primary, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        ),
                         const SizedBox(height: 10),
                         _buildDropdown(
                           label: 'Sucursal de Destino',
                           value: _idSucursalDestino == 1 ? 'Viña del Mar' : 'Limache',
                           hint: 'Seleccionar sucursal de destino',
-                          items: const ['Viña del Mar', 'Limache'],
+                          items: [_idSucursalActual == 1 ? 'Limache' : 'Viña del Mar'],
                           onChanged: (val) {
                             if (val != null) {
                               setState(() {
@@ -1454,7 +1480,7 @@ class _CarritoScreenState extends State<CarritoScreen> {
                         ),
                         const SizedBox(height: 10),
                         Text(
-                          'ℹ️ Se generará la tarea de traslado logístico asignada a bodega para el envío a ${_idSucursalDestino == 1 ? "Viña del Mar" : "Limache"}.',
+                          'ℹ️ Se generará la tarea de traslado logístico asignada a bodega para el envío desde ${_idSucursalActual == 1 ? "Viña del Mar" : "Limache"} hacia ${_idSucursalDestino == 1 ? "Viña del Mar" : "Limache"}.',
                           style: AppTypography.small.copyWith(
                             color: AppPalette.textSecondary,
                             fontSize: 12,
@@ -1595,6 +1621,11 @@ class _CarritoScreenState extends State<CarritoScreen> {
           onTap: () {
             setState(() {
               _tipoEntrega = value;
+              if (value == 'Traslado') {
+                if (_idSucursalDestino == _idSucursalActual) {
+                  _idSucursalDestino = (_idSucursalActual == 1 ? 2 : 1);
+                }
+              }
             });
           },
           borderRadius: BorderRadius.circular(10),

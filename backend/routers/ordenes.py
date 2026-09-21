@@ -2468,10 +2468,23 @@ def checkout_wizard(
                 detail="Los campos de dirección, receptor y RUT son obligatorios para el despacho."
             )
 
+    sucursal_id = current_user.id_sucursal or 1
+    if es_traslado:
+        id_suc_dest = request.id_sucursal_destino or (request.datos_despacho.id_sucursal_destino if request.datos_despacho else (2 if sucursal_id == 1 else 1))
+        if id_suc_dest not in [1, 2]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="La sucursal de destino no es válida para traslados inter-sucursal (permitidas: 1 Viña del Mar, 2 Limache)."
+            )
+        if id_suc_dest == sucursal_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="La sucursal de origen y destino no pueden ser iguales para un traslado."
+            )
+
     try:
         # A. Crear Cabecera de Orden de Venta
         id_orden = uuid.uuid4()
-        sucursal_id = current_user.id_sucursal or 1
         vendedor_asig = request.id_vendedor_asignado or current_user.id_usuario
 
         abono_req_val = request.monto_abono or 0
@@ -2509,6 +2522,12 @@ def checkout_wizard(
                 act_id = item_inv
                 precio_final_custom = None
                 notas_prep = request.instrucciones_bodega
+
+            if isinstance(act_id, str):
+                try:
+                    act_id = uuid.UUID(act_id)
+                except Exception:
+                    pass
 
             activo = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == act_id).first()
             if not activo:
@@ -2684,7 +2703,18 @@ def checkout_wizard(
             db.add(despacho)
             despacho_generado = True
         elif es_traslado:
-            id_suc_dest = request.id_sucursal_destino or (request.datos_despacho.id_sucursal_destino if request.datos_despacho else 2)
+            id_suc_dest = request.id_sucursal_destino or (request.datos_despacho.id_sucursal_destino if request.datos_despacho else (2 if sucursal_id == 1 else 1))
+            if id_suc_dest not in [1, 2]:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="La sucursal de destino no es válida para traslados inter-sucursal (permitidas: 1 Viña del Mar, 2 Limache)."
+                )
+            if id_suc_dest == sucursal_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="La sucursal de origen y destino no pueden ser iguales para un traslado."
+                )
+
             nombre_dest = "Viña del Mar" if id_suc_dest == 1 else "Limache"
             rec_rut = (request.datos_despacho.receptor_rut if request.datos_despacho and request.datos_despacho.receptor_rut else cliente.rut_cliente) or "S/R"
             rec_nom = (request.datos_despacho.receptor_nombres if request.datos_despacho and request.datos_despacho.receptor_nombres else f"{cliente.nombres} {cliente.apellidos}".strip()) or "Cliente"
@@ -2708,9 +2738,25 @@ def checkout_wizard(
             despacho_generado = True
 
             # Registrar Tracking_Logistico para cada activo inventariado involucrado en el traslado
-            for act_id in (request.items_inventariados or []):
+            for item_inv in (request.items_inventariados or []):
+                if isinstance(item_inv, dict):
+                    act_id = item_inv.get("id_activo") or item_inv.get("id")
+                elif hasattr(item_inv, "id_activo"):
+                    act_id = getattr(item_inv, "id_activo")
+                else:
+                    act_id = item_inv
+
+                if not act_id:
+                    continue
+
+                if isinstance(act_id, str):
+                    try:
+                        act_id = uuid.UUID(act_id)
+                    except Exception:
+                        pass
+
                 act_item = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == act_id).first()
-                if act_item:
+                if act_item and act_item.id_sucursal_actual != id_suc_dest:
                     tracking = Tracking_Logistico(
                         id_activo=act_item.id_activo,
                         id_sucursal_origen=act_item.id_sucursal_actual,

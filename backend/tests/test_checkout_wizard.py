@@ -232,7 +232,7 @@ def test_checkout_wizard_flujo_completo_hibrido(client, wizard_db, auth_vendedor
     }
 
     response = client.post("/api/v1/ordenes/checkout-wizard", json=payload, headers=auth_vendedor_wiz)
-    assert response.status_code == 201
+    assert response.status_code == 201, response.text
 
     data = response.json()
     assert "id_orden" in data
@@ -396,3 +396,74 @@ def test_checkout_wizard_bloqueo_rbac_bodeguero_y_cajera(client, wizard_db, auth
     # Caja -> 403
     res_caja = client.post("/api/v1/ordenes/checkout-wizard", json=payload, headers=auth_caja_wiz)
     assert res_caja.status_code == 403
+
+
+# ── TEST 7: Traslado con ítems en formato dict y Tracking_Logistico ───────────
+def test_checkout_wizard_traslado_con_dict_items(client, wizard_db, auth_vendedor_wiz):
+    """Verifica que items_inventariados con dicts {'id_activo': ..., 'precio_final': ...} no fallen con psycopg2 dict error."""
+    db = TestingSessionLocal()
+    try:
+        act_id = uuid.uuid4()
+        act = Activo_Inventariado(
+            id_activo=act_id,
+            sku_qr_fisico=f"MOT-TRAS-{uuid.uuid4().hex[:4].upper()}",
+            id_categoria=31,
+            id_estado=1,
+            id_sucursal_actual=1,
+            precio_referencia=500000,
+            precio_minimo=400000,
+            precio_maximo=600000,
+            estado="Activo",
+        )
+        db.add(act)
+        db.commit()
+    finally:
+        db.close()
+
+    payload = {
+        "id_cliente": str(wizard_db["cliente_id"]),
+        "tipo_entrega": "Traslado",
+        "id_sucursal_destino": 2,
+        "total_venta": 500000,
+        "monto_pendiente": 500000,
+        "items_inventariados": [
+            {
+                "id_activo": str(act_id),
+                "precio_final": 500000,
+            }
+        ],
+        "datos_despacho": {
+            "direccion_envio": "Traslado a Sucursal Limache",
+            "receptor_nombres": "Cliente Destino",
+            "receptor_rut": "18.765.432-1",
+            "receptor_telefono": "+56912345678",
+            "id_sucursal_destino": 2,
+        }
+    }
+
+    res = client.post("/api/v1/ordenes/checkout-wizard", json=payload, headers=auth_vendedor_wiz)
+    assert res.status_code == 201, res.text
+    data = res.json()
+    assert data["despacho_generado"] is True
+
+
+# ── TEST 8: Rechazo de Traslado a la misma sucursal ──────────────────────────
+def test_checkout_wizard_traslado_misma_sucursal_rechazo(client, wizard_db, auth_vendedor_wiz):
+    """Rechaza traslado si la sucursal de destino coincide con la sucursal de la orden."""
+    payload = {
+        "id_cliente": str(wizard_db["cliente_id"]),
+        "tipo_entrega": "Traslado",
+        "id_sucursal_destino": 30,  # Misma sucursal que el vendedor (id_sucursal=30)
+        "total_venta": 500000,
+        "monto_pendiente": 500000,
+        "items_inventariados": [
+            {
+                "id_activo": str(uuid.uuid4()),
+                "precio_final": 500000,
+            }
+        ],
+    }
+
+    res = client.post("/api/v1/ordenes/checkout-wizard", json=payload, headers=auth_vendedor_wiz)
+    assert res.status_code == 400
+    assert "no pueden ser iguales" in res.json()["detail"] or "no es válida" in res.json()["detail"]

@@ -61,7 +61,8 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
   final _empresaTransporteController = TextEditingController(text: 'Chilexpress');
   String? _regionDespacho;
   String? _comunaDespacho;
-  int _idSucursalDestino = 1; // 1: Viña del Mar, 2: Limache
+  int _idSucursalActual = 1; // 1: Viña del Mar, 2: Limache
+  int _idSucursalDestino = 2; // Por defecto a la otra sucursal
   int? _userRolId;
   bool get _esVendedorOnline => _userRolId == 7;
   List<VendedorModel> _vendedoresDisponibles = [];
@@ -130,7 +131,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
         _comunaCliente = null;
         _regionDespacho = null;
         _comunaDespacho = null;
-        _idSucursalDestino = 1;
+        _idSucursalDestino = (_idSucursalActual == 1 ? 2 : 1);
         _idVendedorAsignado = null;
       });
     }
@@ -140,8 +141,17 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
   Future<void> _cargarRolYVendedores() async {
     try {
       final rolId = await AuthService.getIdRol();
+      final sucursalId = await AuthService.getSucursalId();
       if (mounted) {
-        setState(() => _userRolId = rolId);
+        setState(() {
+          _userRolId = rolId;
+          if (sucursalId != null && (sucursalId == 1 || sucursalId == 2)) {
+            _idSucursalActual = sucursalId;
+            _idSucursalDestino = (_idSucursalActual == 1) ? 2 : 1;
+            _controller.setIdSucursalActual(_idSucursalActual);
+            _controller.setIdSucursalDestino(_idSucursalDestino);
+          }
+        });
       }
       if (rolId == 7) {
         final vends = await OrdenesService.obtenerVendedores();
@@ -1594,25 +1604,76 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Configuración de Traslado Inter-Sucursal:', style: AppTypography.body.copyWith(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppPalette.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: AppPalette.primary.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.storefront_outlined, size: 16, color: AppPalette.primary),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Sucursal actual (Origen): ${_idSucursalActual == 1 ? "Viña del Mar" : "Limache"}',
+                        style: AppTypography.small.copyWith(color: AppPalette.primary, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<int>(
                   isExpanded: true,
-                  initialValue: _idSucursalDestino,
+                  value: _idSucursalDestino,
                   dropdownColor: AppPalette.surface,
                   style: AppTypography.body,
                   decoration: _inputDeco('Sucursal de Destino *', Icons.swap_horiz),
-                  items: const [
-                    DropdownMenuItem(value: 1, child: Text('Sucursal Viña del Mar', overflow: TextOverflow.ellipsis)),
-                    DropdownMenuItem(value: 2, child: Text('Sucursal Limache', overflow: TextOverflow.ellipsis)),
+                  items: [
+                    DropdownMenuItem(
+                      value: 1,
+                      enabled: _idSucursalActual != 1,
+                      child: Text(
+                        _idSucursalActual == 1
+                            ? 'Sucursal Viña del Mar (Actual - Deshabilitada)'
+                            : 'Sucursal Viña del Mar',
+                        style: TextStyle(
+                          color: _idSucursalActual == 1
+                              ? AppPalette.textSecondary.withValues(alpha: 0.4)
+                              : AppPalette.textPrimary,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    DropdownMenuItem(
+                      value: 2,
+                      enabled: _idSucursalActual != 2,
+                      child: Text(
+                        _idSucursalActual == 2
+                            ? 'Sucursal Limache (Actual - Deshabilitada)'
+                            : 'Sucursal Limache',
+                        style: TextStyle(
+                          color: _idSucursalActual == 2
+                              ? AppPalette.textSecondary.withValues(alpha: 0.4)
+                              : AppPalette.textPrimary,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                   ],
                   onChanged: (val) {
-                    setState(() => _idSucursalDestino = val ?? 1);
-                    _actualizarDatosDespachoLocal();
+                    if (val != null && val != _idSucursalActual) {
+                      setState(() => _idSucursalDestino = val);
+                      _controller.setIdSucursalDestino(val);
+                      _actualizarDatosDespachoLocal();
+                    }
                   },
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'ℹ️ Se generará automáticamente la orden de traslado logístico para que Bodega envíe la pieza a ${_idSucursalDestino == 1 ? "Viña del Mar" : "Limache"}.',
+                  'ℹ️ Se generará automáticamente la orden de traslado logístico para que Bodega envíe la pieza desde ${_idSucursalActual == 1 ? "Viña del Mar" : "Limache"} hacia ${_idSucursalDestino == 1 ? "Viña del Mar" : "Limache"}.',
                   style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
                 ),
                 const SizedBox(height: 10),
@@ -1686,6 +1747,13 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
           borderRadius: BorderRadius.circular(10),
           onTap: () {
             _controller.setTipoEntrega(value);
+            if (value == 'Traslado') {
+              if (_idSucursalDestino == _idSucursalActual) {
+                _idSucursalDestino = (_idSucursalActual == 1 ? 2 : 1);
+              }
+              _controller.setIdSucursalActual(_idSucursalActual);
+              _controller.setIdSucursalDestino(_idSucursalDestino);
+            }
             _actualizarDatosDespachoLocal();
           },
           child: Container(
@@ -1834,7 +1902,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               if (_controller.tipoEntrega == 'Despacho Domicilio' && _controller.datosDespacho != null)
                 Text('Destino: ${_controller.datosDespacho!.direccionEnvio} • Receptor: ${_controller.datosDespacho!.receptorNombres}', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
               if (_controller.tipoEntrega == 'Traslado')
-                Text('Traslado a: ${_idSucursalDestino == 1 ? "Viña del Mar" : "Limache"}', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
+                Text('Traslado: ${_idSucursalActual == 1 ? "Viña del Mar" : "Limache"} ➔ ${_idSucursalDestino == 1 ? "Viña del Mar" : "Limache"}', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
               const Divider(color: Colors.white24, height: 20),
 
               Text('DETALLE COMERCIAL', style: AppTypography.small.copyWith(color: AppPalette.secondary, fontWeight: FontWeight.bold)),

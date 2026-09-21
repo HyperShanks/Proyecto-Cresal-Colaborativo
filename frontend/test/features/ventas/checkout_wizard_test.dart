@@ -153,6 +153,36 @@ void main() {
       expect(controller.itemsInventariados.length, equals(1));
       expect(controller.clienteSeleccionado?.nombres, equals('Roberto'));
     });
+
+    test('Validación de traslado inter-sucursal impide seleccionar misma sucursal origen y destino', () {
+      controller.addItemInventariado(idActivo: 'act-001', sku: 'SKU-1', descripcion: 'Alternador', precio: 80000);
+      controller.setCliente(
+        const ClienteWizardModel(
+          idCliente: 'cli-001',
+          rut: '19.888.777-6',
+          nombres: 'Roberto',
+          apellidos: 'López',
+          consentimientoLegal: true,
+          estado: 'Activo',
+        ),
+      );
+      controller.nextStep(); // Paso 1
+      controller.nextStep(); // Paso 2
+
+      controller.setTipoEntrega('Traslado');
+      controller.setIdSucursalActual(1); // Viña del Mar
+      // Forzar que el destino sea igual al origen
+      controller.setIdSucursalDestino(1);
+      expect(controller.validateStep3(), isFalse);
+      expect(controller.nextStep(), isFalse);
+      expect(controller.errorMessage, contains('no puede ser igual'));
+
+      // Asignar destino válido (Limache)
+      controller.setIdSucursalDestino(2);
+      expect(controller.validateStep3(), isTrue);
+      expect(controller.nextStep(), isTrue);
+      expect(controller.currentStep, equals(3));
+    });
   });
 
   group('SPEC-HU-05: VentasService.processCheckoutWizard - HTTP Mock', () {

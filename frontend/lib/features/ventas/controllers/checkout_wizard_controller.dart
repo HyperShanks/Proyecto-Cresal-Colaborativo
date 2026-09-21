@@ -20,7 +20,8 @@ class CheckoutWizardController extends ChangeNotifier {
 
   // Paso 3: Logística y Despacho
   String _tipoEntrega = 'Retiro'; // 'Retiro', 'Despacho Domicilio', 'Traslado'
-  int _idSucursalDestino = 1; // 1: Viña del Mar, 2: Limache
+  int _idSucursalActual = 1; // 1: Viña del Mar, 2: Limache
+  int _idSucursalDestino = 2; // Por defecto sucursal opuesta
   String? _idVendedorAsignado; // Para vendedor online
   DespachoModel? _datosDespacho;
 
@@ -39,6 +40,7 @@ class CheckoutWizardController extends ChangeNotifier {
 
   ClienteWizardModel? get clienteSeleccionado => _clienteSeleccionado;
   String get tipoEntrega => _tipoEntrega;
+  int get idSucursalActual => _idSucursalActual;
   int get idSucursalDestino => _idSucursalDestino;
   String? get idVendedorAsignado => _idVendedorAsignado;
   DespachoModel? get datosDespacho => _datosDespacho;
@@ -86,7 +88,9 @@ class CheckoutWizardController extends ChangeNotifier {
       return false;
     }
     if (_currentStep == 2 && !validateStep3()) {
-      _errorMessage = 'Complete todos los campos obligatorios para el despacho a domicilio.';
+      _errorMessage = _tipoEntrega == 'Traslado'
+          ? 'La sucursal de destino no puede ser igual a la sucursal actual.'
+          : 'Complete todos los campos obligatorios para el despacho a domicilio.';
       notifyListeners();
       return false;
     }
@@ -116,7 +120,10 @@ class CheckoutWizardController extends ChangeNotifier {
       totalItemsCount > 0 && !CartController.instance.hayPreciosInvalidos;
   bool validateStep2() => _clienteSeleccionado != null && _clienteSeleccionado!.rut.trim().isNotEmpty;
   bool validateStep3() {
-    if (_tipoEntrega == 'Retiro' || _tipoEntrega == 'Traslado') return true;
+    if (_tipoEntrega == 'Retiro') return true;
+    if (_tipoEntrega == 'Traslado') {
+      return _idSucursalDestino != _idSucursalActual;
+    }
     if (_datosDespacho == null) return false;
     return _datosDespacho!.direccionEnvio.trim().isNotEmpty &&
         _datosDespacho!.receptorNombres.trim().isNotEmpty &&
@@ -271,6 +278,14 @@ class CheckoutWizardController extends ChangeNotifier {
     _tipoEntrega = tipo;
     if (_errorMessage == 'Complete todos los campos obligatorios para el despacho a domicilio.' && validateStep3()) {
       _errorMessage = null;
+    }
+    notifyListeners();
+  }
+
+  void setIdSucursalActual(int sucursalId) {
+    _idSucursalActual = sucursalId;
+    if (_idSucursalDestino == _idSucursalActual) {
+      _idSucursalDestino = (_idSucursalActual == 1) ? 2 : 1;
     }
     notifyListeners();
   }
