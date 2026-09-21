@@ -400,9 +400,9 @@ void main() {
         ),
       );
 
-      // Tap en la miniatura interactiva (primer InkWell)
-      await tester.tap(find.byType(InkWell).first);
-      await tester.pump();
+      // Tap en la miniatura interactiva (segundo InkWell, el primero es la tarjeta completa)
+      await tester.tap(find.byType(InkWell).at(1));
+      await tester.pumpAndSettle();
 
       // Debe abrir el diálogo visor a pantalla completa
       expect(find.byType(Dialog), findsOneWidget);

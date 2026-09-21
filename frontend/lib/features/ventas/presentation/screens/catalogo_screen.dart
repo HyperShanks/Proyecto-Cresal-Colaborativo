@@ -13,7 +13,6 @@ import '../../services/catalogo_service.dart';
 import '../../services/carrito_service.dart';
 import '../widgets/catalogo_item_card.dart';
 import '../widgets/filtros_drawer.dart';
-import '../widgets/venta_libre_dialog.dart';
 import '../widgets/modal_backorder_form.dart';
 import 'detalle_activo_screen.dart';
 
@@ -295,6 +294,20 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
       return;
     }
 
+    if (CartController.instance.tieneVentaEnVerde) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: AppPalette.error,
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            'No se pueden combinar productos con una Venta en Verde. Las ventas en verde van solas en el pedido.',
+          ),
+        ),
+      );
+      return;
+    }
+
     try {
       final reserva = await CarritoService.reservarActivo(
         item.idActivo,
@@ -381,9 +394,6 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
     }
   }
 
-  void _onVentaRapida() {
-    VentaLibreDialog.show(context);
-  }
 
   // ── Construcción de la Vista ──────────────────────────────────────────────
 
@@ -448,40 +458,6 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
             icon: const Icon(Icons.refresh, color: AppPalette.primary),
             tooltip: 'Actualizar catálogo',
             onPressed: () => _fetchCatalogo(resetPagination: true),
-          ),
-          IconButton(
-            icon: const Icon(Icons.bookmark_add_outlined, color: AppPalette.secondary),
-            tooltip: 'Crear Venta en Verde',
-            onPressed: () async {
-              final messenger = ScaffoldMessenger.of(context);
-              final reserva = await ModalBackorderForm.mostrar(context);
-              if (!mounted || reserva == null) return;
-              final ok = CartController.instance.agregarReservaBackorder(
-                idCategoria: reserva.idCategoriaRequerida,
-                categoriaNombre: reserva.categoriaNombre,
-                marca: reserva.marcaRequerida,
-                modelo: reserva.modeloRequerido,
-                anio: reserva.anioRequerido,
-                precioAcordado: reserva.precioAcordado,
-                montoAbonado: reserva.montoAbonado,
-                notas: reserva.notasPreparacion,
-              );
-              if (!ok) {
-                messenger.showSnackBar(
-                  const SnackBar(
-                    content: Text('Las ventas en verde deben tramitarse de manera individual. Por favor vacía el carrito antes de agregar una venta en verde.'),
-                    backgroundColor: AppPalette.error,
-                  ),
-                );
-                return;
-              }
-              messenger.showSnackBar(
-                SnackBar(
-                  content: Text('Venta en verde (${reserva.marcaRequerida} ${reserva.modeloRequerido}) añadida al Checkout Wizard.'),
-                  backgroundColor: AppPalette.secondary,
-                ),
-              );
-            },
           ),
         ],
         title: Column(
@@ -799,6 +775,19 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
                   icon: const Icon(Icons.bookmark_add, size: 18),
                   label: const Text('¿NO ESTÁ? VENTA EN VERDE', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                   onPressed: () async {
+                    if (CartController.instance.items.isNotEmpty) {
+                      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          backgroundColor: AppPalette.error,
+                          behavior: SnackBarBehavior.floating,
+                          content: Text(
+                            'No se pueden agregar ventas en verde porque el carrito ya contiene productos. Las ventas en verde van solas.',
+                          ),
+                        ),
+                      );
+                      return;
+                    }
                     final messenger = ScaffoldMessenger.of(context);
                     final reserva = await ModalBackorderForm.mostrar(context);
                     if (!mounted || reserva == null) return;

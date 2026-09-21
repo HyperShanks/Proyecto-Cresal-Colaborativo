@@ -12,6 +12,19 @@ class VentaLibreDialog extends StatefulWidget {
   const VentaLibreDialog({super.key});
 
   static Future<void> show(BuildContext context) {
+    if (CartController.instance.tieneVentaEnVerde) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: AppPalette.error,
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            'No se pueden agregar ítems manuales a un pedido con Venta en Verde. Las ventas en verde van solas.',
+          ),
+        ),
+      );
+      return Future.value();
+    }
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -70,11 +83,25 @@ class _VentaLibreDialogState extends State<VentaLibreDialog> {
       return;
     }
 
-    CartController.instance.agregarVentaLibre(
+    final agregado = CartController.instance.agregarVentaLibre(
       descripcion: _descController.text.trim(),
       monto: monto,
       cantidad: _cantidad,
     );
+
+    if (!agregado) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: AppPalette.error,
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            'No se pudo agregar el ítem manual. El pedido contiene una Venta en Verde (las ventas en verde van solas).',
+          ),
+        ),
+      );
+      return;
+    }
 
     Navigator.of(context).pop();
 
@@ -82,6 +109,7 @@ class _VentaLibreDialogState extends State<VentaLibreDialog> {
       SnackBar(
         backgroundColor: AppPalette.surface,
         duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
         content: Row(
           children: [
             const Icon(Icons.check_circle, color: AppPalette.primary, size: 20),

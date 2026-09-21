@@ -5,6 +5,7 @@ import '../../../../core/theme/tokens/app_typography.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../../../core/constants/especificaciones_vehiculo.dart';
 import '../../models/checkout_wizard_models.dart';
+import '../../controllers/cart_controller.dart';
 
 /// Modal dialog interactivo para configurar una Reserva por Encargo (Compra en Verde / Backorder) (SPEC-HU-05)
 class ModalBackorderForm extends StatefulWidget {
@@ -12,6 +13,19 @@ class ModalBackorderForm extends StatefulWidget {
 
   /// Abre el diálogo y retorna la `ReservaBackorderModel` configurada o `null` si se cancela.
   static Future<ReservaBackorderModel?> mostrar(BuildContext context) {
+    if (CartController.instance.items.isNotEmpty) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: AppPalette.error,
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            'No se pueden agregar ventas en verde porque el carrito ya contiene productos. Las ventas en verde van solas.',
+          ),
+        ),
+      );
+      return Future.value(null);
+    }
     return showDialog<ReservaBackorderModel>(
       context: context,
       barrierDismissible: false,

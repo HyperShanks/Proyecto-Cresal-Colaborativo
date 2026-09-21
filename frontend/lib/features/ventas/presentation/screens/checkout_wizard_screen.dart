@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../../../core/utils/currency_formatter.dart';
@@ -747,6 +746,19 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 onPressed: () async {
+                  if (CartController.instance.items.isNotEmpty || _controller.totalItemsCount > 0) {
+                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        backgroundColor: AppPalette.error,
+                        behavior: SnackBarBehavior.floating,
+                        content: Text(
+                          'No se pueden agregar ventas en verde porque el pedido ya contiene productos. Las ventas en verde van solas.',
+                        ),
+                      ),
+                    );
+                    return;
+                  }
                   final reserva = await ModalBackorderForm.mostrar(context);
                   if (reserva != null) {
                     _controller.addReservaBackorder(reserva);
@@ -780,7 +792,22 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                onPressed: () => VentaLibreDialog.show(context),
+                onPressed: () {
+                  if (CartController.instance.tieneVentaEnVerde || _controller.reservas.isNotEmpty) {
+                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        backgroundColor: AppPalette.error,
+                        behavior: SnackBarBehavior.floating,
+                        content: Text(
+                          'No se pueden agregar ítems manuales a un pedido con Venta en Verde. Las ventas en verde van solas.',
+                        ),
+                      ),
+                    );
+                    return;
+                  }
+                  VentaLibreDialog.show(context);
+                },
               ),
             ),
           ],
@@ -2179,9 +2206,6 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     );
   }
 
-  void _abrirDialogoItemManual() {
-    VentaLibreDialog.show(context);
-  }
 
   InputDecoration _inputDeco(String hint, IconData icon, {Widget? suffix, String? errorText}) {
     return InputDecoration(

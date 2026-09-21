@@ -413,47 +413,58 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8.0),
-                      decoration: BoxDecoration(
-                        color: AppPalette.primary.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(8.0),
-                      ),
-                      child: const Icon(
-                        Icons.receipt_long_outlined,
-                        size: 22.0,
-                        color: AppPalette.primary,
-                      ),
-                    ),
-                    const SizedBox(width: 10.0),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _orden.folioDisplay,
-                          style: AppTypography.title.copyWith(
-                            fontSize: 18.0,
-                            fontWeight: FontWeight.bold,
-                          ),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8.0),
+                        decoration: BoxDecoration(
+                          color: AppPalette.primary.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8.0),
                         ),
-                        Text(
-                          _orden.fechaFormateada,
-                          style: AppTypography.small.copyWith(
-                            fontSize: 12.0,
-                            color: AppPalette.textSecondary,
-                          ),
+                        child: const Icon(
+                          Icons.receipt_long_outlined,
+                          size: 20.0,
+                          color: AppPalette.primary,
                         ),
-                      ],
-                    ),
-                  ],
+                      ),
+                      const SizedBox(width: 8.0),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _orden.folioDisplay,
+                              style: AppTypography.title.copyWith(
+                                fontSize: 16.5,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              _orden.fechaFormateada,
+                              style: AppTypography.small.copyWith(
+                                fontSize: 11.5,
+                                color: AppPalette.textSecondary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 6.0),
                 Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     if (_orden.esMixta) ...[
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                        padding: const EdgeInsets.symmetric(horizontal: 7.0, vertical: 3.0),
                         decoration: BoxDecoration(
                           color: AppPalette.secondary.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(20.0),
@@ -462,22 +473,22 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                         child: Text(
                           'Mixta',
                           style: TextStyle(
-                            fontSize: 12.0,
+                            fontSize: 11.0,
                             fontWeight: FontWeight.w600,
                             color: AppPalette.secondary,
                             fontFamily: AppTypography.fontFamily,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 6.0),
+                      const SizedBox(width: 4.0),
                     ],
                     _buildStatusBadge(),
-                    const SizedBox(width: 8.0),
+                    const SizedBox(width: 4.0),
                     IconButton(
-                      icon: const Icon(Icons.close, color: AppPalette.textSecondary),
+                      icon: const Icon(Icons.close, color: AppPalette.textSecondary, size: 20.0),
                       onPressed: () => Navigator.of(context).pop(),
                       padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                     ),
                   ],
                 ),
@@ -609,12 +620,12 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                           ],
                           const SizedBox(height: 4.0),
                           Text(
-                            'Receptor: ${_orden.despacho!.receptorNombres} (${_orden.despacho!.receptorRut})',
+                            'Receptor: ${_orden.despacho!.receptorNombres} (${_orden.despacho!.receptorRut.isNotEmpty ? _orden.despacho!.receptorRut : "S/R"})',
                             style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
                           ),
                           const SizedBox(height: 2.0),
                           Text(
-                            'Teléfono: ${_orden.despacho!.receptorTelefono}',
+                            'Teléfono: ${_orden.despacho!.receptorTelefono.isNotEmpty ? _orden.despacho!.receptorTelefono : (_orden.cliente?.telefono?.isNotEmpty == true ? _orden.cliente!.telefono! : "No registrado")}',
                             style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
                           ),
                           if (_orden.despacho!.empresaTransporte != null && _orden.despacho!.empresaTransporte!.isNotEmpty) ...[
@@ -624,6 +635,11 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                               style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
                             ),
                           ],
+                          const SizedBox(height: 2.0),
+                          Text(
+                            'Costo Envío: ${_orden.despacho!.costoEnvioFormateado}',
+                            style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
+                          ),
                           const SizedBox(height: 2.0),
                           Text(
                             'Estado Envío: ${_orden.despacho!.estadoDespacho}',
@@ -745,16 +761,20 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                                                   : AppPalette.secondary,
                                             ),
                                             const SizedBox(width: 4.0),
-                                            Text(
-                                              detalle.esMotorOCaja
-                                                  ? 'Retiro en Bodega (Barrera)'
-                                                  : 'Entrega Inmediata en Mesón',
-                                              style: TextStyle(
-                                                fontSize: 10.5,
-                                                fontWeight: FontWeight.w600,
-                                                color: detalle.esMotorOCaja
-                                                    ? AppPalette.primary
-                                                    : AppPalette.secondary,
+                                            Flexible(
+                                              child: Text(
+                                                detalle.esMotorOCaja
+                                                    ? 'Retiro en Bodega (Barrera)'
+                                                    : 'Entrega Inmediata en Mesón',
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  fontSize: 10.5,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: detalle.esMotorOCaja
+                                                      ? AppPalette.primary
+                                                      : AppPalette.secondary,
+                                                ),
                                               ),
                                             ),
                                           ],

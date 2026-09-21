@@ -156,15 +156,13 @@ class _AsignarActivoVendedorDialogState
     final detalleBo = widget.orden.detalles.firstWhere(
       (d) => !d.esInventariado,
       orElse: () => widget.orden.detalles.first,
-    );
-
-    return Dialog(
-      backgroundColor: AppPalette.surfaceLight,
+    );    return Dialog(
+      backgroundColor: AppPalette.surface,
       surfaceTintColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: AppPalette.borderLight),
+        side: const BorderSide(color: Colors.white12),
       ),
       elevation: 16,
       child: ConstrainedBox(
@@ -179,54 +177,62 @@ class _AsignarActivoVendedorDialogState
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: AppPalette.primary.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(
-                          Icons.inventory_2_rounded,
-                          size: 24,
-                          color: AppPalette.primary,
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Asignar Activo Físico Paletizado',
-                            style: AppTypography.headline.copyWith(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w900,
-                              color: AppPalette.textPrimaryLight,
-                            ),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppPalette.primary.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(10),
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Orden ${widget.orden.folioDisplay} • Venta en Verde Pagada',
-                            style: AppTypography.small.copyWith(
-                              color: AppPalette.textSecondaryLight,
-                              fontWeight: FontWeight.w600,
-                            ),
+                          child: const Icon(
+                            Icons.inventory_2_rounded,
+                            size: 24,
+                            color: AppPalette.primary,
                           ),
-                        ],
-                      ),
-                    ],
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Asignar Activo Físico Paletizado',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTypography.headline.copyWith(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w900,
+                                  color: AppPalette.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Orden ${widget.orden.folioDisplay} • Venta en Verde Pagada',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTypography.small.copyWith(
+                                  color: AppPalette.textSecondary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   IconButton(
                     onPressed: _isAsignando ? null : () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close, color: AppPalette.textSecondaryLight),
+                    icon: const Icon(Icons.close, color: AppPalette.textSecondary),
                     tooltip: 'Cerrar',
                   ),
                 ],
               ),
 
               const SizedBox(height: 16),
-              const Divider(color: AppPalette.borderLight, height: 1),
+              const Divider(color: Colors.white12, height: 1),
               const SizedBox(height: 16),
 
               // ── Resumen de lo solicitado por el cliente ────────────
@@ -234,9 +240,9 @@ class _AsignarActivoVendedorDialogState
                 width: double.infinity,
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: AppPalette.backgroundLight,
+                  color: AppPalette.background,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppPalette.borderLight),
+                  border: Border.all(color: Colors.white12),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -262,7 +268,7 @@ class _AsignarActivoVendedorDialogState
                       style: AppTypography.title.copyWith(
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
-                        color: AppPalette.textPrimaryLight,
+                        color: AppPalette.textPrimary,
                       ),
                     ),
                     if (detalleBo.notasPreparacion != null &&
@@ -271,7 +277,7 @@ class _AsignarActivoVendedorDialogState
                       Text(
                         detalleBo.notasPreparacion!,
                         style: AppTypography.small.copyWith(
-                          color: AppPalette.textSecondaryLight,
+                          color: AppPalette.textSecondary,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -283,14 +289,18 @@ class _AsignarActivoVendedorDialogState
                           'Cliente: ',
                           style: AppTypography.small.copyWith(
                             fontWeight: FontWeight.w700,
-                            color: AppPalette.textSecondaryLight,
+                            color: AppPalette.textSecondary,
                           ),
                         ),
-                        Text(
-                          '${widget.orden.cliente?.nombreCompleto ?? "Cliente General"} (${widget.orden.cliente?.rutCliente ?? "N/A"})',
-                          style: AppTypography.small.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: AppPalette.textPrimaryLight,
+                        Expanded(
+                          child: Text(
+                            '${widget.orden.cliente?.nombreCompleto ?? "Cliente General"} (${widget.orden.cliente?.rutCliente ?? "N/A"})',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.small.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: AppPalette.textPrimary,
+                            ),
                           ),
                         ),
                       ],
@@ -307,7 +317,7 @@ class _AsignarActivoVendedorDialogState
                 style: AppTypography.body.copyWith(
                   fontWeight: FontWeight.w800,
                   fontSize: 13,
-                  color: AppPalette.textPrimaryLight,
+                  color: AppPalette.textPrimary,
                 ),
               ),
               const SizedBox(height: 6),
@@ -319,23 +329,23 @@ class _AsignarActivoVendedorDialogState
                       controller: _skuController,
                       style: AppTypography.body.copyWith(
                         fontWeight: FontWeight.w700,
-                        color: AppPalette.textPrimaryLight,
+                        color: AppPalette.textPrimary,
                         letterSpacing: 0.5,
                       ),
                       textCapitalization: TextCapitalization.characters,
                       decoration: InputDecoration(
                         hintText: 'Ej: MOT-NIS-1234 o escanear QR',
                         hintStyle: AppTypography.body.copyWith(
-                          color: AppPalette.textSecondaryLight.withValues(alpha: 0.6),
+                          color: AppPalette.textSecondary.withValues(alpha: 0.6),
                           fontSize: 13,
                         ),
                         filled: true,
-                        fillColor: Colors.white,
+                        fillColor: AppPalette.background,
                         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                         prefixIcon: const Icon(Icons.qr_code_scanner, color: AppPalette.primary, size: 20),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: AppPalette.borderLight),
+                          borderSide: const BorderSide(color: Colors.white24),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -455,9 +465,9 @@ class _AsignarActivoVendedorDialogState
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: AppPalette.background,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppPalette.borderLight),
+                      border: Border.all(color: Colors.white12),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -466,7 +476,7 @@ class _AsignarActivoVendedorDialogState
                           'Detalles de la pieza física encontrada:',
                           style: AppTypography.small.copyWith(
                             fontWeight: FontWeight.bold,
-                            color: AppPalette.textSecondaryLight,
+                            color: AppPalette.textSecondary,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -474,13 +484,13 @@ class _AsignarActivoVendedorDialogState
                           '${detalleActivo["categoria"] ?? "Repuesto"} • ${detalleActivo["marca"] ?? ""} ${detalleActivo["modelo"] ?? ""} (${detalleActivo["anio"] ?? "Año N/A"})',
                           style: AppTypography.body.copyWith(
                             fontWeight: FontWeight.bold,
-                            color: AppPalette.textPrimaryLight,
+                            color: AppPalette.textPrimary,
                           ),
                         ),
                         Text(
                           'Estado: ${detalleActivo["estado_conservacion"] ?? "Disponible"} • Ubicación: ${detalleActivo["ubicacion"] ?? "En paletizado"}',
                           style: AppTypography.small.copyWith(
-                            color: AppPalette.textSecondaryLight,
+                            color: AppPalette.textSecondary,
                           ),
                         ),
                       ],
@@ -550,8 +560,8 @@ class _AsignarActivoVendedorDialogState
                   Expanded(
                     child: OutlinedButton(
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: AppPalette.textSecondaryLight,
-                        side: const BorderSide(color: AppPalette.borderLight),
+                        foregroundColor: AppPalette.textSecondary,
+                        side: const BorderSide(color: Colors.white24),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),

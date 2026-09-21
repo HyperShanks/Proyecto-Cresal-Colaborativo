@@ -210,6 +210,11 @@ class DespachoOrdenResumenModel {
     this.comunaDestino,
   });
 
+  String get costoEnvioFormateado {
+    if (costoEnvio <= 0) return 'Gratis / Incluido';
+    return OrdenResponseModel._formatearMonto(costoEnvio);
+  }
+
   factory DespachoOrdenResumenModel.fromJson(Map<String, dynamic> json) {
     return DespachoOrdenResumenModel(
       idDespacho: json['id_despacho']?.toString() ?? '',
@@ -1348,6 +1353,12 @@ class EntregaEnvioModel {
   bool get esMixta => contieneMotorOCaja && contieneMiscelaneos;
   bool get esDespacho => tipoEntrega.toLowerCase() == 'despacho' || despacho != null;
   bool get esRetiro => !esDespacho;
+  bool get esVentaEnVerde => detalles.any((d) =>
+      d.titulo.toUpperCase().contains('RESERVA EN VERDE') ||
+      d.titulo.toUpperCase().contains('VENTA EN VERDE') ||
+      (d.descripcionManual != null &&
+          (d.descripcionManual!.toUpperCase().contains('RESERVA EN VERDE') ||
+           d.descripcionManual!.toUpperCase().contains('VENTA EN VERDE'))));
   bool get tieneQrDisponible =>
       esPagada &&
       qrTransaccionalSalida != null &&

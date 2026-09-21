@@ -4,6 +4,7 @@ import '../../models/cobro_pendiente_model.dart';
 import '../../models/cobro_model.dart';
 import '../../services/caja_service.dart';
 import '../../../../core/services/api_service.dart';
+import '../../../ventas/services/ordenes_sync_notifier.dart';
 
 /// Proveedor de estado reactivo para la Bandeja de Cobros y Panel de Cobro de Caja (SPEC-HU-03).
 /// Maneja la lista de cobros pendientes, la selección activa Master-Detail,
@@ -478,6 +479,7 @@ class CajaProvider extends ChangeNotifier {
 
       final resultado = await _cajaService.registrarCobro(request);
       _ultimoResultadoCobro = resultado;
+      OrdenesSyncNotifier.instance.notificarCambio();
 
       return resultado;
     } on CustomApiException catch (e) {
