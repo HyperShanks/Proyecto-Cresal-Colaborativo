@@ -115,10 +115,15 @@ class ResultadoCobroDialog extends StatelessWidget {
   }
 
   Widget _buildTitleAndSubtitle(bool emiteQr) {
+    final esBackorderCompleta = orden.esBackorder && resultado.nuevoSaldoPendiente == 0;
     return Column(
       children: [
         Text(
-          emiteQr ? 'Pago Registrado Exitosamente' : 'Comprobante de Abono Registrado',
+          emiteQr
+              ? 'Pago Registrado Exitosamente'
+              : esBackorderCompleta
+                  ? 'Venta en Verde Pagada al 100%'
+                  : 'Comprobante de Abono Registrado',
           style: AppTypography.title.copyWith(
             fontSize: 19,
             fontWeight: FontWeight.w900,
@@ -130,9 +135,15 @@ class ResultadoCobroDialog extends StatelessWidget {
         Text(
           emiteQr
               ? 'QR Transaccional generado para barrera de salida'
-              : 'Abono procesado correctamente • Sin emisión de QR',
+              : esBackorderCompleta
+                  ? 'Pago completado • Pasa a "Por Asignar" del vendedor'
+                  : 'Abono procesado correctamente • Sin emisión de QR',
           style: AppTypography.body.copyWith(
-            color: emiteQr ? AppPalette.success : AppPalette.primary,
+            color: emiteQr
+                ? AppPalette.success
+                : esBackorderCompleta
+                    ? AppPalette.primary
+                    : AppPalette.primary,
             fontSize: 13,
             fontWeight: FontWeight.w600,
           ),
@@ -314,11 +325,32 @@ class ResultadoCobroDialog extends StatelessWidget {
   }
 
   Widget _buildOperationalInstructionBox(bool emiteQr) {
-    final bgColor = emiteQr ? AppPalette.surfaceLight : AppPalette.warningBg;
-    final borderColor = emiteQr ? AppPalette.borderLight : AppPalette.warningBorder;
-    final headerTextColor = emiteQr ? AppPalette.textPrimaryLight : AppPalette.warningText;
-    final iconColor = emiteQr ? AppPalette.primary : AppPalette.warningText;
-    final bodyTextColor = emiteQr ? AppPalette.textSecondaryLight : AppPalette.warningText;
+    final esBackorderCompleta = orden.esBackorder && resultado.nuevoSaldoPendiente == 0;
+    final bgColor = emiteQr
+        ? AppPalette.surfaceLight
+        : esBackorderCompleta
+            ? AppPalette.primary.withValues(alpha: 0.08)
+            : AppPalette.warningBg;
+    final borderColor = emiteQr
+        ? AppPalette.borderLight
+        : esBackorderCompleta
+            ? AppPalette.primary.withValues(alpha: 0.25)
+            : AppPalette.warningBorder;
+    final headerTextColor = emiteQr
+        ? AppPalette.textPrimaryLight
+        : esBackorderCompleta
+            ? AppPalette.primary
+            : AppPalette.warningText;
+    final iconColor = emiteQr
+        ? AppPalette.primary
+        : esBackorderCompleta
+            ? AppPalette.primary
+            : AppPalette.warningText;
+    final bodyTextColor = emiteQr
+        ? AppPalette.textSecondaryLight
+        : esBackorderCompleta
+            ? AppPalette.textPrimaryLight
+            : AppPalette.warningText;
 
     return Container(
       width: double.infinity,
@@ -334,7 +366,11 @@ class ResultadoCobroDialog extends StatelessWidget {
           Row(
             children: [
               Icon(
-                emiteQr ? Icons.info_outline_rounded : Icons.warning_amber_rounded,
+                emiteQr
+                    ? Icons.info_outline_rounded
+                    : esBackorderCompleta
+                        ? Icons.pending_actions_rounded
+                        : Icons.warning_amber_rounded,
                 size: 16,
                 color: iconColor,
               ),
@@ -353,7 +389,9 @@ class ResultadoCobroDialog extends StatelessWidget {
           Text(
             emiteQr
                 ? 'Derive al cliente al Mesón de Venta para la entrega física de sus piezas y repuestos.'
-                : 'La orden queda retenida en estado \'Reservada\' / Confirmada sin código QR de salida hasta la liquidación final o arribo a bodega.',
+                : esBackorderCompleta
+                    ? 'La venta en verde ha sido pagada al 100%. La orden ya está disponible en la sección "Por Asignar" del vendedor (${orden.vendedorNombre}) para que realice la asignación física del motor o caja cuando arribe a bodega.'
+                    : 'La orden queda retenida en estado \'Reservada\' / Confirmada sin código QR de salida hasta la liquidación final o arribo a bodega.',
             style: AppTypography.small.copyWith(
               fontSize: 12,
               fontWeight: FontWeight.w500,

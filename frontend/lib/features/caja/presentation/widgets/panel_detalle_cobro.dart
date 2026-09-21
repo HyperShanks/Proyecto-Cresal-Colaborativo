@@ -8,7 +8,6 @@ import '../../models/cobro_model.dart';
 import '../providers/caja_provider.dart';
 import 'cobro_pendiente_card.dart';
 import 'resultado_cobro_dialog.dart';
-import 'asignar_activo_backorder_modal.dart';
 
 /// Panel de Detalle de Cobro con soporte para Pago Único o Dividido (Split Payment).
 /// Cumple con la especificación SPEC-HU-03 / CRES-214 (Master-Detail alimentado en memoria).
@@ -123,33 +122,9 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
     final orden = widget.provider.ordenSeleccionada;
     if (orden == null) return;
 
-    final esBackorder = orden.esBackorder;
-    final esLiquidacionTotal = widget.provider.esLiquidacionCompleta;
-
-    // Si es una Venta en Verde y liquida el 100%, disparamos la Asignación Obligatoria de Activo Físico
-    if (esBackorder && esLiquidacionTotal) {
-      await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (dialogCtx) => AsignarActivoBackorderModal(
-          orden: orden,
-          provider: widget.provider,
-          montoALiquidar: widget.provider.montoDeclarado,
-          onConfirmar: (sku, forzar) async {
-            final res = await widget.provider.procesarCobro(
-              skuOverride: sku,
-              forzarOverride: forzar,
-            );
-            if (res != null && res.success && mounted) {
-              await _mostrarResultadoCobro(orden, res);
-            }
-          },
-        ),
-      );
-      return;
-    }
-
-    // Cobro normal (abono parcial o venta en stock)
+    // Cobro directo (para ventas normales, abonos y ventas en verde)
+    // Las ventas en verde se cobran directamente al 100%; la asignación física del motor o caja
+    // es realizada exclusivamente por el vendedor desde su apartado "Por Asignar".
     try {
       final res = await widget.provider.procesarCobro();
       if (!mounted) return;
@@ -1303,7 +1278,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                                 ? (widget.provider.errorMontoAbono ?? 'Monto de abono inválido.')
                                 : esValida
                                     ? (orden.esBackorder && esLiquidacionTotal
-                                        ? 'Monto exacto para saldar el 100%. Se solicitará la asignación del activo.'
+                                        ? 'Cuadratura perfecta. Salda el 100% de la venta en verde (el vendedor asignará el activo físico).'
                                         : (esLiquidacionTotal
                                             ? 'Cuadratura perfecta. Este cobro salda el 100% de la orden.'
                                             : 'Cuadratura perfecta para registrar este abono parcial.'))
@@ -1360,11 +1335,9 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                             ? (widget.provider.errorMontoAbono?.toUpperCase() ?? 'MONTO DE ABONO INVÁLIDO')
                             : !esValida
                                 ? 'PAGO BLOQUEADO (DESCUADRE)'
-                                : (orden.esBackorder && esLiquidacionTotal)
-                                    ? 'CONTINUAR Y ASIGNAR ACTIVO'
-                                    : !esLiquidacionTotal
-                                        ? 'REGISTRAR ABONO PARCIAL'
-                                        : 'CONFIRMAR Y PROCESAR COBRO',
+                                : !esLiquidacionTotal
+                                    ? 'REGISTRAR ABONO PARCIAL'
+                                    : 'CONFIRMAR Y PROCESAR COBRO',
                 style: AppTypography.button.copyWith(
                   fontWeight: FontWeight.w900,
                   fontSize: 14,
