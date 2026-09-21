@@ -752,13 +752,28 @@ class BackordersGerenciaViewState extends State<BackordersGerenciaView> {
             flex: 12,
             child: Align(
               alignment: Alignment.centerRight,
-              child: Text(
-                _formatoCLP(b.precioAcordado),
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w900,
-                  color: Color(0xFF0F172A),
-                ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    _formatoCLP(b.precioAcordado),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                  if (b.descuento > 0)
+                    Text(
+                      '- ${_formatoCLP(b.descuento)}',
+                      style: const TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFFDC2626),
+                      ),
+                    ),
+                ],
               ),
             ),
           ),

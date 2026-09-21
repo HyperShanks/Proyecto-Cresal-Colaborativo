@@ -24,6 +24,7 @@ class BackorderItemModel {
   final String? transmisionRequerida;
   final String? notasPreparacion;
   final int precioAcordado;
+  final int descuento;
   final int montoAbonado;
   final int saldoPendiente;
   final String estadoReserva;
@@ -54,6 +55,7 @@ class BackorderItemModel {
     this.transmisionRequerida,
     this.notasPreparacion,
     required this.precioAcordado,
+    this.descuento = 0,
     required this.montoAbonado,
     required this.saldoPendiente,
     required this.estadoReserva,
@@ -86,6 +88,7 @@ class BackorderItemModel {
       transmisionRequerida: json['transmision_requerida']?.toString(),
       notasPreparacion: json['notas_preparacion']?.toString(),
       precioAcordado: (json['precio_acordado'] as num?)?.toInt() ?? 0,
+      descuento: (json['descuento'] as num?)?.toInt() ?? 0,
       montoAbonado: (json['monto_abonado'] as num?)?.toInt() ?? 0,
       saldoPendiente: (json['saldo_pendiente'] as num?)?.toInt() ?? 0,
       estadoReserva: json['estado_reserva']?.toString() ?? 'Pendiente',

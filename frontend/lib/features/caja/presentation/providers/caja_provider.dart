@@ -32,12 +32,6 @@ class CajaProvider extends ChangeNotifier {
   bool _isProcesandoCobro = false;
   RegistrarCobroResponseModel? _ultimoResultadoCobro;
 
-  // ── ESTADO REACTIVO DE ATRIBUCIÓN BACKORDER ──
-  String? _skuActivoAtribuido;
-  bool _forzarAtribucion = false;
-  ValidarActivoBackorderResponseModel? _validacionActivo;
-  bool _isRevisandoActivo = false;
-
   CajaProvider({
     ICajaService? cajaService,
   }) : _cajaService = cajaService ?? CajaService();
@@ -66,11 +60,6 @@ class CajaProvider extends ChangeNotifier {
   bool get isProcesandoCobro => _isProcesandoCobro;
   RegistrarCobroResponseModel? get ultimoResultadoCobro =>
       _ultimoResultadoCobro;
-
-  String? get skuActivoAtribuido => _skuActivoAtribuido;
-  bool get forzarAtribucion => _forzarAtribucion;
-  ValidarActivoBackorderResponseModel? get validacionActivo => _validacionActivo;
-  bool get isRevisandoActivo => _isRevisandoActivo;
 
   int get totalPagosIngresados =>
       _pagosDivididos.fold(0, (sum, p) => sum + p.monto);
@@ -240,9 +229,6 @@ class CajaProvider extends ChangeNotifier {
       _montoDeclarado = 0;
       _pagosDivididos = [];
     }
-    _skuActivoAtribuido = null;
-    _forzarAtribucion = false;
-    _validacionActivo = null;
     notifyListeners();
   }
 
@@ -408,59 +394,13 @@ class CajaProvider extends ChangeNotifier {
           monto: _ordenSeleccionada!.montoACobrar,
         ),
       ];
-      _skuActivoAtribuido = null;
-      _forzarAtribucion = false;
-      _validacionActivo = null;
       notifyListeners();
     }
-  }
-
-  /// Valida el SKU de un activo ingresado contra la reserva backorder activa.
-  Future<void> validarActivoBackorder(String sku) async {
-    if (_ordenSeleccionada == null || !_ordenSeleccionada!.esBackorder) return;
-    
-    _isRevisandoActivo = true;
-    _errorMessage = null;
-    notifyListeners();
-    
-    try {
-      final req = ValidarActivoBackorderRequestModel(
-        idDocumento: _ordenSeleccionada!.idReferencia,
-        skuActivo: sku,
-      );
-      _validacionActivo = await _cajaService.validarActivoBackorder(req);
-      _skuActivoAtribuido = sku;
-      _forzarAtribucion = false;
-    } on CustomApiException catch (e) {
-      _errorMessage = e.messageUser;
-      _validacionActivo = null;
-      _skuActivoAtribuido = null;
-      _forzarAtribucion = false;
-    } catch (e) {
-      _errorMessage = ApiService.limpiarMensajeExcepcion(e);
-      _validacionActivo = null;
-      _skuActivoAtribuido = null;
-      _forzarAtribucion = false;
-    } finally {
-      _isRevisandoActivo = false;
-      notifyListeners();
-    }
-  }
-
-  void setForzarAtribucion(bool val) {
-    _forzarAtribucion = val;
-    notifyListeners();
   }
 
   /// Procesa el cobro enviando la petición atómica al Backend (FastAPI).
-  Future<RegistrarCobroResponseModel?> procesarCobro({
-    String? skuOverride,
-    bool? forzarOverride,
-  }) async {
+  Future<RegistrarCobroResponseModel?> procesarCobro() async {
     if (_ordenSeleccionada == null || !esCuadraturaValida) return null;
-
-    final sku = skuOverride ?? _skuActivoAtribuido;
-    final forzar = forzarOverride ?? _forzarAtribucion;
 
     _isProcesandoCobro = true;
     _errorMessage = null;
@@ -473,8 +413,8 @@ class CajaProvider extends ChangeNotifier {
         modalidad: _modalidad,
         montoDeclarado: _montoDeclarado,
         pagos: _pagosDivididos,
-        skuActivoAtribuido: sku,
-        forzarAtribucion: forzar,
+        skuActivoAtribuido: null,
+        forzarAtribucion: false,
       );
 
       final resultado = await _cajaService.registrarCobro(request);

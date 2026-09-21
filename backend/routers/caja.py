@@ -214,7 +214,7 @@ def obtener_cobros_pendientes(
             # Folio representativo
             folio_doc = orden.folio
 
-            total_op = orden.total_venta
+            total_op = orden.total_venta + (getattr(orden, "descuento", 0) or 0)
             abono_req = getattr(orden, "abono_requerido", 0) or 0
             saldo_pendiente = orden.monto_pendiente
 
@@ -242,7 +242,7 @@ def obtener_cobros_pendientes(
                 )
                 abono_acumulado += p.monto
 
-            if orden.monto_pendiente == total_op:
+            if orden.monto_pendiente == orden.total_venta:
                 # El cliente no ha pagado nada aún
                 abono_prev = 0
                 if abono_req > 0:
@@ -253,7 +253,7 @@ def obtener_cobros_pendientes(
                     monto_cobrar = orden.monto_pendiente
             else:
                 # El cliente ya abonó previamente
-                abono_prev = abono_acumulado if abono_acumulado > 0 else max(0, total_op - orden.monto_pendiente)
+                abono_prev = abono_acumulado if abono_acumulado > 0 else max(0, orden.total_venta - orden.monto_pendiente)
                 monto_cobrar = orden.monto_pendiente
 
             fecha_fmt, hora_fmt, dt_utc = format_chile_datetime(orden.fecha_creacion)
@@ -288,20 +288,35 @@ def obtener_cobros_pendientes(
     # ─────────────────────────────────────────────────────────────────────────
     if tipo_filtro in ["TODOS", "BACKORDER"]:
         reservas_query = (
-            db.query(Reservas_Backorder, Cliente, Usuario, Categoria_Activo)
+            db.query(Reservas_Backorder, Cliente, Usuario, Categoria_Activo, Orden_Venta)
             .join(Cliente, Reservas_Backorder.id_cliente == Cliente.id_cliente)
             .join(Usuario, Reservas_Backorder.id_vendedor == Usuario.id_usuario)
             .outerjoin(Categoria_Activo, Reservas_Backorder.id_categoria_requerida == Categoria_Activo.id_categoria)
+            .outerjoin(Orden_Venta, Reservas_Backorder.id_orden == Orden_Venta.id_orden)
             .filter(Reservas_Backorder.id_sucursal_registro == sucursal_id)
             .filter(Reservas_Backorder.estado_reserva.in_(["Pendiente", "Reservada", "Confirmada"]))
             .filter((Reservas_Backorder.precio_acordado - Reservas_Backorder.monto_abonado) > 0)
         ).all()
 
-        for res, cliente, vendedor, categoria in reservas_query:
-            folio_doc = f"RES-{str(res.id_reserva).replace('-', '')[:4].upper()}"
-            total_op = res.precio_acordado
-            abono_req = getattr(res, "abono_requerido", 0) or 0
-            saldo_pendiente = max(0, res.precio_acordado - res.monto_abonado)
+        for res, cliente, vendedor, categoria, orden_vinculada in reservas_query:
+            folio_doc = (orden_vinculada.folio if orden_vinculada and orden_vinculada.folio else None) or f"RES-{str(res.id_reserva).replace('-', '')[:4].upper()}"
+            desc_val = getattr(orden_vinculada, "descuento", 0) or 0 if orden_vinculada else 0
+            
+            # Subtotal Bruto antes de descuento
+            if orden_vinculada and orden_vinculada.total_venta is not None:
+                total_op = orden_vinculada.total_venta + desc_val
+            else:
+                total_op = res.precio_acordado
+
+            abono_req = getattr(res, "abono_requerido", 0) or (getattr(orden_vinculada, "abono_requerido", 0) if orden_vinculada else 0) or 0
+            
+            # Total neto a liquidar deduciendo descuento
+            total_neto = max(0, total_op - desc_val)
+            saldo_pendiente = max(0, total_neto - res.monto_abonado)
+
+            # Si la orden vinculada ya está saldada o el saldo pendiente es 0, no mostrar en pendientes
+            if saldo_pendiente <= 0 or (orden_vinculada and (orden_vinculada.monto_pendiente == 0 or orden_vinculada.estado_orden == "Pagada")):
+                continue
 
             # Consultar transacciones previas registradas para la reserva
             if res.id_orden is not None:
@@ -335,12 +350,12 @@ def obtener_cobros_pendientes(
             if res.monto_abonado == 0:
                 abono_prev = 0
                 if abono_req > 0:
-                    monto_cobrar = min(abono_req, res.precio_acordado)
+                    monto_cobrar = min(abono_req, saldo_pendiente)
                 else:
-                    monto_cobrar = res.precio_acordado
+                    monto_cobrar = saldo_pendiente
             else:
                 abono_prev = res.monto_abonado if res.monto_abonado > 0 else abono_acumulado
-                monto_cobrar = res.precio_acordado - res.monto_abonado
+                monto_cobrar = saldo_pendiente
 
             cat_nombre = categoria.nombre_categoria if categoria else "Repuesto Solicitado"
             transito_str = res.notas_preparacion or "Pendiente de Recepción"
@@ -354,6 +369,69 @@ def obtener_cobros_pendientes(
                 combustible=res.combustible_requerido,
                 transito=transito_str,
             )
+
+            # Cargar artículos adicionales (misceláneos o inventariados) de la orden híbrida si existen
+            articulos_bo_dto: List[ArticuloResumenDTO] = []
+            if orden_vinculada:
+                detalles_bo_raw = (
+                    db.query(
+                        Detalle_Orden,
+                        Activo_Inventariado,
+                        Vehiculo_Origen,
+                        Categoria_Activo,
+                        Detalle_Motor,
+                        Detalle_Caja_Cambio,
+                    )
+                    .outerjoin(Activo_Inventariado, Detalle_Orden.id_activo == Activo_Inventariado.id_activo)
+                    .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
+                    .outerjoin(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
+                    .outerjoin(Detalle_Motor, Activo_Inventariado.id_activo == Detalle_Motor.id_activo)
+                    .outerjoin(Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo)
+                    .filter(Detalle_Orden.id_orden == orden_vinculada.id_orden)
+                ).all()
+
+                for det, act, veh, cat_a, mot, caj in detalles_bo_raw:
+                    desc_man = det.descripcion_manual or ""
+                    # Omitir la línea del backorder en la lista de artículos para que se vea exclusivamente en el grid de especificaciones
+                    if "[RESERVA EN VERDE]" in desc_man or "[BACKORDER]" in desc_man:
+                        continue
+
+                    c_str = cat_a.nombre_categoria if cat_a else None
+                    m_str = veh.marca if veh else None
+                    mod_str = veh.modelo if veh else None
+                    a_int = veh.anio if veh else None
+
+                    tp = []
+                    if mot and mot.cilindrada: tp.append(mot.cilindrada)
+                    if mot and mot.combustible: tp.append(mot.combustible)
+                    if caj and caj.transmision_tipo: tp.append(caj.transmision_tipo)
+                    det_tec = " • ".join(tp) if tp else None
+
+                    if act:
+                        tipo_art = "INVENTARIADO"
+                        sku_art = act.sku_qr_fisico
+                        d_art = desc_man or f"{c_str or 'Repuesto'} ({sku_art})"
+                    else:
+                        tipo_art = "MISCELANEO"
+                        sku_art = None
+                        d_art = desc_man or "Ítem Misceláneo"
+
+                    p_unit = det.precio_unitario if det.precio_unitario is not None else det.precio_final
+                    articulos_bo_dto.append(
+                        ArticuloResumenDTO(
+                            cantidad=det.cantidad,
+                            tipo=tipo_art,
+                            descripcion=d_art,
+                            sku=sku_art,
+                            precio=p_unit,
+                            subtotal=det.precio_final,
+                            categoria=c_str,
+                            marca=m_str,
+                            modelo=mod_str,
+                            anio=a_int,
+                            detalle_tecnico=det_tec,
+                        )
+                    )
 
             fecha_fmt, hora_fmt, dt_utc = format_chile_datetime(res.fecha_creacion)
             cliente_nombre = f"{cliente.nombres} {cliente.apellidos}".strip()
@@ -371,13 +449,13 @@ def obtener_cobros_pendientes(
                 fecha_emision_formateada=fecha_fmt,
                 hora_emision_formateada=hora_fmt,
                 total_operacion=total_op,
-                descuento=0,
+                descuento=desc_val,
                 abono_previo=abono_prev,
                 abono_requerido=abono_req,
                 saldo_pendiente=saldo_pendiente,
                 monto_a_cobrar=monto_cobrar,
                 historial_abonos=historial_dto,
-                articulos=[],
+                articulos=articulos_bo_dto,
                 especificaciones_backorder=specs_dto,
             )
             items_resultado.append(item_dto)
@@ -734,7 +812,14 @@ def registrar_cobro(
                     detail=f"No se encontró la Reserva Backorder con ID {payload.id_documento}."
                 )
 
-            saldo_pendiente_backorder = reserva.precio_acordado - reserva.monto_abonado
+            orden_vinculada = None
+            if reserva.id_orden:
+                orden_vinculada = db.query(Orden_Venta).filter(Orden_Venta.id_orden == reserva.id_orden).first()
+
+            desc_val = getattr(orden_vinculada, "descuento", 0) or 0 if orden_vinculada else 0
+            base_total = orden_vinculada.total_venta if (orden_vinculada and orden_vinculada.total_venta is not None) else max(0, reserva.precio_acordado - desc_val)
+            saldo_pendiente_backorder = max(0, base_total - reserva.monto_abonado)
+
             if payload.monto_declarado > saldo_pendiente_backorder:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -743,7 +828,7 @@ def registrar_cobro(
                 )
 
             # Validación de Piso Comercial en Primer Abono:
-            abono_req = getattr(reserva, "abono_requerido", 0) or 0
+            abono_req = getattr(reserva, "abono_requerido", 0) or (getattr(orden_vinculada, "abono_requerido", 0) if orden_vinculada else 0) or 0
             es_primer_abono = (reserva.monto_abonado == 0)
             if es_primer_abono and abono_req > 0:
                 if payload.monto_declarado < abono_req and payload.monto_declarado < saldo_pendiente_backorder:
@@ -754,7 +839,9 @@ def registrar_cobro(
 
             reserva.monto_abonado += payload.monto_declarado
             reserva.fecha_actualizacion = now_utc
-            nuevo_saldo = reserva.precio_acordado - reserva.monto_abonado
+            nuevo_saldo = max(0, base_total - reserva.monto_abonado)
+            if nuevo_saldo == 0:
+                reserva.monto_abonado = reserva.precio_acordado
             
             target_id_orden = None
             if nuevo_saldo == 0:
@@ -933,20 +1020,18 @@ def registrar_cobro(
                 folio_doc = f"RES-{str(reserva.id_reserva).replace('-', '')[:4].upper()}"
                 estado_resultado = reserva.estado_reserva
 
-                if reserva.id_orden:
-                    orden_vinculada = db.query(Orden_Venta).filter(Orden_Venta.id_orden == reserva.id_orden).first()
-                    if orden_vinculada:
-                        orden_vinculada.monto_pendiente = max(0, orden_vinculada.total_venta - reserva.monto_abonado)
-                        orden_vinculada.id_cajera = current_user.id_usuario
-                        orden_vinculada.fecha_actualizacion = now_utc
-                        target_id_orden = orden_vinculada.id_orden
+                if orden_vinculada:
+                    orden_vinculada.monto_pendiente = nuevo_saldo
+                    orden_vinculada.id_cajera = current_user.id_usuario
+                    orden_vinculada.fecha_actualizacion = now_utc
+                    target_id_orden = orden_vinculada.id_orden
 
             # Registrar cada método en Transaccion_Pago
             for pago_item in payload.pagos:
                 id_transaccion = uuid.uuid4()
                 transaccion = Transaccion_Pago(
                     id_pago=id_transaccion,
-                    id_orden=target_id_orden,
+                    id_orden=target_id_orden or reserva.id_orden,
                     id_reserva=reserva.id_reserva,
                     monto=pago_item.monto,
                     metodo_pago=pago_item.metodo.value,

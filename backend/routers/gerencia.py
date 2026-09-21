@@ -139,24 +139,29 @@ def obtener_kpis_financieros(
     # 1. Consulto los pagos procesados de hoy
     query_pagos_hoy = (
         db.query(Transaccion_Pago)
-        .join(Orden_Venta, Transaccion_Pago.id_orden == Orden_Venta.id_orden)
+        .outerjoin(Orden_Venta, Transaccion_Pago.id_orden == Orden_Venta.id_orden)
+        .outerjoin(Reservas_Backorder, Transaccion_Pago.id_reserva == Reservas_Backorder.id_reserva)
         .filter(
             Transaccion_Pago.estado_pago == "Procesado",
             Transaccion_Pago.fecha_pago.between(inicio_hoy_utc, fin_hoy_utc),
-            Orden_Venta.estado_orden != "Anulada",
+            or_(Orden_Venta.estado_orden.is_(None), Orden_Venta.estado_orden != "Anulada"),
+            or_(Reservas_Backorder.estado_reserva.is_(None), Reservas_Backorder.estado_reserva != "Anulada"),
         )
     )
     if id_sucursal is not None:
         query_pagos_hoy = query_pagos_hoy.filter(
-            Orden_Venta.id_sucursal == id_sucursal
+            or_(
+                Orden_Venta.id_sucursal == id_sucursal,
+                Reservas_Backorder.id_sucursal_registro == id_sucursal,
+            )
         )
 
     pagos_hoy = query_pagos_hoy.all()
     ventas_del_dia = sum(p.monto for p in pagos_hoy)
 
-    # Identifico las órdenes pagadas de hoy para calcular transacciones
+    # Identifico las transacciones pagadas de hoy
     ordenes_hoy_ids = {
-        p.id_orden for p in pagos_hoy if p.id_orden is not None
+        p.id_orden or p.id_reserva for p in pagos_hoy if (p.id_orden is not None or p.id_reserva is not None)
     }
     transacciones_hoy = len(ordenes_hoy_ids)
 
@@ -170,16 +175,21 @@ def obtener_kpis_financieros(
     # 2. Consulto el acumulado mensual MTD
     query_mtd = (
         db.query(Transaccion_Pago)
-        .join(Orden_Venta, Transaccion_Pago.id_orden == Orden_Venta.id_orden)
+        .outerjoin(Orden_Venta, Transaccion_Pago.id_orden == Orden_Venta.id_orden)
+        .outerjoin(Reservas_Backorder, Transaccion_Pago.id_reserva == Reservas_Backorder.id_reserva)
         .filter(
             Transaccion_Pago.estado_pago == "Procesado",
             Transaccion_Pago.fecha_pago.between(inicio_mes_utc, fin_hoy_utc),
-            Orden_Venta.estado_orden != "Anulada",
+            or_(Orden_Venta.estado_orden.is_(None), Orden_Venta.estado_orden != "Anulada"),
+            or_(Reservas_Backorder.estado_reserva.is_(None), Reservas_Backorder.estado_reserva != "Anulada"),
         )
     )
     if id_sucursal is not None:
         query_mtd = query_mtd.filter(
-            Orden_Venta.id_sucursal == id_sucursal
+            or_(
+                Orden_Venta.id_sucursal == id_sucursal,
+                Reservas_Backorder.id_sucursal_registro == id_sucursal,
+            )
         )
 
     pagos_mtd = query_mtd.all()
@@ -216,16 +226,21 @@ def obtener_resumen_pagos(
 
     query_pagos = (
         db.query(Transaccion_Pago)
-        .join(Orden_Venta, Transaccion_Pago.id_orden == Orden_Venta.id_orden)
+        .outerjoin(Orden_Venta, Transaccion_Pago.id_orden == Orden_Venta.id_orden)
+        .outerjoin(Reservas_Backorder, Transaccion_Pago.id_reserva == Reservas_Backorder.id_reserva)
         .filter(
             Transaccion_Pago.estado_pago == "Procesado",
             Transaccion_Pago.fecha_pago.between(inicio_hoy_utc, fin_hoy_utc),
-            Orden_Venta.estado_orden != "Anulada",
+            or_(Orden_Venta.estado_orden.is_(None), Orden_Venta.estado_orden != "Anulada"),
+            or_(Reservas_Backorder.estado_reserva.is_(None), Reservas_Backorder.estado_reserva != "Anulada"),
         )
     )
     if id_sucursal is not None:
         query_pagos = query_pagos.filter(
-            Orden_Venta.id_sucursal == id_sucursal
+            or_(
+                Orden_Venta.id_sucursal == id_sucursal,
+                Reservas_Backorder.id_sucursal_registro == id_sucursal,
+            )
         )
 
     pagos = query_pagos.all()
@@ -447,12 +462,14 @@ def obtener_backorders_gerencia(
             Sucursal,
             Categoria_Activo,
             Activo_Inventariado,
+            Orden_Venta,
         )
         .join(Cliente, Reservas_Backorder.id_cliente == Cliente.id_cliente)
         .join(Usuario, Reservas_Backorder.id_vendedor == Usuario.id_usuario)
         .join(Sucursal, Reservas_Backorder.id_sucursal_registro == Sucursal.id_sucursal)
         .outerjoin(Categoria_Activo, Reservas_Backorder.id_categoria_requerida == Categoria_Activo.id_categoria)
         .outerjoin(Activo_Inventariado, Reservas_Backorder.id_activo_asignado == Activo_Inventariado.id_activo)
+        .outerjoin(Orden_Venta, Reservas_Backorder.id_orden == Orden_Venta.id_orden)
     )
 
     if id_sucursal is not None:
@@ -487,7 +504,7 @@ def obtener_backorders_gerencia(
     rows = query.offset(offset).limit(limit).all()
 
     items = []
-    for res, cli, ven, suc, cat, act in rows:
+    for res, cli, ven, suc, cat, act, ord_vinc in rows:
         folio_str = f"RES-{str(res.id_reserva).replace('-', '')[:4].upper()}"
         fecha_amigable = format_relative_chile_date(res.fecha_creacion)
         fecha_iso = res.fecha_creacion.isoformat() if res.fecha_creacion else ""
@@ -496,7 +513,13 @@ def obtener_backorders_gerencia(
         cat_nombre = cat.nombre_categoria if cat else "Repuesto"
         sku_fisico = act.sku_qr_fisico if act else None
 
-        saldo_calc = max(0, res.precio_acordado - (res.monto_abonado or 0))
+        desc_val = getattr(ord_vinc, "descuento", 0) or 0 if ord_vinc else 0
+        if ord_vinc and (ord_vinc.estado_orden == "Pagada" or ord_vinc.monto_pendiente == 0):
+            saldo_calc = 0
+        elif ord_vinc and ord_vinc.monto_pendiente is not None:
+            saldo_calc = ord_vinc.monto_pendiente
+        else:
+            saldo_calc = max(0, res.precio_acordado - desc_val - (res.monto_abonado or 0))
 
         item_dto = BackorderGerenciaItemDTO(
             id_reserva=str(res.id_reserva),
@@ -521,6 +544,7 @@ def obtener_backorders_gerencia(
             transmision_requerida=res.transmision_requerida,
             notas_preparacion=res.notas_preparacion,
             precio_acordado=res.precio_acordado,
+            descuento=desc_val,
             monto_abonado=res.monto_abonado or 0,
             saldo_pendiente=saldo_calc,
             estado_reserva=res.estado_reserva,
