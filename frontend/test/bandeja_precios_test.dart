@@ -173,7 +173,9 @@ void main() {
 
       final response = await InventarioService.asignarPrecio(
         '33333333-3333-3333-3333-333333333333',
-        580000,
+        precioMinimo: 500000,
+        precioMaximo: 600000,
+        precioReferencia: 580000,
         client: mockClient,
       );
 
@@ -194,7 +196,8 @@ void main() {
       expect(
         () async => await InventarioService.asignarPrecio(
           '33333333-3333-3333-3333-333333333333',
-          0,
+          precioMinimo: 0,
+          precioMaximo: 0,
           client: mockClient,
         ),
         throwsA(isA<Exception>().having((e) => e.toString(), 'msg', contains('precio ingresado no es válido'))),

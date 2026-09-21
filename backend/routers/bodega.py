@@ -849,6 +849,12 @@ def escanear_salida(
         orden.estado_orden = "Completada"
         orden.fecha_actualizacion = datetime.now()
 
+        # Si la orden corresponde a un despacho (courier), marcar el despacho como 'Enviado'
+        despacho_db = db.query(Despacho).filter(Despacho.id_orden == orden.id_orden).first()
+        if despacho_db:
+            despacho_db.estado_despacho = "Enviado"
+            despacho_db.fecha_actualizacion = datetime.now()
+
         # Marcar automáticamente todas las líneas de detalle como 'Listo' (cierre de ciclo para misceláneos y activos)
         for d in detalles:
             d.estado_preparacion = "Listo"

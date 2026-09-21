@@ -614,6 +614,10 @@ def registrar_cobro(
                     Detalle_Orden.id_activo.isnot(None)
                 ).first() is not None
 
+                tiene_despacho = db.query(Despacho).filter(
+                    Despacho.id_orden == orden.id_orden
+                ).first() is not None
+
                 reserva_vinculada = db.query(Reservas_Backorder).filter(
                     Reservas_Backorder.id_orden == orden.id_orden
                 ).first()
@@ -657,7 +661,7 @@ def registrar_cobro(
                         reserva_vinculada.estado_reserva = "Confirmada"
                         qr_hash = None
                         orden.qr_transaccional_salida = None
-                elif tiene_activos_inventariados:
+                elif tiene_activos_inventariados or tiene_despacho:
                     orden.estado_orden = "Pagada"
                     qr_hash = f"TX-QR-{uuid.uuid4()}"
                     orden.qr_transaccional_salida = qr_hash

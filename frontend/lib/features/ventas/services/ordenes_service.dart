@@ -1337,6 +1337,8 @@ class EntregaEnvioModel {
   bool get contieneMotorOCaja => detalles.any((d) => d.esMotorOCaja);
   bool get contieneMiscelaneos => detalles.any((d) => !d.esMotorOCaja);
   bool get esMixta => contieneMotorOCaja && contieneMiscelaneos;
+  bool get esDespacho => tipoEntrega.toLowerCase() == 'despacho' || despacho != null;
+  bool get esRetiro => !esDespacho;
   bool get tieneQrDisponible =>
       esPagada &&
       qrTransaccionalSalida != null &&

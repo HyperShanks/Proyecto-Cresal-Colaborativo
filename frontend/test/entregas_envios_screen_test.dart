@@ -243,7 +243,7 @@ void main() {
       expect(ordenNominativa.clienteDisplay, 'Felipe Dávila');
     });
 
-    testWidgets('EntregasEnviosScreen renderiza pestañas y botón de filtros para rol vendedor', (tester) async {
+    testWidgets('EntregasEnviosScreen renderiza vista unificada Retiro y Envíos y botón de filtros sin pestaña courier', (tester) async {
       await const FlutterSecureStorage().write(key: 'user_id_rol', value: '2');
 
       await tester.pumpWidget(
@@ -252,10 +252,11 @@ void main() {
         ),
       );
 
-      // Debe mostrar el título, los tabs y el botón de filtros
-      expect(find.text('Entregas y Envíos'), findsOneWidget);
-      expect(find.text('Retiros en Tienda'), findsOneWidget);
-      expect(find.text('Despachos (Courier)'), findsOneWidget);
+      // Debe mostrar el título unificado 'Retiro y Envíos' y los botones de acción
+      expect(find.text('Retiro y Envíos'), findsOneWidget);
+      // El apartado de despachos courier desapareció por completo (no hay pestañas separadas)
+      expect(find.text('Retiros en Tienda'), findsNothing);
+      expect(find.text('Despachos (Courier)'), findsNothing);
       expect(find.byIcon(Icons.tune_outlined), findsOneWidget);
       expect(find.byIcon(Icons.refresh_rounded), findsOneWidget);
     });
@@ -298,7 +299,7 @@ void main() {
       OrdenesSyncNotifier.instance.removeListener(listener);
     });
 
-    testWidgets('Cards de Entregas y Envíos renderizan botón Ver Detalle y botón de acción ampliado', (tester) async {
+    testWidgets('Cards de Entregas y Envíos renderizan vista unificada sin desbordamiento', (tester) async {
       await const FlutterSecureStorage().write(key: 'user_id_rol', value: '2');
       await const FlutterSecureStorage().write(key: 'user_rol', value: 'Vendedor');
 
@@ -310,7 +311,16 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.text('Entregas y Envíos'), findsOneWidget);
+      expect(find.text('Retiro y Envíos'), findsOneWidget);
+    });
+
+    test('Orden de despacho incluye datos de despacho y QR transaccional para barrera de salida', () {
+      final ordenDespacho = EntregaEnvioModel.fromJson(mockEntregasJson[1]);
+      expect(ordenDespacho.esDespacho, true);
+      expect(ordenDespacho.despacho?.empresaTransporte, 'Chilexpress');
+      expect(ordenDespacho.despacho?.direccionEnvio, 'Av. Libertad 500');
+      expect(ordenDespacho.tieneQrDisponible, true);
+      expect(ordenDespacho.qrTransaccionalSalida, 'ORD-DESP-002');
     });
 
     test('EntregaEnvioModel.contieneMotorOCaja identifica con precisión motores y cajas vs repuestos menores', () {
