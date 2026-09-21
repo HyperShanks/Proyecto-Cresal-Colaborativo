@@ -255,6 +255,20 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
     _cargarInventario();
   }
 
+  int get _cantidadFiltrosActivos {
+    int count = 0;
+    if (_busquedaController.text.trim().isNotEmpty) count++;
+    if (_soloSinTasar) count++;
+    if (_categoria != 'todas') count++;
+    if (_galpon != 'todas' && _galpon != 'todos') count++;
+    if (_pasillo != 'todas' && _pasillo != 'todos') count++;
+    if (_pallet != 'todas' && _pallet != 'todos') count++;
+    if (_combustible != 'todos' && _combustible != 'todas') count++;
+    if (_transmision != 'todas' && _transmision != 'todos') count++;
+    if (_estado != 'todos') count++;
+    return count;
+  }
+
   int get _totalPaginas => (_totalCount / _limitePorPagina).ceil().clamp(1, 9999);
 
   // Formateador monetario CLP seguro
@@ -513,7 +527,10 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
   Widget _buildBuscadorInput() {
     return TextField(
       controller: _busquedaController,
-      onChanged: _onBusquedaChanged,
+      onChanged: (val) {
+        setState(() {});
+        _onBusquedaChanged(val);
+      },
       style: AppTypography.small.copyWith(
         fontSize: 13,
         color: AppPalette.textPrimaryLight,
@@ -645,18 +662,59 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
   }
 
   Widget _buildBotonLimpiar() {
+    final count = _cantidadFiltrosActivos;
+    final hayFiltros = count > 0;
+
     return OutlinedButton.icon(
       onPressed: _limpiarFiltros,
-      icon: const Icon(Icons.filter_alt_off, size: 14),
-      label: const Text('Limpiar'),
+      icon: Icon(
+        Icons.filter_alt_off_rounded,
+        size: 14,
+        color: hayFiltros ? AppPalette.tertiary : const Color(0xFF475569),
+      ),
+      label: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Limpiar',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: hayFiltros ? AppPalette.tertiary : const Color(0xFF475569),
+            ),
+          ),
+          if (hayFiltros) ...[
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                color: AppPalette.tertiary,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '$count',
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
       style: OutlinedButton.styleFrom(
-        foregroundColor: const Color(0xFF475569),
-        backgroundColor: Colors.white,
-        side: const BorderSide(color: AppPalette.borderLight),
+        foregroundColor: hayFiltros ? AppPalette.tertiary : const Color(0xFF475569),
+        backgroundColor: hayFiltros
+            ? AppPalette.tertiary.withValues(alpha: 0.1)
+            : Colors.white,
+        side: BorderSide(
+          color: hayFiltros ? AppPalette.tertiary : AppPalette.borderLight,
+          width: hayFiltros ? 1.5 : 1.0,
+        ),
         minimumSize: const Size(0, 38),
         padding: const EdgeInsets.symmetric(horizontal: 12),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
       ),
     );
   }

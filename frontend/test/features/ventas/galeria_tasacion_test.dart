@@ -137,9 +137,10 @@ void main() {
       // Verifica presencia del Empty State de fotos
       expect(find.text('Activo sin fotografías registradas.'), findsOneWidget);
 
-      // Verifica presencia del campo de precio
-      expect(find.text('PRECIO DE REFERENCIA (CLP)'), findsOneWidget);
-      expect(find.byType(TextFormField), findsOneWidget);
+      // Verifica presencia del campo de precio (rango mínimo y máximo)
+      expect(find.text('PRECIO MÍNIMO (PISO DE NEGOCIACIÓN CLP)'), findsOneWidget);
+      expect(find.text('PRECIO MÁXIMO (PRECIO SUGERIDO / LISTA CLP)'), findsOneWidget);
+      expect(find.byType(TextFormField), findsNWidgets(2));
     });
   });
 }

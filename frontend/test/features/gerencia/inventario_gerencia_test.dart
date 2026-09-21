@@ -135,5 +135,30 @@ void main() {
       await tester.tap(botonTarjetas);
       await tester.pump();
     });
+
+    testWidgets('Botón Limpiar muestra badge de filtros activos y resetea al presionar', (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: InventarioGerenciaView(
+              idSucursalInicial: 1,
+              filtroSinTasarInicial: true,
+            ),
+          ),
+        ),
+      );
+
+      // Dado que filtroSinTasarInicial es true, debe haber 1 filtro activo y mostrar el badge '1'
+      expect(find.text('Limpiar'), findsOneWidget);
+      expect(find.text('1'), findsWidgets);
+
+      // Al presionar Limpiar, se limpian los filtros
+      await tester.tap(find.text('Limpiar'));
+      await tester.pump();
+    });
   });
 }

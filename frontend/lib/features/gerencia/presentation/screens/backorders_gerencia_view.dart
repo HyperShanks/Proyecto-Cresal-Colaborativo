@@ -90,6 +90,13 @@ class BackordersGerenciaViewState extends State<BackordersGerenciaView> {
     _cargarDatos();
   }
 
+  int get _cantidadFiltrosActivos {
+    int count = 0;
+    if (_busquedaController.text.trim().isNotEmpty) count++;
+    if (_filtroEstado != 'todos') count++;
+    return count;
+  }
+
   Future<void> _cargarDatos() async {
     debugPrint('🌱 [GERENCIA-VENTAS_EN_VERDE] 🔄 Solicitando KPIs y reservas en verde (Sucursal: ${_idSucursal ?? "Todas"}, Filtro: $_filtroEstado)...');
     setState(() {
@@ -336,7 +343,10 @@ class BackordersGerenciaViewState extends State<BackordersGerenciaView> {
             constraints: const BoxConstraints(minWidth: 280, maxWidth: 380),
             child: TextField(
               controller: _busquedaController,
-              onChanged: _onBusquedaChanged,
+              onChanged: (val) {
+                setState(() {});
+                _onBusquedaChanged(val);
+              },
               style: AppTypography.small.copyWith(
                 fontSize: 13,
                 color: AppPalette.textPrimaryLight,
@@ -448,23 +458,67 @@ class BackordersGerenciaViewState extends State<BackordersGerenciaView> {
           ),
 
           // Botón Limpiar Filtros
-          OutlinedButton.icon(
-            onPressed: _limpiarFiltros,
-            icon: const Icon(Icons.filter_alt_off_rounded, size: 14),
-            label: const Text(
-              'Limpiar Filtros',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-            ),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFF64748B),
-              side: const BorderSide(color: AppPalette.borderLight),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
+          _buildBotonLimpiar(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBotonLimpiar() {
+    final count = _cantidadFiltrosActivos;
+    final hayFiltros = count > 0;
+
+    return OutlinedButton.icon(
+      onPressed: _limpiarFiltros,
+      icon: Icon(
+        Icons.filter_alt_off_rounded,
+        size: 14,
+        color: hayFiltros ? AppPalette.tertiary : const Color(0xFF64748B),
+      ),
+      label: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Limpiar',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: hayFiltros ? AppPalette.tertiary : const Color(0xFF64748B),
             ),
           ),
+          if (hayFiltros) ...[
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                color: AppPalette.tertiary,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '$count',
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
         ],
+      ),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: hayFiltros ? AppPalette.tertiary : const Color(0xFF64748B),
+        backgroundColor: hayFiltros
+            ? AppPalette.tertiary.withValues(alpha: 0.1)
+            : Colors.white,
+        side: BorderSide(
+          color: hayFiltros ? AppPalette.tertiary : AppPalette.borderLight,
+          width: hayFiltros ? 1.5 : 1.0,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
       ),
     );
   }

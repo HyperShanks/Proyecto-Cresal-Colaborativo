@@ -146,9 +146,9 @@ void main() {
       expect(find.byType(TextField), findsOneWidget);
       expect(find.text('Buscar por Marca, Modelo, Cliente o Vendedor...'), findsOneWidget);
 
-      // Verificamos presencia del selector de estado y botón Limpiar Filtros
+      // Verificamos presencia del selector de estado y botón Limpiar
       expect(find.text('Estado: Todos'), findsOneWidget);
-      expect(find.text('Limpiar Filtros'), findsOneWidget);
+      expect(find.text('Limpiar'), findsOneWidget);
 
       // En la carga inicial se muestra el indicador de carga
       expect(find.byType(CircularProgressIndicator), findsOneWidget);

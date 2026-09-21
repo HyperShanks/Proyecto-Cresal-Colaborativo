@@ -380,7 +380,7 @@ class PanelFiltrosAvanzados extends StatelessWidget {
           ],
         ],
       ),
-      onPressed: hayFiltros ? onLimpiar : null,
+      onPressed: onLimpiar,
     );
   }
 }

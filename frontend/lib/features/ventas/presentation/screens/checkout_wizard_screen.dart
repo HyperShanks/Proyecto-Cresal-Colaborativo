@@ -1390,11 +1390,11 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                         icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF94A3B8)),
                         decoration: _inputDeco(
                           label: 'Región (Opcional)',
-                          hint: 'Seleccione región...',
+                          hint: 'Seleccione Región...',
                           icon: Icons.map_outlined,
                         ),
                         hint: const Text(
-                          'Seleccione región...',
+                          'Seleccione Región...',
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
                         ),
@@ -1427,14 +1427,14 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                         icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF94A3B8)),
                         decoration: _inputDeco(
                           label: 'Comuna (Opcional)',
-                          hint: 'Seleccione comuna...',
+                          hint: 'Seleccione Comuna...',
                           icon: Icons.location_city,
                         ).copyWith(
                           enabled: _regionCliente != null && _regionCliente!.isNotEmpty,
                         ),
                         hint: Text(
                           _regionCliente != null && _regionCliente!.isNotEmpty
-                              ? 'Seleccione comuna...'
+                              ? 'Seleccione Comuna...'
                               : 'Seleccione región primero',
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
