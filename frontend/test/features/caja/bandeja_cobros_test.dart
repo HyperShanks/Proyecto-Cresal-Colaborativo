@@ -114,6 +114,7 @@ void main() {
       horaEmisionFormateada: '11:38',
       totalOperacion: 650000,
       abonoPrevio: 150000,
+      saldoPendiente: 500000,
       montoACobrar: 500000,
       articulos: [
         ArticuloResumenModel(
@@ -141,6 +142,7 @@ void main() {
       horaEmisionFormateada: '12:20',
       totalOperacion: 1200000,
       abonoPrevio: 900000,
+      saldoPendiente: 300000,
       montoACobrar: 300000,
       articulos: [],
       especificacionesBackorder: BackorderEspecificacionesModel(
@@ -247,7 +249,7 @@ void main() {
       expect(find.text('Cristobal Alejandro Espinoza Perez'), findsOneWidget);
       expect(find.text('RUT: 14.892.401-2'), findsOneWidget);
       expect(find.text('Vendedor: Juaquin Leiva'), findsOneWidget);
-      expect(find.text('Saldo a Pagar:'), findsOneWidget);
+      expect(find.text('Saldo Pendiente:'), findsOneWidget);
       expect(find.text('\$500.000'), findsOneWidget);
 
       await tester.tap(find.byType(CobroPendienteCard));
@@ -275,7 +277,7 @@ void main() {
       expect(find.text('RES-5401'), findsOneWidget);
       expect(find.text('Ventas en Verde'), findsOneWidget);
       expect(find.text('Camila Andrea Soto Lagos'), findsOneWidget);
-      expect(find.text('Abono Inicial:'), findsOneWidget);
+      expect(find.text('Saldo Pendiente:'), findsOneWidget);
       expect(find.text('\$300.000'), findsOneWidget);
     });
   });

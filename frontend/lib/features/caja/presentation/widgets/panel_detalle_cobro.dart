@@ -1413,7 +1413,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                             : !esValida
                                 ? 'PAGO BLOQUEADO (DESCUADRE)'
                                 : (orden.esBackorder && esLiquidacionTotal)
-                                    ? 'CONTINUAR Y ASIGNAR ACTIVO (100%)'
+                                    ? 'CONTINUAR Y ASIGNAR ACTIVO'
                                     : !esLiquidacionTotal
                                         ? 'REGISTRAR ABONO PARCIAL'
                                         : 'CONFIRMAR Y PROCESAR COBRO',
@@ -1544,7 +1544,6 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
   Widget _buildModalidadCobroSection(CobroPendienteModel orden) {
     final modalidad = widget.provider.modalidad;
     final isLiquidacion = modalidad == 'LIQUIDACION';
-    final saldo = orden.saldoPendiente > 0 ? orden.saldoPendiente : orden.totalOperacion;
     final error = widget.provider.errorMontoAbono;
 
     return Container(
@@ -1587,7 +1586,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                   },
                   borderRadius: BorderRadius.circular(10),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
                     decoration: BoxDecoration(
                       color: isLiquidacion ? AppPalette.primary : AppPalette.backgroundLight,
                       borderRadius: BorderRadius.circular(10),
@@ -1596,34 +1595,24 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                         width: 1.5,
                       ),
                     ),
-                    child: Column(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.check_circle_rounded,
-                              size: 16,
-                              color: isLiquidacion ? Colors.white : AppPalette.textSecondaryLight,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Liquidar Saldo Completo',
-                              style: AppTypography.body.copyWith(
-                                fontWeight: FontWeight.w800,
-                                fontSize: 12,
-                                color: isLiquidacion ? Colors.white : AppPalette.textPrimaryLight,
-                              ),
-                            ),
-                          ],
+                        Icon(
+                          Icons.check_circle_rounded,
+                          size: 16,
+                          color: isLiquidacion ? Colors.white : AppPalette.textSecondaryLight,
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          CobroPendienteCard.formatClp(saldo),
-                          style: AppTypography.small.copyWith(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12,
-                            color: isLiquidacion ? Colors.white.withValues(alpha: 0.85) : AppPalette.primary,
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            'Liquidación Total',
+                            style: AppTypography.body.copyWith(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12,
+                              color: isLiquidacion ? Colors.white : AppPalette.textPrimaryLight,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
@@ -1640,7 +1629,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                   },
                   borderRadius: BorderRadius.circular(10),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
                     decoration: BoxDecoration(
                       color: !isLiquidacion ? AppPalette.tertiary : AppPalette.backgroundLight,
                       borderRadius: BorderRadius.circular(10),
@@ -1649,36 +1638,24 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                         width: 1.5,
                       ),
                     ),
-                    child: Column(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.savings_rounded,
-                              size: 16,
-                              color: !isLiquidacion ? Colors.white : AppPalette.textSecondaryLight,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Abono Personalizado',
-                              style: AppTypography.body.copyWith(
-                                fontWeight: FontWeight.w800,
-                                fontSize: 12,
-                                color: !isLiquidacion ? Colors.white : AppPalette.textPrimaryLight,
-                              ),
-                            ),
-                          ],
+                        Icon(
+                          Icons.savings_rounded,
+                          size: 16,
+                          color: !isLiquidacion ? Colors.white : AppPalette.textSecondaryLight,
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          orden.esPrimerAbono && orden.pisoPrimerAbono > 0
-                              ? 'Mín. ${CobroPendienteCard.formatClp(orden.pisoPrimerAbono)}'
-                              : 'Monto libre',
-                          style: AppTypography.small.copyWith(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12,
-                            color: !isLiquidacion ? Colors.white.withValues(alpha: 0.85) : AppPalette.textSecondaryLight,
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            'Abono Personalizado',
+                            style: AppTypography.body.copyWith(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12,
+                              color: !isLiquidacion ? Colors.white : AppPalette.textPrimaryLight,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],

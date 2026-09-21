@@ -32,7 +32,6 @@ class _AsignarActivoBackorderModalState
     extends State<AsignarActivoBackorderModal> {
   late final TextEditingController _skuController;
   bool _isConfirmando = false;
-  int _intentosFallidosSku = 0;
 
   @override
   void initState() {
@@ -52,12 +51,6 @@ class _AsignarActivoBackorderModalState
     final sku = _skuController.text.trim();
     if (sku.isEmpty) return;
     await widget.provider.validarActivoBackorder(sku);
-    final res = widget.provider.validacionActivo;
-    if (res != null && !res.coincide) {
-      setState(() {
-        _intentosFallidosSku++;
-      });
-    }
   }
 
   Future<void> _confirmarAtribucion() async {

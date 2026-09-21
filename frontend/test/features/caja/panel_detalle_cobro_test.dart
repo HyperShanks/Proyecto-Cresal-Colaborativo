@@ -104,6 +104,7 @@ void main() {
       horaEmisionFormateada: '11:38',
       totalOperacion: 650000,
       abonoPrevio: 150000,
+      saldoPendiente: 500000,
       montoACobrar: 500000,
       articulos: [
         ArticuloResumenModel(
@@ -131,6 +132,7 @@ void main() {
       horaEmisionFormateada: '12:20',
       totalOperacion: 1200000,
       abonoPrevio: 900000,
+      saldoPendiente: 300000,
       montoACobrar: 300000,
       articulos: [],
       especificacionesBackorder: BackorderEspecificacionesModel(
@@ -185,7 +187,7 @@ void main() {
     expect(find.textContaining('Cristobal Alejandro'), findsOneWidget);
     expect(find.text('Motor MG ZS 1.5 VTi-Tech Completo'), findsOneWidget);
     expect(find.text('TOTAL VENTA'), findsOneWidget);
-    expect(find.text('SALDO A COBRAR'), findsOneWidget);
+    expect(find.text('SALDO PENDIENTE'), findsOneWidget);
   });
 
   testWidgets('ST-F02 / CA-01: Renderiza detalle de Reserva Backorder seleccionada',
@@ -203,7 +205,7 @@ void main() {
     expect(find.text('Tucson 2.0 CRDi Turbo Diesel'), findsOneWidget);
   });
 
-  testWidgets('ST-F03: Renderiza directamente la orden sin selector de modalidad de cobro',
+  testWidgets('ST-F03: Selector de modalidad y botón inferior no muestran valores de precio repetidos',
       (tester) async {
     setDesktopViewport(tester);
     provider.seleccionarOrden(sampleVenta);
@@ -211,15 +213,23 @@ void main() {
     await tester.pumpWidget(createTestWidget(PanelDetalleCobro(provider: provider)));
     await tester.pumpAndSettle();
 
-    // No debe existir selector de modalidad ni abono personalizado
-    expect(find.text('MODALIDAD DE COBRO'), findsNothing);
-    expect(find.text('Abono Personalizado'), findsNothing);
-    expect(find.text('Liquidación Total'), findsNothing);
+    // El selector de modalidad existe sin montos o placeholders de precio
+    expect(find.text('MODALIDAD DE COBRO'), findsOneWidget);
+    expect(find.text('Liquidación Total'), findsOneWidget);
+    expect(find.text('Abono Personalizado'), findsOneWidget);
 
-    // Muestra la tarjeta financiera con los montos oficiales
+    // Ningún botón de modalidad muestra montos como placeholder
+    expect(find.widgetWithText(InkWell, '\$500.000'), findsNothing);
+    expect(find.widgetWithText(InkWell, '\$650.000'), findsNothing);
+
+    // El botón inferior de cobro no muestra montos de precio
+    expect(find.text('CONFIRMAR Y PROCESAR COBRO'), findsOneWidget);
+    expect(find.textContaining('CONFIRMAR Y PROCESAR COBRO ('), findsNothing);
+
+    // Muestra la tarjeta financiera oficial
     expect(find.text('TOTAL VENTA'), findsOneWidget);
     expect(find.text('ABONOS PREVIOS'), findsOneWidget);
-    expect(find.text('SALDO A COBRAR'), findsOneWidget);
+    expect(find.text('SALDO PENDIENTE'), findsOneWidget);
   });
 
   testWidgets('ST-F05: Cuadratura exacta habilita botón de confirmación en verde',
@@ -252,7 +262,7 @@ void main() {
 
     expect(provider.esCuadraturaValida, isFalse);
     expect(find.text('PAGO BLOQUEADO (DESCUADRE)'), findsOneWidget);
-    expect(find.textContaining('Descuadre Financiero'), findsOneWidget);
+    expect(find.textContaining('Faltan'), findsOneWidget);
 
     final boton = tester.widget<ElevatedButton>(find.byType(ElevatedButton));
     expect(boton.onPressed, isNull);

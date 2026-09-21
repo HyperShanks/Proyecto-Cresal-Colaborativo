@@ -76,8 +76,15 @@ class CajaProvider extends ChangeNotifier {
 
   int get diferenciaCuadratura => _montoDeclarado - totalPagosIngresados;
 
-  int get saldoPendienteActual =>
-      _ordenSeleccionada?.saldoPendiente ?? (_ordenSeleccionada?.montoACobrar ?? 0);
+  int get saldoPendienteActual {
+    if (_ordenSeleccionada == null) return 0;
+    if (_ordenSeleccionada!.saldoPendiente > 0) {
+      return _ordenSeleccionada!.saldoPendiente;
+    }
+    return _ordenSeleccionada!.montoACobrar > 0
+        ? _ordenSeleccionada!.montoACobrar
+        : _ordenSeleccionada!.totalOperacion;
+  }
 
   bool get esLiquidacionCompleta =>
       _ordenSeleccionada != null && _montoDeclarado >= saldoPendienteActual && saldoPendienteActual > 0;
