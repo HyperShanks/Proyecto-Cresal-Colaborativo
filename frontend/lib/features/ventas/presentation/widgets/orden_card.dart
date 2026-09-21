@@ -323,54 +323,29 @@ class OrdenCard extends StatelessWidget {
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (orden.contieneMotorOCaja) ...[
-                          if (orden.tieneQrDisponible) ...[
-                            OutlinedButton.icon(
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: AppPalette.success,
-                                side: BorderSide(
-                                  color: AppPalette.success.withValues(alpha: 0.6),
-                                  width: 1.0,
-                                ),
-                                padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 4.0),
-                                visualDensity: VisualDensity.compact,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8.0),
-                                ),
+                        if (orden.contieneMotorOCaja && orden.tieneQrDisponible) ...[
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppPalette.success,
+                              side: BorderSide(
+                                color: AppPalette.success.withValues(alpha: 0.6),
+                                width: 1.0,
                               ),
-                              icon: const Icon(Icons.qr_code, size: 15.0),
-                              label: const Text(
-                                'Ver QR',
-                                style: TextStyle(
-                                  fontSize: 12.0,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              onPressed: () => QrTicketDialog.mostrar(context, orden),
-                            ),
-                            const SizedBox(width: 8.0),
-                          ],
-                        ] else if (orden.esPagada && !orden.esCompletada) ...[
-                          ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppPalette.success,
-                              foregroundColor: Colors.white,
-                              elevation: 0,
                               padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 4.0),
                               visualDensity: VisualDensity.compact,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8.0),
                               ),
                             ),
-                            icon: const Icon(Icons.check_circle_outline, size: 15.0),
+                            icon: const Icon(Icons.qr_code, size: 15.0),
                             label: const Text(
-                              'Entregado',
+                              'Ver QR',
                               style: TextStyle(
                                 fontSize: 12.0,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                            onPressed: () => _confirmarEntregaMeson(context),
+                            onPressed: () => QrTicketDialog.mostrar(context, orden),
                           ),
                           const SizedBox(width: 8.0),
                         ],
@@ -582,76 +557,4 @@ class OrdenCard extends StatelessWidget {
       ),
     );
   }
-
-  Future<void> _confirmarEntregaMeson(BuildContext context) async {
-    final bool? confirmar = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppPalette.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            const Icon(Icons.check_circle_outline, color: AppPalette.success, size: 24),
-            const SizedBox(width: 8),
-            const Text('Confirmar Entrega', style: TextStyle(color: AppPalette.textPrimary)),
-          ],
-        ),
-        content: Text(
-          '¿Confirmar la entrega de la orden #${orden.folioDisplay} al cliente?\n\nEsta acción marcará la orden como Completada.',
-          style: const TextStyle(color: AppPalette.textSecondary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('CANCELAR', style: TextStyle(color: AppPalette.textSecondary)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppPalette.success,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('CONFIRMAR ENTREGA', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmar == true) {
-      try {
-        await OrdenesService.confirmarEntregaTienda(orden.idOrden);
-        if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: AppPalette.surface,
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle, color: AppPalette.success),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    '¡Orden #${orden.folioDisplay} entregada exitosamente!',
-                    style: const TextStyle(color: AppPalette.textPrimary),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      } catch (e) {
-        if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: AppPalette.surface,
-            content: Text(
-              'Error al confirmar entrega: ${e.toString().replaceAll("Exception: ", "")}',
-              style: const TextStyle(color: AppPalette.error),
-            ),
-          ),
-        );
-      }
-    }
-  }
-
 }

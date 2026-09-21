@@ -1981,9 +1981,21 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                 children: [
                   const Icon(Icons.payments_outlined, size: 16, color: AppPalette.primary),
                   const SizedBox(width: 6),
-                  Text('Abono / Anticipo Inicial (\$):', style: AppTypography.small.copyWith(fontWeight: FontWeight.bold)),
+                  Text(
+                    _controller.reservas.isNotEmpty
+                        ? 'Abono / Anticipo Venta en Verde (\$):'
+                        : 'Abono / Anticipo Inicial (\$):',
+                    style: AppTypography.small.copyWith(fontWeight: FontWeight.bold),
+                  ),
                 ],
               ),
+              if (_controller.reservas.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  'Ingrese aquí el monto de abono acordado para la venta en verde (o \$0 para que el cliente pague el total en caja).',
+                  style: AppTypography.small.copyWith(color: AppPalette.textSecondary, fontSize: 11),
+                ),
+              ],
               const SizedBox(height: 6),
               TextField(
                 controller: _montoAbonoController,

@@ -244,5 +244,41 @@ void main() {
 
       expect(siguienteOrdenPulsado, isTrue);
     });
+
+    testWidgets('Venta de Misceláneos 100% pagada renderiza cabecera verde de Venta Completada en Mostrador y aviso de entrega en mostrador sin QR',
+        (tester) async {
+      setDesktopViewport(tester);
+
+      final resultadoMisc = RegistrarCobroResponseModel(
+        success: true,
+        mensaje: 'Cobro registrado exitosamente',
+        folio: 'ORD-2026-0999',
+        montoCobrado: 45000,
+        nuevoSaldoPendiente: 0,
+        estadoActualizado: 'Completada',
+        transaccionesIds: ['tx-misc-001'],
+        qrGenerado: null,
+      );
+
+      await tester.pumpWidget(
+        createTestWidget(
+          ResultadoCobroDialog(
+            orden: sampleVenta,
+            resultado: resultadoMisc,
+            metodosResumen: 'Efectivo: \$45.000',
+            onSiguienteOrden: () {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Venta Completada en Mostrador'), findsOneWidget);
+      expect(find.text('Pago 100% saldado • Entrega inmediata en mostrador'), findsOneWidget);
+      expect(
+        find.textContaining('La venta de misceláneos ha sido saldada y completada exitosamente'),
+        findsOneWidget,
+      );
+      expect(find.byIcon(Icons.qr_code_2_rounded), findsNothing);
+    });
   });
 }

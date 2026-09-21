@@ -86,4 +86,63 @@ class CatalogoService {
       throw Exception('Error de conexión con el catálogo: $e');
     }
   }
+
+  /// Obtiene dinámicamente desde la BD las opciones de filtro (marcas, años,
+  /// cilindradas, transmisiones) correspondientes únicamente a activos disponibles en catálogo.
+  static Future<Map<String, dynamic>> obtenerOpcionesFiltrosCatalogo({
+    int? idCategoria,
+    int? idSucursal,
+  }) async {
+    try {
+      final Map<String, String> queryParams = {};
+      if (idCategoria != null) {
+        queryParams['id_categoria'] = idCategoria.toString();
+      }
+      if (idSucursal != null) {
+        queryParams['id_sucursal'] = idSucursal.toString();
+      }
+
+      final uri = Uri.parse(
+        '${ApiConstants.inventarioEndpoint}/catalogo/opciones-filtros',
+      ).replace(queryParameters: queryParams.isNotEmpty ? queryParams : null);
+
+      final token = await AuthService.getToken();
+      final headers = {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      };
+
+      final response = await http.get(uri, headers: headers).timeout(
+            const Duration(seconds: 10),
+            onTimeout: () => throw Exception('Tiempo de espera agotado al consultar opciones de filtro'),
+          );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = jsonDecode(
+          utf8.decode(response.bodyBytes),
+        ) as Map<String, dynamic>;
+
+        return {
+          'marcas': List<String>.from(data['marcas'] ?? []),
+          'anios': List<int>.from(data['anios'] ?? []),
+          'cilindradas': List<String>.from(data['cilindradas'] ?? []),
+          'transmisiones': List<String>.from(data['transmisiones'] ?? []),
+        };
+      } else {
+        return {
+          'marcas': <String>[],
+          'anios': <int>[],
+          'cilindradas': <String>[],
+          'transmisiones': <String>[],
+        };
+      }
+    } catch (_) {
+      return {
+        'marcas': <String>[],
+        'anios': <int>[],
+        'cilindradas': <String>[],
+        'transmisiones': <String>[],
+      };
+    }
+  }
 }

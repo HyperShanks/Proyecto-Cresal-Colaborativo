@@ -74,6 +74,12 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
   String? _cilindrada;
   String? _transmision;
 
+  // Opciones dinámicas de filtros desde la BD (solo disponibles)
+  List<String> _opcionesMarcas = [];
+  List<int> _opcionesAnios = [];
+  List<String> _opcionesCilindradas = [];
+  List<String> _opcionesTransmisiones = [];
+
   bool get _tieneFiltrosActivos =>
       _idCategoria != null ||
       _idSucursalFiltro != null ||
@@ -122,7 +128,27 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
         _vendedorSucursalId = sucursalId;
       });
     }
+    _cargarOpcionesFiltros();
     await _fetchCatalogo(resetPagination: true);
+  }
+
+  Future<void> _cargarOpcionesFiltros() async {
+    try {
+      final opts = await CatalogoService.obtenerOpcionesFiltrosCatalogo(
+        idCategoria: _idCategoria,
+        idSucursal: _idSucursalFiltro,
+      );
+      if (mounted) {
+        setState(() {
+          _opcionesMarcas = opts['marcas'] as List<String>? ?? [];
+          _opcionesAnios = opts['anios'] as List<int>? ?? [];
+          _opcionesCilindradas = opts['cilindradas'] as List<String>? ?? [];
+          _opcionesTransmisiones = opts['transmisiones'] as List<String>? ?? [];
+        });
+      }
+    } catch (_) {
+      // Continuar con listas vacías en caso de error
+    }
   }
 
   // ── Búsqueda en Tiempo Real (Debounce 250 ms) ──────────────────────────────
@@ -156,6 +182,7 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
       _cilindrada = null;
       _transmision = null;
     });
+    _cargarOpcionesFiltros();
     _aplicarFiltros();
   }
 
@@ -408,12 +435,18 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
         anio: _anio,
         cilindrada: _cilindrada,
         transmision: _transmision,
+        marcasDisponibles: _opcionesMarcas,
+        aniosDisponibles: _opcionesAnios,
+        cilindradasDisponibles: _opcionesCilindradas,
+        transmisionesDisponibles: _opcionesTransmisiones,
         onCategoriaChanged: (val) {
           setState(() => _idCategoria = val);
+          _cargarOpcionesFiltros();
           _aplicarFiltros();
         },
         onSucursalChanged: (val) {
           setState(() => _idSucursalFiltro = val);
+          _cargarOpcionesFiltros();
           _aplicarFiltros();
         },
         onMarcaChanged: (val) {
@@ -589,6 +622,7 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
                         label: _idCategoria == 1 ? 'Motores' : 'Cajas',
                         onDeleted: () {
                           setState(() => _idCategoria = null);
+                          _cargarOpcionesFiltros();
                           _aplicarFiltros();
                         },
                       ),
@@ -597,6 +631,7 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
                         label: _idSucursalFiltro == 1 ? 'Viña del Mar' : 'Limache',
                         onDeleted: () {
                           setState(() => _idSucursalFiltro = null);
+                          _cargarOpcionesFiltros();
                           _aplicarFiltros();
                         },
                       ),
@@ -616,6 +651,22 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
                           _aplicarFiltros();
                         },
                       ),
+                    if (_cilindrada != null)
+                      _buildActiveFilterChip(
+                        label: '$_cilindrada L',
+                        onDeleted: () {
+                          setState(() => _cilindrada = null);
+                          _aplicarFiltros();
+                        },
+                      ),
+                    if (_transmision != null)
+                      _buildActiveFilterChip(
+                        label: _transmision!,
+                        onDeleted: () {
+                          setState(() => _transmision = null);
+                          _aplicarFiltros();
+                        },
+                      ),
                     Padding(
                       padding: const EdgeInsets.only(left: 4.0),
                       child: ActionChip(
@@ -628,7 +679,13 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
                           ),
                         ),
                         backgroundColor: AppPalette.surface,
-                        side: BorderSide.none,
+                        side: BorderSide(
+                          color: AppPalette.error.withValues(alpha: 0.4),
+                          width: 1.0,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8.0),
+                        ),
                         onPressed: _limpiarFiltros,
                       ),
                     ),
@@ -653,22 +710,26 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
     return Container(
       margin: const EdgeInsets.only(right: 6.0),
       child: Chip(
+        color: WidgetStateProperty.resolveWith<Color>((states) {
+          return AppPalette.primary.withValues(alpha: 0.18);
+        }),
+        backgroundColor: AppPalette.primary.withValues(alpha: 0.18),
         label: Text(
           label,
           style: const TextStyle(
-            color: AppPalette.textPrimary,
+            color: AppPalette.primary,
             fontSize: 12,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w700,
           ),
         ),
         deleteIcon: const Icon(
           Icons.close,
           size: 14,
-          color: AppPalette.textPrimary,
+          color: AppPalette.primary,
         ),
+        deleteButtonTooltipMessage: 'Quitar filtro',
         onDeleted: onDeleted,
-        backgroundColor: AppPalette.primary.withValues(alpha: 0.25),
-        side: const BorderSide(color: AppPalette.primary, width: 1),
+        side: const BorderSide(color: AppPalette.primary, width: 1.2),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8.0),
         ),

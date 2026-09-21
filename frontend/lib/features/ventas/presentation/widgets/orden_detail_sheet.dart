@@ -242,145 +242,6 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
     }
   }
 
-  /// Confirmar entrega directa de productos misceláneos en mesón (tienda)
-  Future<void> _entregarOrdenMeson() async {
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
-
-    final confirmar = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppPalette.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14.0),
-          side: const BorderSide(color: Colors.white10),
-        ),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6.0),
-              decoration: BoxDecoration(
-                color: AppPalette.success.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(8.0),
-              ),
-              child: const Icon(
-                Icons.check_circle_outline,
-                color: AppPalette.success,
-                size: 22.0,
-              ),
-            ),
-            const SizedBox(width: 10.0),
-            Text(
-              'Confirmar Entrega en Mesón',
-              style: AppTypography.title.copyWith(fontSize: 17.0),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '¿Confirmar la entrega física de la orden ${_orden.folioDisplay} al cliente?',
-              style: AppTypography.body.copyWith(fontSize: 14.5),
-            ),
-            const SizedBox(height: 12.0),
-            Container(
-              padding: const EdgeInsets.all(10.0),
-              decoration: BoxDecoration(
-                color: AppPalette.background,
-                borderRadius: BorderRadius.circular(8.0),
-                border: Border.all(color: Colors.white10),
-              ),
-              child: const Row(
-                children: [
-                  Icon(Icons.info_outline, size: 16.0, color: AppPalette.secondary),
-                  SizedBox(width: 8.0),
-                  Expanded(
-                    child: Text(
-                      'Esta orden corresponde a venta de misceláneos en mesón. Al confirmar, pasará al estado Completada.',
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        color: AppPalette.textSecondary,
-                        fontFamily: AppTypography.fontFamily,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(
-              'Cancelar',
-              style: AppTypography.button.copyWith(color: AppPalette.textSecondary),
-            ),
-          ),
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppPalette.success,
-              foregroundColor: AppPalette.textPrimary,
-              elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
-            ),
-            icon: const Icon(Icons.check, size: 18.0),
-            label: const Text('CONFIRMAR ENTREGA'),
-            onPressed: () => Navigator.of(ctx).pop(true),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmar != true || !mounted) return;
-
-    setState(() => _isLoading = true);
-
-    try {
-      await OrdenesService.confirmarEntregaTienda(_orden.idOrden);
-
-      if (!mounted) return;
-
-      setState(() {
-        _orden = _orden.copyWith(estadoOrden: 'Completada');
-        _isLoading = false;
-      });
-
-      widget.onOrderUpdated?.call();
-
-      scaffoldMessenger.showSnackBar(
-        const SnackBar(
-          content: Row(
-            children: [
-              Icon(Icons.check_circle, color: Colors.white, size: 20.0),
-              SizedBox(width: 8.0),
-              Expanded(
-                child: Text(
-                  '¡Entrega confirmada exitosamente! Orden completada.',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ),
-            ],
-          ),
-          backgroundColor: AppPalette.success,
-          duration: Duration(seconds: 3),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      scaffoldMessenger.showSnackBar(
-        SnackBar(
-          content: Text('Error al confirmar entrega: ${e.toString().replaceFirst("Exception: ", "")}'),
-          backgroundColor: AppPalette.error,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-  }
-
 
 
   @override
@@ -806,9 +667,10 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                               ],
                             ),
 
-                            // Notas de preparación técnica de este ítem
+                            // Notas de preparación técnica de este ítem (solo activos o motores/cajas, no misceláneos)
                             if (detalle.notasPreparacion != null &&
-                                detalle.notasPreparacion!.isNotEmpty) ...[
+                                detalle.notasPreparacion!.isNotEmpty &&
+                                (detalle.esInventariado || detalle.esMotorOCaja)) ...[
                               const SizedBox(height: 8.0),
                               Container(
                                 padding: const EdgeInsets.all(8.0),
@@ -1027,89 +889,6 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                     ),
                   ],
 
-                  // ── Sección 4.A.1: Entrega Inmediata en Mesón (Misceláneos pagados sin motor/caja) ─
-                  if (!_orden.contieneMotorOCaja && _orden.esPagada && !_orden.esCompletada) ...[
-                    const SizedBox(height: 20.0),
-                    Container(
-                      padding: const EdgeInsets.all(16.0),
-                      decoration: BoxDecoration(
-                        color: AppPalette.success.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(12.0),
-                        border: Border.all(color: AppPalette.success.withValues(alpha: 0.5)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(8.0),
-                                decoration: BoxDecoration(
-                                  color: AppPalette.success.withValues(alpha: 0.2),
-                                  borderRadius: BorderRadius.circular(8.0),
-                                ),
-                                child: const Icon(
-                                  Icons.storefront_outlined,
-                                  color: AppPalette.success,
-                                  size: 28.0,
-                                ),
-                              ),
-                              const SizedBox(width: 12.0),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Entrega Inmediata en Mesón',
-                                      style: AppTypography.title.copyWith(
-                                        color: AppPalette.success,
-                                        fontSize: 15.0,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    Text(
-                                      'Venta de repuestos misceláneos o insumos. Entrega directa en mostrador.',
-                                      style: AppTypography.small.copyWith(
-                                        color: AppPalette.textSecondary,
-                                        fontSize: 12.0,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 14.0),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppPalette.success,
-                                foregroundColor: AppPalette.textPrimary,
-                                elevation: 0,
-                                minimumSize: const Size(double.infinity, 48.0),
-                                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(AppComponents.defaultBorderRadius),
-                                ),
-                              ),
-                              icon: const Icon(Icons.check_circle_outline, size: 20.0),
-                              label: const Text(
-                                'MARCAR COMO ENTREGADO',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13.5,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                              onPressed: _isLoading ? null : _entregarOrdenMeson,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-
                   // ── Sección 4.B: Confirmación de Entrega (Si está Completada) ─
                   if (_orden.esCompletada) ...[
                     const SizedBox(height: 20.0),
@@ -1131,7 +910,7 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                             child: const Icon(
                               Icons.verified_outlined,
                               color: AppPalette.primary,
-                              size: 28.0,
+                              size: 24.0,
                             ),
                           ),
                           const SizedBox(width: 12.0),
@@ -1140,18 +919,16 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Orden Completada',
+                                  'Orden Entregada / Completada',
                                   style: AppTypography.title.copyWith(
-                                    fontSize: 15.0,
-                                    fontWeight: FontWeight.bold,
                                     color: AppPalette.primary,
+                                    fontSize: 14.0,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
                                 const SizedBox(height: 4.0),
                                 Text(
-                                  _orden.contieneMotorOCaja
-                                      ? 'Los repuestos fueron validados y entregados exitosamente en barrera de bodega.'
-                                      : 'Los repuestos misceláneos fueron entregados exitosamente al cliente en mesón.',
+                                  'El ciclo operativo de esta venta se encuentra cerrado y validado.',
                                   style: AppTypography.small.copyWith(
                                     color: AppPalette.textSecondary,
                                     fontSize: 12.0,
@@ -1165,37 +942,36 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                     ),
                   ],
 
-                  // ── Sección 4.C: Acciones Condicionales (Solo si está Reservada) ─
+                  // ── Sección 5: Acciones de Gestión (Solo si Reservada) ──
                   if (_orden.esReservada) ...[
                     const SizedBox(height: 20.0),
                     Text(
                       'Acciones de Gestión',
                       style: AppTypography.title.copyWith(fontSize: 15.0),
                     ),
-                    const SizedBox(height: 10.0),
-
-                    // Botón Editar Instrucciones a Bodega
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48.0,
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppPalette.primary,
-                          side: const BorderSide(color: AppPalette.primary, width: 1.2),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10.0),
+                    // Botón Editar Instrucciones a Bodega (solo para órdenes con repuestos inventariados o motor/caja)
+                    if (_orden.contieneMotorOCaja || _orden.detalles.any((d) => d.esInventariado)) ...[
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48.0,
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppPalette.primary,
+                            side: const BorderSide(color: AppPalette.primary, width: 1.2),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10.0),
+                            ),
                           ),
+                          icon: const Icon(Icons.edit_note, size: 20.0),
+                          label: const Text(
+                            'Editar Instrucciones a Bodega',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          onPressed: _isLoading ? null : _dialogEditarInstrucciones,
                         ),
-                        icon: const Icon(Icons.edit_note, size: 20.0),
-                        label: const Text(
-                          'Editar Instrucciones a Bodega',
-                          style: TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        onPressed: _isLoading ? null : _dialogEditarInstrucciones,
                       ),
-                    ),
-
-                    const SizedBox(height: 10.0),
+                      const SizedBox(height: 10.0),
+                    ],
 
                     // Botón Deshacer / Anular Orden
                     SizedBox(

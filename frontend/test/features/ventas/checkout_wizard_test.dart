@@ -322,6 +322,34 @@ void main() {
       expect(find.text('Computador ECU'), findsNothing);
     });
 
+    testWidgets('ModalBackorderForm no renderiza campo de abono porque reside en Paso 4', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () => ModalBackorderForm.mostrar(context),
+                child: const Text('Abrir Modal'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Abrir Modal'));
+      await tester.pumpAndSettle();
+
+      // Debe mostrar Precio Acordado
+      expect(find.text('Precio Acordado (\$) *'), findsOneWidget);
+
+      // NO debe existir campo de Monto a Abonar en este formulario
+      expect(find.text('Monto a Abonar (\$) *'), findsNothing);
+      expect(find.textContaining('Monto a Abonar'), findsNothing);
+
+      // Texto de información orienta al usuario hacia el Paso 4
+      expect(find.textContaining('Paso 4'), findsOneWidget);
+    });
+
     testWidgets('CheckoutWizardScreen renderiza el Stepper de 5 pasos', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
