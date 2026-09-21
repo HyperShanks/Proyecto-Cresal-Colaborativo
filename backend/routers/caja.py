@@ -457,8 +457,9 @@ def validar_activo_backorder(
     estados_validos = ["disponible", "paletizado"]
     nombre_estado_actual = estado_activo.nombre_estado if estado_activo else ""
     if nombre_estado_actual.lower() not in estados_validos:
-        discrepancias.append(
-            f"Estado del repuesto: '{nombre_estado_actual}'. Solo se pueden asignar repuestos en estado 'Disponible' o 'Paletizado'."
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"El repuesto con SKU '{payload.sku_activo}' no está disponible (estado actual: '{nombre_estado_actual}'). Solo se pueden asignar repuestos en estado 'Disponible' o 'Paletizado'."
         )
 
     if vehiculo and reserva.marca_requerida and vehiculo.marca.lower() != reserva.marca_requerida.lower():

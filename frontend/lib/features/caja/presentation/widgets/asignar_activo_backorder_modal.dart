@@ -31,14 +31,39 @@ class AsignarActivoBackorderModal extends StatefulWidget {
 class _AsignarActivoBackorderModalState
     extends State<AsignarActivoBackorderModal> {
   late final TextEditingController _skuController;
+  String _prefijoSeleccionado = 'MOT-';
   bool _isConfirmando = false;
 
   @override
   void initState() {
     super.initState();
-    _skuController = TextEditingController(
-      text: widget.provider.skuActivoAtribuido ?? '',
-    );
+    final catBo = widget.orden.especificacionesBackorder?.categoria.toLowerCase() ?? '';
+    final esCaja = catBo.contains('caja') ||
+        widget.orden.articulos.any((a) => (a.categoria?.toLowerCase().contains('caja') ?? false) || a.descripcion.toLowerCase().contains('caja'));
+    _prefijoSeleccionado = esCaja ? 'CAJ-' : 'MOT-';
+
+    String initialText = widget.provider.skuActivoAtribuido ?? '';
+    if (initialText.startsWith('MOT-')) {
+      _prefijoSeleccionado = 'MOT-';
+      initialText = initialText.substring(4);
+    } else if (initialText.startsWith('CAJ-')) {
+      _prefijoSeleccionado = 'CAJ-';
+      initialText = initialText.substring(4);
+    }
+
+    _skuController = TextEditingController(text: initialText);
+  }
+
+  String _obtenerSkuCompleto() {
+    String texto = _skuController.text.trim().toUpperCase();
+    if (texto.startsWith('MOT-')) {
+      _prefijoSeleccionado = 'MOT-';
+      texto = texto.substring(4).trim();
+    } else if (texto.startsWith('CAJ-')) {
+      _prefijoSeleccionado = 'CAJ-';
+      texto = texto.substring(4).trim();
+    }
+    return '$_prefijoSeleccionado$texto';
   }
 
   @override
@@ -48,14 +73,14 @@ class _AsignarActivoBackorderModalState
   }
 
   Future<void> _ejecutarValidacionSku() async {
-    final sku = _skuController.text.trim();
-    if (sku.isEmpty) return;
+    final sku = _obtenerSkuCompleto();
+    if (_skuController.text.trim().isEmpty) return;
     await widget.provider.validarActivoBackorder(sku);
   }
 
   Future<void> _confirmarAtribucion() async {
-    final sku = _skuController.text.trim();
-    if (sku.isEmpty) return;
+    final sku = _obtenerSkuCompleto();
+    if (_skuController.text.trim().isEmpty) return;
 
     setState(() {
       _isConfirmando = true;
@@ -296,6 +321,48 @@ class _AsignarActivoBackorderModalState
                   // ── Input de SKU + Botón Validar ────────────────────
                   Row(
                     children: [
+                      // Selector de Prefijo (MOT- / CAJ-)
+                      Container(
+                        height: 48,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        decoration: BoxDecoration(
+                          color: AppPalette.backgroundLight,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppPalette.borderLight),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _prefijoSeleccionado,
+                            dropdownColor: AppPalette.surfaceLight,
+                            icon: const Icon(Icons.arrow_drop_down, color: AppPalette.primary),
+                            style: AppTypography.body.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: AppPalette.primary,
+                              fontSize: 14,
+                            ),
+                            items: const [
+                              DropdownMenuItem(
+                                value: 'MOT-',
+                                child: Text('MOT-', style: TextStyle(fontWeight: FontWeight.bold)),
+                              ),
+                              DropdownMenuItem(
+                                value: 'CAJ-',
+                                child: Text('CAJ-', style: TextStyle(fontWeight: FontWeight.bold)),
+                              ),
+                            ],
+                            onChanged: (!atribuido || (validacion?.coincide == false && !forzar))
+                                ? (val) {
+                                    if (val != null) {
+                                      setState(() {
+                                        _prefijoSeleccionado = val;
+                                      });
+                                    }
+                                  }
+                                : null,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: TextField(
                           controller: _skuController,
@@ -310,7 +377,7 @@ class _AsignarActivoBackorderModalState
                               ? null
                               : (_) => _ejecutarValidacionSku(),
                           decoration: InputDecoration(
-                            hintText: 'Ej: MOT-1020',
+                            hintText: 'Número de ingreso (ej: 1020)',
                             prefixIcon: const Icon(
                               Icons.tag_rounded,
                               size: 20,
@@ -357,6 +424,38 @@ class _AsignarActivoBackorderModalState
                       ),
                     ],
                   ),
+
+                  // ── Error de Validación / No Disponible ─────────────
+                  if (widget.provider.errorMessage != null && validacion == null) ...[
+                    const SizedBox(height: 14),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppPalette.errorBg,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppPalette.errorBorder),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.error_outline_rounded,
+                            color: AppPalette.errorText,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              widget.provider.errorMessage!,
+                              style: AppTypography.small.copyWith(
+                                color: AppPalette.errorText,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
 
                   // ── Resultado de Validación ─────────────────────────
                   if (validacion != null) ...[

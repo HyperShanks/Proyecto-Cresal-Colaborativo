@@ -11,6 +11,7 @@ import 'package:frontend/features/ventas/services/ordenes_service.dart';
 import 'package:frontend/features/ventas/presentation/widgets/orden_card.dart';
 import 'package:frontend/features/ventas/presentation/widgets/orden_detail_sheet.dart';
 import 'package:frontend/features/ventas/presentation/widgets/historial_filtros_drawer.dart';
+import 'package:frontend/features/ventas/presentation/widgets/asignar_activo_vendedor_dialog.dart';
 import 'package:frontend/features/ventas/presentation/screens/historial_screen.dart';
 
 void main() {
@@ -875,6 +876,114 @@ void main() {
 
       // Verificamos que inicialmente está en normal y renderiza la orden1
       expect(find.text('ORD-TEST-001'), findsOneWidget);
+    });
+  });
+
+  group('AsignarActivoVendedorDialog Widget Tests', () {
+    testWidgets('Muestra selector de prefijo MOT- y CAJ- y selecciona automáticamente según categoría', (tester) async {
+      final ordenBackorderCaja = OrdenHistorialModel(
+        idOrden: 'bo-caja-001',
+        estadoOrden: 'Pagada',
+        totalVenta: 350000,
+        montoPendiente: 0,
+        fechaCreacion: '2026-08-14T10:30:00',
+        totalItems: 1,
+        cliente: const ClienteOrdenResumenModel(
+          rutCliente: '18.765.432-1',
+          nombres: 'Carlos',
+          apellidos: 'González',
+          telefono: '+56912345678',
+          correo: 'carlos@correo.cl',
+          comuna: 'Viña del Mar',
+        ),
+        detalles: [
+          DetalleOrdenItemModel(
+            idDetalle: 'det-caja-001',
+            idCategoria: 2,
+            nombreCategoria: 'Cajas de Cambio',
+            titulo: 'Caja Automática Toyota Yaris',
+            cantidad: 1,
+            precioFinal: 350000,
+            subtotal: 350000,
+            esInventariado: false,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (ctx) => ElevatedButton(
+                onPressed: () {
+                  AsignarActivoVendedorDialog.mostrar(
+                    ctx,
+                    orden: ordenBackorderCaja,
+                    onAsignadoExitoso: () {},
+                  );
+                },
+                child: const Text('Abrir Dialog'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Abrir Dialog'));
+      await tester.pumpAndSettle();
+
+      // Debe detectar que es Caja y preseleccionar CAJ-
+      expect(find.text('CAJ-'), findsOneWidget);
+      expect(find.text('Número de ingreso (ej: 1000)'), findsOneWidget);
+      expect(find.text('Validar'), findsOneWidget);
+    });
+
+    testWidgets('Para un motor preselecciona MOT-', (tester) async {
+      final ordenBackorderMotor = OrdenHistorialModel(
+        idOrden: 'bo-mot-001',
+        estadoOrden: 'Pagada',
+        totalVenta: 600000,
+        montoPendiente: 0,
+        fechaCreacion: '2026-08-14T10:30:00',
+        totalItems: 1,
+        detalles: [
+          DetalleOrdenItemModel(
+            idDetalle: 'det-mot-001',
+            idCategoria: 1,
+            nombreCategoria: 'Motor',
+            titulo: 'Motor 1.6L Hyundai Accent',
+            cantidad: 1,
+            precioFinal: 600000,
+            subtotal: 600000,
+            esInventariado: false,
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (ctx) => ElevatedButton(
+                onPressed: () {
+                  AsignarActivoVendedorDialog.mostrar(
+                    ctx,
+                    orden: ordenBackorderMotor,
+                    onAsignadoExitoso: () {},
+                  );
+                },
+                child: const Text('Abrir Dialog'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Abrir Dialog'));
+      await tester.pumpAndSettle();
+
+      // Debe detectar que es Motor y preseleccionar MOT-
+      expect(find.text('MOT-'), findsOneWidget);
     });
   });
 }

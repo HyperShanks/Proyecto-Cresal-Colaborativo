@@ -34,7 +34,12 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final TextEditingController _searchController = TextEditingController();
 
-  List<OrdenHistorialModel> _ordenes = [];
+  List<OrdenHistorialModel> _ordenesHistorial = [];
+  List<OrdenHistorialModel> _ordenesPorAsignar = [];
+  int _activeRequestId = 0;
+
+  List<OrdenHistorialModel> get _ordenes =>
+      _seccionActual == 'por_asignar' ? _ordenesPorAsignar : _ordenesHistorial;
   bool _isLoading = true;
   String? _errorMessage;
   String _searchQuery = '';
@@ -62,8 +67,8 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
     _iniciarAutoRefresh();
 
     if (widget.initialOrdenes != null) {
-      _ordenes = List.from(widget.initialOrdenes!);
-      _ordenarOrdenes(_ordenes);
+      _ordenesHistorial = List.from(widget.initialOrdenes!);
+      _ordenarOrdenes(_ordenesHistorial);
       _isLoading = false;
     } else {
       _cargarOrdenes();
@@ -134,6 +139,9 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
   }
 
   Future<void> _cargarOrdenes() async {
+    final int requestId = ++_activeRequestId;
+    final String seccionSolicitada = _seccionActual;
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -141,19 +149,21 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
 
     try {
       final ordenes = await OrdenesService.obtenerMisVentas(
-        todas: _seccionActual == 'por_asignar' ? true : _verTodas,
-        estado: _seccionActual == 'por_asignar' ? null : _filtroEstado,
-        seccion: _seccionActual,
+        todas: seccionSolicitada == 'por_asignar' ? true : _verTodas,
+        estado: seccionSolicitada == 'por_asignar' ? null : _filtroEstado,
+        seccion: seccionSolicitada,
         client: widget.client,
       );
 
-      if (!mounted) return;
+      if (!mounted || requestId != _activeRequestId || _seccionActual != seccionSolicitada) {
+        return;
+      }
 
       // Ordenar: Activas al principio, completadas al final y anuladas al final absoluto
       _ordenarOrdenes(ordenes);
 
       int conteo = _conteoPorAsignar;
-      if (_seccionActual == 'por_asignar') {
+      if (seccionSolicitada == 'por_asignar') {
         conteo = ordenes.length;
       } else {
         try {
@@ -162,17 +172,26 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
             todas: true,
             client: widget.client,
           );
+          if (!mounted || requestId != _activeRequestId) return;
           conteo = porAsignar.length;
         } catch (_) {}
       }
 
+      if (!mounted || requestId != _activeRequestId || _seccionActual != seccionSolicitada) {
+        return;
+      }
+
       setState(() {
-        _ordenes = ordenes;
+        if (seccionSolicitada == 'por_asignar') {
+          _ordenesPorAsignar = ordenes;
+        } else {
+          _ordenesHistorial = ordenes;
+        }
         _conteoPorAsignar = conteo;
         _isLoading = false;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || requestId != _activeRequestId || _seccionActual != seccionSolicitada) return;
       setState(() {
         _errorMessage = e.toString().replaceFirst('Exception: ', '');
         _isLoading = false;
@@ -183,20 +202,22 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
   /// Recarga en segundo plano sin interrumpir la interacción del usuario
   Future<void> _cargarOrdenesSilencioso() async {
     if (!mounted || _isLoading) return;
+    final int requestId = ++_activeRequestId;
+    final String seccionSolicitada = _seccionActual;
 
     try {
       final ordenes = await OrdenesService.obtenerMisVentas(
-        todas: _seccionActual == 'por_asignar' ? true : _verTodas,
-        estado: _seccionActual == 'por_asignar' ? null : _filtroEstado,
-        seccion: _seccionActual,
+        todas: seccionSolicitada == 'por_asignar' ? true : _verTodas,
+        estado: seccionSolicitada == 'por_asignar' ? null : _filtroEstado,
+        seccion: seccionSolicitada,
         client: widget.client,
       );
 
-      if (!mounted) return;
+      if (!mounted || requestId != _activeRequestId || _seccionActual != seccionSolicitada) return;
       _ordenarOrdenes(ordenes);
 
       int conteo = _conteoPorAsignar;
-      if (_seccionActual == 'por_asignar') {
+      if (seccionSolicitada == 'por_asignar') {
         conteo = ordenes.length;
       } else {
         try {
@@ -205,16 +226,21 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
             todas: true,
             client: widget.client,
           );
+          if (!mounted || requestId != _activeRequestId) return;
           conteo = porAsignar.length;
         } catch (_) {}
       }
 
-      if (mounted) {
-        setState(() {
-          _ordenes = ordenes;
-          _conteoPorAsignar = conteo;
-        });
-      }
+      if (!mounted || requestId != _activeRequestId || _seccionActual != seccionSolicitada) return;
+
+      setState(() {
+        if (seccionSolicitada == 'por_asignar') {
+          _ordenesPorAsignar = ordenes;
+        } else {
+          _ordenesHistorial = ordenes;
+        }
+        _conteoPorAsignar = conteo;
+      });
     } catch (_) {
       // Ignorar errores en ciclo silencioso
     }
@@ -468,6 +494,12 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
   }
 
   Widget _buildOrdenPorAsignarCard(OrdenHistorialModel orden) {
+    // Guardia de seguridad: Asegurar que la orden sea venta en verde con ítem pendiente
+    final tieneBackorderPendiente = orden.detalles.any((d) => !d.esInventariado);
+    if (!tieneBackorderPendiente) {
+      return const SizedBox.shrink();
+    }
+
     return Container(
       key: Key('orden_por_asignar_${orden.idOrden}'),
       margin: const EdgeInsets.only(bottom: 12.0),

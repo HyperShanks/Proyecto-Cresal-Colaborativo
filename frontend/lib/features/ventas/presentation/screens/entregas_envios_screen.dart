@@ -760,7 +760,18 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('DESGLOSE DE REPUESTOS (${orden.totalItems})', style: AppTypography.small.copyWith(fontWeight: FontWeight.bold, color: AppPalette.textSecondary)),
+                      Expanded(
+                        child: Text(
+                          'DESGLOSE DE REPUESTOS (${orden.totalItems})',
+                          style: AppTypography.small.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: AppPalette.textSecondary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
                       _buildPreparacionBadge(orden.preparacionLista),
                     ],
                   ),

@@ -38,6 +38,7 @@ class AsignarActivoVendedorDialog extends StatefulWidget {
 class _AsignarActivoVendedorDialogState
     extends State<AsignarActivoVendedorDialog> {
   final TextEditingController _skuController = TextEditingController();
+  String _prefijoSeleccionado = 'MOT-';
   bool _isValidando = false;
   bool _isAsignando = false;
   bool _forzarAtribucion = false;
@@ -46,14 +47,39 @@ class _AsignarActivoVendedorDialogState
   String? _errorValidacion;
 
   @override
+  void initState() {
+    super.initState();
+    final detalleBo = widget.orden.detalles.firstWhere(
+      (d) => !d.esInventariado,
+      orElse: () => widget.orden.detalles.first,
+    );
+    final esCaja = (detalleBo.idCategoria == 2) ||
+        (detalleBo.nombreCategoria?.toLowerCase().contains('caja') ?? false) ||
+        (detalleBo.titulo.toLowerCase().contains('caja'));
+    _prefijoSeleccionado = esCaja ? 'CAJ-' : 'MOT-';
+  }
+
+  String _obtenerSkuCompleto() {
+    String texto = _skuController.text.trim().toUpperCase();
+    if (texto.startsWith('MOT-')) {
+      _prefijoSeleccionado = 'MOT-';
+      texto = texto.substring(4).trim();
+    } else if (texto.startsWith('CAJ-')) {
+      _prefijoSeleccionado = 'CAJ-';
+      texto = texto.substring(4).trim();
+    }
+    return '$_prefijoSeleccionado$texto';
+  }
+
+  @override
   void dispose() {
     _skuController.dispose();
     super.dispose();
   }
 
   Future<void> _validarSku() async {
-    final sku = _skuController.text.trim();
-    if (sku.isEmpty) return;
+    final sku = _obtenerSkuCompleto();
+    if (_skuController.text.trim().isEmpty) return;
 
     setState(() {
       _isValidando = true;
@@ -82,8 +108,8 @@ class _AsignarActivoVendedorDialogState
   }
 
   Future<void> _asignarActivo() async {
-    final sku = _skuController.text.trim();
-    if (sku.isEmpty) return;
+    final sku = _obtenerSkuCompleto();
+    if (_skuController.text.trim().isEmpty) return;
 
     setState(() {
       _isAsignando = true;
@@ -324,6 +350,48 @@ class _AsignarActivoVendedorDialogState
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Selector de Prefijo (MOT- / CAJ-)
+                  Container(
+                    height: 48,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    decoration: BoxDecoration(
+                      color: AppPalette.background,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _prefijoSeleccionado,
+                        dropdownColor: AppPalette.surface,
+                        icon: const Icon(Icons.arrow_drop_down, color: AppPalette.primary),
+                        style: AppTypography.body.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: AppPalette.primary,
+                          fontSize: 14,
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'MOT-',
+                            child: Text('MOT-', style: TextStyle(fontWeight: FontWeight.bold)),
+                          ),
+                          DropdownMenuItem(
+                            value: 'CAJ-',
+                            child: Text('CAJ-', style: TextStyle(fontWeight: FontWeight.bold)),
+                          ),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() {
+                              _prefijoSeleccionado = val;
+                              _resultadoValidacion = null;
+                              _errorValidacion = null;
+                            });
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: TextField(
                       controller: _skuController,
@@ -334,7 +402,7 @@ class _AsignarActivoVendedorDialogState
                       ),
                       textCapitalization: TextCapitalization.characters,
                       decoration: InputDecoration(
-                        hintText: 'Ej: MOT-NIS-1234 o escanear QR',
+                        hintText: 'Número de ingreso (ej: 1000)',
                         hintStyle: AppTypography.body.copyWith(
                           color: AppPalette.textSecondary.withValues(alpha: 0.6),
                           fontSize: 13,
@@ -342,7 +410,7 @@ class _AsignarActivoVendedorDialogState
                         filled: true,
                         fillColor: AppPalette.background,
                         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        prefixIcon: const Icon(Icons.qr_code_scanner, color: AppPalette.primary, size: 20),
+                        prefixIcon: const Icon(Icons.tag, color: AppPalette.primary, size: 20),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
                           borderSide: const BorderSide(color: Colors.white24),

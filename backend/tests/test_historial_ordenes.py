@@ -9,7 +9,7 @@ from models import (
     Region, Comuna, Sucursal, Rol, Usuario,
     Categoria_Activo, Estado_Activo, Vehiculo_Origen,
     Activo_Inventariado, Detalle_Motor, Orden_Venta,
-    Detalle_Orden, Despacho, Cliente
+    Detalle_Orden, Despacho, Cliente, Reservas_Backorder
 )
 from core.security import create_access_token
 from conftest import TestingSessionLocal
@@ -448,6 +448,100 @@ def test_obtener_mis_ventas_ordenamiento_completadas_al_final(client, db_session
         assert "Completada" in estados
         assert "Anulada" in estados
         assert estados[-1] == "Anulada"
+    finally:
+        db.close()
+
+
+def test_validar_activo_backorder_no_disponible_retorna_400(client, auth_headers_vendedor1, db_session):
+    """Verifica que validar un SKU de activo cuyo estado no es Disponible ni Paletizado retorne 400 y sea rechazado."""
+    db = TestingSessionLocal()
+    try:
+        id_orden = uuid.uuid4()
+        orden = Orden_Venta(
+            id_orden=id_orden,
+            id_cliente=db_session["orden_1"].id_cliente,
+            id_vendedor=db_session["vendedor_1"].id_usuario,
+            id_sucursal=1,
+            estado_orden="Pagada",
+            total_venta=500000,
+            monto_pendiente=0,
+            qr_transaccional_salida=None,
+        )
+        reserva = Reservas_Backorder(
+            id_reserva=uuid.uuid4(),
+            id_orden=id_orden,
+            id_cliente=db_session["orden_1"].id_cliente,
+            id_vendedor=db_session["vendedor_1"].id_usuario,
+            id_sucursal_registro=1,
+            id_categoria_requerida=1,
+            marca_requerida="Toyota",
+            modelo_requerido="Yaris",
+            precio_acordado=500000,
+            monto_abonado=500000,
+            estado_reserva="Confirmada",
+        )
+        activo_vendido = Activo_Inventariado(
+            id_activo=uuid.uuid4(),
+            sku_qr_fisico="MOT-VEND-9999",
+            id_categoria=1,
+            id_estado=3,  # Vendido
+            id_sucursal_actual=1,
+            precio_referencia=500000,
+            estado="Activo",
+        )
+        db.add_all([orden, reserva, activo_vendido])
+        db.commit()
+
+        payload = {"sku_activo": "MOT-VEND-9999"}
+        response = client.post(
+            f"/api/v1/ordenes/{id_orden}/validar-activo-backorder",
+            json=payload,
+            headers=auth_headers_vendedor1
+        )
+        assert response.status_code == 400
+        assert "no está disponible" in response.json()["detail"].lower()
+    finally:
+        db.close()
+
+
+def test_mis_ventas_por_asignar_excluye_anuladas(client, auth_headers_vendedor1, db_session):
+    """Verifica que la sección por_asignar no retorne órdenes anuladas aunque tengan backorder sin asignar."""
+    db = TestingSessionLocal()
+    try:
+        id_orden_anulada = uuid.uuid4()
+        orden_anulada = Orden_Venta(
+            id_orden=id_orden_anulada,
+            id_cliente=db_session["orden_1"].id_cliente,
+            id_vendedor=db_session["vendedor_1"].id_usuario,
+            id_sucursal=1,
+            estado_orden="Anulada",
+            total_venta=400000,
+            monto_pendiente=0,
+            qr_transaccional_salida=None,
+        )
+        reserva_anulada = Reservas_Backorder(
+            id_reserva=uuid.uuid4(),
+            id_orden=id_orden_anulada,
+            id_cliente=db_session["orden_1"].id_cliente,
+            id_vendedor=db_session["vendedor_1"].id_usuario,
+            id_sucursal_registro=1,
+            id_categoria_requerida=1,
+            marca_requerida="Toyota",
+            modelo_requerido="Yaris",
+            precio_acordado=400000,
+            monto_abonado=400000,
+            estado_reserva="Confirmada",
+        )
+        db.add_all([orden_anulada, reserva_anulada])
+        db.commit()
+
+        response = client.get(
+            "/api/v1/ordenes/mis-ventas?seccion=por_asignar&todas=true",
+            headers=auth_headers_vendedor1
+        )
+        assert response.status_code == 200
+        ids = [item["id_orden"] for item in response.json()]
+        assert str(id_orden_anulada) not in ids
     finally:
         db.close()
 
