@@ -25,7 +25,8 @@ class ResultadoCobroDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final emiteQr = resultado.qrGenerado != null;
-    final esAbono = !emiteQr;
+    final esMiscelaneoCompleta = !orden.esBackorder && resultado.nuevoSaldoPendiente == 0 && !emiteQr;
+    final esAbono = !emiteQr && !esMiscelaneoCompleta;
 
     return Dialog(
       backgroundColor: AppPalette.surfaceLight,
@@ -44,12 +45,12 @@ class ResultadoCobroDialog extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               // ── 1. Círculo de Estado ─────────────────────────────────────────
-              _buildStatusCircle(emiteQr),
+              _buildStatusCircle(emiteQr, esMiscelaneoCompleta),
 
               const SizedBox(height: 16),
 
               // ── 2. Título y Subtítulo Adaptativo ───────────────────────────
-              _buildTitleAndSubtitle(emiteQr),
+              _buildTitleAndSubtitle(emiteQr, esMiscelaneoCompleta),
 
               const SizedBox(height: 20),
 
@@ -59,7 +60,7 @@ class ResultadoCobroDialog extends StatelessWidget {
               const SizedBox(height: 16),
 
               // ── 4. Recuadro de Instrucción Operativa ───────────────────────
-              _buildOperationalInstructionBox(emiteQr),
+              _buildOperationalInstructionBox(emiteQr, esMiscelaneoCompleta),
 
               const SizedBox(height: 24),
 
@@ -94,36 +95,55 @@ class ResultadoCobroDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildStatusCircle(bool emiteQr) {
+  Widget _buildStatusCircle(bool emiteQr, bool esMiscelaneoCompleta) {
+    final isSuccess = emiteQr || esMiscelaneoCompleta;
     return Container(
       width: 64,
       height: 64,
       decoration: BoxDecoration(
-        color: emiteQr ? AppPalette.successBg : AppPalette.primary.withValues(alpha: 0.15),
+        color: isSuccess ? AppPalette.successBg : AppPalette.primary.withValues(alpha: 0.15),
         shape: BoxShape.circle,
         border: Border.all(
-          color: emiteQr ? AppPalette.successBorder : AppPalette.primary.withValues(alpha: 0.3),
+          color: isSuccess ? AppPalette.successBorder : AppPalette.primary.withValues(alpha: 0.3),
           width: 1.5,
         ),
       ),
       child: Icon(
-        emiteQr ? Icons.check_circle_rounded : Icons.receipt_long_rounded,
+        isSuccess ? Icons.check_circle_rounded : Icons.receipt_long_rounded,
         size: 36,
-        color: emiteQr ? AppPalette.success : AppPalette.primary,
+        color: isSuccess ? AppPalette.success : AppPalette.primary,
       ),
     );
   }
 
-  Widget _buildTitleAndSubtitle(bool emiteQr) {
+  Widget _buildTitleAndSubtitle(bool emiteQr, bool esMiscelaneoCompleta) {
     final esBackorderCompleta = orden.esBackorder && resultado.nuevoSaldoPendiente == 0;
+    final String title;
+    final String subtitle;
+    final Color subtitleColor;
+
+    if (emiteQr) {
+      title = 'Pago Registrado Exitosamente';
+      subtitle = 'QR Transaccional generado para barrera de salida';
+      subtitleColor = AppPalette.success;
+    } else if (esMiscelaneoCompleta) {
+      title = 'Venta Completada en Mostrador';
+      subtitle = 'Pago 100% saldado • Entrega inmediata en mostrador';
+      subtitleColor = AppPalette.success;
+    } else if (esBackorderCompleta) {
+      title = 'Venta en Verde Pagada al 100%';
+      subtitle = 'Pago completado • Pasa a "Por Asignar" del vendedor';
+      subtitleColor = AppPalette.primary;
+    } else {
+      title = 'Comprobante de Abono Registrado';
+      subtitle = 'Abono procesado correctamente • Sin emisión de QR';
+      subtitleColor = AppPalette.primary;
+    }
+
     return Column(
       children: [
         Text(
-          emiteQr
-              ? 'Pago Registrado Exitosamente'
-              : esBackorderCompleta
-                  ? 'Venta en Verde Pagada al 100%'
-                  : 'Comprobante de Abono Registrado',
+          title,
           style: AppTypography.title.copyWith(
             fontSize: 19,
             fontWeight: FontWeight.w900,
@@ -133,17 +153,9 @@ class ResultadoCobroDialog extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          emiteQr
-              ? 'QR Transaccional generado para barrera de salida'
-              : esBackorderCompleta
-                  ? 'Pago completado • Pasa a "Por Asignar" del vendedor'
-                  : 'Abono procesado correctamente • Sin emisión de QR',
+          subtitle,
           style: AppTypography.body.copyWith(
-            color: emiteQr
-                ? AppPalette.success
-                : esBackorderCompleta
-                    ? AppPalette.primary
-                    : AppPalette.primary,
+            color: subtitleColor,
             fontSize: 13,
             fontWeight: FontWeight.w600,
           ),
@@ -324,33 +336,49 @@ class ResultadoCobroDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildOperationalInstructionBox(bool emiteQr) {
+  Widget _buildOperationalInstructionBox(bool emiteQr, bool esMiscelaneoCompleta) {
     final esBackorderCompleta = orden.esBackorder && resultado.nuevoSaldoPendiente == 0;
-    final bgColor = emiteQr
-        ? AppPalette.surfaceLight
-        : esBackorderCompleta
-            ? AppPalette.primary.withValues(alpha: 0.08)
-            : AppPalette.warningBg;
-    final borderColor = emiteQr
-        ? AppPalette.borderLight
-        : esBackorderCompleta
-            ? AppPalette.primary.withValues(alpha: 0.25)
-            : AppPalette.warningBorder;
-    final headerTextColor = emiteQr
-        ? AppPalette.textPrimaryLight
-        : esBackorderCompleta
-            ? AppPalette.primary
-            : AppPalette.warningText;
-    final iconColor = emiteQr
-        ? AppPalette.primary
-        : esBackorderCompleta
-            ? AppPalette.primary
-            : AppPalette.warningText;
-    final bodyTextColor = emiteQr
-        ? AppPalette.textSecondaryLight
-        : esBackorderCompleta
-            ? AppPalette.textPrimaryLight
-            : AppPalette.warningText;
+    final Color bgColor;
+    final Color borderColor;
+    final Color headerTextColor;
+    final Color iconColor;
+    final Color bodyTextColor;
+    final IconData icon;
+    final String instructionText;
+
+    if (emiteQr) {
+      bgColor = AppPalette.surfaceLight;
+      borderColor = AppPalette.borderLight;
+      headerTextColor = AppPalette.textPrimaryLight;
+      iconColor = AppPalette.primary;
+      bodyTextColor = AppPalette.textSecondaryLight;
+      icon = Icons.info_outline_rounded;
+      instructionText = 'Derive al cliente al Mesón de Venta para la entrega física de sus piezas y repuestos.';
+    } else if (esMiscelaneoCompleta) {
+      bgColor = AppPalette.successBg;
+      borderColor = AppPalette.successBorder;
+      headerTextColor = AppPalette.success;
+      iconColor = AppPalette.success;
+      bodyTextColor = AppPalette.textPrimaryLight;
+      icon = Icons.check_circle_outline_rounded;
+      instructionText = 'La venta de misceláneos ha sido saldada y completada exitosamente. Entregue los repuestos o insumos directamente al cliente en el mostrador. No requiere paso por bodega ni barrera.';
+    } else if (esBackorderCompleta) {
+      bgColor = AppPalette.primary.withValues(alpha: 0.08);
+      borderColor = AppPalette.primary.withValues(alpha: 0.25);
+      headerTextColor = AppPalette.primary;
+      iconColor = AppPalette.primary;
+      bodyTextColor = AppPalette.textPrimaryLight;
+      icon = Icons.pending_actions_rounded;
+      instructionText = 'La venta en verde ha sido pagada al 100%. La orden ya está disponible en la sección "Por Asignar" del vendedor (${orden.vendedorNombre}) para que realice la asignación física del motor o caja cuando arribe a bodega.';
+    } else {
+      bgColor = AppPalette.warningBg;
+      borderColor = AppPalette.warningBorder;
+      headerTextColor = AppPalette.warningText;
+      iconColor = AppPalette.warningText;
+      bodyTextColor = AppPalette.warningText;
+      icon = Icons.warning_amber_rounded;
+      instructionText = 'La orden queda retenida en estado \'Reservada\' / Confirmada sin código QR de salida hasta la liquidación final o arribo a bodega.';
+    }
 
     return Container(
       width: double.infinity,
@@ -366,11 +394,7 @@ class ResultadoCobroDialog extends StatelessWidget {
           Row(
             children: [
               Icon(
-                emiteQr
-                    ? Icons.info_outline_rounded
-                    : esBackorderCompleta
-                        ? Icons.pending_actions_rounded
-                        : Icons.warning_amber_rounded,
+                icon,
                 size: 16,
                 color: iconColor,
               ),
@@ -387,11 +411,7 @@ class ResultadoCobroDialog extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            emiteQr
-                ? 'Derive al cliente al Mesón de Venta para la entrega física de sus piezas y repuestos.'
-                : esBackorderCompleta
-                    ? 'La venta en verde ha sido pagada al 100%. La orden ya está disponible en la sección "Por Asignar" del vendedor (${orden.vendedorNombre}) para que realice la asignación física del motor o caja cuando arribe a bodega.'
-                    : 'La orden queda retenida en estado \'Reservada\' / Confirmada sin código QR de salida hasta la liquidación final o arribo a bodega.',
+            instructionText,
             style: AppTypography.small.copyWith(
               fontSize: 12,
               fontWeight: FontWeight.w500,

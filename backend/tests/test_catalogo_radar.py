@@ -358,3 +358,45 @@ def test_buscar_inventario_y_catalogo_por_tipo_pieza(client, db_session):
     for item in items_inv:
         assert "CAJA" in item["categoria"].upper() or "CAJA" in item["modelo"].upper()
 
+
+def test_opciones_filtros_catalogo_solo_retorna_disponibles(client, db_session):
+    """
+    Verifica que /api/v1/inventario/catalogo/opciones-filtros retorne únicamente
+    opciones de marcas, años, cilindradas y transmisiones de repuestos en estado 'Disponible',
+    excluyendo marcas de repuestos no disponibles o inactivos.
+    """
+    headers = {"Authorization": f"Bearer {db_session['token_suc1']}"}
+    res = client.get("/api/v1/inventario/catalogo/opciones-filtros", headers=headers)
+    assert res.status_code == 200
+    data = res.json()
+
+    assert "marcas" in data
+    assert "anios" in data
+    assert "cilindradas" in data
+    assert "transmisiones" in data
+
+    # En db_session los disponibles son Toyota (Yaris) y Chevrolet (Sail)
+    assert "TOYOTA" in data["marcas"]
+    assert "CHEVROLET" in data["marcas"]
+    # No debe incluir marcas que no están en la BD
+    assert "NISSAN" not in data["marcas"]
+    assert "HYUNDAI" not in data["marcas"]
+
+    # Años disponibles
+    assert 2018 in data["anios"]
+    assert 2016 in data["anios"]
+
+    # Cilindradas de motores disponibles
+    assert "1.5" in data["cilindradas"]
+
+    # Transmisiones
+    assert any("Mecánica" in t or "Manual" in t for t in data["transmisiones"])
+
+    # Filtro por categoría cajas (id_categoria=2): solo debe listar CHEVROLET
+    res_cajas = client.get("/api/v1/inventario/catalogo/opciones-filtros?id_categoria=2", headers=headers)
+    assert res_cajas.status_code == 200
+    data_cajas = res_cajas.json()
+    assert "CHEVROLET" in data_cajas["marcas"]
+    assert "TOYOTA" not in data_cajas["marcas"]
+
+

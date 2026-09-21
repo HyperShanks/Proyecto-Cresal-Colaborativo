@@ -117,6 +117,18 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
     }).toList();
 
     if (_tipoEntregaFilter == 'todos') return lista;
+    if (_tipoEntregaFilter == 'despacho') {
+      return lista
+          .where((e) =>
+              e.tipoEntrega.toLowerCase() == 'despacho' ||
+              e.tipoEntrega.toLowerCase() == 'despacho domicilio')
+          .toList();
+    }
+    if (_tipoEntregaFilter == 'traslado') {
+      return lista
+          .where((e) => e.tipoEntrega.toLowerCase() == 'traslado')
+          .toList();
+    }
     return lista
         .where((e) => e.tipoEntrega.toLowerCase() == _tipoEntregaFilter)
         .toList();
@@ -323,6 +335,18 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                           selectedColor: AppPalette.secondary.withValues(alpha: 0.25),
                           labelStyle: TextStyle(
                             color: _tipoEntregaFilter == 'despacho' ? AppPalette.secondary : AppPalette.textSecondary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        ChoiceChip(
+                          label: const Text('Solo Traslados'),
+                          selected: _tipoEntregaFilter == 'traslado',
+                          onSelected: (selected) {
+                            if (selected) setModalState(() => _tipoEntregaFilter = 'traslado');
+                          },
+                          selectedColor: const Color(0xFFAB47BC).withValues(alpha: 0.25),
+                          labelStyle: TextStyle(
+                            color: _tipoEntregaFilter == 'traslado' ? const Color(0xFFAB47BC) : AppPalette.textSecondary,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -551,13 +575,17 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                         decoration: BoxDecoration(
                           color: (orden.tipoEntrega.toLowerCase() == 'despacho'
                                   ? AppPalette.secondary
-                                  : AppPalette.primary)
+                                  : (orden.tipoEntrega.toLowerCase() == 'traslado'
+                                      ? const Color(0xFFAB47BC)
+                                      : AppPalette.primary))
                               .withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
                             color: (orden.tipoEntrega.toLowerCase() == 'despacho'
                                     ? AppPalette.secondary
-                                    : AppPalette.primary)
+                                    : (orden.tipoEntrega.toLowerCase() == 'traslado'
+                                        ? const Color(0xFFAB47BC)
+                                        : AppPalette.primary))
                                 .withValues(alpha: 0.5),
                           ),
                         ),
@@ -566,7 +594,9 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                           style: TextStyle(
                             color: orden.tipoEntrega.toLowerCase() == 'despacho'
                                 ? AppPalette.secondary
-                                : AppPalette.primary,
+                                : (orden.tipoEntrega.toLowerCase() == 'traslado'
+                                    ? const Color(0xFFAB47BC)
+                                    : AppPalette.primary),
                             fontWeight: FontWeight.bold,
                             fontSize: 12,
                           ),
@@ -851,7 +881,9 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                                 ],
                               ),
                             ),
-                            if (item.notasPreparacion != null && item.notasPreparacion!.isNotEmpty)
+                            if (item.notasPreparacion != null &&
+                                item.notasPreparacion!.isNotEmpty &&
+                                (item.esInventariado || item.esMotorOCaja))
                               Padding(
                                 padding: const EdgeInsets.only(top: 2.0),
                                 child: Text('Nota: ${item.notasPreparacion}', style: AppTypography.small.copyWith(color: AppPalette.warning, fontSize: 11)),

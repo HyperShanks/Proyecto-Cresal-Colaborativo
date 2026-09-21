@@ -618,7 +618,8 @@ def registrar_cobro(
                 ).first() is not None
 
                 tiene_despacho = db.query(Despacho).filter(
-                    Despacho.id_orden == orden.id_orden
+                    Despacho.id_orden == orden.id_orden,
+                    Despacho.estado == "Activo"
                 ).first() is not None
 
                 reserva_vinculada = db.query(Reservas_Backorder).filter(

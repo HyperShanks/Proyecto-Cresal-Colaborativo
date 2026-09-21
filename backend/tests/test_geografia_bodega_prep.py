@@ -191,9 +191,6 @@ def test_checkout_wizard_con_comuna_dinamica_y_preparacion(client, setup_geograf
     assert res_tareas.status_code == 200
     tareas = res_tareas.json()
 
-    # Debe existir la tarea de pre-entrega para el ítem manual
+    # NO debe existir tarea de bodega para ítems manuales / venta libre (misceláneos)
     tarea_prep = next((t for t in tareas if "Pastillas de freno" in t["titulo_pieza"]), None)
-    assert tarea_prep is not None, f"No se encontró la tarea de preparación. Tareas actuales: {tareas}"
-    assert tarea_prep["tipo_alerta"] == "PREPARACION"
-    assert tarea_prep["estado_bloqueo"] == "ESPERANDO PAGO EN CAJA"
-    assert "Verificar espesor" in tarea_prep["nota_especial"]
+    assert tarea_prep is None, f"Los misceláneos no deben generar tareas para bodega. Tarea encontrada: {tarea_prep}"

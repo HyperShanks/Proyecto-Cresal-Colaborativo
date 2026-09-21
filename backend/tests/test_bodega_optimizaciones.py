@@ -700,3 +700,47 @@ def test_alertas_impresion_qr_todos_activos_sin_qr(client, db_session, auth_head
     assert str(act_e.id_activo) not in ids_impresion, "El activo E (otra sucursal) NO debe aparecer en impresión de sucursal 1"
 
 
+def test_orden_miscelaneos_no_genera_tareas_bodega(client, db_session, auth_headers_vendedor, auth_headers_bodega_vina):
+    """
+    Verifica que al crearse una orden de solo venta libre / misceláneos (id_activo is None),
+    NO le llega ninguna tarea de preparación ni alerta al bodeguero.
+    """
+    payload_orden = {
+        "cliente": {
+            "rut_cliente": "19.999.999-9",
+            "nombres": "Arturo",
+            "apellidos": "Prat",
+            "comuna": "Valparaíso",
+            "consentimiento_legal": True,
+        },
+        "requiere_despacho": False,
+        "consentimiento_legal": True,
+        "id_sucursal": 1,
+        "items": [
+            {
+                "descripcion_manual": "Ampolleta H4 y Fusible 15A",
+                "cantidad": 2,
+                "precio_final": 15000,
+            }
+        ],
+    }
+
+    res = client.post("/api/v1/ordenes", json=payload_orden, headers=auth_headers_vendedor)
+    assert res.status_code == 201
+    orden_data = res.json()
+    id_orden = orden_data["id_orden"]
+    folio = orden_data["folio"]
+
+    # Consultar tareas de bodega
+    res_bodega = client.get("/api/v1/bodega/tareas-pendientes?sucursal_id=1", headers=auth_headers_bodega_vina)
+    assert res_bodega.status_code == 200
+    tareas = res_bodega.json()
+
+    # Ninguna tarea debe pertenecer a esta orden de misceláneos
+    tareas_de_esta_orden = [
+        t for t in tareas
+        if t.get("id_orden") == id_orden or t.get("folio") == folio or t.get("orden_ref") == folio
+    ]
+    assert len(tareas_de_esta_orden) == 0, f"Error: Bodega recibió tareas para orden de misceláneos: {tareas_de_esta_orden}"
+
+

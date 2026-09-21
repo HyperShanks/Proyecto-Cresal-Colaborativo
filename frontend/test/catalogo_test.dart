@@ -7,6 +7,7 @@ import 'package:frontend/features/ventas/presentation/widgets/filtros_drawer.dar
 import 'package:frontend/features/ventas/presentation/screens/ventas_main_screen.dart';
 import 'package:frontend/features/ventas/presentation/screens/catalogo_screen.dart';
 import 'package:frontend/features/ventas/presentation/screens/detalle_activo_screen.dart';
+import 'package:frontend/core/theme/tokens/app_palette.dart';
 
 void main() {
   group('CatalogoItem Model Tests', () {
@@ -519,6 +520,95 @@ void main() {
 
       expect(find.text('ESPECIFICACIONES TÉCNICAS'), findsOneWidget);
       expect(find.text('Número de Motor'), findsNothing);
+    });
+  });
+
+  group('Filtros Dinámicos y Contraste de Chips Tests', () {
+    testWidgets('FiltrosDrawer renderiza únicamente marcas disponibles en la BD y no marcas fantasma', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            endDrawer: FiltrosDrawer(
+              idCategoria: null,
+              idSucursal: null,
+              marca: null,
+              anio: null,
+              marcasDisponibles: const ['PEUGEOT', 'DODGE'],
+              aniosDisponibles: const [2022, 2019],
+              cilindradasDisponibles: const ['1.6', '2.0'],
+              onCategoriaChanged: (_) {},
+              onSucursalChanged: (_) {},
+              onMarcaChanged: (_) {},
+              onAnioChanged: (_) {},
+              onCilindradaChanged: (_) {},
+              onTransmisionChanged: (_) {},
+              onLimpiarFiltros: () {},
+            ),
+            body: Builder(
+              builder: (ctx) => ElevatedButton(
+                onPressed: () => Scaffold.of(ctx).openEndDrawer(),
+                child: const Text('Abrir'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Abrir'));
+      await tester.pumpAndSettle();
+
+      // Abrir dropdown de marcas (primer DropdownButtonFormField<String?>)
+      await tester.tap(find.byType(DropdownButtonFormField<String?>).first);
+      await tester.pumpAndSettle();
+
+      // Debe mostrar las marcas dinámicas presentes en la BD
+      expect(find.text('PEUGEOT'), findsWidgets);
+      expect(find.text('DODGE'), findsWidgets);
+
+      // No debe contener marcas que no existen en la BD (marcas hardcodeadas previas)
+      expect(find.text('Toyota'), findsNothing);
+      expect(find.text('Chevrolet'), findsNothing);
+      expect(find.text('Nissan'), findsNothing);
+      expect(find.text('Hyundai'), findsNothing);
+    });
+
+    testWidgets('CatalogoScreen renderiza chips de filtros activos con texto en AppPalette.primary (no blanco invisible)', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: CatalogoScreen(),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // Abrir drawer tocando el botón de tune
+      final tuneBtn = find.byIcon(Icons.tune);
+      expect(tuneBtn, findsOneWidget);
+      await tester.tap(tuneBtn);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Tap en Cajas dentro del drawer
+      final cajasChip = find.text('Cajas');
+      expect(cajasChip, findsOneWidget);
+      await tester.tap(cajasChip);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Cerrar drawer
+      await tester.tap(find.text('Ocultar'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // El chip activo 'Cajas' debe estar presente en el catálogo
+      final chipFinder = find.widgetWithText(Chip, 'Cajas');
+      expect(chipFinder, findsOneWidget);
+
+      // El texto dentro del chip debe ser AppPalette.primary (alto contraste legible, NO blanco)
+      final textWidget = tester.widget<Text>(find.descendant(of: chipFinder, matching: find.byType(Text)));
+      expect(textWidget.style?.color, equals(AppPalette.primary));
+      expect(textWidget.style?.color, isNot(equals(Colors.white)));
+      expect(textWidget.style?.color, isNot(equals(const Color(0xFFFFFFFF))));
     });
   });
 }

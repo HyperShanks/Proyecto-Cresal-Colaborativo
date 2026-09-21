@@ -351,6 +351,114 @@ def buscar_inventario(
     return respuesta
 
 
+@router.get("/catalogo/opciones-filtros")
+def obtener_opciones_filtros_catalogo(
+    id_categoria: Optional[int] = Query(None, description="Filtro opcional por ID de categoría"),
+    id_sucursal: Optional[int] = Query(None, description="Filtro opcional por ID de sucursal"),
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """
+    Retorna exclusivamente las opciones de filtro (marcas, años, cilindradas, transmisiones)
+    de aquellos repuestos inventariados que se encuentren actualmente en estado 'Disponible',
+    activos y con precio de referencia tasado (visibles en el catálogo de ventas).
+    """
+    limpiar_reservas_expiradas(db)
+
+    # Base: sólo activos inventariados Disponibles y con precio de referencia
+    base_filter = [
+        Activo_Inventariado.estado == "Activo",
+        Activo_Inventariado.id_estado == 1,
+        Estado_Activo.nombre_estado == "Disponible",
+        Activo_Inventariado.precio_referencia.isnot(None),
+        Activo_Inventariado.precio_referencia > 0,
+    ]
+
+    if id_categoria is not None:
+        base_filter.append(Activo_Inventariado.id_categoria == id_categoria)
+    if id_sucursal is not None:
+        base_filter.append(Activo_Inventariado.id_sucursal_actual == id_sucursal)
+
+    # 1. Marcas
+    marcas_raw = (
+        db.query(Vehiculo_Origen.marca)
+        .join(Activo_Inventariado, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
+        .join(Estado_Activo, Activo_Inventariado.id_estado == Estado_Activo.id_estado)
+        .filter(*base_filter, Vehiculo_Origen.marca.isnot(None))
+        .distinct()
+        .all()
+    )
+    marcas = sorted(
+        list(set(m[0].strip().upper() for m in marcas_raw if m[0] and m[0].strip()))
+    )
+
+    # 2. Años
+    anios_raw = (
+        db.query(Vehiculo_Origen.anio)
+        .join(Activo_Inventariado, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
+        .join(Estado_Activo, Activo_Inventariado.id_estado == Estado_Activo.id_estado)
+        .filter(*base_filter, Vehiculo_Origen.anio.isnot(None))
+        .distinct()
+        .all()
+    )
+    anios = sorted(
+        list(set(int(a[0]) for a in anios_raw if a[0] is not None and a[0] > 1900)),
+        reverse=True,
+    )
+
+    # 3. Cilindradas (de motores)
+    cil_raw = (
+        db.query(Detalle_Motor.cilindrada)
+        .join(Activo_Inventariado, Activo_Inventariado.id_activo == Detalle_Motor.id_activo)
+        .join(Estado_Activo, Activo_Inventariado.id_estado == Estado_Activo.id_estado)
+        .filter(*base_filter, Detalle_Motor.cilindrada.isnot(None))
+        .distinct()
+        .all()
+    )
+    cilindradas = sorted(
+        list(set(c[0].strip().upper().replace("L", "").strip() for c in cil_raw if c[0] and c[0].strip()))
+    )
+
+    # 4. Transmisiones (motores y cajas)
+    trans_m_raw = (
+        db.query(Detalle_Motor.transmision_tipo)
+        .join(Activo_Inventariado, Activo_Inventariado.id_activo == Detalle_Motor.id_activo)
+        .join(Estado_Activo, Activo_Inventariado.id_estado == Estado_Activo.id_estado)
+        .filter(*base_filter, Detalle_Motor.transmision_tipo.isnot(None))
+        .distinct()
+        .all()
+    )
+    trans_c_raw = (
+        db.query(Detalle_Caja_Cambio.transmision_tipo)
+        .join(Activo_Inventariado, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo)
+        .join(Estado_Activo, Activo_Inventariado.id_estado == Estado_Activo.id_estado)
+        .filter(*base_filter, Detalle_Caja_Cambio.transmision_tipo.isnot(None))
+        .distinct()
+        .all()
+    )
+    trans_combined = []
+    for t in (trans_m_raw + trans_c_raw):
+        if t[0] and t[0].strip():
+            val = t[0].strip()
+            val_upper = val.upper()
+            if "MEC" in val_upper or "MAN" in val_upper:
+                trans_combined.append("Mecánica")
+            elif "AUT" in val_upper:
+                trans_combined.append("Automática")
+            elif "SEMI" in val_upper:
+                trans_combined.append("Semiautomática")
+            else:
+                trans_combined.append(val.title())
+    transmisiones = sorted(list(set(trans_combined)))
+
+    return {
+        "marcas": marcas,
+        "anios": anios,
+        "cilindradas": cilindradas,
+        "transmisiones": transmisiones,
+    }
+
+
 @router.get("/catalogo", response_model=PaginatedCatalogoResponse)
 def obtener_catalogo(
     q: Optional[str] = Query(None, description="Texto libre para buscar por marca, modelo o SKU"),

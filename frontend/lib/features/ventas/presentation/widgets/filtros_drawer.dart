@@ -6,7 +6,8 @@ import '../../../../core/theme/tokens/app_typography.dart';
 import '../../../../core/constants/especificaciones_vehiculo.dart';
 
 /// Panel lateral de filtros interactivos para el Catálogo de Repuestos (HU-3.2).
-/// Diseñado con Flat Design estricto, respetando SystemDesignCresal.
+/// Consume opciones dinámicas de repuestos en estado Disponible y se adapta
+/// con alto contraste a temas Claro y Oscuro.
 class FiltrosDrawer extends StatelessWidget {
   final int? idCategoria;
   final int? idSucursal;
@@ -16,6 +17,13 @@ class FiltrosDrawer extends StatelessWidget {
   final String? transmision;
   final String? combustible;
   final String? traccion;
+
+  /// Opciones dinámicas cargadas desde la BD (sólo activos Disponibles)
+  final List<String> marcasDisponibles;
+  final List<int> aniosDisponibles;
+  final List<String> cilindradasDisponibles;
+  final List<String> transmisionesDisponibles;
+
   final ValueChanged<int?> onCategoriaChanged;
   final ValueChanged<int?> onSucursalChanged;
   final ValueChanged<String?> onMarcaChanged;
@@ -36,6 +44,10 @@ class FiltrosDrawer extends StatelessWidget {
     this.transmision,
     this.combustible,
     this.traccion,
+    this.marcasDisponibles = const [],
+    this.aniosDisponibles = const [],
+    this.cilindradasDisponibles = const [],
+    this.transmisionesDisponibles = const [],
     required this.onCategoriaChanged,
     required this.onSucursalChanged,
     required this.onMarcaChanged,
@@ -47,57 +59,40 @@ class FiltrosDrawer extends StatelessWidget {
     required this.onLimpiarFiltros,
   });
 
-  static const List<String> _marcasDisponibles = [
-    'Toyota',
-    'Chevrolet',
-    'Hyundai',
-    'Nissan',
-    'Kia',
-    'Ford',
-    'Peugeot',
-    'Suzuki',
-    'Volkswagen',
-    'Honda',
-    'Mitsubishi',
-  ];
-
-  static const List<String> _cilindradasDisponibles = [
-    '1.0',
-    '1.2',
-    '1.4',
-    '1.5',
-    '1.6',
-    '1.8',
-    '2.0',
-    '2.2',
-    '2.4',
-    '2.5',
-    '3.0',
-    '3.5',
-  ];
-
-  static const List<int> _aniosDisponibles = [
-    2024,
-    2023,
-    2022,
-    2021,
-    2020,
-    2019,
-    2018,
-    2017,
-    2016,
-    2015,
-    2014,
-    2013,
-    2012,
-    2011,
-    2010,
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final drawerBg = isDark ? AppPalette.background : AppPalette.surfaceLight;
+    final surfaceColor = isDark ? AppPalette.surface : AppPalette.backgroundLight;
+    final textPrimaryColor = isDark ? AppPalette.textPrimary : AppPalette.textPrimaryLight;
+    final textSecondaryColor = isDark ? AppPalette.textSecondary : AppPalette.textSecondaryLight;
+    final dividerColor = isDark ? AppPalette.surface : AppPalette.borderLight;
+
+    // Listas seguras para dropdowns (evitan AssertionError si el valor actual no está en la lista)
+    final List<String> listaMarcas = [
+      if (marca != null && marca!.trim().isNotEmpty && !marcasDisponibles.contains(marca))
+        marca!,
+      ...marcasDisponibles,
+    ];
+
+    final List<int> listaAnios = [
+      if (anio != null && !aniosDisponibles.contains(anio))
+        anio!,
+      ...aniosDisponibles,
+    ];
+
+    final List<String> listaCilindradas = [
+      if (cilindrada != null && cilindrada!.trim().isNotEmpty && !cilindradasDisponibles.contains(cilindrada))
+        cilindrada!,
+      ...cilindradasDisponibles,
+    ];
+
+    final List<String> listaTransmisiones = transmisionesDisponibles.isNotEmpty
+        ? transmisionesDisponibles
+        : const ['Mecánica', 'Automática', 'Semiautomática'];
+
     return Drawer(
-      backgroundColor: AppPalette.background,
+      backgroundColor: drawerBg,
       elevation: 0,
       child: SafeArea(
         child: Column(
@@ -108,20 +103,22 @@ class FiltrosDrawer extends StatelessWidget {
                 horizontal: 16.0,
                 vertical: 12.0,
               ),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 border: Border(
                   bottom: BorderSide(
-                    color: AppPalette.surface,
+                    color: dividerColor,
                     width: 1.5,
                   ),
                 ),
               ),
               child: Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: Text(
                       'Filtros',
-                      style: AppTypography.title,
+                      style: AppTypography.title.copyWith(
+                        color: textPrimaryColor,
+                      ),
                     ),
                   ),
                   // Botón "Ocultar" superior derecho
@@ -141,13 +138,14 @@ class FiltrosDrawer extends StatelessWidget {
                           children: [
                             const Icon(
                               Icons.close,
-                              color: AppPalette.textPrimary,
+                              color: Colors.white,
                               size: 16,
                             ),
                             const SizedBox(width: 4),
                             Text(
                               'Ocultar',
                               style: AppTypography.button.copyWith(
+                                color: Colors.white,
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -168,14 +166,15 @@ class FiltrosDrawer extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 1. Sección TIPO
-                    _buildSectionHeader('TIPO'),
+                    // 1. Sección TIPO (CATEGORÍA)
+                    _buildSectionHeader('TIPO', textSecondaryColor),
                     const SizedBox(height: 10),
                     Wrap(
                       spacing: 8.0,
                       runSpacing: 8.0,
                       children: [
                         _buildChoiceChip(
+                          context: context,
                           label: 'Todos',
                           isSelected: idCategoria == null,
                           onSelected: (selected) {
@@ -183,6 +182,7 @@ class FiltrosDrawer extends StatelessWidget {
                           },
                         ),
                         _buildChoiceChip(
+                          context: context,
                           label: 'Motores',
                           isSelected: idCategoria == 1,
                           onSelected: (selected) {
@@ -190,6 +190,7 @@ class FiltrosDrawer extends StatelessWidget {
                           },
                         ),
                         _buildChoiceChip(
+                          context: context,
                           label: 'Cajas',
                           isSelected: idCategoria == 2,
                           onSelected: (selected) {
@@ -201,13 +202,14 @@ class FiltrosDrawer extends StatelessWidget {
                     const SizedBox(height: 24),
 
                     // 2. Sección SUCURSAL
-                    _buildSectionHeader('SUCURSAL'),
+                    _buildSectionHeader('SUCURSAL', textSecondaryColor),
                     const SizedBox(height: 10),
                     Wrap(
                       spacing: 8.0,
                       runSpacing: 8.0,
                       children: [
                         _buildChoiceChip(
+                          context: context,
                           label: 'Todas',
                           isSelected: idSucursal == null,
                           onSelected: (selected) {
@@ -215,6 +217,7 @@ class FiltrosDrawer extends StatelessWidget {
                           },
                         ),
                         _buildChoiceChip(
+                          context: context,
                           label: 'Viña del Mar',
                           isSelected: idSucursal == 1,
                           onSelected: (selected) {
@@ -222,6 +225,7 @@ class FiltrosDrawer extends StatelessWidget {
                           },
                         ),
                         _buildChoiceChip(
+                          context: context,
                           label: 'Limache',
                           isSelected: idSucursal == 2,
                           onSelected: (selected) {
@@ -233,32 +237,35 @@ class FiltrosDrawer extends StatelessWidget {
                     const SizedBox(height: 24),
 
                     // 3. Sección MARCA DEL VEHÍCULO
-                    _buildSectionHeader('MARCA DEL VEHÍCULO'),
+                    _buildSectionHeader('MARCA DEL VEHÍCULO', textSecondaryColor),
                     const SizedBox(height: 10),
                     DropdownButtonFormField<String?>(
-                      initialValue: marca,
+                      initialValue: (marca != null && listaMarcas.contains(marca)) ? marca : null,
                       isExpanded: true,
-                      dropdownColor: AppPalette.surface,
-                      style: AppTypography.body,
-                      icon: const Icon(
+                      dropdownColor: isDark ? AppPalette.surface : AppPalette.surfaceLight,
+                      style: AppTypography.body.copyWith(color: textPrimaryColor),
+                      icon: Icon(
                         Icons.arrow_drop_down,
-                        color: AppPalette.textSecondary,
+                        color: textSecondaryColor,
                       ),
-                      decoration: _buildInputDecoration(hintText: 'Seleccionar marca'),
+                      decoration: _buildInputDecoration(
+                        context: context,
+                        hintText: listaMarcas.isEmpty ? 'Sin marcas en inventario' : 'Seleccionar marca',
+                      ),
                       items: [
-                        const DropdownMenuItem<String?>(
+                        DropdownMenuItem<String?>(
                           value: null,
                           child: Text(
                             'Todas',
-                            style: AppTypography.body,
+                            style: AppTypography.body.copyWith(color: textPrimaryColor),
                           ),
                         ),
-                        ..._marcasDisponibles.map(
+                        ...listaMarcas.map(
                           (m) => DropdownMenuItem<String?>(
                             value: m,
                             child: Text(
                               m,
-                              style: AppTypography.body,
+                              style: AppTypography.body.copyWith(color: textPrimaryColor),
                             ),
                           ),
                         ),
@@ -268,32 +275,35 @@ class FiltrosDrawer extends StatelessWidget {
                     const SizedBox(height: 24),
 
                     // 4. Sección AÑO DEL MOTOR / VEHÍCULO
-                    _buildSectionHeader('AÑO DEL MOTOR'),
+                    _buildSectionHeader('AÑO DEL MOTOR', textSecondaryColor),
                     const SizedBox(height: 10),
                     DropdownButtonFormField<int?>(
-                      initialValue: anio,
+                      initialValue: (anio != null && listaAnios.contains(anio)) ? anio : null,
                       isExpanded: true,
-                      dropdownColor: AppPalette.surface,
-                      style: AppTypography.body,
-                      icon: const Icon(
+                      dropdownColor: isDark ? AppPalette.surface : AppPalette.surfaceLight,
+                      style: AppTypography.body.copyWith(color: textPrimaryColor),
+                      icon: Icon(
                         Icons.arrow_drop_down,
-                        color: AppPalette.textSecondary,
+                        color: textSecondaryColor,
                       ),
-                      decoration: _buildInputDecoration(hintText: 'Seleccionar año'),
+                      decoration: _buildInputDecoration(
+                        context: context,
+                        hintText: listaAnios.isEmpty ? 'Sin años disponibles' : 'Seleccionar año',
+                      ),
                       items: [
-                        const DropdownMenuItem<int?>(
+                        DropdownMenuItem<int?>(
                           value: null,
                           child: Text(
                             'Todos',
-                            style: AppTypography.body,
+                            style: AppTypography.body.copyWith(color: textPrimaryColor),
                           ),
                         ),
-                        ..._aniosDisponibles.map(
+                        ...listaAnios.map(
                           (a) => DropdownMenuItem<int?>(
                             value: a,
                             child: Text(
                               a.toString(),
-                              style: AppTypography.body,
+                              style: AppTypography.body.copyWith(color: textPrimaryColor),
                             ),
                           ),
                         ),
@@ -303,32 +313,35 @@ class FiltrosDrawer extends StatelessWidget {
                     const SizedBox(height: 24),
 
                     // 5. Sección CILINDRADA
-                    _buildSectionHeader('CILINDRADA'),
+                    _buildSectionHeader('CILINDRADA', textSecondaryColor),
                     const SizedBox(height: 10),
                     DropdownButtonFormField<String?>(
-                      initialValue: cilindrada,
+                      initialValue: (cilindrada != null && listaCilindradas.contains(cilindrada)) ? cilindrada : null,
                       isExpanded: true,
-                      dropdownColor: AppPalette.surface,
-                      style: AppTypography.body,
-                      icon: const Icon(
+                      dropdownColor: isDark ? AppPalette.surface : AppPalette.surfaceLight,
+                      style: AppTypography.body.copyWith(color: textPrimaryColor),
+                      icon: Icon(
                         Icons.arrow_drop_down,
-                        color: AppPalette.textSecondary,
+                        color: textSecondaryColor,
                       ),
-                      decoration: _buildInputDecoration(hintText: 'Seleccionar cilindrada'),
+                      decoration: _buildInputDecoration(
+                        context: context,
+                        hintText: listaCilindradas.isEmpty ? 'Sin cilindradas disponibles' : 'Seleccionar cilindrada',
+                      ),
                       items: [
-                        const DropdownMenuItem<String?>(
+                        DropdownMenuItem<String?>(
                           value: null,
                           child: Text(
                             'Todas',
-                            style: AppTypography.body,
+                            style: AppTypography.body.copyWith(color: textPrimaryColor),
                           ),
                         ),
-                        ..._cilindradasDisponibles.map(
+                        ...listaCilindradas.map(
                           (c) => DropdownMenuItem<String?>(
                             value: c,
                             child: Text(
                               '$c L',
-                              style: AppTypography.body,
+                              style: AppTypography.body.copyWith(color: textPrimaryColor),
                             ),
                           ),
                         ),
@@ -338,52 +351,38 @@ class FiltrosDrawer extends StatelessWidget {
                     const SizedBox(height: 24),
 
                     // 6. Sección TIPO DE TRANSMISIÓN
-                    _buildSectionHeader('TIPO DE TRANSMISIÓN'),
+                    _buildSectionHeader('TIPO DE TRANSMISIÓN', textSecondaryColor),
                     const SizedBox(height: 10),
                     Wrap(
                       spacing: 8.0,
                       runSpacing: 8.0,
                       children: [
                         _buildChoiceChip(
+                          context: context,
                           label: 'Todas',
                           isSelected: transmision == null,
                           onSelected: (selected) {
                             if (selected) onTransmisionChanged(null);
                           },
                         ),
-                        _buildChoiceChip(
-                          label: 'Mecánica',
-                          isSelected: transmision == 'Mecanica' || transmision == 'Mecánica' || transmision == 'Manual',
-                          onSelected: (selected) {
-                            onTransmisionChanged(selected ? 'Mecánica' : null);
-                          },
-                        ),
-                        _buildChoiceChip(
-                          label: 'Automática',
-                          isSelected: transmision == 'Automatica' || transmision == 'Automática',
-                          onSelected: (selected) {
-                            onTransmisionChanged(selected ? 'Automática' : null);
-                          },
-                        ),
-                        _buildChoiceChip(
-                          label: 'Semiautomática',
-                          isSelected: transmision == 'Semiautomatica' || transmision == 'Semiautomática',
-                          onSelected: (selected) {
-                            onTransmisionChanged(selected ? 'Semiautomática' : null);
-                          },
-                        ),
-                        _buildChoiceChip(
-                          label: 'Otro...',
-                          isSelected: transmision == 'Otro...',
-                          onSelected: (selected) {
-                            onTransmisionChanged(selected ? 'Otro...' : null);
-                          },
-                        ),
+                        ...listaTransmisiones.map((t) {
+                          final isSelected = transmision != null &&
+                              (transmision!.toLowerCase() == t.toLowerCase() ||
+                               (t.toLowerCase() == 'mecánica' && (transmision!.toLowerCase() == 'manual' || transmision!.toLowerCase() == 'mecanica')));
+                          return _buildChoiceChip(
+                            context: context,
+                            label: t,
+                            isSelected: isSelected,
+                            onSelected: (selected) {
+                              onTransmisionChanged(selected ? t : null);
+                            },
+                          );
+                        }),
                       ],
                     ),
                     if (onCombustibleChanged != null) ...[
                       const SizedBox(height: 24),
-                      _buildSectionHeader('TIPO DE COMBUSTIBLE'),
+                      _buildSectionHeader('TIPO DE COMBUSTIBLE', textSecondaryColor),
                       const SizedBox(height: 10),
                       Wrap(
                         spacing: 8.0,
@@ -394,6 +393,7 @@ class FiltrosDrawer extends StatelessWidget {
                               ? (combustible == null || combustible!.isEmpty)
                               : combustible == opcion;
                           return _buildChoiceChip(
+                            context: context,
                             label: opcion,
                             isSelected: isSelected,
                             onSelected: (selected) {
@@ -409,7 +409,7 @@ class FiltrosDrawer extends StatelessWidget {
                     ],
                     if (onTraccionChanged != null) ...[
                       const SizedBox(height: 24),
-                      _buildSectionHeader('TIPO DE TRACCIÓN'),
+                      _buildSectionHeader('TIPO DE TRACCIÓN', textSecondaryColor),
                       const SizedBox(height: 10),
                       Wrap(
                         spacing: 8.0,
@@ -420,6 +420,7 @@ class FiltrosDrawer extends StatelessWidget {
                               ? (traccion == null || traccion!.isEmpty)
                               : traccion == opcion;
                           return _buildChoiceChip(
+                            context: context,
                             label: opcion,
                             isSelected: isSelected,
                             onSelected: (selected) {
@@ -441,10 +442,10 @@ class FiltrosDrawer extends StatelessWidget {
             // ── Botón Inferior: Limpiar Filtros ──────────────────────────────
             Container(
               padding: const EdgeInsets.all(16.0),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 border: Border(
                   top: BorderSide(
-                    color: AppPalette.surface,
+                    color: dividerColor,
                     width: 1.5,
                   ),
                 ),
@@ -467,8 +468,10 @@ class FiltrosDrawer extends StatelessWidget {
                   ),
                   style: TextButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14.0),
+                    backgroundColor: isDark ? surfaceColor : AppPalette.errorBg,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8.0),
+                      side: BorderSide(color: AppPalette.error.withValues(alpha: 0.3)),
                     ),
                   ),
                 ),
@@ -480,28 +483,32 @@ class FiltrosDrawer extends StatelessWidget {
     );
   }
 
-  Widget _buildSectionHeader(String title) {
+  Widget _buildSectionHeader(String title, Color textColor) {
     return Text(
       title,
       style: AppTypography.small.copyWith(
         fontSize: 12,
         fontWeight: FontWeight.bold,
         letterSpacing: 1.0,
-        color: AppPalette.textSecondary,
+        color: textColor,
       ),
     );
   }
 
   Widget _buildChoiceChip({
+    required BuildContext context,
     required String label,
     required bool isSelected,
     required ValueChanged<bool> onSelected,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return ChoiceChip(
       label: Text(
         label,
         style: TextStyle(
-          color: isSelected ? AppPalette.textPrimary : AppPalette.textSecondary,
+          color: isSelected
+              ? Colors.white
+              : (isDark ? AppPalette.textSecondary : AppPalette.textPrimaryLight),
           fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
           fontSize: 13,
         ),
@@ -509,13 +516,13 @@ class FiltrosDrawer extends StatelessWidget {
       selected: isSelected,
       onSelected: onSelected,
       selectedColor: AppPalette.primary,
-      backgroundColor: AppPalette.surface,
+      backgroundColor: isDark ? AppPalette.surface : AppPalette.backgroundLight,
       elevation: 0,
       pressElevation: 0,
       side: BorderSide(
         color: isSelected
             ? AppPalette.primary
-            : Colors.white.withValues(alpha: 0.08),
+            : (isDark ? Colors.white.withValues(alpha: 0.08) : AppPalette.borderLight),
         width: 1,
       ),
       shape: RoundedRectangleBorder(
@@ -525,14 +532,19 @@ class FiltrosDrawer extends StatelessWidget {
     );
   }
 
-  InputDecoration _buildInputDecoration({required String hintText}) {
+  InputDecoration _buildInputDecoration({
+    required BuildContext context,
+    required String hintText,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return InputDecoration(
       hintText: hintText,
       hintStyle: AppTypography.body.copyWith(
-        color: AppPalette.textSecondary,
+        color: isDark ? AppPalette.textSecondary : AppPalette.textSecondaryLight,
+        fontSize: 14,
       ),
       filled: true,
-      fillColor: AppPalette.surface,
+      fillColor: isDark ? AppPalette.surface : AppPalette.backgroundLight,
       contentPadding: const EdgeInsets.symmetric(
         horizontal: 16.0,
         vertical: 12.0,
@@ -540,14 +552,14 @@ class FiltrosDrawer extends StatelessWidget {
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10.0),
         borderSide: BorderSide(
-          color: Colors.white.withValues(alpha: 0.08),
+          color: isDark ? Colors.white.withValues(alpha: 0.08) : AppPalette.borderLight,
           width: 1.0,
         ),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10.0),
         borderSide: BorderSide(
-          color: Colors.white.withValues(alpha: 0.08),
+          color: isDark ? Colors.white.withValues(alpha: 0.08) : AppPalette.borderLight,
           width: 1.0,
         ),
       ),

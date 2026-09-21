@@ -495,10 +495,10 @@ void main() {
       expect(find.text('¿Deshacer esta Orden?'), findsNothing);
     });
 
-    testWidgets('Orden pagada de misceláneos muestra banner y botón MARCAR COMO ENTREGADO', (tester) async {
+    testWidgets('Orden de misceláneos no muestra botón MARCAR COMO ENTREGADO', (tester) async {
       final ordenMiscelaneo = OrdenHistorialModel(
         idOrden: 'ord-misc-001',
-        estadoOrden: 'Pagada',
+        estadoOrden: 'Completada',
         totalVenta: 10000,
         montoPendiente: 0,
         totalItems: 1,
@@ -529,8 +529,8 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      expect(find.text('Entrega Inmediata en Mesón'), findsNWidgets(2));
-      expect(find.text('MARCAR COMO ENTREGADO'), findsOneWidget);
+      expect(find.text('Entrega Inmediata en Mesón'), findsOneWidget);
+      expect(find.text('MARCAR COMO ENTREGADO'), findsNothing);
     });
 
     testWidgets('Orden mixta (Motor + Misceláneo) muestra badges diferenciados y banner de orden mixta', (tester) async {

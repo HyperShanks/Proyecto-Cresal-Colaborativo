@@ -48,7 +48,6 @@ class _ModalBackorderFormState extends State<ModalBackorderForm> {
   final _anioController = TextEditingController();
   final _cilindradaController = TextEditingController();
   final _precioController = TextEditingController();
-  final _abonoController = TextEditingController();
   final _notasController = TextEditingController();
   final _combustibleOtroController = TextEditingController();
   final _transmisionOtroController = TextEditingController();
@@ -68,7 +67,6 @@ class _ModalBackorderFormState extends State<ModalBackorderForm> {
     _anioController.dispose();
     _cilindradaController.dispose();
     _precioController.dispose();
-    _abonoController.dispose();
     _notasController.dispose();
     _combustibleOtroController.dispose();
     _transmisionOtroController.dispose();
@@ -79,18 +77,7 @@ class _ModalBackorderFormState extends State<ModalBackorderForm> {
     if (!_formKey.currentState!.validate()) return;
 
     final precio = CurrencyFormatter.parse(_precioController.text);
-    final abono = CurrencyFormatter.parse(_abonoController.text);
     final anio = int.tryParse(_anioController.text.trim());
-
-    if (abono > precio) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('El abono inicial no puede ser superior al precio acordado.'),
-          backgroundColor: AppPalette.error,
-        ),
-      );
-      return;
-    }
 
     final combFinal = (_combustible == OpcionesCombustible.otro && _combustibleOtroController.text.trim().isNotEmpty)
         ? _combustibleOtroController.text.trim()
@@ -109,7 +96,7 @@ class _ModalBackorderFormState extends State<ModalBackorderForm> {
       combustibleRequerido: combFinal,
       transmisionRequerida: transFinal,
       precioAcordado: precio,
-      montoAbonado: abono,
+      montoAbonado: 0,
       notasPreparacion: _notasController.text.trim().isNotEmpty ? _notasController.text.trim() : null,
     );
 
@@ -173,7 +160,7 @@ class _ModalBackorderFormState extends State<ModalBackorderForm> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Esta pieza se registrará como Venta en Verde. Generará un abono en caja y una orden de búsqueda para adquisiciones/bodega.',
+                          'Esta pieza se registrará como Venta en Verde. Podrás definir el abono acordado en el Paso 4 (Condiciones Comerciales y Abonos) del Checkout.',
                           style: AppTypography.small.copyWith(color: AppPalette.textSecondary, fontSize: 11),
                         ),
                       ),
@@ -370,72 +357,27 @@ class _ModalBackorderFormState extends State<ModalBackorderForm> {
                 ),
                 const SizedBox(height: 14),
 
-                // Precios y Abonos
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Precio Acordado (\$) *',
-                            style: AppTypography.small.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: AppPalette.secondary,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 4),
-                          TextFormField(
-                            controller: _precioController,
-                            keyboardType: TextInputType.number,
-                            inputFormatters: [MilesTextInputFormatter()],
-                            style: AppTypography.body.copyWith(fontWeight: FontWeight.bold),
-                            decoration: _inputDecoration('Ej: 450.000'),
-                            validator: (val) {
-                              if (val == null || val.trim().isEmpty) return 'Requerido';
-                              final n = CurrencyFormatter.parse(val);
-                              if (n <= 0) return 'Mayor a 0';
-                              return null;
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Monto a Abonar (\$) *',
-                            style: AppTypography.small.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: AppPalette.success,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 4),
-                          TextFormField(
-                            controller: _abonoController,
-                            keyboardType: TextInputType.number,
-                            inputFormatters: [MilesTextInputFormatter()],
-                            style: AppTypography.body.copyWith(fontWeight: FontWeight.bold),
-                            decoration: _inputDecoration('Ej: 100.000'),
-                            validator: (val) {
-                              if (val == null || val.trim().isEmpty) return null;
-                              final n = CurrencyFormatter.parse(val);
-                              if (n < 0) return 'Inválido';
-                              return null;
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                // Precio Acordado
+                Text(
+                  'Precio Acordado (\$) *',
+                  style: AppTypography.small.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppPalette.secondary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                TextFormField(
+                  controller: _precioController,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [MilesTextInputFormatter()],
+                  style: AppTypography.body.copyWith(fontWeight: FontWeight.bold),
+                  decoration: _inputDecoration('Ej: 450.000'),
+                  validator: (val) {
+                    if (val == null || val.trim().isEmpty) return 'Requerido';
+                    final n = CurrencyFormatter.parse(val);
+                    if (n <= 0) return 'Mayor a 0';
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 12),
 

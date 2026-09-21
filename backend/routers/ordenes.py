@@ -320,7 +320,7 @@ def crear_orden(
                 receptor_telefono=rec_tel,
                 empresa_transporte=desp_obj.empresa_transporte,
                 costo_envio=desp_obj.costo_envio or 0,
-                estado_despacho="Enviado",
+                estado_despacho="Por Enviar",
                 estado="Activo"
             )
             db.add(despacho)
@@ -334,11 +334,12 @@ def crear_orden(
             db.flush()
 
         for item in orden_in.items:
-            nota_final = item.notas_preparacion or orden_in.instrucciones_bodega
             activo = None
 
             # Si es inventariado, verificar si requiere traslado entre sucursales
             if item.id_activo:
+                nota_final = item.notas_preparacion or orden_in.instrucciones_bodega
+                estado_prep = "Pendiente"
                 activo = (
                     db.query(Activo_Inventariado)
                     .filter(Activo_Inventariado.id_activo == item.id_activo)
@@ -370,6 +371,10 @@ def crear_orden(
                                 nota_final = f"{prefijo}{nota_final}"
                         else:
                             nota_final = f"{prefijo}Preparar repuesto para traslado inter-sucursal."
+            else:
+                # Ítems misceláneos / venta libre: no heredan instrucciones de bodega de los activos ni van a tareas de bodega
+                nota_final = None
+                estado_prep = "Listo"
 
             detalle = Detalle_Orden(
                 id_orden=nueva_orden.id_orden,
@@ -379,7 +384,7 @@ def crear_orden(
                 cantidad=item.cantidad,
                 precio_unitario=item.precio_unitario or item.precio_final,
                 precio_final=item.precio_final,
-                estado_preparacion="Pendiente",
+                estado_preparacion=estado_prep,
             )
             db.add(detalle)
 
@@ -955,14 +960,18 @@ def obtener_mis_ventas(
                 if not d.descripcion_manual or "VENTA EN VERDE" in d.descripcion_manual.upper() or "BACKORDER" in d.descripcion_manual.upper():
                     titulo_item = f"{nom_cat}: {reserva_asociada.marca_requerida} {reserva_asociada.modelo_requerido} ({reserva_asociada.anio_requerido or 'Año N/A'})"
 
-            notas_final = d.notas_preparacion
-            if reserva_asociada and (not notas_final or "PAGADO" in notas_final.upper() or "ESPERANDO" in notas_final.upper()):
-                especs = []
-                if reserva_asociada.cilindrada_requerida: especs.append(f"Cil: {reserva_asociada.cilindrada_requerida}")
-                if reserva_asociada.transmision_requerida: especs.append(f"Trans: {reserva_asociada.transmision_requerida}")
-                if reserva_asociada.combustible_requerido: especs.append(f"Comb: {reserva_asociada.combustible_requerido}")
-                if especs:
-                    notas_final = f"Requerido: {' • '.join(especs)}"
+            if not d.id_activo and not reserva_asociada:
+                # Ítems misceláneos / venta libre: no tienen notas de preparación técnica para bodega
+                notas_final = None
+            else:
+                notas_final = d.notas_preparacion
+                if reserva_asociada and (not notas_final or "PAGADO" in notas_final.upper() or "ESPERANDO" in notas_final.upper()):
+                    especs = []
+                    if reserva_asociada.cilindrada_requerida: especs.append(f"Cil: {reserva_asociada.cilindrada_requerida}")
+                    if reserva_asociada.transmision_requerida: especs.append(f"Trans: {reserva_asociada.transmision_requerida}")
+                    if reserva_asociada.combustible_requerido: especs.append(f"Comb: {reserva_asociada.combustible_requerido}")
+                    if especs:
+                        notas_final = f"Requerido: {' • '.join(especs)}"
 
             detalles_resumen.append(
                 DetalleOrdenItemResponse(
@@ -1291,7 +1300,7 @@ def listar_entregas_envios(
     ordenes_resultado = []
 
     # A. Consulta de Retiros en Tienda (sin registro en Despacho)
-    if tipo_filtro in [None, "retiro", "todos", ""]:
+    if tipo_filtro in [None, "retiro", "traslado", "todos", ""]:
         q_retiros = (
             db.query(Orden_Venta)
             .outerjoin(Despacho, Orden_Venta.id_orden == Despacho.id_orden)
@@ -1301,20 +1310,41 @@ def listar_entregas_envios(
                 Despacho.id_despacho == None,
             )
         )
-        ordenes_resultado.extend([("Retiro", o) for o in q_retiros.all()])
+        for o in q_retiros.all():
+            tiene_traslado = (
+                db.query(Tracking_Logistico)
+                .filter(Tracking_Logistico.id_orden == o.id_orden)
+                .first() is not None
+            )
+            tipo_label = "Traslado" if tiene_traslado else "Retiro"
+            if tipo_filtro == "retiro" and tiene_traslado:
+                continue
+            if tipo_filtro == "traslado" and not tiene_traslado:
+                continue
+            ordenes_resultado.append((tipo_label, o))
 
-    # B. Consulta de Despachos Externos (con registro en Despacho y estado Por Enviar)
-    if tipo_filtro in [None, "despacho", "todos", ""]:
+    # B. Consulta de Despachos Externos y Traslados (con registro en Despacho)
+    if tipo_filtro in [None, "despacho", "traslado", "todos", ""]:
         q_despachos = (
-            db.query(Orden_Venta)
+            db.query(Orden_Venta, Despacho)
             .join(Despacho, Orden_Venta.id_orden == Despacho.id_orden)
             .filter(
                 Orden_Venta.id_sucursal == sucursal_id,
                 Orden_Venta.estado_orden.in_(["Reservada", "Pagada"]),
-                Despacho.estado_despacho == "Por Enviar",
             )
         )
-        ordenes_resultado.extend([("Despacho", o) for o in q_despachos.all()])
+        for o, desp in q_despachos.all():
+            es_traslado = (
+                (desp.empresa_transporte or "").lower() == "interno"
+                or "traslado" in (desp.direccion_envio or "").lower()
+                or db.query(Tracking_Logistico).filter(Tracking_Logistico.id_orden == o.id_orden).first() is not None
+            )
+            tipo_label = "Traslado" if es_traslado else "Despacho"
+            if tipo_filtro == "despacho" and es_traslado:
+                continue
+            if tipo_filtro == "traslado" and not es_traslado:
+                continue
+            ordenes_resultado.append((tipo_label, o))
 
     # Ordenar cronológicamente descendente
     ordenes_resultado.sort(key=lambda x: x[1].fecha_creacion, reverse=True)
@@ -1399,7 +1429,9 @@ def listar_entregas_envios(
             )
 
         # Detalles (repuestos inventariados + misceláneos)
+        reserva_asociada = db.query(Reservas_Backorder).filter(Reservas_Backorder.id_orden == orden.id_orden).first()
         detalles_db = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == orden.id_orden).all()
+
         detalles_resumen = []
         for d in detalles_db:
             sku_fisico = None
@@ -1428,6 +1460,8 @@ def listar_entregas_envios(
                     else:
                         titulo_item = f"{nombre_cat} ({sku_fisico})"
 
+            notas_item = None if (not d.id_activo and not reserva_asociada) else d.notas_preparacion
+
             detalles_resumen.append(
                 DetalleOrdenItemResponse(
                     id_detalle=d.id_detalle,
@@ -1437,7 +1471,7 @@ def listar_entregas_envios(
                     titulo=titulo_item,
                     sku_qr_fisico=sku_fisico,
                     descripcion_manual=d.descripcion_manual,
-                    notas_preparacion=d.notas_preparacion,
+                    notas_preparacion=notas_item,
                     cantidad=d.cantidad,
                     precio_unitario=d.precio_unitario,
                     precio_final=d.precio_final,
@@ -2207,7 +2241,8 @@ def actualizar_instrucciones_bodega(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Detalle con ID '{payload.id_detalle}' no encontrado en esta orden."
                 )
-            detalle.notas_preparacion = payload.notas_preparacion.strip()
+            if detalle.id_activo is not None:
+                detalle.notas_preparacion = payload.notas_preparacion.strip()
             detalles_actualizados = 1
         else:
             detalles = query_detalles.all()
@@ -2217,7 +2252,8 @@ def actualizar_instrucciones_bodega(
                     detail="La orden no contiene líneas de detalle para actualizar."
                 )
             for d in detalles:
-                d.notas_preparacion = payload.notas_preparacion.strip()
+                if d.id_activo is not None:
+                    d.notas_preparacion = payload.notas_preparacion.strip()
             detalles_actualizados = len(detalles)
 
         orden.fecha_actualizacion = datetime.now()
@@ -2649,24 +2685,23 @@ def checkout_wizard(
             )
             db.add(detalle)
 
-        # C. Procesar Ítems Manuales
+        # C. Procesar Ítems Manuales (Misceláneos de mesón / venta libre)
         for m in (request.items_manuales or []):
             desc_m = m.get("descripcion", "Ítem Manual")
             cant_m = int(m.get("cantidad", 1))
             p_unit = int(m.get("precio_unitario", 0))
             p_fin = int(m.get("precio_final", p_unit * cant_m))
-            notas_m = m.get("notas_preparacion") or request.instrucciones_bodega
 
             detalle_m = Detalle_Orden(
                 id_detalle=uuid.uuid4(),
                 id_orden=orden.id_orden,
                 id_activo=None,
                 descripcion_manual=desc_m,
-                notas_preparacion=notas_m,
+                notas_preparacion=None,
                 cantidad=cant_m,
                 precio_unitario=p_unit,
                 precio_final=p_fin,
-                estado_preparacion="Pendiente"
+                estado_preparacion="Listo"
             )
             db.add(detalle_m)
 
@@ -2677,6 +2712,8 @@ def checkout_wizard(
             cat_label = categoria.nombre_categoria if categoria else f"Categoría {r.id_categoria_requerida}"
 
             abono_res = r.abono_requerido if getattr(r, "abono_requerido", None) is not None else r.monto_abonado
+            if (abono_res is None or abono_res == 0) and abono_req_val > 0:
+                abono_res = abono_req_val
             reserva_bo = Reservas_Backorder(
                 id_reserva=uuid.uuid4(),
                 id_cliente=cliente.id_cliente,
@@ -2732,7 +2769,7 @@ def checkout_wizard(
                 receptor_telefono=d_data.receptor_telefono.strip(),
                 empresa_transporte=d_data.empresa_transporte or "Chilexpress",
                 costo_envio=0,
-                estado_despacho="Enviado",
+                estado_despacho="Por Enviar",
                 estado="Activo",
                 fecha_creacion=datetime.now(timezone.utc)
             )
@@ -2766,7 +2803,7 @@ def checkout_wizard(
                 receptor_telefono=rec_tel,
                 empresa_transporte="Interno",
                 costo_envio=0,
-                estado_despacho="Enviado",
+                estado_despacho="Por Enviar",
                 estado="Activo",
                 fecha_creacion=datetime.now(timezone.utc)
             )
