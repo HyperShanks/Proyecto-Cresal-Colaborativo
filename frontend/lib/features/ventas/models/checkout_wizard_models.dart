@@ -219,6 +219,7 @@ class CheckoutWizardRequestModel {
   final List<ItemManualModel> itemsManuales;
   final List<ReservaBackorderModel> reservas;
   final DespachoModel? datosDespacho;
+  final int? descuento;
 
   const CheckoutWizardRequestModel({
     this.idCliente,
@@ -229,6 +230,7 @@ class CheckoutWizardRequestModel {
     required this.totalVenta,
     required this.montoPendiente,
     this.montoAbono,
+    this.descuento,
     this.instruccionesBodega,
     this.itemsInventariados = const [],
     this.itemsManuales = const [],
@@ -245,6 +247,7 @@ class CheckoutWizardRequestModel {
     'total_venta': totalVenta,
     'monto_pendiente': montoPendiente,
     if (montoAbono != null) 'monto_abono': montoAbono,
+    if (descuento != null && descuento! > 0) 'descuento': descuento,
     if (instruccionesBodega != null) 'instrucciones_bodega': instruccionesBodega,
     'items_inventariados': itemsInventariados.map((i) {
       if (i is Map) return i;
@@ -264,6 +267,7 @@ class CheckoutWizardResponseModel {
   final String? folio;
   final String estado;
   final int totalVenta;
+  final int descuento;
   final int montoPendiente;
   final int reservasGeneradas;
   final int activosReservados;
@@ -276,6 +280,7 @@ class CheckoutWizardResponseModel {
     this.folio,
     required this.estado,
     required this.totalVenta,
+    this.descuento = 0,
     required this.montoPendiente,
     this.reservasGeneradas = 0,
     this.activosReservados = 0,
@@ -303,6 +308,7 @@ class CheckoutWizardResponseModel {
       folio: json['folio']?.toString(),
       estado: json['estado']?.toString() ?? json['estado_orden']?.toString() ?? 'Reservada',
       totalVenta: json['total_venta'] is int ? json['total_venta'] : int.tryParse(json['total_venta']?.toString() ?? '0') ?? 0,
+      descuento: json['descuento'] is int ? json['descuento'] : int.tryParse(json['descuento']?.toString() ?? '0') ?? 0,
       montoPendiente: json['monto_pendiente'] is int ? json['monto_pendiente'] : int.tryParse(json['monto_pendiente']?.toString() ?? '0') ?? 0,
       reservasGeneradas: json['reservas_generadas'] is int ? json['reservas_generadas'] : int.tryParse(json['reservas_generadas']?.toString() ?? '0') ?? 0,
       activosReservados: json['activos_reservados'] is int ? json['activos_reservados'] : int.tryParse(json['activos_reservados']?.toString() ?? '0') ?? 0,

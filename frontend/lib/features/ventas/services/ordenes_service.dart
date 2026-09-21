@@ -16,6 +16,7 @@ class OrdenResponseModel {
   final String? folio;
   final String estadoOrden;
   final int totalVenta;
+  final int descuento;
   final int montoPendiente;
   final String? qrTransaccionalSalida;
   final String mensaje;
@@ -28,6 +29,7 @@ class OrdenResponseModel {
     this.folio,
     required this.estadoOrden,
     required this.totalVenta,
+    this.descuento = 0,
     required this.montoPendiente,
     this.qrTransaccionalSalida,
     required this.mensaje,
@@ -42,6 +44,7 @@ class OrdenResponseModel {
       folio: json['folio']?.toString(),
       estadoOrden: json['estado_orden']?.toString() ?? 'Reservada',
       totalVenta: json['total_venta'] as int? ?? 0,
+      descuento: json['descuento'] as int? ?? 0,
       montoPendiente: json['monto_pendiente'] as int? ?? 0,
       qrTransaccionalSalida: json['qr_transaccional_salida']?.toString(),
       mensaje: json['mensaje']?.toString() ?? 'Orden generada exitosamente',
@@ -317,6 +320,7 @@ class OrdenHistorialModel {
   final String? folio;
   String estadoOrden;
   final int totalVenta;
+  final int descuento;
   final int montoPendiente;
   final String? qrTransaccionalSalida;
   final String? fechaCreacion;
@@ -332,6 +336,7 @@ class OrdenHistorialModel {
     this.folio,
     required this.estadoOrden,
     required this.totalVenta,
+    this.descuento = 0,
     required this.montoPendiente,
     this.qrTransaccionalSalida,
     this.fechaCreacion,
@@ -364,6 +369,7 @@ class OrdenHistorialModel {
     String? folio,
     String? estadoOrden,
     int? totalVenta,
+    int? descuento,
     int? montoPendiente,
     Object? qrTransaccionalSalida = _sentinel,
     String? fechaCreacion,
@@ -379,6 +385,7 @@ class OrdenHistorialModel {
       folio: folio ?? this.folio,
       estadoOrden: estadoOrden ?? this.estadoOrden,
       totalVenta: totalVenta ?? this.totalVenta,
+      descuento: descuento ?? this.descuento,
       montoPendiente: montoPendiente ?? this.montoPendiente,
       qrTransaccionalSalida: identical(qrTransaccionalSalida, _sentinel)
           ? this.qrTransaccionalSalida
@@ -393,6 +400,7 @@ class OrdenHistorialModel {
   }
 
   String get totalVentaFormateado => OrdenResponseModel._formatearMonto(totalVenta);
+  String get descuentoFormateado => OrdenResponseModel._formatearMonto(descuento);
   String get montoPendienteFormateado => OrdenResponseModel._formatearMonto(montoPendiente);
 
   String get folioDisplay {
@@ -454,6 +462,7 @@ class OrdenHistorialModel {
       folio: json['folio']?.toString(),
       estadoOrden: json['estado_orden']?.toString() ?? 'Reservada',
       totalVenta: json['total_venta'] as int? ?? 0,
+      descuento: json['descuento'] as int? ?? 0,
       montoPendiente: json['monto_pendiente'] as int? ?? 0,
       qrTransaccionalSalida: json['qr_transaccional_salida']?.toString(),
       fechaCreacion: json['fecha_creacion']?.toString(),

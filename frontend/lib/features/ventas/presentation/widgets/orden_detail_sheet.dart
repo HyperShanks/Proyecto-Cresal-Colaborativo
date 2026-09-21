@@ -834,19 +834,49 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                       borderRadius: BorderRadius.circular(10.0),
                       border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    child: Column(
                       children: [
-                        Text(
-                          'Total de la Orden',
-                          style: AppTypography.title.copyWith(fontSize: 16.0),
-                        ),
-                        Text(
-                          _orden.totalVentaFormateado,
-                          style: AppTypography.headline.copyWith(
-                            fontSize: 20.0,
-                            color: _orden.esAnulada ? AppPalette.neutral : AppPalette.secondary,
+                        if (_orden.descuento > 0) ...[
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Descuento a Favor',
+                                style: AppTypography.body.copyWith(
+                                  color: const Color(0xFFEF5350),
+                                  fontSize: 14.0,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              Text(
+                                '- ${_orden.descuentoFormateado}',
+                                style: AppTypography.title.copyWith(
+                                  color: const Color(0xFFEF5350),
+                                  fontSize: 15.0,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
                           ),
+                          const SizedBox(height: 8.0),
+                          Divider(color: Colors.white.withValues(alpha: 0.08), height: 1),
+                          const SizedBox(height: 8.0),
+                        ],
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Total de la Orden',
+                              style: AppTypography.title.copyWith(fontSize: 16.0),
+                            ),
+                            Text(
+                              _orden.totalVentaFormateado,
+                              style: AppTypography.headline.copyWith(
+                                fontSize: 20.0,
+                                color: _orden.esAnulada ? AppPalette.neutral : AppPalette.secondary,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),

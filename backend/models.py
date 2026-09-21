@@ -226,6 +226,7 @@ class Orden_Venta(Base):
     estado_orden = Column(String(30), nullable=False, server_default="Reservada")
     qr_transaccional_salida = Column(String(255), nullable=True, unique=True)
     total_venta = Column(Integer, nullable=False, default=0)
+    descuento = Column(Integer, nullable=False, server_default="0", default=0)
     monto_pendiente = Column(Integer, nullable=False, default=0)
     abono_requerido = Column(Integer, nullable=False, default=0)
     fecha_creacion = Column(DateTime, nullable=False, server_default=text("now()"))

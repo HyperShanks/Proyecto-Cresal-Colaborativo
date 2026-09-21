@@ -68,8 +68,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
   List<VendedorModel> _vendedoresDisponibles = [];
   String? _idVendedorAsignado;
 
-  // Controladores Paso 4 (Comercial / Abonos)
+  // Controladores Paso 4 (Comercial / Abonos / Descuentos)
   final _montoAbonoController = TextEditingController();
+  final _descuentoController = TextEditingController();
 
   @override
   void initState() {
@@ -124,6 +125,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     _receptorTelefonoController.clear();
     _empresaTransporteController.text = 'Chilexpress';
     _montoAbonoController.clear();
+    _descuentoController.clear();
     if (mounted) {
       setState(() {
         _esClienteAnonimo = false;
@@ -168,6 +170,8 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     if (cartItems.isEmpty) {
       _controller.clearAll();
       _montoAbonoController.clear();
+      _descuentoController.clear();
+      _controller.setDescuento(0);
       _controller.setAbonoAdicional(0);
       _controller.setNotasGenerales('');
       return;
@@ -277,6 +281,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     _receptorTelefonoController.dispose();
     _empresaTransporteController.dispose();
     _montoAbonoController.dispose();
+    _descuentoController.dispose();
     super.dispose();
   }
 
@@ -912,6 +917,51 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               );
             }),
           ],
+
+          // Descuento por Vale a Favor (Paso 1)
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppPalette.surface,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.white12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.confirmation_number_outlined, size: 16, color: AppPalette.primary),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Descuento por Vale a Favor (\$):',
+                      style: AppTypography.small.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _descuentoController,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [MilesTextInputFormatter()],
+                  style: AppTypography.body,
+                  decoration: _inputDeco('Ej: 50.000 (Monto a descontar del total)', Icons.local_offer_outlined),
+                  onChanged: (val) {
+                    final desc = CurrencyFormatter.parse(val);
+                    _controller.setDescuento(desc);
+                  },
+                ),
+                if (_controller.descuento > 0) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    'Descuento aplicado: - ${CurrencyFormatter.formatCLP(_controller.descuento)} • Total Venta: ${CurrencyFormatter.formatCLP(_controller.totalVenta)}',
+                    style: AppTypography.small.copyWith(color: const Color(0xFFEF5350), fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ],
+            ),
+          ),
 
           if (CartController.instance.hayPreciosInvalidos) ...[
             const SizedBox(height: 12),
@@ -1788,14 +1838,59 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
           decoration: BoxDecoration(color: AppPalette.surface, borderRadius: BorderRadius.circular(12)),
           child: Column(
             children: [
-              _buildResumenRow('Subtotal Repuestos Inventario:', CurrencyFormatter.formatCLP(_controller.subtotalInventario)),
-              _buildResumenRow('Subtotal Ítems Manuales:', CurrencyFormatter.formatCLP(_controller.subtotalManuales)),
-              _buildResumenRow('Subtotal Ventas en Verde:', CurrencyFormatter.formatCLP(_controller.subtotalReservas)),
+              if (_controller.subtotalInventario > 0)
+                _buildResumenRow('Subtotal Repuestos Inventario:', CurrencyFormatter.formatCLP(_controller.subtotalInventario)),
+              if (_controller.subtotalManuales > 0)
+                _buildResumenRow('Subtotal Ítems Manuales:', CurrencyFormatter.formatCLP(_controller.subtotalManuales)),
+              if (_controller.subtotalReservas > 0)
+                _buildResumenRow('Subtotal Ventas en Verde:', CurrencyFormatter.formatCLP(_controller.subtotalReservas)),
+              if (_controller.descuento > 0)
+                _buildResumenRow('Descuento a Favor:', '- ${CurrencyFormatter.formatCLP(_controller.descuento)}', color: const Color(0xFFEF5350)),
               const Divider(color: Colors.white24, height: 20),
               _buildResumenRow('TOTAL DE LA VENTA:', CurrencyFormatter.formatCLP(_controller.totalVenta), isBold: true, color: AppPalette.primary),
-              const SizedBox(height: 8),
-              _buildResumenRow('Total Abonos Acordados:', CurrencyFormatter.formatCLP(_controller.totalAbonos), color: AppPalette.success),
-              _buildResumenRow('Saldo Pendiente a Cobrar en Caja:', CurrencyFormatter.formatCLP(_controller.montoPendiente), isBold: true, color: AppPalette.secondary),
+              if (_controller.totalAbonos > 0) ...[
+                const SizedBox(height: 8),
+                _buildResumenRow('Total Abonos Acordados:', CurrencyFormatter.formatCLP(_controller.totalAbonos), color: AppPalette.textSecondary),
+                _buildResumenRow('Saldo Pendiente a Cobrar en Caja:', CurrencyFormatter.formatCLP(_controller.montoPendiente), isBold: true, color: AppPalette.primary),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // Campo de Descuento por Vale a Favor (Sincronizado)
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(color: AppPalette.surface, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.confirmation_number_outlined, size: 16, color: AppPalette.primary),
+                  const SizedBox(width: 6),
+                  Text('Descuento por Vale a Favor (\$):', style: AppTypography.small.copyWith(fontWeight: FontWeight.bold)),
+                ],
+              ),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _descuentoController,
+                keyboardType: TextInputType.number,
+                inputFormatters: [MilesTextInputFormatter()],
+                style: AppTypography.body,
+                decoration: _inputDeco('Ej: 50.000 (Monto a descontar del total)', Icons.local_offer_outlined),
+                onChanged: (val) {
+                  final desc = CurrencyFormatter.parse(val);
+                  _controller.setDescuento(desc);
+                },
+              ),
+              if (_controller.descuento > 0) ...[
+                const SizedBox(height: 6),
+                Text(
+                  'Descuento aplicado: - ${CurrencyFormatter.formatCLP(_controller.descuento)}',
+                  style: AppTypography.small.copyWith(color: const Color(0xFFEF5350), fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+              ],
             ],
           ),
         ),
@@ -1821,13 +1916,13 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                   _controller.setAbonoAdicional(ab);
                 },
               ),
-              const SizedBox(height: 6),
-              Text(
-                _controller.totalAbonos == 0
-                    ? 'ℹ️ El cliente liquidará el 100% de la orden en Caja.'
-                    : 'ℹ️ El cliente abonará ${CurrencyFormatter.formatCLP(_controller.totalAbonos)} y quedará un saldo de ${CurrencyFormatter.formatCLP(_controller.montoPendiente)} en Caja.',
-                style: AppTypography.small.copyWith(color: AppPalette.secondary, fontSize: 12),
-              ),
+              if (_controller.totalAbonos > 0) ...[
+                const SizedBox(height: 6),
+                Text(
+                  'El cliente abonará ${CurrencyFormatter.formatCLP(_controller.totalAbonos)} y quedará un saldo de ${CurrencyFormatter.formatCLP(_controller.montoPendiente)} en Caja.',
+                  style: AppTypography.small.copyWith(color: AppPalette.secondary, fontSize: 12),
+                ),
+              ],
             ],
           ),
         ),
@@ -1895,7 +1990,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('RESUMEN DE CLIENTE & ENTREGA', style: AppTypography.small.copyWith(color: AppPalette.secondary, fontWeight: FontWeight.bold)),
+              Text('RESUMEN DE CLIENTE & ENTREGA', style: AppTypography.small.copyWith(color: AppPalette.textSecondary, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
               const SizedBox(height: 6),
               Text('Cliente: ${cli?.nombreCompleto ?? "Consumidor Final"} (${cli?.rut ?? "6.666.666-6"})', style: AppTypography.body.copyWith(fontWeight: FontWeight.bold)),
               Text('Modalidad: ${_controller.tipoEntrega}', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
@@ -1905,12 +2000,24 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                 Text('Traslado: ${_idSucursalActual == 1 ? "Viña del Mar" : "Limache"} ➔ ${_idSucursalDestino == 1 ? "Viña del Mar" : "Limache"}', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
               const Divider(color: Colors.white24, height: 20),
 
-              Text('DETALLE COMERCIAL', style: AppTypography.small.copyWith(color: AppPalette.secondary, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 6),
-              Text('• Total Artículos: ${_controller.totalItemsCount}', style: AppTypography.body),
-              Text('• Total Venta: ${CurrencyFormatter.formatCLP(_controller.totalVenta)}', style: AppTypography.body.copyWith(fontWeight: FontWeight.bold, color: AppPalette.primary)),
-              Text('• Abono Acordado: ${CurrencyFormatter.formatCLP(_controller.totalAbonos)}', style: AppTypography.body.copyWith(color: AppPalette.success)),
-              Text('• Saldo a Pagar en Caja: ${CurrencyFormatter.formatCLP(_controller.montoPendiente)}', style: AppTypography.body.copyWith(fontWeight: FontWeight.bold, color: AppPalette.secondary)),
+              Text('DETALLE COMERCIAL', style: AppTypography.small.copyWith(color: AppPalette.textSecondary, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+              const SizedBox(height: 10),
+              _buildResumenRow('Total Artículos:', '${_controller.totalItemsCount}'),
+              if (_controller.subtotalInventario > 0)
+                _buildResumenRow('Subtotal Repuestos Inventario:', CurrencyFormatter.formatCLP(_controller.subtotalInventario)),
+              if (_controller.subtotalManuales > 0)
+                _buildResumenRow('Subtotal Ítems Manuales:', CurrencyFormatter.formatCLP(_controller.subtotalManuales)),
+              if (_controller.subtotalReservas > 0)
+                _buildResumenRow('Subtotal Ventas en Verde:', CurrencyFormatter.formatCLP(_controller.subtotalReservas)),
+              if (_controller.descuento > 0)
+                _buildResumenRow('Descuento a Favor:', '- ${CurrencyFormatter.formatCLP(_controller.descuento)}', color: const Color(0xFFEF5350)),
+              const Divider(color: Colors.white24, height: 20),
+              _buildResumenRow('TOTAL DE LA VENTA:', CurrencyFormatter.formatCLP(_controller.totalVenta), isBold: true, color: AppPalette.primary),
+              if (_controller.totalAbonos > 0) ...[
+                const SizedBox(height: 6),
+                _buildResumenRow('Total Abonos Acordados:', CurrencyFormatter.formatCLP(_controller.totalAbonos), color: AppPalette.textSecondary),
+                _buildResumenRow('Saldo a Pagar en Caja:', CurrencyFormatter.formatCLP(_controller.montoPendiente), isBold: true, color: AppPalette.primary),
+              ],
             ],
           ),
         ),

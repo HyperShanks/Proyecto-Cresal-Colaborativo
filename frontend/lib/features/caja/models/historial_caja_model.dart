@@ -207,6 +207,7 @@ class HistorialOrdenItemModel {
   final String modalidadPago;
   final String metodosResumen;
   final int totalVenta;
+  final int descuento;
   final int abonoPrevio;
   final int totalLiquidado;
   final int montoPendiente;
@@ -232,6 +233,7 @@ class HistorialOrdenItemModel {
     required this.modalidadPago,
     required this.metodosResumen,
     required this.totalVenta,
+    this.descuento = 0,
     required this.abonoPrevio,
     required this.totalLiquidado,
     this.montoPendiente = 0,
@@ -283,6 +285,7 @@ class HistorialOrdenItemModel {
         modalidadPago: json['modalidad_pago'] as String? ?? 'unico',
         metodosResumen: json['metodos_resumen'] as String? ?? '',
         totalVenta: json['total_venta'] as int? ?? 0,
+        descuento: json['descuento'] as int? ?? 0,
         abonoPrevio: json['abono_previo'] as int? ?? 0,
         totalLiquidado: json['total_liquidado'] as int? ?? 0,
         montoPendiente: json['monto_pendiente'] as int? ?? 0,
@@ -321,6 +324,7 @@ class HistorialOrdenItemModel {
         'modalidad_pago': modalidadPago,
         'metodos_resumen': metodosResumen,
         'total_venta': totalVenta,
+        'descuento': descuento,
         'abono_previo': abonoPrevio,
         'total_liquidado': totalLiquidado,
         'monto_pendiente': montoPendiente,

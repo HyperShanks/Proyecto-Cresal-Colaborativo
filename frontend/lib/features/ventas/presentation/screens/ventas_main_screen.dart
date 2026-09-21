@@ -233,22 +233,6 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
             },
           ),
 
-          // ── Opción Exclusiva: Jefe de Ventas (HU-3.8) ────────────────────
-          if (_esJefeVentas) ...[
-            const Divider(color: Colors.white10, height: 16),
-            _buildDrawerItem(
-              icon: Icons.price_change_outlined,
-              label: 'BANDEJA DE PRECIOS',
-              badgeColor: _pendientesTasacionCount > 0 ? AppPalette.secondary : null,
-              onTap: () {
-                Navigator.of(context).pop();
-                // Si la pestaña de Tasación está activa, navega al índice 2
-                setState(() => _currentIndex = 2);
-                _bandejaPreciosKey.currentState?.refrescar();
-              },
-            ),
-          ],
-
           const Spacer(),
 
           // ── Botón de Cerrar Sesión (anclado en la parte inferior) ─────────

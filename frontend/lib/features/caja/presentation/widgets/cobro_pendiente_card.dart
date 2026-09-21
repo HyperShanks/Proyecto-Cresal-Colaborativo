@@ -289,6 +289,17 @@ class CobroPendienteCard extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
+                          ] else if (orden.descuento > 0) ...[
+                            Text(
+                              'Desc. Vale: - ${formatClp(orden.descuento)}',
+                              style: AppTypography.small.copyWith(
+                                color: const Color(0xFFE53935),
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ],
                         ],
                       ),

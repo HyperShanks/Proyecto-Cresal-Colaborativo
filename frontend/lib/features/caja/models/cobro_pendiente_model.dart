@@ -179,6 +179,7 @@ class CobroPendienteModel {
   final String fechaEmisionFormateada;
   final String horaEmisionFormateada;
   final int totalOperacion;
+  final int descuento;
   final int abonoPrevio;
   final int abonoRequerido;
   final int saldoPendiente;
@@ -199,6 +200,7 @@ class CobroPendienteModel {
     required this.fechaEmisionFormateada,
     required this.horaEmisionFormateada,
     required this.totalOperacion,
+    this.descuento = 0,
     required this.abonoPrevio,
     this.abonoRequerido = 0,
     this.saldoPendiente = 0,
@@ -215,6 +217,7 @@ class CobroPendienteModel {
 
   factory CobroPendienteModel.fromJson(Map<String, dynamic> json) {
     final totalOp = json['total_operacion'] as int? ?? 0;
+    final desc = json['descuento'] as int? ?? 0;
     final abonoPrev = json['abono_previo'] as int? ?? 0;
     final saldoPen = json['saldo_pendiente'] as int? ?? (totalOp - abonoPrev);
 
@@ -232,6 +235,7 @@ class CobroPendienteModel {
       fechaEmisionFormateada: json['fecha_emision_formateada'] as String? ?? '',
       horaEmisionFormateada: json['hora_emision_formateada'] as String? ?? '',
       totalOperacion: totalOp,
+      descuento: desc,
       abonoPrevio: abonoPrev,
       abonoRequerido: json['abono_requerido'] as int? ?? 0,
       saldoPendiente: saldoPen,

@@ -465,106 +465,137 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
           ),
         ],
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Total Operación
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  orden.esVenta ? 'TOTAL VENTA' : 'PRECIO ACORDADO',
-                  style: AppTypography.small.copyWith(
-                    color: Colors.white.withValues(alpha: 0.75),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  CobroPendienteCard.formatClp(orden.totalOperacion),
-                  style: AppTypography.title.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 18,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            height: 36,
-            width: 1,
-            color: Colors.white.withValues(alpha: 0.25),
-          ),
-          // Abonos Previos (Rojo / Error ST-F02)
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(left: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    orden.historialAbonos.isNotEmpty
-                        ? 'ABONOS (${orden.historialAbonos.length})'
-                        : 'ABONOS PREVIOS',
-                    style: AppTypography.small.copyWith(
-                      color: Colors.white.withValues(alpha: 0.75),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.5,
+          Row(
+            children: [
+              // Total Operación
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      orden.esVenta ? 'TOTAL VENTA' : 'PRECIO ACORDADO',
+                      style: AppTypography.small.copyWith(
+                        color: Colors.white.withValues(alpha: 0.75),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                      ),
                     ),
+                    const SizedBox(height: 4),
+                    Text(
+                      CobroPendienteCard.formatClp(orden.totalOperacion),
+                      style: AppTypography.title.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 18,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                height: 36,
+                width: 1,
+                color: Colors.white.withValues(alpha: 0.25),
+              ),
+              // Abonos Previos (Rojo / Error ST-F02)
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        orden.historialAbonos.isNotEmpty
+                            ? 'ABONOS (${orden.historialAbonos.length})'
+                            : 'ABONOS PREVIOS',
+                        style: AppTypography.small.copyWith(
+                          color: Colors.white.withValues(alpha: 0.75),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        CobroPendienteCard.formatClp(orden.abonoPrevio),
+                        style: AppTypography.title.copyWith(
+                          color: orden.abonoPrevio > 0 ? AppPalette.secondary : Colors.white,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 18,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 4),
+                ),
+              ),
+              Container(
+                height: 36,
+                width: 1,
+                color: Colors.white.withValues(alpha: 0.25),
+              ),
+              // Saldo Pendiente Actual
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'SALDO PENDIENTE',
+                        style: AppTypography.small.copyWith(
+                          color: Colors.white.withValues(alpha: 0.75),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        CobroPendienteCard.formatClp(
+                          orden.saldoPendiente > 0 ? orden.saldoPendiente : orden.totalOperacion,
+                        ),
+                        style: AppTypography.title.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 20,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (orden.descuento > 0) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.confirmation_num_outlined, size: 14, color: Color(0xFFEF9A9A)),
+                  const SizedBox(width: 6),
                   Text(
-                    CobroPendienteCard.formatClp(orden.abonoPrevio),
-                    style: AppTypography.title.copyWith(
-                      color: orden.abonoPrevio > 0 ? AppPalette.secondary : Colors.white,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 18,
+                    'Descuento a Favor aplicado: - ${CobroPendienteCard.formatClp(orden.descuento)}',
+                    style: AppTypography.small.copyWith(
+                      color: const Color(0xFFFFCDD2),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 11.5,
                     ),
                   ),
                 ],
               ),
             ),
-          ),
-          Container(
-            height: 36,
-            width: 1,
-            color: Colors.white.withValues(alpha: 0.25),
-          ),
-          // Saldo Pendiente Actual
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(left: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'SALDO PENDIENTE',
-                    style: AppTypography.small.copyWith(
-                      color: Colors.white.withValues(alpha: 0.75),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    CobroPendienteCard.formatClp(
-                      orden.saldoPendiente > 0 ? orden.saldoPendiente : orden.totalOperacion,
-                    ),
-                    style: AppTypography.title.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 20,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          ],
         ],
       ),
     );
@@ -603,8 +634,39 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
             ],
           ),
           const SizedBox(height: 14),
-          if (isVenta)
-            _buildArticulosList(orden.articulos)
+          if (isVenta) ...[
+            _buildArticulosList(orden.articulos),
+            if (orden.descuento > 0) ...[
+              const Divider(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.confirmation_num_outlined, size: 16, color: Colors.red.shade400),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Descuento a Favor:',
+                        style: AppTypography.body.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFFEF5350),
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    '- ${CobroPendienteCard.formatClp(orden.descuento)}',
+                    style: AppTypography.body.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFFEF5350),
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ]
           else
             _buildBackorderGrid(orden.especificacionesBackorder),
         ],

@@ -87,6 +87,32 @@ void main() {
       expect(controller.montoPendiente, equals(950000)); // 1.100.000 - 150.000
     });
 
+    test('Descuento por Vale a Favor descuenta del totalVenta y recalcula montoPendiente', () {
+      controller.addItemInventariado(
+        idActivo: 'act-001',
+        sku: 'MOT-TOY-001',
+        descripcion: 'Motor Toyota Corolla 1.8',
+        precio: 100000,
+      );
+      expect(controller.subtotal, equals(100000));
+      expect(controller.totalVenta, equals(100000));
+
+      // Aplicar descuento por vale a favor
+      controller.setDescuento(20000);
+      expect(controller.descuento, equals(20000));
+      expect(controller.totalVenta, equals(80000));
+      expect(controller.montoPendiente, equals(80000));
+
+      // Agregar abono adicional
+      controller.setAbonoAdicional(30000);
+      expect(controller.montoPendiente, equals(50000));
+
+      // Descuento mayor al subtotal se ajusta a 0 (nunca negativo)
+      controller.setDescuento(150000);
+      expect(controller.totalVenta, equals(0));
+      expect(controller.montoPendiente, equals(0));
+    });
+
     test('Validación de paso impide avanzar sin ítems (Paso 0 -> Paso 1)', () {
       expect(controller.nextStep(), isFalse);
       expect(controller.currentStep, equals(0));

@@ -659,6 +659,39 @@ class AuditoriaDetalleDialog extends StatelessWidget {
                   ),
                 ),
 
+              if (orden.descuento > 0) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.confirmation_num_outlined, size: 14, color: Color(0xFFDC2626)),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Descuento a Favor',
+                            style: AppTypography.small.copyWith(
+                              color: const Color(0xFFDC2626),
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Text(
+                        '- ${CobroPendienteCard.formatClp(orden.descuento)}',
+                        style: AppTypography.small.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFFDC2626),
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
               const SizedBox(height: 8),
               Divider(
                 height: 1,

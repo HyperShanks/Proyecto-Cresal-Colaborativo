@@ -25,7 +25,8 @@ class CheckoutWizardController extends ChangeNotifier {
   String? _idVendedorAsignado; // Para vendedor online
   DespachoModel? _datosDespacho;
 
-  // Paso 4: Abonos y Notas
+  // Paso 4: Abonos, Descuentos y Notas
+  int _descuento = 0;
   int _abonoAdicional = 0;
   String _notasGenerales = '';
 
@@ -44,6 +45,7 @@ class CheckoutWizardController extends ChangeNotifier {
   int get idSucursalDestino => _idSucursalDestino;
   String? get idVendedorAsignado => _idVendedorAsignado;
   DespachoModel? get datosDespacho => _datosDespacho;
+  int get descuento => _descuento;
   int get abonoAdicional => _abonoAdicional;
   String get notasGenerales => _notasGenerales;
 
@@ -52,7 +54,12 @@ class CheckoutWizardController extends ChangeNotifier {
   int get subtotalManuales => _itemsManuales.fold<int>(0, (sum, m) => sum + m.precioFinal);
   int get subtotalReservas => _reservas.fold<int>(0, (sum, r) => sum + r.precioAcordado);
 
-  int get totalVenta => subtotalInventario + subtotalManuales + subtotalReservas;
+  int get subtotal => subtotalInventario + subtotalManuales + subtotalReservas;
+
+  int get totalVenta {
+    final t = subtotal - _descuento;
+    return t < 0 ? 0 : t;
+  }
 
   int get abonoReservas => _reservas.fold<int>(0, (sum, r) => sum + r.montoAbonado);
   int get totalAbonos => abonoReservas + _abonoAdicional;
@@ -308,6 +315,14 @@ class CheckoutWizardController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setDescuento(int valor) {
+    _descuento = valor < 0 ? 0 : valor;
+    if (_descuento > subtotal) {
+      _descuento = subtotal;
+    }
+    notifyListeners();
+  }
+
   void setAbonoAdicional(int abono) {
     _abonoAdicional = abono < 0 ? 0 : abono;
     if (_errorMessage == 'El monto de abono no puede ser superior al total de la venta.' && validateStep4()) {
@@ -333,6 +348,7 @@ class CheckoutWizardController extends ChangeNotifier {
     _idSucursalDestino = 1;
     _idVendedorAsignado = null;
     _datosDespacho = null;
+    _descuento = 0;
     _abonoAdicional = 0;
     _notasGenerales = '';
     notifyListeners();
@@ -363,6 +379,7 @@ class CheckoutWizardController extends ChangeNotifier {
         idSucursalDestino: _tipoEntrega == 'Traslado' ? _idSucursalDestino : null,
         idVendedorAsignado: _idVendedorAsignado,
         totalVenta: totalVenta,
+        descuento: _descuento,
         montoPendiente: montoPendiente,
         montoAbono: totalAbonos,
         instruccionesBodega: bodegaNotas,

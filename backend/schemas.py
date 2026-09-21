@@ -306,6 +306,7 @@ class CobroPendienteItemResponse(BaseModel):
 
     # Datos Financieros
     total_operacion: int = Field(description="Total venta o precio acordado de reserva")
+    descuento: int = Field(default=0, description="Descuento aplicado por saldo o vale a favor")
     abono_previo: int = Field(default=0, description="Monto ya pagado previamente")
     abono_requerido: int = Field(default=0, description="Piso mínimo comercial requerido para el primer abono")
     saldo_pendiente: int = Field(default=0, description="Monto restante para liquidar el 100% de la venta")
@@ -637,6 +638,7 @@ class OrdenCreateRequest(BaseModel):
     tipo_entrega: Optional[str] = Field("Retiro", description="Tipo de entrega: 'Retiro', 'Despacho', 'Traslado'")
     id_sucursal_destino: Optional[int] = Field(None, description="ID de sucursal destino si aplica traslado (1: Viña, 2: Limache)")
     monto_abono: Optional[int] = Field(None, ge=0, description="Monto abonado al registrar la venta (opcional para abonos parciales)")
+    descuento: Optional[int] = Field(0, ge=0, description="Descuento aplicado al total de la orden por vale o saldo a favor")
     id_vendedor_asignado: Optional[UUID] = Field(None, description="ID del vendedor asignado para entregar/despachar la orden (None = Mesón General)")
 
 
@@ -649,6 +651,7 @@ class OrdenResponse(BaseModel):
     folio: Optional[str] = None
     estado_orden: str
     total_venta: int
+    descuento: int = 0
     monto_pendiente: int
     abono_requerido: int = 0
     qr_transaccional_salida: Optional[str] = None
@@ -748,6 +751,7 @@ class OrdenHistorialItemResponse(BaseModel):
     folio: Optional[str] = None
     estado_orden: str
     total_venta: int
+    descuento: int = 0
     monto_pendiente: int
     abono_requerido: int = 0
     qr_transaccional_salida: Optional[str] = None
@@ -769,6 +773,7 @@ class EntregaEnvioItemResponse(BaseModel):
     tipo_entrega: str
     estado_orden: str
     total_venta: int
+    descuento: int = 0
     monto_pendiente: int
     abono_requerido: int = 0
     qr_transaccional_salida: Optional[str] = None
@@ -1200,6 +1205,7 @@ class HistorialOrdenItemResponse(BaseModel):
     modalidad_pago: str = Field(description="'unico' o 'split'")
     metodos_resumen: str = Field(description="Ej: Débito: $420.000 + Transferencia: $180.000")
     total_venta: int
+    descuento: int = 0
     abono_previo: int = 0
     monto_pendiente: Optional[int] = Field(default=0, description="Saldo pendiente de pago")
     total_liquidado: int = Field(description="Monto total pagado en ventanilla")
@@ -1283,6 +1289,7 @@ class CheckoutWizardRequest(BaseModel):
     total_venta: int
     monto_pendiente: int
     monto_abono: Optional[int] = 0
+    descuento: Optional[int] = 0
     instrucciones_bodega: Optional[str] = None
     items_inventariados: List[Any] = Field(default_factory=list)
     items_manuales: List[dict] = Field(default_factory=list)
@@ -1300,6 +1307,7 @@ class CheckoutWizardResponse(BaseModel):
     estado: str = "Reservada"
     estado_orden: str = "Reservada"
     total_venta: int
+    descuento: int = 0
     monto_pendiente: int
     abono_requerido: int = 0
     reservas_generadas: int = 0

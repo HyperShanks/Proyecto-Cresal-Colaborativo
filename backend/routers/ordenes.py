@@ -267,8 +267,10 @@ def crear_orden(
         now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
 
         monto_abono_val = orden_in.monto_abono if (orden_in.monto_abono is not None and orden_in.monto_abono > 0) else 0
-        if monto_abono_val > total_calculado:
-            monto_abono_val = total_calculado
+        desc_val = max(0, getattr(orden_in, "descuento", 0) or 0)
+        total_con_descuento = max(0, total_calculado - desc_val)
+        if monto_abono_val > total_con_descuento:
+            monto_abono_val = total_con_descuento
 
         nueva_orden = Orden_Venta(
             id_cliente=cliente.id_cliente,
@@ -277,8 +279,9 @@ def crear_orden(
             id_sucursal=id_sucursal_orden,
             estado_orden="Reservada",
             qr_transaccional_salida=None,
-            total_venta=total_calculado,
-            monto_pendiente=total_calculado,
+            total_venta=total_con_descuento,
+            descuento=desc_val,
+            monto_pendiente=total_con_descuento,
             abono_requerido=monto_abono_val,
             fecha_creacion=now_utc,
             fecha_actualizacion=now_utc,
@@ -397,6 +400,7 @@ def crear_orden(
             folio=nueva_orden.folio,
             estado_orden=nueva_orden.estado_orden,
             total_venta=nueva_orden.total_venta,
+            descuento=nueva_orden.descuento,
             monto_pendiente=nueva_orden.monto_pendiente,
             abono_requerido=nueva_orden.abono_requerido,
             qr_transaccional_salida=nueva_orden.qr_transaccional_salida,
@@ -979,6 +983,7 @@ def obtener_mis_ventas(
                 folio=orden.folio,
                 estado_orden=orden.estado_orden,
                 total_venta=orden.total_venta,
+                descuento=getattr(orden, "descuento", 0) or 0,
                 monto_pendiente=orden.monto_pendiente,
                 qr_transaccional_salida=orden.qr_transaccional_salida,
                 fecha_creacion=orden.fecha_creacion.isoformat() if orden.fecha_creacion else None,
@@ -1488,6 +1493,7 @@ def listar_entregas_envios(
                 tipo_entrega=tipo_entrega_item,
                 estado_orden=orden.estado_orden,
                 total_venta=orden.total_venta,
+                descuento=getattr(orden, "descuento", 0) or 0,
                 monto_pendiente=orden.monto_pendiente,
                 qr_transaccional_salida=orden.qr_transaccional_salida,
                 fecha_creacion=orden.fecha_creacion.isoformat() if orden.fecha_creacion else None,
@@ -2491,6 +2497,7 @@ def checkout_wizard(
         if abono_req_val == 0 and request.reservas:
             abono_req_val = sum((r.abono_requerido if getattr(r, "abono_requerido", None) is not None else r.monto_abonado) for r in request.reservas)
 
+        desc_val = max(0, getattr(request, "descuento", 0) or 0)
         orden = Orden_Venta(
             id_orden=id_orden,
             id_cliente=cliente.id_cliente,
@@ -2499,6 +2506,7 @@ def checkout_wizard(
             id_sucursal=sucursal_id,
             estado_orden="Reservada",
             total_venta=request.total_venta,
+            descuento=desc_val,
             monto_pendiente=request.total_venta,
             abono_requerido=abono_req_val,
             fecha_creacion=datetime.now(timezone.utc),
@@ -2526,7 +2534,7 @@ def checkout_wizard(
             if isinstance(act_id, str):
                 try:
                     act_id = uuid.UUID(act_id)
-                except Exception:
+                except (ValueError, AttributeError, Exception):
                     pass
 
             activo = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == act_id).first()
@@ -2752,9 +2760,8 @@ def checkout_wizard(
                 if isinstance(act_id, str):
                     try:
                         act_id = uuid.UUID(act_id)
-                    except Exception:
+                    except (ValueError, AttributeError, Exception):
                         pass
-
                 act_item = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == act_id).first()
                 if act_item and act_item.id_sucursal_actual != id_suc_dest:
                     tracking = Tracking_Logistico(
@@ -2777,6 +2784,7 @@ def checkout_wizard(
             estado=orden.estado_orden,
             estado_orden=orden.estado_orden,
             total_venta=orden.total_venta,
+            descuento=orden.descuento,
             monto_pendiente=orden.monto_pendiente,
             abono_requerido=orden.abono_requerido,
             reservas_generadas=reservas_creadas,

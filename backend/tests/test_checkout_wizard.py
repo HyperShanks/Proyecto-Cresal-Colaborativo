@@ -467,3 +467,32 @@ def test_checkout_wizard_traslado_misma_sucursal_rechazo(client, wizard_db, auth
     res = client.post("/api/v1/ordenes/checkout-wizard", json=payload, headers=auth_vendedor_wiz)
     assert res.status_code == 400
     assert "no pueden ser iguales" in res.json()["detail"] or "no es válida" in res.json()["detail"]
+
+
+# ── TEST 9: Descuento por Vale a Favor y Coherencia en Caja ───────────────────
+def test_checkout_wizard_con_descuento_por_vale_a_favor(client, wizard_db, auth_vendedor_wiz, auth_caja_wiz):
+    """Verifica que un descuento por vale a favor se guarde en la orden y sea visible en Caja."""
+    payload = {
+        "id_cliente": str(wizard_db["cliente_id"]),
+        "tipo_entrega": "Retiro",
+        "total_venta": 70000,
+        "descuento": 30000,
+        "monto_pendiente": 70000,
+        "items_manuales": [{"descripcion": "Repuesto Especial", "cantidad": 1, "precio_unitario": 100000, "precio_final": 100000}],
+    }
+
+    res = client.post("/api/v1/ordenes/checkout-wizard", json=payload, headers=auth_vendedor_wiz)
+    assert res.status_code == 201
+    data = res.json()
+    assert data["total_venta"] == 70000
+    assert data["descuento"] == 30000
+    id_orden = data["id_orden"]
+
+    # Verificar visibilidad en lista de cobros pendientes de Caja
+    res_caja = client.get("/api/v1/caja/pendientes?sucursal_id=30", headers=auth_caja_wiz)
+    assert res_caja.status_code == 200
+    pendientes = res_caja.json()["items"]
+    orden_en_caja = next((p for p in pendientes if p["id_referencia"] == id_orden), None)
+    assert orden_en_caja is not None
+    assert orden_en_caja["total_operacion"] == 70000
+    assert orden_en_caja["descuento"] == 30000
