@@ -628,3 +628,86 @@ def test_actualizar_estado_despacho_independiente_de_orden(client, auth_headers)
         db.close()
 
 
+def test_ventas_en_verde_no_pagadas_o_sin_qr_no_aparecen_en_entregas_envios(client, auth_headers):
+    """
+    Verifica que las ventas en verde que no están 100% pagadas o no cuentan con QR
+    transaccional (activo no asignado) no se listen en entregas y envíos.
+    """
+    db = TestingSessionLocal()
+    try:
+        user = db.query(models.Usuario).first()
+        cliente = db.query(models.Cliente).first()
+
+        # 1. Crear Orden de Venta en Verde con saldo pendiente y sin QR
+        id_orden_bo = uuid.uuid4()
+        orden_bo = models.Orden_Venta(
+            id_orden=id_orden_bo,
+            id_cliente=cliente.id_cliente,
+            id_vendedor=user.id_usuario,
+            id_sucursal=1,
+            estado_orden="Reservada",
+            total_venta=500000,
+            monto_pendiente=500000,
+            qr_transaccional_salida=None,
+        )
+        db.add(orden_bo)
+        db.flush()
+
+        reserva = models.Reservas_Backorder(
+            id_reserva=uuid.uuid4(),
+            id_cliente=cliente.id_cliente,
+            id_vendedor=user.id_usuario,
+            id_orden=id_orden_bo,
+            id_sucursal_registro=1,
+            id_categoria_requerida=1,
+            marca_requerida="Nissan",
+            modelo_requerido="Qashqai",
+            precio_acordado=500000,
+            monto_abonado=0,
+            abono_requerido=250000,
+            id_activo_asignado=None,
+            estado_reserva="Pendiente",
+        )
+        db.add(reserva)
+
+        detalle = models.Detalle_Orden(
+            id_detalle=uuid.uuid4(),
+            id_orden=id_orden_bo,
+            descripcion_manual="[RESERVA EN VERDE] Motor - Nissan Qashqai",
+            cantidad=1,
+            precio_unitario=500000,
+            precio_final=500000,
+            estado_preparacion="Pendiente",
+        )
+        db.add(detalle)
+        db.commit()
+
+        # Caso A: Con saldo pendiente -> NO debe aparecer
+        res_a = client.get("/api/v1/ordenes/entregas-envios?sucursal_id=1", headers=auth_headers)
+        assert res_a.status_code == 200
+        folios_a = [item["folio"] for item in res_a.json()]
+        assert orden_bo.folio not in folios_a
+
+        # Caso B: Pagada pero sin QR asignado -> NO debe aparecer
+        orden_bo.monto_pendiente = 0
+        orden_bo.estado_orden = "Pagada"
+        db.commit()
+
+        res_b = client.get("/api/v1/ordenes/entregas-envios?sucursal_id=1", headers=auth_headers)
+        assert res_b.status_code == 200
+        folios_b = [item["folio"] for item in res_b.json()]
+        assert orden_bo.folio not in folios_b
+
+        # Caso C: Pagada y con QR asignado -> SÍ debe aparecer
+        orden_bo.qr_transaccional_salida = f"TX-QR-{uuid.uuid4()}"
+        db.commit()
+
+        res_c = client.get("/api/v1/ordenes/entregas-envios?sucursal_id=1", headers=auth_headers)
+        assert res_c.status_code == 200
+        folios_c = [item["folio"] for item in res_c.json()]
+        assert orden_bo.folio in folios_c
+
+    finally:
+        db.close()
+
+

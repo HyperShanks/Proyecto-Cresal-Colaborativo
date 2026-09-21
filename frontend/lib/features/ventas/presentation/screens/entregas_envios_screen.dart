@@ -109,8 +109,15 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
   }
 
   List<EntregaEnvioModel> get _ordenesFiltradas {
-    if (_tipoEntregaFilter == 'todos') return _todasEntregas;
-    return _todasEntregas
+    var lista = _todasEntregas.where((e) {
+      if (e.esVentaEnVerde && (!e.estaPagada || !e.tieneQrDisponible)) {
+        return false;
+      }
+      return true;
+    }).toList();
+
+    if (_tipoEntregaFilter == 'todos') return lista;
+    return lista
         .where((e) => e.tipoEntrega.toLowerCase() == _tipoEntregaFilter)
         .toList();
   }
@@ -369,115 +376,31 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
 
 
 
-  Future<void> _marcarDespachoEnviado(EntregaEnvioModel orden) async {
-    final idDespacho = orden.despacho?.idDespacho;
-    if (idDespacho == null || idDespacho.isEmpty) return;
-
-    final confirmar = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppPalette.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: Row(
-          children: [
-            const Icon(Icons.local_shipping_outlined, color: AppPalette.secondary, size: 28),
-            const SizedBox(width: 10),
-            Text('Marcar como Enviado', style: AppTypography.title),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '¿Confirmas la entrega de la encomienda ${orden.folioDisplay} a la empresa de transporte (${orden.despacho?.empresaTransporte ?? "Courier"})?',
-              style: AppTypography.body,
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppPalette.background,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.white10),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Receptor: ${orden.despacho?.receptorNombres ?? "S/R"}',
-                    style: AppTypography.small.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    'Destino: ${orden.despacho?.direccionEnvio ?? ""}, ${orden.despacho?.comunaDestino ?? ""}',
-                    style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
-                  ),
-                  Text(
-                    'Transporte: ${orden.despacho?.empresaTransporte ?? "Chilexpress"}',
-                    style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    'Responsable: ${orden.vendedorAsignadoNombre ?? orden.vendedorNombre ?? "Mesón General"}',
-                    style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('CANCELAR', style: TextStyle(color: AppPalette.textSecondary)),
+  Widget _buildDatoFila(IconData icon, String label, String valor) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 15, color: AppPalette.textSecondary),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: AppTypography.small.copyWith(
+            color: AppPalette.textSecondary,
+            fontWeight: FontWeight.w500,
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppPalette.secondary,
-              foregroundColor: Colors.black, // Fix de contraste AAA
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            valor,
+            style: AppTypography.small.copyWith(
+              color: AppPalette.textPrimary,
+              fontWeight: FontWeight.w600,
             ),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('MARCAR COMO ENVIADO', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
-        ],
-      ),
+        ),
+      ],
     );
-
-    if (confirmar == true) {
-      try {
-        await OrdenesService.marcarDespachoEnviado(idDespacho);
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: AppPalette.surface,
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle, color: AppPalette.success),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    '¡Despacho ${orden.folioDisplay} marcado como Enviado!',
-                    style: const TextStyle(color: AppPalette.textPrimary),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-        _cargarDatos();
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: AppPalette.surface,
-            content: Text(
-              'Error al marcar despacho enviado: ${e.toString().replaceAll("Exception: ", "")}',
-              style: const TextStyle(color: AppPalette.error),
-            ),
-          ),
-        );
-      }
-    }
   }
 
   /// Confirmar entrega en tienda física (mostrador) para órdenes sin motor ni caja
@@ -653,8 +576,8 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                   ),
                   const Divider(color: Colors.white10, height: 24),
 
-                  // Ficha de Contacto Completa
-                  Text('DATOS DE CLIENTE Y ENTREGA', style: AppTypography.small.copyWith(fontWeight: FontWeight.bold, color: AppPalette.textSecondary)),
+                  // Ficha de Cliente
+                  Text('DATOS DEL CLIENTE', style: AppTypography.small.copyWith(fontWeight: FontWeight.bold, color: AppPalette.textSecondary)),
                   const SizedBox(height: 8),
                   Container(
                     padding: const EdgeInsets.all(12),
@@ -691,29 +614,110 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                               : 'RUT: ${orden.cliente?.rutCliente ?? "S/R"}  •  Tel: ${orden.cliente?.telefono ?? "S/T"}',
                           style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
                         ),
-                        if (orden.cliente?.correo != null)
-                          Text('Correo: ${orden.cliente!.correo}', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
-                        if (desp != null) ...[
-                          const Divider(color: Colors.white10, height: 16),
+                        if (orden.cliente?.correo != null && orden.cliente!.correo!.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text('Correo: ${orden.cliente!.correo}', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
+                          ),
+                      ],
+                    ),
+                  ),
+
+                  // Ficha Completa de Despacho y Envío
+                  if (desp != null) ...[
+                    const SizedBox(height: 14),
+                    Text('DATOS COMPLETOS DE DESPACHO Y ENVÍO', style: AppTypography.small.copyWith(fontWeight: FontWeight.bold, color: AppPalette.secondary)),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppPalette.background,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppPalette.secondary.withValues(alpha: 0.3)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Icon(Icons.local_shipping, size: 16, color: AppPalette.secondary),
-                              const SizedBox(width: 8),
-                              Expanded(
+                              Row(
+                                children: [
+                                  const Icon(Icons.local_shipping, size: 18, color: AppPalette.secondary),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Despacho a Domicilio',
+                                    style: AppTypography.body.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: AppPalette.secondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: AppPalette.secondary.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: AppPalette.secondary.withValues(alpha: 0.4)),
+                                ),
                                 child: Text(
-                                  'Receptor: ${desp.receptorNombres} (RUT: ${desp.receptorRut})',
-                                  style: AppTypography.body.copyWith(fontWeight: FontWeight.bold),
+                                  desp.estadoDespacho,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppPalette.secondary,
+                                  ),
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 4),
-                          Text('Dirección: ${desp.direccionEnvio}, ${desp.comunaDestino ?? ""}', style: AppTypography.small.copyWith(color: AppPalette.textPrimary)),
-                          Text('Transporte: ${desp.empresaTransporte ?? "Chilexpress"}  •  Tel: ${desp.receptorTelefono}', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
+                          const Divider(color: Colors.white10, height: 16),
+                          _buildDatoFila(
+                            Icons.person_outline,
+                            'Receptor:',
+                            '${desp.receptorNombres} (${desp.receptorRut.isNotEmpty ? desp.receptorRut : "S/R"})',
+                          ),
+                          const SizedBox(height: 6),
+                          _buildDatoFila(
+                            Icons.phone_outlined,
+                            'Teléfono:',
+                            desp.receptorTelefono.isNotEmpty
+                                ? desp.receptorTelefono
+                                : (orden.cliente?.telefono?.isNotEmpty == true
+                                    ? orden.cliente!.telefono!
+                                    : 'No registrado'),
+                          ),
+                          const SizedBox(height: 6),
+                          _buildDatoFila(
+                            Icons.location_on_outlined,
+                            'Dirección:',
+                            desp.direccionEnvio,
+                          ),
+                          const SizedBox(height: 6),
+                          _buildDatoFila(
+                            Icons.map_outlined,
+                            'Comuna Destino:',
+                            (desp.comunaDestino != null && desp.comunaDestino!.isNotEmpty)
+                                ? desp.comunaDestino!
+                                : (orden.cliente?.comuna ?? 'No especificada'),
+                          ),
+                          const SizedBox(height: 6),
+                          _buildDatoFila(
+                            Icons.local_shipping_outlined,
+                            'Transporte:',
+                            desp.empresaTransporte ?? 'Chilexpress',
+                          ),
+                          const SizedBox(height: 6),
+                          _buildDatoFila(
+                            Icons.payments_outlined,
+                            'Costo Envío:',
+                            desp.costoEnvioFormateado,
+                          ),
                         ],
-                      ],
+                      ),
                     ),
-                  ),
+                  ],
                   const SizedBox(height: 16),
 
                   // Trazabilidad de Vendedores
@@ -1015,20 +1019,25 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                           ),
                         ],
                       ] else ...[
-                        // Despacho: Permite visualizar Ticket QR para Barrera de Bodega o marcar enviado
+                        // Despacho: Permite visualizar Ticket QR para salida en Barrera de Bodega
                         Expanded(
-                          child: OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: orden.tieneQrDisponible
+                                  ? AppPalette.secondary
+                                  : AppPalette.surface,
                               foregroundColor: orden.tieneQrDisponible
-                                  ? AppPalette.primary
+                                  ? Colors.black
                                   : AppPalette.textSecondary,
-                              side: BorderSide(
-                                color: orden.tieneQrDisponible
-                                    ? AppPalette.primary
-                                    : Colors.white24,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                side: BorderSide(
+                                  color: orden.tieneQrDisponible
+                                      ? AppPalette.secondary
+                                      : Colors.white24,
+                                ),
                               ),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             ),
                             onPressed: () {
                               if (!orden.tieneQrDisponible) {
@@ -1066,23 +1075,6 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                               orden.tieneQrDisponible ? 'VER TICKET QR' : 'QR BLOQUEADO',
                               style: const TextStyle(fontWeight: FontWeight.bold),
                             ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppPalette.secondary,
-                              foregroundColor: Colors.black, // Fix de contraste AAA
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            ),
-                            onPressed: () {
-                              Navigator.of(ctx).pop();
-                              _marcarDespachoEnviado(orden);
-                            },
-                            icon: const Icon(Icons.local_shipping, size: 18, color: Colors.black),
-                            label: const Text('MARCAR ENVIADO', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
                           ),
                         ),
                       ],
@@ -1446,9 +1438,9 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 3),
-                        if (esDespacho && desp != null)
+                        if (esDespacho && desp != null) ...[
                           Text(
-                            'Envío: ${desp.direccionEnvio}, ${desp.comunaDestino ?? ""} • Tel: ${desp.receptorTelefono}',
+                            'Destino: ${desp.direccionEnvio}${(desp.comunaDestino != null && desp.comunaDestino!.isNotEmpty) ? ", ${desp.comunaDestino!}" : ""}${desp.receptorTelefono.isNotEmpty ? " • Tel: ${desp.receptorTelefono}" : (orden.cliente?.telefono?.isNotEmpty == true ? " • Tel: ${orden.cliente!.telefono!}" : "")}',
                             style: AppTypography.small.copyWith(
                               color: AppPalette.textSecondary,
                               fontSize: 12,
@@ -1456,6 +1448,17 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
+                          Text(
+                            'Courier: ${desp.empresaTransporte ?? "Chilexpress"} • ${desp.costoEnvioFormateado} • Estado: ${desp.estadoDespacho}',
+                            style: AppTypography.small.copyWith(
+                              color: AppPalette.secondary,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                         Text(
                           'Vendedor: ${orden.vendedorNombre ?? "Vendedor Central"} • Resp: ${orden.vendedorAsignadoNombre ?? "Mesón General"}',
                           style: AppTypography.small.copyWith(
@@ -1580,94 +1583,106 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    InkWell(
-                      onTap: () {
-                        if (!orden.tieneQrDisponible) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              backgroundColor: AppPalette.surface,
-                              behavior: SnackBarBehavior.floating,
-                              content: Row(
-                                children: [
-                                  const Icon(Icons.lock_clock_rounded,
-                                      color: AppPalette.warning, size: 20),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      saldoPendiente
-                                          ? 'QR bloqueado: Orden con saldo pendiente de ${orden.montoPendienteFormateado}. Requiere confirmación de pago en Caja.'
-                                          : 'Esta orden no tiene código QR disponible.',
-                                      style: const TextStyle(color: AppPalette.warning),
+                    Flexible(
+                      child: InkWell(
+                        onTap: () {
+                          if (!orden.tieneQrDisponible) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                backgroundColor: AppPalette.surface,
+                                behavior: SnackBarBehavior.floating,
+                                content: Row(
+                                  children: [
+                                    const Icon(Icons.lock_clock_rounded,
+                                        color: AppPalette.warning, size: 20),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        saldoPendiente
+                                            ? 'QR bloqueado: Orden con saldo pendiente de ${orden.montoPendienteFormateado}. Requiere confirmación de pago en Caja.'
+                                            : 'Esta orden no tiene código QR disponible.',
+                                        style: const TextStyle(color: AppPalette.warning),
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
-                          );
-                          return;
-                        }
-                        _abrirQrModal(orden);
-                      },
-                      borderRadius: BorderRadius.circular(8),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              orden.tieneQrDisponible ? Icons.qr_code_2 : Icons.lock_outline,
-                              color: orden.tieneQrDisponible
-                                  ? (esDespacho ? AppPalette.secondary : AppPalette.primary)
-                                  : AppPalette.warning,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              orden.tieneQrDisponible ? 'Ticket QR' : 'QR Bloqueado',
-                              style: AppTypography.body.copyWith(
+                            );
+                            return;
+                          }
+                          _abrirQrModal(orden);
+                        },
+                        borderRadius: BorderRadius.circular(8),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                orden.tieneQrDisponible ? Icons.qr_code_2 : Icons.lock_outline,
                                 color: orden.tieneQrDisponible
                                     ? (esDespacho ? AppPalette.secondary : AppPalette.primary)
                                     : AppPalette.warning,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
+                                size: 18,
                               ),
-                            ),
-                          ],
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  orden.tieneQrDisponible ? 'Ticket QR' : 'QR Bloqueado',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTypography.body.copyWith(
+                                    color: orden.tieneQrDisponible
+                                        ? (esDespacho ? AppPalette.secondary : AppPalette.primary)
+                                        : AppPalette.warning,
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: AppPalette.surface,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.white12),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.qr_code_scanner,
-                            size: 15,
-                            color: esDespacho
-                                ? AppPalette.secondary
-                                : (orden.esMixta ? AppPalette.secondary : AppPalette.textSecondary),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            esDespacho
-                                ? 'Salida en Barrera Bodega'
-                                : (orden.esMixta ? 'Mixta · Barrera Bodega' : 'Salida en Barrera Bodega'),
-                            style: AppTypography.small.copyWith(
+                    Flexible(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AppPalette.surface,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.white12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.qr_code_scanner,
+                              size: 15,
                               color: esDespacho
                                   ? AppPalette.secondary
                                   : (orden.esMixta ? AppPalette.secondary : AppPalette.textSecondary),
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12,
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                esDespacho
+                                    ? 'Salida en Barrera Bodega'
+                                    : (orden.esMixta ? 'Mixta · Barrera Bodega' : 'Salida en Barrera Bodega'),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTypography.small.copyWith(
+                                  color: esDespacho
+                                      ? AppPalette.secondary
+                                      : (orden.esMixta ? AppPalette.secondary : AppPalette.textSecondary),
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 11.5,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],

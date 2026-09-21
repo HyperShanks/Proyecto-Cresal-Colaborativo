@@ -781,11 +781,12 @@ class _CarritoScreenState extends State<CarritoScreen> {
             title: Text('Carrito de Ventas', style: AppTypography.title),
             actions: [
               if (!cart.estaVacio) ...[
-                IconButton(
-                  icon: const Icon(Icons.add_circle_outline, color: AppPalette.secondary),
-                  onPressed: () => VentaLibreDialog.show(context),
-                  tooltip: 'Agregar ítem manual',
-                ),
+                if (!cart.tieneVentaEnVerde)
+                  IconButton(
+                    icon: const Icon(Icons.add_circle_outline, color: AppPalette.secondary),
+                    onPressed: () => VentaLibreDialog.show(context),
+                    tooltip: 'Agregar ítem manual',
+                  ),
                 IconButton(
                   icon: const Icon(Icons.delete_sweep_outlined, color: AppPalette.error),
                   onPressed: () => _confirmarVaciarCarrito(context),
@@ -1032,37 +1033,65 @@ class _CarritoScreenState extends State<CarritoScreen> {
             ),
             const SizedBox(height: 8),
 
-            // ── 3. Botón de Ancho Completo: Añadir Ítem No Inventariado ─────
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: OutlinedButton.icon(
-                onPressed: () => VentaLibreDialog.show(context),
-                icon: const Icon(Icons.add, color: AppPalette.secondary, size: 20),
-                label: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    '+ Añadir Ítem No Inventariado / Misceláneo',
-                    style: AppTypography.button.copyWith(
-                      color: AppPalette.secondary,
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
+            // ── 3. Botón de Ancho Completo: Añadir Ítem No Inventariado / Banner Venta en Verde ─────
+            if (!cart.tieneVentaEnVerde) ...[
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: OutlinedButton.icon(
+                  onPressed: () => VentaLibreDialog.show(context),
+                  icon: const Icon(Icons.add, color: AppPalette.secondary, size: 20),
+                  label: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      '+ Añadir Ítem No Inventariado / Misceláneo',
+                      style: AppTypography.button.copyWith(
+                        color: AppPalette.secondary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
-                ),
-                style: OutlinedButton.styleFrom(
-                  side: BorderSide(
-                    color: AppPalette.secondary.withValues(alpha: 0.4),
-                    width: 1.2,
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(
+                      color: AppPalette.secondary.withValues(alpha: 0.4),
+                      width: 1.2,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    backgroundColor: AppPalette.surface.withValues(alpha: 0.4),
                   ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  backgroundColor: AppPalette.surface.withValues(alpha: 0.4),
                 ),
               ),
-            ),
-            const SizedBox(height: 24),
+              const SizedBox(height: 24),
+            ] else ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppPalette.secondary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppPalette.secondary.withValues(alpha: 0.4)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.bookmark_added, color: AppPalette.secondary, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Pedido con Venta en Verde (Reserva por encargo). Las compras en verde se tramitan de forma exclusiva e individual sin otros repuestos.',
+                        style: AppTypography.small.copyWith(
+                          color: AppPalette.textPrimary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
 
             // ── 4. Tarjeta 1: DATOS POST-VENTA CLIENTE ──────────────────────
             _buildCardContainer(

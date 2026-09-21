@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../../../core/theme/tokens/app_palette.dart';
@@ -49,6 +50,7 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
   // Sección actual: 'normal' (Historial de Órdenes) o 'por_asignar' (Ventas en Verde Pagadas sin activo asignado)
   String _seccionActual = 'normal';
   int _conteoPorAsignar = 0;
+  Timer? _autoRefreshTimer;
 
   @override
   void initState() {
@@ -57,6 +59,7 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
     _tempFiltroEstado = _filtroEstado;
 
     OrdenesSyncNotifier.instance.addListener(_onSyncNotification);
+    _iniciarAutoRefresh();
 
     if (widget.initialOrdenes != null) {
       _ordenes = List.from(widget.initialOrdenes!);
@@ -65,6 +68,15 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
     } else {
       _cargarOrdenes();
     }
+  }
+
+  void _iniciarAutoRefresh() {
+    _autoRefreshTimer?.cancel();
+    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (mounted) {
+        _cargarOrdenesSilencioso();
+      }
+    });
   }
 
   /// Prioridad de ordenamiento: 0 = Activas/Pendientes, 1 = Completadas, 2 = Anuladas (al final absoluto)
@@ -103,12 +115,13 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
 
   void _onSyncNotification() {
     if (mounted) {
-      _cargarOrdenes();
+      _cargarOrdenesSilencioso();
     }
   }
 
   @override
   void dispose() {
+    _autoRefreshTimer?.cancel();
     routeObserver.unsubscribe(this);
     OrdenesSyncNotifier.instance.removeListener(_onSyncNotification);
     _searchController.dispose();
@@ -128,8 +141,8 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
 
     try {
       final ordenes = await OrdenesService.obtenerMisVentas(
-        todas: _verTodas,
-        estado: _filtroEstado,
+        todas: _seccionActual == 'por_asignar' ? true : _verTodas,
+        estado: _seccionActual == 'por_asignar' ? null : _filtroEstado,
         seccion: _seccionActual,
         client: widget.client,
       );
@@ -146,6 +159,7 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
         try {
           final porAsignar = await OrdenesService.obtenerMisVentas(
             seccion: 'por_asignar',
+            todas: true,
             client: widget.client,
           );
           conteo = porAsignar.length;
@@ -163,6 +177,46 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
         _errorMessage = e.toString().replaceFirst('Exception: ', '');
         _isLoading = false;
       });
+    }
+  }
+
+  /// Recarga en segundo plano sin interrumpir la interacción del usuario
+  Future<void> _cargarOrdenesSilencioso() async {
+    if (!mounted || _isLoading) return;
+
+    try {
+      final ordenes = await OrdenesService.obtenerMisVentas(
+        todas: _seccionActual == 'por_asignar' ? true : _verTodas,
+        estado: _seccionActual == 'por_asignar' ? null : _filtroEstado,
+        seccion: _seccionActual,
+        client: widget.client,
+      );
+
+      if (!mounted) return;
+      _ordenarOrdenes(ordenes);
+
+      int conteo = _conteoPorAsignar;
+      if (_seccionActual == 'por_asignar') {
+        conteo = ordenes.length;
+      } else {
+        try {
+          final porAsignar = await OrdenesService.obtenerMisVentas(
+            seccion: 'por_asignar',
+            todas: true,
+            client: widget.client,
+          );
+          conteo = porAsignar.length;
+        } catch (_) {}
+      }
+
+      if (mounted) {
+        setState(() {
+          _ordenes = ordenes;
+          _conteoPorAsignar = conteo;
+        });
+      }
+    } catch (_) {
+      // Ignorar errores en ciclo silencioso
     }
   }
 
@@ -355,7 +409,7 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
       borderRadius: BorderRadius.circular(8.0),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 8.0),
+        padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
         decoration: BoxDecoration(
           color: isSelected ? AppPalette.primary.withValues(alpha: 0.2) : Colors.transparent,
           borderRadius: BorderRadius.circular(8.0),
@@ -365,26 +419,34 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               icon,
-              size: 16.0,
+              size: 14.0,
               color: isSelected ? AppPalette.primary : AppPalette.textSecondary,
             ),
-            const SizedBox(width: 6.0),
-            Text(
-              titulo,
-              style: TextStyle(
-                fontSize: 13.0,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                color: isSelected ? AppPalette.textPrimary : AppPalette.textSecondary,
-                fontFamily: AppTypography.fontFamily,
+            const SizedBox(width: 4.0),
+            Expanded(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.center,
+                child: Text(
+                  titulo,
+                  maxLines: 1,
+                  style: TextStyle(
+                    fontSize: 12.0,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    color: isSelected ? AppPalette.textPrimary : AppPalette.textSecondary,
+                    fontFamily: AppTypography.fontFamily,
+                  ),
+                ),
               ),
             ),
             if (badgeCount > 0) ...[
-              const SizedBox(width: 6.0),
+              const SizedBox(width: 4.0),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 2.0),
+                padding: const EdgeInsets.symmetric(horizontal: 5.0, vertical: 1.5),
                 decoration: BoxDecoration(
                   color: isSelected ? AppPalette.secondary : AppPalette.warning,
                   borderRadius: BorderRadius.circular(10.0),
@@ -539,20 +601,27 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
                         color: AppPalette.textSecondary,
                       ),
                     ),
-                    const Spacer(),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 2.0),
-                      decoration: BoxDecoration(
-                        color: AppPalette.success.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(4.0),
-                        border: Border.all(color: AppPalette.success.withValues(alpha: 0.4)),
-                      ),
-                      child: Text(
-                        'Pagada al 100% (${orden.totalVentaFormateado})',
-                        style: const TextStyle(
-                          fontSize: 11.0,
-                          fontWeight: FontWeight.bold,
-                          color: AppPalette.success,
+                    const SizedBox(width: 8.0),
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 2.0),
+                          decoration: BoxDecoration(
+                            color: AppPalette.success.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(4.0),
+                            border: Border.all(color: AppPalette.success.withValues(alpha: 0.4)),
+                          ),
+                          child: Text(
+                            'Pagada al 100% (${orden.totalVentaFormateado})',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 11.0,
+                              fontWeight: FontWeight.bold,
+                              color: AppPalette.success,
+                            ),
+                          ),
                         ),
                       ),
                     ),

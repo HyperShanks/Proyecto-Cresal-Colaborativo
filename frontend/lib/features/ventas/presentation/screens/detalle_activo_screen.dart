@@ -39,6 +39,20 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
   }
 
   void _onAddToCart() {
+    if (CartController.instance.tieneVentaEnVerde) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: AppPalette.error,
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            'No se pueden combinar productos con una Venta en Verde. Las ventas en verde van solas en el pedido.',
+          ),
+        ),
+      );
+      return;
+    }
+
     final agregado = CartController.instance.agregarInventariado(widget.item);
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(

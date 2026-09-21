@@ -55,6 +55,18 @@ class CartController extends ChangeNotifier {
   /// Indica si el carrito está actualmente vacío
   bool get estaVacio => _items.isEmpty;
 
+  /// Indica si el carrito contiene actualmente una Venta en Verde (Reserva Backorder)
+  bool get tieneVentaEnVerde => _items.any((i) => i is ReservaBackorderCartItem);
+
+  /// Indica si el carrito contiene ítems regulares (inventariados o venta libre)
+  bool get tieneItemsRegulares => _items.any((i) => i is! ReservaBackorderCartItem);
+
+  /// Las ventas en verde van exclusivamente solas en el pedido
+  bool get puedeAgregarVentaEnVerde => _items.isEmpty;
+
+  /// Solo se pueden agregar ítems regulares si no hay una venta en verde en el pedido
+  bool get puedeAgregarItemRegular => !tieneVentaEnVerde;
+
   /// Verifica si existe algún repuesto inventariado cuyo precio final acordado
   /// esté fuera del rango de tasación permitido (mínimo y máximo).
   bool get hayPreciosInvalidos {

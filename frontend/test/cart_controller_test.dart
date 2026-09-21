@@ -272,5 +272,90 @@ void main() {
       expect(CartController.instance.totalMonto, 90000); // 45.000 * 2
       expect(CartController.instance.items.first.titulo, 'Mano de Obra Desarme');
     });
+
+    testWidgets('VentaLibreDialog muestra error y rechaza ítem si el carrito contiene Venta en Verde', (tester) async {
+      // 1. Configurar carrito con un Backorder
+      final okBo = CartController.instance.agregarReservaBackorder(
+        idCategoria: 1,
+        categoriaNombre: 'Motor',
+        marca: 'Subaru',
+        modelo: 'Impreza',
+        precioAcordado: 800000,
+      );
+      expect(okBo, isTrue);
+      expect(CartController.instance.tieneVentaEnVerde, isTrue);
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: VentaLibreDialog(),
+          ),
+        ),
+      );
+
+      // Llenar formulario
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Ej. Perno culata especial, Mano de obra, etc.'),
+        'Filtro de Aceite',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, '0'),
+        '10000',
+      );
+
+      // Presionar Agregar al Carrito
+      await tester.tap(find.text('Agregar al Carrito'));
+      await tester.pump();
+
+      // Debe mostrar error indicando que las ventas en verde van solas
+      expect(find.text('No se pudo agregar el ítem manual. El pedido contiene una Venta en Verde (las ventas en verde van solas).'), findsOneWidget);
+
+      // El carrito sigue teniendo únicamente la venta en verde (1 ítem)
+      expect(CartController.instance.items.length, 1);
+      expect(CartController.instance.items.first, isA<ReservaBackorderCartItem>());
+    });
+
+    test('Reglas de Exclusividad: Venta en Verde y repuestos regulares no pueden combinarse', () {
+      final cart = CartController.instance;
+
+      // Caso A: Carrito con producto regular no permite Venta en Verde
+      cart.agregarVentaLibre(descripcion: 'Bujía', monto: 5000);
+      expect(cart.tieneItemsRegulares, isTrue);
+      expect(cart.puedeAgregarVentaEnVerde, isFalse);
+
+      final intentoVentaVerde = cart.agregarReservaBackorder(
+        idCategoria: 1,
+        categoriaNombre: 'Motor',
+        marca: 'Toyota',
+        modelo: 'Corolla',
+        precioAcordado: 900000,
+      );
+      expect(intentoVentaVerde, isFalse);
+      expect(cart.items.length, 1);
+
+      // Vaciar
+      cart.vaciarCarrito();
+
+      // Caso B: Carrito con Venta en Verde no permite agregar inventariado ni manual
+      final okBo = cart.agregarReservaBackorder(
+        idCategoria: 2,
+        categoriaNombre: 'Caja de Cambios',
+        marca: 'Nissan',
+        modelo: 'Navara',
+        precioAcordado: 600000,
+      );
+      expect(okBo, isTrue);
+      expect(cart.tieneVentaEnVerde, isTrue);
+      expect(cart.puedeAgregarItemRegular, isFalse);
+
+      final intentoManual = cart.agregarVentaLibre(descripcion: 'Golilla', monto: 1000);
+      expect(intentoManual, isFalse);
+
+      final intentoInv = cart.agregarInventariado(itemTest1);
+      expect(intentoInv, isFalse);
+
+      expect(cart.items.length, 1);
+      expect(cart.items.first, isA<ReservaBackorderCartItem>());
+    });
   });
 }

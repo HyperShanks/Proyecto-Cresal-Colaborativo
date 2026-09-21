@@ -793,7 +793,10 @@ def obtener_mis_ventas(
     if seccion == "por_asignar":
         # Apartado exclusivo: Ventas en verde pagadas que están pendientes de asignación física de activo
         query = db.query(Orden_Venta).filter(
-            Orden_Venta.id_vendedor == current_user.id_usuario,
+            or_(
+                Orden_Venta.id_vendedor == current_user.id_usuario,
+                Orden_Venta.id_vendedor_asignado == current_user.id_usuario,
+            ),
             Orden_Venta.monto_pendiente == 0,
             Orden_Venta.qr_transaccional_salida.is_(None),
             Orden_Venta.id_orden.in_(subquery_por_asignar)
@@ -818,7 +821,10 @@ def obtener_mis_ventas(
     else:
         # Apartado normal: Excluir estrictamente órdenes pendientes de asignación para evitar duplicidad o botones Ver QR inválidos
         query = db.query(Orden_Venta).filter(
-            Orden_Venta.id_vendedor == current_user.id_usuario,
+            or_(
+                Orden_Venta.id_vendedor == current_user.id_usuario,
+                Orden_Venta.id_vendedor_asignado == current_user.id_usuario,
+            ),
             ~and_(
                 Orden_Venta.monto_pendiente == 0,
                 Orden_Venta.qr_transaccional_salida.is_(None),
@@ -1323,6 +1329,25 @@ def listar_entregas_envios(
         if not es_admin_o_jefe and orden.id_vendedor_asignado is not None:
             if orden.id_vendedor_asignado != current_user.id_usuario and orden.id_vendedor != current_user.id_usuario:
                 continue
+
+        # 1.1 Regla de Venta en Verde:
+        # Las órdenes de ventas en verde que aún no están pagadas (monto_pendiente > 0)
+        # o que no cuentan con QR transaccional asignado no se pueden entregar, por ende no deben listarse.
+        tiene_reserva_verde = (
+            db.query(Reservas_Backorder)
+            .filter(Reservas_Backorder.id_orden == orden.id_orden)
+            .first() is not None
+        )
+        if not tiene_reserva_verde:
+            detalles_check = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == orden.id_orden).all()
+            tiene_reserva_verde = any(
+                "[RESERVA EN VERDE]" in (d.descripcion_manual or "").upper() or
+                "VENTA EN VERDE" in (d.descripcion_manual or "").upper()
+                for d in detalles_check
+            )
+
+        if tiene_reserva_verde and (orden.monto_pendiente > 0 or not orden.qr_transaccional_salida):
+            continue
 
         # 2. Filtro por Estado de Pago
         if estado_pago:
