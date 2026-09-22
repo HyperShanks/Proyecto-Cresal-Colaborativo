@@ -1,4 +1,5 @@
 // frontend/lib/features/gerencia/presentation/screens/dashboard_gerencia_view.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../../core/routes/route_observer.dart';
 import '../../../../core/services/api_service.dart';
@@ -14,6 +15,9 @@ import '../widgets/metodos_pago_chart.dart';
 import 'inventario_gerencia_view.dart';
 import 'ordenes_gerencia_view.dart';
 import 'backorders_gerencia_view.dart';
+import '../../../../core/widgets/update_dialog.dart';
+import '../../../../core/services/app_update_service.dart';
+import '../../../../core/services/silent_polling_manager.dart';
 
 /// Enumeración de vistas principales del panel gerencial (HU-5.1 y HU-5.2).
 enum VistaGerencia { dashboard, ordenes, inventario, backorders }
@@ -56,6 +60,8 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
   bool _dashboardDirty = false;
 
   late AnimationController _spinController;
+  SilentPollingManager? _gerenciaPollingManager;
+  Timer? _updateCheckTimer;
 
   final GlobalKey<OrdenesGerenciaViewState> _ordenesKey =
       GlobalKey<OrdenesGerenciaViewState>();
@@ -95,6 +101,41 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
       duration: const Duration(milliseconds: 900),
     );
     _cargarDatosIniciales();
+
+    _gerenciaPollingManager = SilentPollingManager(
+      interval: const Duration(seconds: 45),
+      debugLabel: 'GerenciaPolling',
+      shouldPause: () {
+        final modalInventarioAbierto =
+            _inventarioKey.currentState?.isModalAbierto ?? false;
+        return _cargando || modalInventarioAbierto;
+      },
+      onPoll: () async {
+        if (!mounted) return;
+        switch (_vistaActiva) {
+          case VistaGerencia.dashboard:
+            await _cargarDashboard(silent: true);
+            break;
+          case VistaGerencia.ordenes:
+            await _ordenesKey.currentState?.refrescarSilencioso();
+            break;
+          case VistaGerencia.inventario:
+            await _inventarioKey.currentState?.refrescarSilencioso();
+            break;
+          case VistaGerencia.backorders:
+            await _backordersKey.currentState?.refrescarSilencioso();
+            break;
+        }
+      },
+    )..start();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _updateCheckTimer = Timer(const Duration(seconds: 3), () {
+        if (mounted) {
+          AppUpdateChecker.check(context, showIfUpToDate: false);
+        }
+      });
+    });
   }
 
   @override
@@ -113,13 +154,15 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
     // y la vista visible es el Dashboard, evitando falsos refrescos al cerrar modales o cancelar diálogos.
     if (_dashboardDirty && _vistaActiva == VistaGerencia.dashboard) {
       _dashboardDirty = false;
-      _cargarDashboard();
+      _cargarDashboard(silent: true);
     }
   }
 
   @override
   void dispose() {
+    _updateCheckTimer?.cancel();
     routeObserver.unsubscribe(this);
+    _gerenciaPollingManager?.dispose();
     // Libero explícitamente el controlador de animación según RULES.md
     _spinController.dispose();
     super.dispose();
@@ -158,20 +201,22 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
   }
 
   /// Cargo simultáneamente los 3 endpoints analíticos aplicando guardas de montaje.
-  Future<void> _cargarDashboard({bool mostrarToast = false}) async {
+  Future<void> _cargarDashboard({bool mostrarToast = false, bool silent = false}) async {
     if (!mounted) return;
 
     debugPrint(
       '📊 [GERENCIA-DASHBOARD] 🔄 Solicitando KPIs, métodos de pago y flujo operativo (Sucursal: ${_sucursalSeleccionada ?? "Todas"})...',
     );
-    setState(() {
-      _cargando = true;
-      _mensajeError = null;
-      _codigoError = null;
-      _detalleTecnicoError = null;
-      _mostrarDetalleTecnico = false;
-    });
-    _spinController.repeat();
+    if (!silent) {
+      setState(() {
+        _cargando = true;
+        _mensajeError = null;
+        _codigoError = null;
+        _detalleTecnicoError = null;
+        _mostrarDetalleTecnico = false;
+      });
+      _spinController.repeat();
+    }
 
     try {
       final futures = await Future.wait([
@@ -190,8 +235,10 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
         _flujo = futures[2] as FlujoOperativoModel;
         _cargando = false;
       });
-      _spinController.stop();
-      _spinController.reset();
+      if (!silent) {
+        _spinController.stop();
+        _spinController.reset();
+      }
 
       debugPrint(
         '📊 [GERENCIA-DASHBOARD] ✅ OK 200 - Métricas analíticas cargadas exitosamente:',
@@ -221,6 +268,10 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
       }
     } catch (e) {
       if (!mounted) return;
+      if (silent) {
+        debugPrint('📊 [GERENCIA-DASHBOARD] ⚠️ Error en polling silencioso (ignorado): $e');
+        return;
+      }
 
       String errorStr;
       String? codigoDiag;
@@ -393,35 +444,39 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
               children: [
                 _buildTopbar(),
                 Expanded(
-                  child: _vistaActiva == VistaGerencia.dashboard
-                      ? _buildDashboardContent()
-                      : _vistaActiva == VistaGerencia.ordenes
-                      ? Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: OrdenesGerenciaView(
-                            key: _ordenesKey,
-                            idSucursalInicial: _sucursalSeleccionada,
-                            estadoInicial: _filtroEstadoOrdenes,
-                          ),
-                        )
-                      : _vistaActiva == VistaGerencia.inventario
-                      ? InventarioGerenciaView(
-                          key: _inventarioKey,
+                  child: IndexedStack(
+                    index: _vistaActiva.index,
+                    children: [
+                      // 0: VistaGerencia.dashboard
+                      _buildDashboardContent(),
+                      // 1: VistaGerencia.ordenes
+                      Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: OrdenesGerenciaView(
+                          key: _ordenesKey,
                           idSucursalInicial: _sucursalSeleccionada,
-                          filtroSinTasarInicial: _filtroSinTasar,
-                          onStockMutado: () {
-                            _dashboardDirty = true;
-                            if (_vistaActiva == VistaGerencia.dashboard) {
-                              _cargarDashboard();
-                            }
-                          },
-                        )
-                      : _vistaActiva == VistaGerencia.backorders
-                      ? BackordersGerenciaView(
-                          key: _backordersKey,
-                          idSucursalInicial: _sucursalSeleccionada,
-                        )
-                      : const SizedBox.shrink(),
+                          estadoInicial: _filtroEstadoOrdenes,
+                        ),
+                      ),
+                      // 2: VistaGerencia.inventario
+                      InventarioGerenciaView(
+                        key: _inventarioKey,
+                        idSucursalInicial: _sucursalSeleccionada,
+                        filtroSinTasarInicial: _filtroSinTasar,
+                        onStockMutado: () {
+                          _dashboardDirty = true;
+                          if (_vistaActiva == VistaGerencia.dashboard) {
+                            _cargarDashboard(silent: true);
+                          }
+                        },
+                      ),
+                      // 3: VistaGerencia.backorders
+                      BackordersGerenciaView(
+                        key: _backordersKey,
+                        idSucursalInicial: _sucursalSeleccionada,
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -567,8 +622,16 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                         debugPrint(
                           '🔀 [GERENCIA-NAV] 📂 Cambiando a pestaña: Dashboard Ejecutivo',
                         );
-                        setState(() => _vistaActiva = VistaGerencia.dashboard);
-                        _cargarDashboard();
+                        final needsHardLoad = _kpis == null || _dashboardDirty;
+                        setState(() {
+                          _vistaActiva = VistaGerencia.dashboard;
+                          _dashboardDirty = false;
+                        });
+                        if (needsHardLoad) {
+                          _cargarDashboard();
+                        } else {
+                          _cargarDashboard(silent: true);
+                        }
                       } else {
                         // Re-clic en la pestaña activa: refresca intencionalmente
                         _cargarDashboard(mostrarToast: true);
@@ -592,6 +655,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                           _filtroEstadoOrdenes = null;
                           _vistaActiva = VistaGerencia.ordenes;
                         });
+                        _ordenesKey.currentState?.refrescarSilencioso();
                       } else {
                         // Re-clic en la pestaña activa: refresca intencionalmente
                         _refrescarVistaActiva(mostrarToast: true);
@@ -618,6 +682,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                           _vistaActiva = VistaGerencia.inventario;
                           _filtroSinTasar = false;
                         });
+                        _inventarioKey.currentState?.refrescarSilencioso();
                       } else {
                         // Re-clic en la pestaña activa: refresca intencionalmente
                         _refrescarVistaActiva(mostrarToast: true);
@@ -641,11 +706,25 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                         setState(() {
                           _vistaActiva = VistaGerencia.backorders;
                         });
+                        _backordersKey.currentState?.refrescarSilencioso();
                       } else {
                         // Re-clic en la pestaña activa: refresca intencionalmente
                         _refrescarVistaActiva(mostrarToast: true);
                       }
                     },
+                  ),
+
+                  const SizedBox(height: 12),
+                  const Divider(color: Colors.white12, height: 1),
+                  const SizedBox(height: 6),
+
+                  // 5. Botón de Actualizaciones
+                  _buildSidebarNavItem(
+                    icon: Icons.system_update_alt_rounded,
+                    label: 'Actualizaciones',
+                    isSelected: false,
+                    badgeText: null,
+                    onTap: () => AppUpdateChecker.check(context, showIfUpToDate: true),
                   ),
                 ],
               ),
@@ -700,6 +779,18 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
+                              ),
+                              FutureBuilder<String>(
+                                future: AppUpdateService().getCurrentVersion(),
+                                builder: (context, snapshot) {
+                                  return Text(
+                                    'v${snapshot.data ?? "..."}',
+                                    style: const TextStyle(
+                                      color: Colors.white38,
+                                      fontSize: 9,
+                                    ),
+                                  );
+                                },
                               ),
                             ],
                           ),

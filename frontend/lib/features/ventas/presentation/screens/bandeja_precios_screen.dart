@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import '../../../../core/routes/route_observer.dart';
+import '../../../../core/services/silent_polling_manager.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../models/pendiente_precio_model.dart';
@@ -30,11 +31,22 @@ class BandejaPreciosScreenState extends State<BandejaPreciosScreen> with RouteAw
   List<ActivoPendientePrecioModel> _pendientes = [];
   bool _isLoading = true;
   String? _errorMessage;
+  SilentPollingManager? _pollingManager;
 
   @override
   void initState() {
     super.initState();
     _cargarPendientes();
+    _iniciarPollingSilencioso();
+  }
+
+  void _iniciarPollingSilencioso() {
+    _pollingManager?.dispose();
+    _pollingManager = SilentPollingManager(
+      interval: const Duration(seconds: 20),
+      debugLabel: 'TasacionPolling',
+      onPoll: _cargarPendientesSilencioso,
+    )..start();
   }
 
   @override
@@ -49,11 +61,12 @@ class BandejaPreciosScreenState extends State<BandejaPreciosScreen> with RouteAw
   @override
   void didPopNext() {
     super.didPopNext();
-    refrescar();
+    refrescarSilencioso();
   }
 
   @override
   void dispose() {
+    _pollingManager?.dispose();
     routeObserver.unsubscribe(this);
     super.dispose();
   }
@@ -61,6 +74,30 @@ class BandejaPreciosScreenState extends State<BandejaPreciosScreen> with RouteAw
   /// Método público para forzar recarga (Auto-Refresh SPEC-HU-TAREA-20)
   Future<void> refrescar() async {
     await _cargarPendientes();
+  }
+
+  /// Recarga silenciosa sin spinners si ya hay datos en memoria
+  Future<void> refrescarSilencioso() async {
+    if (_pendientes.isEmpty) {
+      await _cargarPendientes();
+    } else {
+      await _cargarPendientesSilencioso();
+    }
+  }
+
+  Future<void> _cargarPendientesSilencioso() async {
+    try {
+      final items = await InventarioService.obtenerPendientesPrecio();
+      if (!mounted) return;
+
+      setState(() {
+        _pendientes = items;
+        _errorMessage = null;
+        _isLoading = false;
+      });
+    } catch (_) {
+      // Ignorar errores transitorios en ciclo silencioso
+    }
   }
 
   Future<void> _cargarPendientes() async {
@@ -91,7 +128,7 @@ class BandejaPreciosScreenState extends State<BandejaPreciosScreen> with RouteAw
       context,
       activo: activo,
       onPrecioAsignado: () {
-        _cargarPendientes();
+        _cargarPendientesSilencioso();
         CatalogoScreen.refreshNotifier.value++;
         widget.onRefreshCatalogo?.call();
       },

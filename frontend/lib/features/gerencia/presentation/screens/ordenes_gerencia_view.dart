@@ -47,12 +47,52 @@ class OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
   HistorialCajaResponseModel? _data;
 
   /// Permite a vistas contenedoras (como [DashboardGerenciaView]) solicitar una recarga explícita.
-  Future<void> refrescar({int? idSucursal, bool actualizarSucursal = false}) async {
+  Future<void> refrescar({
+    int? idSucursal,
+    bool actualizarSucursal = false,
+    bool silent = false,
+  }) async {
     if (actualizarSucursal) {
       _idSucursal = idSucursal;
     }
+    if (silent) {
+      await refrescarSilencioso();
+      return;
+    }
     setState(() => _paginaActual = 1);
     await _cargarOrdenes(pagina: 1);
+  }
+
+  /// Permite refrescar las órdenes de manera silenciosa manteniendo la página actual.
+  Future<void> refrescarSilencioso({
+    int? pagina,
+    int? idSucursal,
+    bool actualizarSucursal = false,
+  }) async {
+    if (!mounted) return;
+    if (actualizarSucursal) {
+      _idSucursal = idSucursal;
+    }
+    final targetPage = pagina ?? _paginaActual;
+    try {
+      final res = await GerenciaService.obtenerHistorialOrdenes(
+        idSucursal: _idSucursal,
+        estado: _estado,
+        periodo: _periodo,
+        metodoPago: _metodoPago,
+        busqueda: _busquedaController.text.trim(),
+        pagina: targetPage,
+        limite: 20,
+      );
+      if (!mounted) return;
+      setState(() {
+        _data = res;
+        _paginaActual = targetPage;
+      });
+      debugPrint('📦 [GERENCIA-ORDENES] ✅ Sincronización silenciosa completada (Pág $targetPage)');
+    } catch (e) {
+      debugPrint('📦 [GERENCIA-ORDENES] ⚠️ Error en refresco silencioso (ignorado): $e');
+    }
   }
 
   /// Aplica un filtro de estado específico y recarga inmediatamente

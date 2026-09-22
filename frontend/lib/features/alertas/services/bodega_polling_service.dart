@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import '../../../core/services/silent_polling_manager.dart';
 import '../models/tarea_alerta.dart';
 import 'logistica_service.dart';
 import '../../auth/services/auth_service.dart';
@@ -30,6 +31,7 @@ class BodegaPollingService {
   }
 
   Timer? _pollingTimer;
+  SilentPollingManager? _silentPolling;
 
   /// Set en memoria para deduplicar alertas (compatibilidad)
   final Set<String> _tareasNotificadas = {};
@@ -59,7 +61,9 @@ class BodegaPollingService {
 
   Set<String> get tareasNotificadas => Set.unmodifiable(_tareasNotificadas);
   DateTime? get ultimaAlertaResumen => _ultimaAlertaResumen;
-  bool get isPollingActive => _pollingTimer != null && _pollingTimer!.isActive;
+  bool get isPollingActive =>
+      (_silentPolling != null && _silentPolling!.isRunning) ||
+      (_pollingTimer != null && _pollingTimer!.isActive);
 
   /// Inicia el temporizador de polling (por defecto cada 30-60 segundos)
   void iniciarPolling({
@@ -69,13 +73,18 @@ class BodegaPollingService {
     detenerPolling();
     procesarCiclo(sucursalId: sucursalId);
 
-    _pollingTimer = Timer.periodic(interval, (_) {
-      procesarCiclo(sucursalId: sucursalId);
-    });
+    _silentPolling = SilentPollingManager(
+      interval: interval,
+      debugLabel: 'BodegaPollingService',
+      onPoll: () => procesarCiclo(sucursalId: sucursalId),
+    );
+    _silentPolling!.start();
   }
 
   /// Detiene el ciclo de polling
   void detenerPolling() {
+    _silentPolling?.dispose();
+    _silentPolling = null;
     _pollingTimer?.cancel();
     _pollingTimer = null;
   }

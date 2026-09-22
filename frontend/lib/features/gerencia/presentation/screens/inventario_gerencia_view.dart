@@ -38,14 +38,81 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
   late final TextEditingController _busquedaController;
   Timer? _debounceTimer;
 
+  bool _isModalAbierto = false;
+  bool get isModalAbierto => _isModalAbierto;
+
   /// Permite a vistas contenedoras (como [DashboardGerenciaView]) solicitar una recarga explícita.
-  Future<void> refrescar({int? idSucursal, bool actualizarSucursal = false}) async {
+  Future<void> refrescar({
+    int? idSucursal,
+    bool actualizarSucursal = false,
+    bool silent = false,
+  }) async {
     if (actualizarSucursal) {
       _idSucursal = idSucursal;
+    }
+    if (silent) {
+      await refrescarSilencioso();
+      return;
     }
     setState(() => _paginaActual = 1);
     await _cargarOpcionesUbicacion();
     await _cargarInventario(pagina: 1);
+  }
+
+  /// Permite refrescar el inventario en segundo plano manteniendo la página actual sin blankear la interfaz.
+  Future<void> refrescarSilencioso({
+    int? pagina,
+    int? idSucursal,
+    bool actualizarSucursal = false,
+  }) async {
+    if (!mounted || _isModalAbierto) return;
+    if (actualizarSucursal) {
+      _idSucursal = idSucursal;
+    }
+    final targetPage = pagina ?? _paginaActual;
+    try {
+      int? catId;
+      if (_categoria == '1') catId = 1;
+      if (_categoria == '2') catId = 2;
+      if (_categoria == '3') catId = 3;
+
+      final offset = (targetPage - 1) * _limitePorPagina;
+
+      final res = await GerenciaService.obtenerMaestroInventario(
+        idSucursal: _idSucursal,
+        idCategoria: catId,
+        estado: _estado,
+        combustible: _combustible,
+        transmision: _transmision,
+        galpon: _galpon,
+        pasillo: _pasillo,
+        pallet: _pallet,
+        soloSinTasar: _soloSinTasar,
+        busqueda: _busquedaController.text.trim(),
+        limite: _limitePorPagina,
+        offset: offset,
+      );
+
+      if (!mounted || _isModalAbierto) return;
+
+      final itemsValidos = res.items.where((item) {
+        final est = (item.estadoActivo ?? '').trim().toLowerCase();
+        final id = item.idEstado;
+        if (id == 5 || id == 6) return false;
+        if (est == 'en desarme' || est == 'desarme' || est == 'entregado') return false;
+        return true;
+      }).toList();
+
+      setState(() {
+        _items = itemsValidos;
+        _totalCount = res.totalCount;
+        _pendientesTasacionCount = res.pendientesTasacionCount;
+        _paginaActual = targetPage;
+      });
+      debugPrint('🏭 [GERENCIA-INVENTARIO] ✅ Sincronización silenciosa completada (Pág $targetPage)');
+    } catch (e) {
+      debugPrint('🏭 [GERENCIA-INVENTARIO] ⚠️ Error en refresco silencioso (ignorado): $e');
+    }
   }
 
   /// Aplica el filtro de repuestos sin tasar y recarga inmediatamente
@@ -294,11 +361,11 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
 
           // Área Central con Vistas o Estados de Carga
           Expanded(
-            child: _isLoading
+            child: _isLoading && _items.isEmpty
                 ? const Center(
                     child: CircularProgressIndicator(color: AppPalette.primary),
                   )
-                : _errorMessage != null
+                : _errorMessage != null && _items.isEmpty
                     ? _buildErrorState()
                     : _items.isEmpty
                         ? _buildEmptyState()
@@ -1825,6 +1892,7 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
 
     final bool esEdicionPrevia = (item.precioReferencia != null && item.precioReferencia! > 0) ||
         (item.precioMaximo != null && item.precioMaximo! > 0);
+    setState(() => _isModalAbierto = true);
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -1847,7 +1915,11 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
           );
         },
       ),
-    );
+    ).then((_) {
+      if (mounted) {
+        setState(() => _isModalAbierto = false);
+      }
+    });
   }
 
   Widget _buildEmptyState() {

@@ -10,6 +10,7 @@ import '../widgets/orden_card.dart';
 import '../widgets/orden_detail_sheet.dart';
 import '../widgets/historial_filtros_drawer.dart';
 import '../widgets/asignar_activo_vendedor_dialog.dart';
+import '../../../../core/services/silent_polling_manager.dart';
 
 /// Pantalla principal para la visualización y monitoreo de órdenes de venta del vendedor (HU-3.5).
 class HistorialScreen extends StatefulWidget {
@@ -55,7 +56,8 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
   // Sección actual: 'normal' (Historial de Órdenes) o 'por_asignar' (Ventas en Verde Pagadas sin activo asignado)
   String _seccionActual = 'normal';
   int _conteoPorAsignar = 0;
-  Timer? _autoRefreshTimer;
+  SilentPollingManager? _pollingManager;
+  bool _isModalAbierto = false;
 
   @override
   void initState() {
@@ -76,12 +78,17 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
   }
 
   void _iniciarAutoRefresh() {
-    _autoRefreshTimer?.cancel();
-    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (mounted) {
-        _cargarOrdenesSilencioso();
-      }
-    });
+    _pollingManager?.dispose();
+    _pollingManager = SilentPollingManager(
+      interval: const Duration(seconds: 15),
+      debugLabel: 'HistorialPolling',
+      shouldPause: () => _isModalAbierto || _isLoading,
+      onPoll: () async {
+        if (mounted) {
+          await _cargarOrdenesSilencioso();
+        }
+      },
+    )..start();
   }
 
   /// Prioridad de ordenamiento: 0 = Activas/Pendientes, 1 = Completadas, 2 = Anuladas (al final absoluto)
@@ -115,7 +122,7 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
   @override
   void didPopNext() {
     super.didPopNext();
-    refrescar();
+    _cargarOrdenesSilencioso();
   }
 
   void _onSyncNotification() {
@@ -126,7 +133,7 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
 
   @override
   void dispose() {
-    _autoRefreshTimer?.cancel();
+    _pollingManager?.dispose();
     routeObserver.unsubscribe(this);
     OrdenesSyncNotifier.instance.removeListener(_onSyncNotification);
     _searchController.dispose();
@@ -136,6 +143,15 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
   /// Método público para forzar recarga de órdenes (Auto-Refresh SPEC-HU-TAREA-20)
   Future<void> refrescar() async {
     await _cargarOrdenes();
+  }
+
+  /// Recarga silenciosa sin loaders si ya hay datos en memoria
+  Future<void> refrescarSilencioso() async {
+    if (_ordenesHistorial.isEmpty && _ordenesPorAsignar.isEmpty) {
+      await _cargarOrdenes();
+    } else {
+      await _cargarOrdenesSilencioso();
+    }
   }
 
   Future<void> _cargarOrdenes() async {
@@ -299,20 +315,25 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
     }).toList();
   }
 
-  void _abrirDetalleOrden(OrdenHistorialModel orden) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      builder: (ctx) => OrdenDetailSheet(
-        orden: orden,
-        onOrderUpdated: () {
-          _cargarOrdenes();
-          widget.onRefreshCatalogo?.call();
-        },
-      ),
-    );
+  Future<void> _abrirDetalleOrden(OrdenHistorialModel orden) async {
+    _isModalAbierto = true;
+    try {
+      await showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        builder: (ctx) => OrdenDetailSheet(
+          orden: orden,
+          onOrderUpdated: () {
+            _cargarOrdenesSilencioso();
+            widget.onRefreshCatalogo?.call();
+          },
+        ),
+      );
+    } finally {
+      _isModalAbierto = false;
+    }
   }
 
   Widget _buildSearchBar() {
