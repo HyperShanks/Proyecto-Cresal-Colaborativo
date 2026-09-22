@@ -34,9 +34,11 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
 
   bool _sidebarOpen = true;
   int _selectedNavIndex = 0; // 0: Caja, 1: Historial
-  String _cajeraNombre = 'Lorena Valenzuela';
-  String _sucursalNombre = 'Casa Matriz • Viña del Mar';
-  int _idSucursal = 1;
+  String _cajeraNombre = AuthService.cachedUser != null && AuthService.cachedUser!.nombres.isNotEmpty
+      ? '${AuthService.cachedUser!.nombres} ${AuthService.cachedUser!.apellidos}'.trim()
+      : 'Operario de Caja';
+  String _sucursalNombre = 'Sucursal Activa';
+  int _idSucursal = AuthService.cachedUser?.idSucursal ?? 1;
 
   @override
   void initState() {

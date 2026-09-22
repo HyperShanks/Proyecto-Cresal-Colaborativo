@@ -173,3 +173,19 @@ Las modificaciones fueron verificadas contra la suite de pruebas unitarias y de 
 4. **Pruebas en Frontend (`flutter test test/api_service_test.dart test/features/auth/`):**
    - 28 pruebas widget y unitarias ejecutadas exitosamente (`28 passed`).
    - `flutter analyze lib/features/auth/services/auth_service.dart`: 0 advertencias, 0 errores.
+
+---
+
+## 10. Auditoría de Identidad: Desacople de Datos Mock y Patrón de Caché de Sesión en Memoria
+
+### 10.1. El Problema del "Cargando..." vs. Apps Reales
+En el desarrollo de aplicaciones empresariales modernas (Slack, Gmail, ERPs de retail), existen dos malas prácticas frecuentes al mostrar el perfil del usuario:
+1. **Hardcodear datos de prueba (Mocks en producción):** Dejar nombres como `"Roberto Gerente"`, correos fijos como `'gerente@cresal.cl'` o `'Lorena Valenzuela'` como valores por defecto en variables de estado.
+2. **El antipatrón del texto "Cargando...":** Mostrar textos parpadeantes como *"Cargando..."* o `"Hola, Cargando..."` en los saludos y barras laterales mientras se lee el almacenamiento persistente asíncrono (`FlutterSecureStorage`).
+
+### 10.2. Solución Aplicada: Caché Síncrona en Memoria (`_currentUserCache`)
+Para erradicar ambos problemas y lograr una experiencia fluida con cero parpadeos:
+- **Caché en Memoria Instantánea:** Al momento de autenticar (`enrolarTerminal` o `loginConPin`), el modelo `AuthUserModel` devuelto por FastAPI se almacena en memoria (`AuthService._currentUserCache`).
+- **Persistencia Segura de Email:** Se agregó la clave `_userEmailKey = 'user_email'` en `FlutterSecureStorage` junto al método público `AuthService.getEmailUsuario()`.
+- **Renderizado Inmediato (0 ms):** Al navegar hacia las vistas (`DashboardGerenciaView`, `CajaMainScreen`, `HomeScreen`, `VentasMainScreen`), los estados leen inmediatamente la caché síncrona en memoria. Si el storage asíncrono experimenta latencia, se recurre a un **fallback neutro basado en el rol** (`'Gerencia'`, `'Operario de Caja'`, `'Operador'`), garantizando que jamás se muestren datos falsos ni textos toscos de carga.
+

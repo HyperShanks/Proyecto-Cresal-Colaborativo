@@ -274,7 +274,7 @@ class CajaDrawer extends StatelessWidget {
     final rol = await AuthService.getRol();
     return {
       'nombre': (nombre != null && nombre.isNotEmpty) ? nombre : 'Operario de Caja',
-      'sucursal': (sucursal != null && sucursal.isNotEmpty) ? sucursal : 'Casa Matriz - Viña',
+      'sucursal': (sucursal != null && sucursal.isNotEmpty) ? sucursal : 'Sucursal Activa',
       'rol': (rol != null && rol.isNotEmpty) ? rol : 'CAJA',
     };
   }

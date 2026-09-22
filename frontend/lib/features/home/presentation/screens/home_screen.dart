@@ -18,10 +18,12 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
-  String? _userRol;
+  String? _userRol = AuthService.cachedUser?.nombreRol;
   String? _userSucursal;
-  String? _userNombre;
-  int? _userSucursalId;
+  String? _userNombre = AuthService.cachedUser != null && AuthService.cachedUser!.nombres.isNotEmpty
+      ? '${AuthService.cachedUser!.nombres} ${AuthService.cachedUser!.apellidos}'.trim()
+      : null;
+  int? _userSucursalId = AuthService.cachedUser?.idSucursal;
   DateTime? _pausedTime;
 
   final TextEditingController _paletizadoIngresoController =

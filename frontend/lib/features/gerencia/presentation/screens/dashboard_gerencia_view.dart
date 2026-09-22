@@ -43,7 +43,10 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
   KpiFinancieroModel? _kpis;
   ResumenPagosModel? _pagos;
   FlujoOperativoModel? _flujo;
-  String _nombreUsuario = 'Roberto Gerente';
+  String _nombreUsuario = AuthService.cachedUser != null && AuthService.cachedUser!.nombres.isNotEmpty
+      ? '${AuthService.cachedUser!.nombres} ${AuthService.cachedUser!.apellidos}'.trim()
+      : 'Gerencia';
+  String _emailUsuario = AuthService.cachedUser?.email ?? '';
 
   VistaGerencia _vistaActiva = VistaGerencia.dashboard;
   bool _sidebarOpen = true;
@@ -137,8 +140,16 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
 
   Future<void> _cargarDatosIniciales() async {
     final nombre = await AuthService.getNombreUsuario();
-    if (mounted && nombre != null && nombre.trim().isNotEmpty) {
-      setState(() => _nombreUsuario = nombre);
+    final email = await AuthService.getEmailUsuario();
+    if (mounted) {
+      setState(() {
+        if (nombre != null && nombre.trim().isNotEmpty) {
+          _nombreUsuario = nombre.trim();
+        }
+        if (email != null && email.trim().isNotEmpty) {
+          _emailUsuario = email.trim();
+        }
+      });
     }
     await Future.wait([
       _cargarSucursales(),
@@ -679,9 +690,11 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                              const Text(
-                                'gerente@cresal.cl',
-                                style: TextStyle(
+                              Text(
+                                _emailUsuario.isNotEmpty
+                                    ? _emailUsuario
+                                    : 'gerencia@cresal.cl',
+                                style: const TextStyle(
                                   color: Color(0xFFBAE6FD),
                                   fontSize: 10,
                                 ),
