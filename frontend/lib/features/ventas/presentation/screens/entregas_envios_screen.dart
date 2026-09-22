@@ -372,7 +372,8 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                           'Búsqueda por Cliente',
                           style: AppTypography.small.copyWith(
                             fontWeight: FontWeight.bold,
-                            color: AppPalette.textSecondary,
+                            color: const Color(0xFFCBD5E1),
+                            fontSize: 13,
                           ),
                         ),
                         const SizedBox(height: 6),
@@ -385,6 +386,7 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                             hintText: 'Nombre, RUT o Teléfono del cliente / receptor...',
                             hintStyle: AppTypography.small.copyWith(
                               color: AppPalette.textSecondary.withValues(alpha: 0.65),
+                              fontSize: 13,
                             ),
                             prefixIcon: const Icon(
                               Icons.person_search_outlined,
@@ -415,7 +417,8 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                           'Búsqueda por Vendedor',
                           style: AppTypography.small.copyWith(
                             fontWeight: FontWeight.bold,
-                            color: AppPalette.textSecondary,
+                            color: const Color(0xFFCBD5E1),
+                            fontSize: 13,
                           ),
                         ),
                         const SizedBox(height: 6),
@@ -428,6 +431,7 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                             hintText: 'Nombre del vendedor creador o asignado...',
                             hintStyle: AppTypography.small.copyWith(
                               color: AppPalette.textSecondary.withValues(alpha: 0.65),
+                              fontSize: 13,
                             ),
                             prefixIcon: const Icon(
                               Icons.badge_outlined,
@@ -458,7 +462,8 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                           'Estado de Pago / Liquidación',
                           style: AppTypography.small.copyWith(
                             fontWeight: FontWeight.bold,
-                            color: AppPalette.textSecondary,
+                            color: const Color(0xFFCBD5E1),
+                            fontSize: 13,
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -466,71 +471,22 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                           spacing: 8,
                           runSpacing: 8,
                           children: [
-                            ChoiceChip(
-                              label: const Text('Todos'),
-                              selected: _estadoPagoFilter == 'todos',
-                              onSelected: (selected) {
-                                if (selected) setModalState(() => _estadoPagoFilter = 'todos');
-                              },
-                              backgroundColor: AppPalette.background,
-                              selectedColor: AppPalette.primary.withValues(alpha: 0.22),
-                              side: BorderSide(
-                                color: _estadoPagoFilter == 'todos'
-                                    ? AppPalette.primary.withValues(alpha: 0.6)
-                                    : Colors.white12,
-                              ),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              visualDensity: VisualDensity.compact,
-                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              labelStyle: TextStyle(
-                                color: _estadoPagoFilter == 'todos' ? AppPalette.primary : AppPalette.textSecondary,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
+                            _buildModalFilterPill(
+                              label: 'Todos',
+                              isSelected: _estadoPagoFilter == 'todos',
+                              onTap: () => setModalState(() => _estadoPagoFilter = 'todos'),
                             ),
-                            ChoiceChip(
-                              label: const Text('Pagados'),
-                              selected: _estadoPagoFilter == 'pagados',
-                              onSelected: (selected) {
-                                if (selected) setModalState(() => _estadoPagoFilter = 'pagados');
-                              },
-                              backgroundColor: AppPalette.background,
-                              selectedColor: AppPalette.success.withValues(alpha: 0.22),
-                              side: BorderSide(
-                                color: _estadoPagoFilter == 'pagados'
-                                    ? AppPalette.success.withValues(alpha: 0.6)
-                                    : Colors.white12,
-                              ),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              visualDensity: VisualDensity.compact,
-                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              labelStyle: TextStyle(
-                                color: _estadoPagoFilter == 'pagados' ? AppPalette.success : AppPalette.textSecondary,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
+                            _buildModalFilterPill(
+                              label: 'Pagados',
+                              isSelected: _estadoPagoFilter == 'pagados',
+                              activeColor: AppPalette.success,
+                              onTap: () => setModalState(() => _estadoPagoFilter = 'pagados'),
                             ),
-                            ChoiceChip(
-                              label: const Text('Con Saldo Pendiente'),
-                              selected: _estadoPagoFilter == 'pendientes',
-                              onSelected: (selected) {
-                                if (selected) setModalState(() => _estadoPagoFilter = 'pendientes');
-                              },
-                              backgroundColor: AppPalette.background,
-                              selectedColor: AppPalette.warning.withValues(alpha: 0.22),
-                              side: BorderSide(
-                                color: _estadoPagoFilter == 'pendientes'
-                                    ? AppPalette.warning.withValues(alpha: 0.6)
-                                    : Colors.white12,
-                              ),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              visualDensity: VisualDensity.compact,
-                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              labelStyle: TextStyle(
-                                color: _estadoPagoFilter == 'pendientes' ? AppPalette.warning : AppPalette.textSecondary,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
+                            _buildModalFilterPill(
+                              label: 'Con Saldo Pendiente',
+                              isSelected: _estadoPagoFilter == 'pendientes',
+                              activeColor: AppPalette.warning,
+                              onTap: () => setModalState(() => _estadoPagoFilter = 'pendientes'),
                             ),
                           ],
                         ),
@@ -541,7 +497,8 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                           'Tipo de Pedido / Modalidad',
                           style: AppTypography.small.copyWith(
                             fontWeight: FontWeight.bold,
-                            color: AppPalette.textSecondary,
+                            color: const Color(0xFFCBD5E1),
+                            fontSize: 13,
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -549,93 +506,27 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                           spacing: 8,
                           runSpacing: 8,
                           children: [
-                            ChoiceChip(
-                              label: const Text('Todos'),
-                              selected: _tipoEntregaFilter == 'todos',
-                              onSelected: (selected) {
-                                if (selected) setModalState(() => _tipoEntregaFilter = 'todos');
-                              },
-                              backgroundColor: AppPalette.background,
-                              selectedColor: AppPalette.primary.withValues(alpha: 0.22),
-                              side: BorderSide(
-                                color: _tipoEntregaFilter == 'todos'
-                                    ? AppPalette.primary.withValues(alpha: 0.6)
-                                    : Colors.white12,
-                              ),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              visualDensity: VisualDensity.compact,
-                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              labelStyle: TextStyle(
-                                color: _tipoEntregaFilter == 'todos' ? AppPalette.primary : AppPalette.textSecondary,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
+                            _buildModalFilterPill(
+                              label: 'Todos',
+                              isSelected: _tipoEntregaFilter == 'todos',
+                              onTap: () => setModalState(() => _tipoEntregaFilter = 'todos'),
                             ),
-                            ChoiceChip(
-                              label: const Text('Solo Retiros'),
-                              selected: _tipoEntregaFilter == 'retiro',
-                              onSelected: (selected) {
-                                if (selected) setModalState(() => _tipoEntregaFilter = 'retiro');
-                              },
-                              backgroundColor: AppPalette.background,
-                              selectedColor: AppPalette.primary.withValues(alpha: 0.22),
-                              side: BorderSide(
-                                color: _tipoEntregaFilter == 'retiro'
-                                    ? AppPalette.primary.withValues(alpha: 0.6)
-                                    : Colors.white12,
-                              ),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              visualDensity: VisualDensity.compact,
-                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              labelStyle: TextStyle(
-                                color: _tipoEntregaFilter == 'retiro' ? AppPalette.primary : AppPalette.textSecondary,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
+                            _buildModalFilterPill(
+                              label: 'Solo Retiros',
+                              isSelected: _tipoEntregaFilter == 'retiro',
+                              onTap: () => setModalState(() => _tipoEntregaFilter = 'retiro'),
                             ),
-                            ChoiceChip(
-                              label: const Text('Solo Despachos'),
-                              selected: _tipoEntregaFilter == 'despacho',
-                              onSelected: (selected) {
-                                if (selected) setModalState(() => _tipoEntregaFilter = 'despacho');
-                              },
-                              backgroundColor: AppPalette.background,
-                              selectedColor: AppPalette.secondary.withValues(alpha: 0.22),
-                              side: BorderSide(
-                                color: _tipoEntregaFilter == 'despacho'
-                                    ? AppPalette.secondary.withValues(alpha: 0.6)
-                                    : Colors.white12,
-                              ),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              visualDensity: VisualDensity.compact,
-                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              labelStyle: TextStyle(
-                                color: _tipoEntregaFilter == 'despacho' ? AppPalette.secondary : AppPalette.textSecondary,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
+                            _buildModalFilterPill(
+                              label: 'Solo Despachos',
+                              isSelected: _tipoEntregaFilter == 'despacho',
+                              activeColor: AppPalette.secondary,
+                              onTap: () => setModalState(() => _tipoEntregaFilter = 'despacho'),
                             ),
-                            ChoiceChip(
-                              label: const Text('Solo Traslados'),
-                              selected: _tipoEntregaFilter == 'traslado',
-                              onSelected: (selected) {
-                                if (selected) setModalState(() => _tipoEntregaFilter = 'traslado');
-                              },
-                              backgroundColor: AppPalette.background,
-                              selectedColor: const Color(0xFFAB47BC).withValues(alpha: 0.22),
-                              side: BorderSide(
-                                color: _tipoEntregaFilter == 'traslado'
-                                    ? const Color(0xFFAB47BC).withValues(alpha: 0.6)
-                                    : Colors.white12,
-                              ),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              visualDensity: VisualDensity.compact,
-                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              labelStyle: TextStyle(
-                                color: _tipoEntregaFilter == 'traslado' ? const Color(0xFFAB47BC) : AppPalette.textSecondary,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
+                            _buildModalFilterPill(
+                              label: 'Solo Traslados',
+                              isSelected: _tipoEntregaFilter == 'traslado',
+                              activeColor: const Color(0xFFAB47BC),
+                              onTap: () => setModalState(() => _tipoEntregaFilter = 'traslado'),
                             ),
                           ],
                         ),
@@ -655,7 +546,10 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                                 onPressed: _limpiarFiltros,
                                 child: const FittedBox(
                                   fit: BoxFit.scaleDown,
-                                  child: Text('LIMPIAR'),
+                                  child: Text(
+                                    'LIMPIAR',
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
+                                  ),
                                 ),
                               ),
                             ),
@@ -673,7 +567,7 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                                   fit: BoxFit.scaleDown,
                                   child: Text(
                                     'APLICAR FILTROS',
-                                    style: TextStyle(fontWeight: FontWeight.bold),
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
                                   ),
                                 ),
                               ),
@@ -696,19 +590,57 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
     QrTicketDialog.mostrar(context, orden.toHistorialModel());
   }
 
+  Widget _buildModalFilterPill({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+    Color? activeColor,
+  }) {
+    final selectedColor = activeColor ?? AppPalette.primary;
 
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8.0),
+        splashColor: selectedColor.withValues(alpha: 0.25),
+        highlightColor: Colors.transparent,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8.0),
+          decoration: BoxDecoration(
+            color: isSelected ? selectedColor : AppPalette.background,
+            borderRadius: BorderRadius.circular(8.0),
+            border: Border.all(
+              color: isSelected ? selectedColor : Colors.transparent,
+              width: 1.0,
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: isSelected ? Colors.white : const Color(0xFFCBD5E1),
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+              fontSize: 13.5,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _buildDatoFila(IconData icon, String label, String valor) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 15, color: AppPalette.textSecondary),
+        Icon(icon, size: 16, color: AppPalette.textSecondary),
         const SizedBox(width: 8),
         Text(
           label,
           style: AppTypography.small.copyWith(
             color: AppPalette.textSecondary,
             fontWeight: FontWeight.w500,
+            fontSize: 13.5,
           ),
         ),
         const SizedBox(width: 6),
@@ -718,6 +650,7 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
             style: AppTypography.small.copyWith(
               color: AppPalette.textPrimary,
               fontWeight: FontWeight.w600,
+              fontSize: 13.5,
             ),
           ),
         ),
@@ -1065,7 +998,7 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                             const Icon(Icons.person_pin_outlined, size: 16, color: AppPalette.textSecondary),
                             const SizedBox(width: 8),
                             Expanded(
-                              child: Text('Vendedor Creador: ${orden.vendedorNombre ?? "Vendedor Central"}', style: AppTypography.small),
+                              child: Text('Vendedor Creador: ${orden.vendedorNombre ?? "Vendedor Central"}', style: AppTypography.small.copyWith(fontSize: 13.5)),
                             ),
                           ],
                         ),
@@ -1075,7 +1008,7 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                             const Icon(Icons.assignment_ind_outlined, size: 16, color: AppPalette.primary),
                             const SizedBox(width: 8),
                             Expanded(
-                              child: Text('Responsable Asignado: ${orden.vendedorAsignadoNombre ?? "Mesón General (Todos)"}', style: AppTypography.small.copyWith(color: AppPalette.primary, fontWeight: FontWeight.bold)),
+                              child: Text('Responsable Asignado: ${orden.vendedorAsignadoNombre ?? "Mesón General (Todos)"}', style: AppTypography.small.copyWith(color: AppPalette.primary, fontWeight: FontWeight.bold, fontSize: 13.5)),
                             ),
                           ],
                         ),
@@ -1094,6 +1027,7 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                           style: AppTypography.small.copyWith(
                             fontWeight: FontWeight.bold,
                             color: AppPalette.textSecondary,
+                            fontSize: 13.0,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -1126,16 +1060,17 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                                 Expanded(
                                   child: Text(
                                     item.tituloDisplay,
-                                    style: AppTypography.body.copyWith(fontWeight: FontWeight.bold, fontSize: 13),
+                                    style: AppTypography.body.copyWith(fontWeight: FontWeight.bold, fontSize: 14.5),
+                                    maxLines: 2,
                                   ),
                                 ),
-                                Text(item.subtotalFormateado, style: AppTypography.body.copyWith(fontWeight: FontWeight.bold, fontSize: 13, color: AppPalette.primary)),
+                                Text(item.subtotalFormateado, style: AppTypography.body.copyWith(fontWeight: FontWeight.bold, fontSize: 14.5, color: AppPalette.primary)),
                               ],
                             ),
                             if (item.skuQrFisico != null)
                               Padding(
                                 padding: const EdgeInsets.only(top: 2.0),
-                                child: Text('SKU QR: ${item.skuQrFisico}', style: AppTypography.small.copyWith(color: AppPalette.textSecondary, fontSize: 11)),
+                                child: Text('SKU QR: ${item.skuQrFisico}', style: AppTypography.small.copyWith(color: AppPalette.textSecondary, fontSize: 12.5)),
                               ),
                             const SizedBox(height: 4.0),
                             Container(
@@ -1158,7 +1093,7 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                                     item.esMotorOCaja
                                         ? Icons.warehouse_outlined
                                         : Icons.storefront_outlined,
-                                    size: 11.0,
+                                    size: 12.0,
                                     color: item.esMotorOCaja
                                         ? AppPalette.primary
                                         : AppPalette.secondary,
@@ -1169,7 +1104,7 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                                         ? 'Retiro en Bodega (Barrera)'
                                         : 'Entrega Inmediata en Mesón',
                                     style: TextStyle(
-                                      fontSize: 10.5,
+                                      fontSize: 12.0,
                                       fontWeight: FontWeight.w600,
                                       color: item.esMotorOCaja
                                           ? AppPalette.primary
@@ -1184,14 +1119,14 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                                 (item.esInventariado || item.esMotorOCaja))
                               Padding(
                                 padding: const EdgeInsets.only(top: 2.0),
-                                child: Text('Nota: ${item.notasPreparacion}', style: AppTypography.small.copyWith(color: AppPalette.warning, fontSize: 11)),
+                                child: Text('Nota: ${item.notasPreparacion}', style: AppTypography.small.copyWith(color: AppPalette.warning, fontSize: 12.5)),
                               ),
                             const SizedBox(height: 4.0),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text('Cantidad: ${item.cantidad}x  •  Unitario: ${item.precioFinalFormateado}', style: AppTypography.small.copyWith(color: AppPalette.textSecondary, fontSize: 11)),
-                                Text('Estado: ${item.estadoPreparacion ?? "Pendiente"}', style: TextStyle(color: item.preparacionLista ? AppPalette.success : AppPalette.warning, fontSize: 11, fontWeight: FontWeight.bold)),
+                                Text('Cantidad: ${item.cantidad}x  •  Unitario: ${item.precioFinalFormateado}', style: AppTypography.small.copyWith(color: Colors.white, fontSize: 13.0)),
+                                Text('Estado: ${item.estadoPreparacion ?? "Pendiente"}', style: TextStyle(color: item.preparacionLista ? AppPalette.success : AppPalette.warning, fontSize: 13.0, fontWeight: FontWeight.bold)),
                               ],
                             ),
                           ],
@@ -1215,8 +1150,8 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('TOTAL VENTA', style: TextStyle(color: AppPalette.textSecondary, fontSize: 10, fontWeight: FontWeight.bold)),
-                            Text(orden.totalVentaFormateado, style: AppTypography.body.copyWith(fontWeight: FontWeight.bold, fontSize: 16)),
+                            const Text('TOTAL VENTA', style: TextStyle(color: AppPalette.textSecondary, fontSize: 12.0, fontWeight: FontWeight.bold)),
+                            Text(orden.totalVentaFormateado, style: AppTypography.body.copyWith(fontWeight: FontWeight.bold, fontSize: 17.0)),
                           ],
                         ),
                         Column(
@@ -1226,7 +1161,7 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                               saldoPendiente ? 'SALDO PENDIENTE' : 'ESTADO DE PAGO',
                               style: TextStyle(
                                 color: saldoPendiente ? AppPalette.warning : AppPalette.success,
-                                fontSize: 10,
+                                fontSize: 12.0,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -2024,7 +1959,7 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                           orden.fechaFormateada,
                           style: AppTypography.small.copyWith(
                             color: AppPalette.textSecondary,
-                            fontSize: 11,
+                            fontSize: 12.5,
                           ),
                         ),
                       ],
@@ -2058,7 +1993,7 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                           style: AppTypography.small.copyWith(
                             color: esDespacho ? AppPalette.secondary : AppPalette.primary,
                             fontWeight: FontWeight.w600,
-                            fontSize: 11,
+                            fontSize: 12.5,
                           ),
                         ),
                       ],
@@ -2128,9 +2063,9 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                           'Vendedor: ${orden.vendedorNombre ?? "Vendedor Central"} • Resp: ${orden.vendedorAsignadoNombre ?? "Mesón General"}',
                           style: AppTypography.small.copyWith(
                             color: AppPalette.textSecondary,
-                            fontSize: 12,
+                            fontSize: 12.5,
                           ),
-                          maxLines: 1,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ],
@@ -2151,11 +2086,11 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                           child: Text(
                             itemsResumen,
                             style: AppTypography.body.copyWith(
-                              fontSize: 14,
+                              fontSize: 14.5,
                               fontWeight: FontWeight.w500,
                               color: AppPalette.textPrimary,
                             ),
-                            maxLines: 1,
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),

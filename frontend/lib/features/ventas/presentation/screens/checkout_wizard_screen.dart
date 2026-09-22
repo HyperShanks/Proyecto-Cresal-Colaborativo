@@ -57,7 +57,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
   final _receptorNombresController = TextEditingController();
   final _receptorRutController = TextEditingController();
   final _receptorTelefonoController = TextEditingController();
-  final _empresaTransporteController = TextEditingController(text: 'Chilexpress');
+  final _empresaTransporteController = TextEditingController(
+    text: 'Chilexpress',
+  );
   String? _regionDespacho;
   String? _comunaDespacho;
   int _idSucursalActual = 1; // 1: Viña del Mar, 2: Limache
@@ -87,11 +89,18 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
       for (final item in widget.initialInventario!) {
         _controller.addItemInventariado(
           idActivo: item['id_activo']?.toString() ?? '',
-          sku: item['sku']?.toString() ?? item['sku_qr_fisico']?.toString() ?? 'SKU-00',
+          sku:
+              item['sku']?.toString() ??
+              item['sku_qr_fisico']?.toString() ??
+              'SKU-00',
           descripcion: item['descripcion']?.toString() ?? 'Repuesto',
           precio: int.tryParse(item['precio']?.toString() ?? '0') ?? 0,
-          pasillo: item['pasillo']?.toString() ?? item['ubicacion_pasillo']?.toString(),
-          pallet: item['pallet']?.toString() ?? item['ubicacion_pallet']?.toString(),
+          pasillo:
+              item['pasillo']?.toString() ??
+              item['ubicacion_pasillo']?.toString(),
+          pallet:
+              item['pallet']?.toString() ??
+              item['ubicacion_pallet']?.toString(),
           precioMinimo: int.tryParse(item['precio_minimo']?.toString() ?? ''),
           precioMaximo: int.tryParse(item['precio_maximo']?.toString() ?? ''),
         );
@@ -177,7 +186,10 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     }
 
     // 1. Reconciliar y sincronizar ítems inventariados
-    final idsEnCart = cartItems.whereType<InventariadoCartItem>().map((i) => i.id).toSet();
+    final idsEnCart = cartItems
+        .whereType<InventariadoCartItem>()
+        .map((i) => i.id)
+        .toSet();
     final aEliminarInventario = _controller.itemsInventariados
         .where((i) => !idsEnCart.contains(i['id_activo']))
         .map((i) => i['id_activo'].toString())
@@ -211,7 +223,10 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
       }
     }
     for (final item in manualesEnCart) {
-      if (!_controller.itemsManuales.any((m) => m.descripcion == item.descripcion && m.precioUnitario == item.monto)) {
+      if (!_controller.itemsManuales.any(
+        (m) =>
+            m.descripcion == item.descripcion && m.precioUnitario == item.monto,
+      )) {
         _controller.addItemManual(
           ItemManualModel(
             descripcion: item.descripcion,
@@ -225,18 +240,28 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     }
 
     // 3. Reconciliar y sincronizar reservas backorder
-    final reservasEnCart = cartItems.whereType<ReservaBackorderCartItem>().toList();
+    final reservasEnCart = cartItems
+        .whereType<ReservaBackorderCartItem>()
+        .toList();
     for (int i = _controller.reservas.length - 1; i >= 0; i--) {
       final r = _controller.reservas[i];
       final sigueEnCart = reservasEnCart.any(
-        (c) => c.idCategoria == r.idCategoriaRequerida && c.marca == r.marcaRequerida && c.modelo == r.modeloRequerido,
+        (c) =>
+            c.idCategoria == r.idCategoriaRequerida &&
+            c.marca == r.marcaRequerida &&
+            c.modelo == r.modeloRequerido,
       );
       if (!sigueEnCart) {
         _controller.removeReservaBackorder(i);
       }
     }
     for (final item in reservasEnCart) {
-      if (!_controller.reservas.any((r) => r.marcaRequerida == item.marca && r.modeloRequerido == item.modelo && r.idCategoriaRequerida == item.idCategoria)) {
+      if (!_controller.reservas.any(
+        (r) =>
+            r.marcaRequerida == item.marca &&
+            r.modeloRequerido == item.modelo &&
+            r.idCategoriaRequerida == item.idCategoria,
+      )) {
         _controller.addReservaBackorder(
           ReservaBackorderModel(
             idCategoriaRequerida: item.idCategoria,
@@ -253,7 +278,8 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     }
 
     if (_controller.totalItemsCount > 0 &&
-        _controller.errorMessage == 'Debes agregar al menos un artículo o servicio para proceder.') {
+        _controller.errorMessage ==
+            'Debes agregar al menos un artículo o servicio para proceder.') {
       _controller.clearErrorMessage();
     }
   }
@@ -323,7 +349,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
           }
 
           final cliente = ClienteWizardModel(
-            idCliente: res['id_cliente']?.toString() ?? 'cli-${DateTime.now().millisecondsSinceEpoch}',
+            idCliente:
+                res['id_cliente']?.toString() ??
+                'cli-${DateTime.now().millisecondsSinceEpoch}',
             rut: rut,
             nombres: _clienteNombresController.text,
             apellidos: _clienteApellidosController.text,
@@ -341,7 +369,10 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               duration: const Duration(seconds: 2),
               content: Text(
                 'Cliente frecuente encontrado: ${cliente.nombreCompleto}',
-                style: AppTypography.small.copyWith(color: AppPalette.secondary, fontWeight: FontWeight.bold),
+                style: AppTypography.small.copyWith(
+                  color: AppPalette.secondary,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           );
@@ -363,7 +394,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
 
     if (rut.isNotEmpty && nom.isNotEmpty) {
       final cliente = ClienteWizardModel(
-        idCliente: _controller.clienteSeleccionado?.idCliente ?? 'cli-${DateTime.now().millisecondsSinceEpoch}',
+        idCliente:
+            _controller.clienteSeleccionado?.idCliente ??
+            'cli-${DateTime.now().millisecondsSinceEpoch}',
         rut: rut,
         nombres: nom,
         apellidos: ape.isNotEmpty ? ape : 'S/A',
@@ -415,7 +448,8 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
 
   // ── Sincronización y Emisión Transaccional (ACID) ─────────────────────────
   void _actualizarDatosDespachoLocal() {
-    if (_controller.tipoEntrega == 'Despacho Domicilio' || _controller.tipoEntrega == 'Despacho') {
+    if (_controller.tipoEntrega == 'Despacho Domicilio' ||
+        _controller.tipoEntrega == 'Despacho') {
       final d = DespachoModel(
         direccionEnvio: _direccionController.text.trim(),
         receptorNombres: _receptorNombresController.text.trim(),
@@ -468,10 +502,13 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
       if (_receptorRutController.text.trim().isEmpty) {
         _receptorRutController.text = cli.rut;
       }
-      if (_receptorTelefonoController.text.trim().isEmpty && cli.telefono != null) {
+      if (_receptorTelefonoController.text.trim().isEmpty &&
+          cli.telefono != null) {
         _receptorTelefonoController.text = cli.telefono!;
       }
-      if (_comunaDespacho == null && cli.comuna != null && cli.comuna!.isNotEmpty) {
+      if (_comunaDespacho == null &&
+          cli.comuna != null &&
+          cli.comuna!.isNotEmpty) {
         final reg = ChileGeografia.obtenerRegionDeComuna(cli.comuna!);
         if (reg != null) {
           _regionDespacho = reg;
@@ -498,35 +535,70 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
         barrierDismissible: false,
         builder: (ctx) => AlertDialog(
           backgroundColor: AppPalette.surface,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: AppPalette.success)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: AppPalette.success),
+          ),
           title: Row(
             children: [
-              const Icon(Icons.check_circle_rounded, color: AppPalette.success, size: 28),
+              const Icon(
+                Icons.check_circle_rounded,
+                color: AppPalette.success,
+                size: 28,
+              ),
               const SizedBox(width: 10),
-              Text('¡Orden Generada!', style: AppTypography.title.copyWith(fontSize: 18)),
+              Text(
+                '¡Orden Generada!',
+                style: AppTypography.title.copyWith(fontSize: 18),
+              ),
             ],
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Folio: ${res.folioDisplay}', style: AppTypography.small.copyWith(color: AppPalette.secondary, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+              Text(
+                'Folio: ${res.folioDisplay}',
+                style: AppTypography.small.copyWith(
+                  color: AppPalette.secondary,
+                  fontFamily: 'monospace',
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               const SizedBox(height: 8),
-              Text('Total Venta: ${CurrencyFormatter.formatCLP(res.totalVenta)}', style: AppTypography.body.copyWith(fontWeight: FontWeight.bold)),
-              Text('Monto Pendiente en Caja: ${CurrencyFormatter.formatCLP(res.montoPendiente)}', style: AppTypography.body.copyWith(color: AppPalette.secondary)),
+              Text(
+                'Total Venta: ${CurrencyFormatter.formatCLP(res.totalVenta)}',
+                style: AppTypography.body.copyWith(fontWeight: FontWeight.bold),
+              ),
+              Text(
+                'Monto Pendiente en Caja: ${CurrencyFormatter.formatCLP(res.montoPendiente)}',
+                style: AppTypography.body.copyWith(color: AppPalette.secondary),
+              ),
               if (res.reservasGeneradas > 0) ...[
                 const SizedBox(height: 6),
-                Text('• ${res.reservasGeneradas} venta(s) en verde generadas por encargo.', style: AppTypography.small.copyWith(color: AppPalette.success)),
+                Text(
+                  '• ${res.reservasGeneradas} venta(s) en verde generadas por encargo.',
+                  style: AppTypography.small.copyWith(
+                    color: AppPalette.success,
+                  ),
+                ),
               ],
               if (res.despachoGenerado) ...[
                 const SizedBox(height: 4),
-                Text('• Solicitud de despacho / traslado registrada.', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
+                Text(
+                  '• Solicitud de despacho / traslado registrada.',
+                  style: AppTypography.small.copyWith(
+                    color: AppPalette.textSecondary,
+                  ),
+                ),
               ],
             ],
           ),
           actions: [
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppPalette.primary),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppPalette.primary,
+              ),
               onPressed: () {
                 _limpiarFormularioCompleto();
                 Navigator.of(ctx).pop();
@@ -546,67 +618,106 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppPalette.background,
-      appBar: AppBar(
-        backgroundColor: AppPalette.surface,
-        foregroundColor: AppPalette.textPrimary,
-        elevation: 0,
-        leading: widget.onOpenMenuDrawer != null
-            ? IconButton(
-                icon: const Icon(Icons.menu),
-                onPressed: widget.onOpenMenuDrawer,
-                tooltip: 'Abrir Menú',
-              )
-            : (Navigator.canPop(context) ? const BackButton() : null),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Checkout Transaccional', style: AppTypography.title.copyWith(fontSize: 18)),
-            Text('Flujo Secuencial de 4 Pasos • Retiro en Tienda', style: AppTypography.small.copyWith(color: AppPalette.secondary, fontSize: 12)),
+    final mediaQuery = MediaQuery.of(context);
+
+    return MediaQuery(
+      data: mediaQuery.copyWith(
+        textScaler: mediaQuery.textScaler.clamp(
+          minScaleFactor: 1.0,
+          maxScaleFactor: 1.15,
+        ),
+      ),
+      child: Scaffold(
+        backgroundColor: AppPalette.background,
+        appBar: AppBar(
+          backgroundColor: AppPalette.surface,
+          foregroundColor: AppPalette.textPrimary,
+          elevation: 0,
+          leading: widget.onOpenMenuDrawer != null
+              ? IconButton(
+                  icon: const Icon(Icons.menu),
+                  onPressed: widget.onOpenMenuDrawer,
+                  tooltip: 'Abrir Menú',
+                )
+              : (Navigator.canPop(context) ? const BackButton() : null),
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Checkout Transaccional',
+                style: AppTypography.title.copyWith(fontSize: 20),
+              ),
+              Text(
+                'Flujo Secuencial de 4 Pasos • Retiro en Tienda',
+                style: AppTypography.small.copyWith(
+                  color: AppPalette.secondary,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            if (_controller.totalItemsCount > 0) ...[
+              IconButton(
+                icon: const Icon(
+                  Icons.delete_sweep_outlined,
+                  color: AppPalette.error,
+                ),
+                tooltip: 'Vaciar Carrito',
+                onPressed: () {
+                  CartController.instance.vaciarCarrito(liberarEnBackend: true);
+                  _limpiarFormularioCompleto();
+                  CatalogoScreen.refreshNotifier.value++;
+                },
+              ),
+              const SizedBox(width: 8),
+            ],
           ],
         ),
-        actions: [
-          if (_controller.totalItemsCount > 0)
-            IconButton(
-              icon: const Icon(Icons.delete_sweep_outlined, color: AppPalette.error),
-              tooltip: 'Vaciar Carrito',
-              onPressed: () {
-                CartController.instance.vaciarCarrito(liberarEnBackend: true);
-                _limpiarFormularioCompleto();
-                CatalogoScreen.refreshNotifier.value++;
-              },
-            ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Barra superior de progreso de pasos
-          _buildStepProgressBar(),
+        body: Column(
+          children: [
+            // Barra superior de progreso de pasos
+            _buildStepProgressBar(),
 
-          if (_controller.errorMessage != null)
-            Container(
-              margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: AppPalette.error.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
-              child: Row(
-                children: [
-                  const Icon(Icons.error_outline, color: AppPalette.error, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(_controller.errorMessage!, style: const TextStyle(color: AppPalette.error, fontSize: 12))),
-                ],
+            if (_controller.errorMessage != null)
+              Container(
+                margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppPalette.error.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      color: AppPalette.error,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _controller.errorMessage!,
+                        style: const TextStyle(
+                          color: AppPalette.error,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: _buildCurrentStepContent(),
               ),
             ),
 
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: _buildCurrentStepContent(),
-            ),
-          ),
-
-          _buildBottomNavigationButtons(),
-        ],
+            _buildBottomNavigationButtons(),
+          ],
+        ),
       ),
     );
   }
@@ -636,20 +747,33 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                           color: isCurrent
                               ? AppPalette.primary
                               : isCompleted
-                                  ? AppPalette.success
-                                  : AppPalette.background,
+                              ? AppPalette.success
+                              : AppPalette.background,
                           border: Border.all(
                             color: isCurrent
                                 ? AppPalette.primary
                                 : isCompleted
-                                    ? AppPalette.success
-                                    : Colors.white24,
+                                ? AppPalette.success
+                                : Colors.white24,
                           ),
                         ),
                         child: Center(
                           child: isCompleted
-                              ? const Icon(Icons.check, size: 16, color: Colors.white)
-                              : Text('${index + 1}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isCurrent ? AppPalette.textPrimary : AppPalette.textSecondary)),
+                              ? const Icon(
+                                  Icons.check,
+                                  size: 16,
+                                  color: Colors.white,
+                                )
+                              : Text(
+                                  '${index + 1}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: isCurrent
+                                        ? AppPalette.textPrimary
+                                        : AppPalette.textSecondary,
+                                  ),
+                                ),
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -658,9 +782,13 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                         child: Text(
                           stepLabels[index],
                           style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
-                            color: isCurrent ? AppPalette.primary : AppPalette.textSecondary,
+                            fontSize: 14,
+                            fontWeight: isCurrent
+                                ? FontWeight.bold
+                                : FontWeight.w500,
+                            color: isCurrent
+                                ? AppPalette.primary
+                                : AppPalette.textSecondary,
                           ),
                           textAlign: TextAlign.center,
                           maxLines: 1,
@@ -717,7 +845,10 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
             Flexible(
               child: Text(
                 '${_controller.totalItemsCount} artículos (${CurrencyFormatter.formatCLP(_controller.totalVenta)})',
-                style: AppTypography.small.copyWith(color: AppPalette.secondary, fontWeight: FontWeight.bold),
+                style: AppTypography.small.copyWith(
+                  color: AppPalette.secondary,
+                  fontWeight: FontWeight.bold,
+                ),
                 textAlign: TextAlign.end,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -734,7 +865,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                   backgroundColor: AppPalette.secondary,
                   foregroundColor: AppPalette.background,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
                 icon: const Icon(Icons.bookmark_add, size: 20),
                 label: const Text(
@@ -744,7 +877,8 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 onPressed: () async {
-                  if (CartController.instance.items.isNotEmpty || _controller.totalItemsCount > 0) {
+                  if (CartController.instance.items.isNotEmpty ||
+                      _controller.totalItemsCount > 0) {
                     ScaffoldMessenger.of(context).hideCurrentSnackBar();
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
@@ -781,7 +915,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                   foregroundColor: AppPalette.primary,
                   side: const BorderSide(color: AppPalette.primary),
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
                 icon: const Icon(Icons.add_shopping_cart, size: 20),
                 label: const Text(
@@ -791,7 +927,8 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 onPressed: () {
-                  if (CartController.instance.tieneVentaEnVerde || _controller.reservas.isNotEmpty) {
+                  if (CartController.instance.tieneVentaEnVerde ||
+                      _controller.reservas.isNotEmpty) {
                     ScaffoldMessenger.of(context).hideCurrentSnackBar();
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
@@ -816,28 +953,52 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
           Container(
             padding: const EdgeInsets.all(32),
             alignment: Alignment.center,
-            decoration: BoxDecoration(color: AppPalette.surface, borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(
+              color: AppPalette.surface,
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: Column(
               children: [
-                const Icon(Icons.shopping_cart_outlined, color: AppPalette.textSecondary, size: 48),
+                const Icon(
+                  Icons.shopping_cart_outlined,
+                  color: AppPalette.textSecondary,
+                  size: 48,
+                ),
                 const SizedBox(height: 10),
-                Text('El carrito está actualmente vacío', style: AppTypography.title.copyWith(fontSize: 15)),
+                Text(
+                  'El carrito está actualmente vacío',
+                  style: AppTypography.title.copyWith(fontSize: 15),
+                ),
                 const SizedBox(height: 4),
-                Text('Añada productos desde el Catálogo, cargue ítems manuales o cree una Reserva por Encargo (Compra en Verde).', style: AppTypography.small.copyWith(color: AppPalette.textSecondary), textAlign: TextAlign.center),
+                Text(
+                  'Añada productos desde el Catálogo, cargue ítems manuales o cree una Reserva por Encargo (Compra en Verde).',
+                  style: AppTypography.body.copyWith(
+                    color: AppPalette.textSecondary,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
                 const SizedBox(height: 16),
                 if (widget.onNavigateToCatalogo != null)
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppPalette.primary,
                       foregroundColor: AppPalette.textPrimary,
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 14,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                       elevation: 0,
                     ),
                     icon: const Icon(Icons.storefront, size: 20),
                     label: const Text(
                       'Ir al Catálogo',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
                     ),
                     onPressed: widget.onNavigateToCatalogo,
                   ),
@@ -846,17 +1007,20 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
           )
         else ...[
           if (_controller.itemsInventariados.isNotEmpty) ...[
-            Text('REPUESTOS EN INVENTARIO (${_controller.itemsInventariados.length})', style: AppTypography.small.copyWith(color: AppPalette.textSecondary, fontWeight: FontWeight.bold)),
+            Text(
+              'REPUESTOS EN INVENTARIO (${_controller.itemsInventariados.length})',
+              style: AppTypography.small.copyWith(
+                color: AppPalette.textSecondary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             const SizedBox(height: 6),
             ..._controller.itemsInventariados.map((item) {
               final idActivo = item['id_activo']?.toString() ?? '';
               final cartItem = CartController.instance.items
                   .whereType<InventariadoCartItem>()
                   .cast<InventariadoCartItem?>()
-                  .firstWhere(
-                    (ci) => ci?.id == idActivo,
-                    orElse: () => null,
-                  );
+                  .firstWhere((ci) => ci?.id == idActivo, orElse: () => null);
               if (cartItem != null) {
                 return CartItemTile(
                   key: ValueKey('cart_inv_${cartItem.id}'),
@@ -869,32 +1033,61 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
           ],
 
           if (_controller.reservas.isNotEmpty) ...[
-            Text('VENTAS EN VERDE (${_controller.reservas.length})', style: AppTypography.small.copyWith(color: AppPalette.secondary, fontWeight: FontWeight.bold)),
+            Text(
+              'VENTAS EN VERDE (${_controller.reservas.length})',
+              style: AppTypography.small.copyWith(
+                color: AppPalette.secondary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             const SizedBox(height: 6),
             ..._controller.reservas.asMap().entries.map((entry) {
               final idx = entry.key;
               final r = entry.value;
               return Card(
                 color: AppPalette.surface,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: const BorderSide(color: AppPalette.secondary, width: 1)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  side: const BorderSide(color: AppPalette.secondary, width: 1),
+                ),
                 margin: const EdgeInsets.only(bottom: 8),
                 child: ListTile(
-                  leading: const Icon(Icons.bookmark_added_rounded, color: AppPalette.secondary),
-                  title: Text('${r.categoriaNombre} - ${r.marcaRequerida} ${r.modeloRequerido}', style: AppTypography.body.copyWith(fontWeight: FontWeight.w600)),
-                  subtitle: Text('Precio: ${CurrencyFormatter.formatCLP(r.precioAcordado)} • Abono: ${CurrencyFormatter.formatCLP(r.montoAbonado)}', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
+                  leading: const Icon(
+                    Icons.bookmark_added_rounded,
+                    color: AppPalette.secondary,
+                  ),
+                  title: Text(
+                    '${r.categoriaNombre} - ${r.marcaRequerida} ${r.modeloRequerido}',
+                    style: AppTypography.body.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  subtitle: Text(
+                    'Precio: ${CurrencyFormatter.formatCLP(r.precioAcordado)} • Abono: ${CurrencyFormatter.formatCLP(r.montoAbonado)}',
+                    style: AppTypography.small.copyWith(
+                      color: AppPalette.textSecondary,
+                    ),
+                  ),
                   trailing: IconButton(
-                    icon: const Icon(Icons.delete_outline, color: AppPalette.error, size: 20),
+                    icon: const Icon(
+                      Icons.delete_outline,
+                      color: AppPalette.error,
+                      size: 20,
+                    ),
                     onPressed: () {
                       final r = _controller.reservas[idx];
                       _controller.removeReservaBackorder(idx);
                       final cartIdx = CartController.instance.items.indexWhere(
-                        (item) => item is ReservaBackorderCartItem &&
+                        (item) =>
+                            item is ReservaBackorderCartItem &&
                             item.idCategoria == r.idCategoriaRequerida &&
                             item.marca == r.marcaRequerida &&
                             item.modelo == r.modeloRequerido,
                       );
                       if (cartIdx != -1) {
-                        CartController.instance.eliminarItem(CartController.instance.items[cartIdx].id);
+                        CartController.instance.eliminarItem(
+                          CartController.instance.items[cartIdx].id,
+                        );
                       }
                     },
                   ),
@@ -905,7 +1098,13 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
           ],
 
           if (_controller.itemsManuales.isNotEmpty) ...[
-            Text('ÍTEMS MANUALES (${_controller.itemsManuales.length})', style: AppTypography.small.copyWith(color: AppPalette.textSecondary, fontWeight: FontWeight.bold)),
+            Text(
+              'ÍTEMS MANUALES (${_controller.itemsManuales.length})',
+              style: AppTypography.small.copyWith(
+                color: AppPalette.textSecondary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             const SizedBox(height: 6),
             ..._controller.itemsManuales.asMap().entries.map((entry) {
               final idx = entry.key;
@@ -914,25 +1113,58 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                 color: AppPalette.surface,
                 margin: const EdgeInsets.only(bottom: 8),
                 child: ListTile(
-                  leading: const Icon(Icons.edit_note, color: Colors.white70),
-                  title: Text(m.descripcion, style: AppTypography.body.copyWith(fontWeight: FontWeight.w600)),
-                  subtitle: Text('Cantidad: ${m.cantidad} • Unit: ${CurrencyFormatter.formatCLP(m.precioUnitario)}', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
+                  leading: const Icon(
+                    Icons.edit_note,
+                    color: Colors.white70,
+                    size: 24,
+                  ),
+                  title: Text(
+                    m.descripcion,
+                    style: AppTypography.body.copyWith(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      color: Colors.white,
+                    ),
+                  ),
+                  subtitle: Text(
+                    'Cantidad: ${m.cantidad}  •  Unitario: ${CurrencyFormatter.formatCLP(m.precioUnitario)}',
+                    style: AppTypography.body.copyWith(
+                      color: const Color(0xFFCBD5E1),
+                      fontSize: 13,
+                    ),
+                  ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(CurrencyFormatter.formatCLP(m.precioFinal), style: AppTypography.body.copyWith(fontWeight: FontWeight.bold)),
+                      Text(
+                        CurrencyFormatter.formatCLP(m.precioFinal),
+                        style: AppTypography.body.copyWith(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                          color: AppPalette.primary,
+                        ),
+                      ),
                       IconButton(
-                        icon: const Icon(Icons.delete_outline, color: AppPalette.error, size: 20),
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          color: AppPalette.error,
+                          size: 22,
+                        ),
+                        tooltip: 'Eliminar ítem',
                         onPressed: () {
                           final m = _controller.itemsManuales[idx];
                           _controller.removeItemManual(idx);
-                          final cartIdx = CartController.instance.items.indexWhere(
-                            (item) => item is VentaLibreCartItem &&
-                                item.descripcion == m.descripcion &&
-                                item.precioUnitario == m.precioUnitario,
-                          );
+                          final cartIdx = CartController.instance.items
+                              .indexWhere(
+                                (item) =>
+                                    item is VentaLibreCartItem &&
+                                    item.descripcion == m.descripcion &&
+                                    item.precioUnitario == m.precioUnitario,
+                              );
                           if (cartIdx != -1) {
-                            CartController.instance.eliminarItem(CartController.instance.items[cartIdx].id);
+                            CartController.instance.eliminarItem(
+                              CartController.instance.items[cartIdx].id,
+                            );
                           }
                         },
                       ),
@@ -943,8 +1175,6 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
             }),
           ],
 
-
-
           if (CartController.instance.hayPreciosInvalidos) ...[
             const SizedBox(height: 12),
             Container(
@@ -952,16 +1182,25 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               decoration: BoxDecoration(
                 color: AppPalette.error.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppPalette.error.withValues(alpha: 0.4)),
+                border: Border.all(
+                  color: AppPalette.error.withValues(alpha: 0.4),
+                ),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.warning_amber_rounded, size: 20, color: AppPalette.error),
+                  const Icon(
+                    Icons.warning_amber_rounded,
+                    size: 20,
+                    color: AppPalette.error,
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       'Hay repuestos con precio acordado fuera del rango de tasación permitido. Modifícalos dentro de su rango para continuar.',
-                      style: AppTypography.small.copyWith(color: AppPalette.error, fontWeight: FontWeight.bold),
+                      style: AppTypography.small.copyWith(
+                        color: AppPalette.error,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ],
@@ -975,10 +1214,17 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
 
   Widget _buildFallbackItemInventariadoTile(Map<String, dynamic> item) {
     final idActivo = item['id_activo']?.toString() ?? '';
-    final precio = item['precio'] is int ? item['precio'] as int : int.tryParse(item['precio']?.toString() ?? '0') ?? 0;
-    final min = item['precio_minimo'] is int ? item['precio_minimo'] as int : int.tryParse(item['precio_minimo']?.toString() ?? '');
-    final max = item['precio_maximo'] is int ? item['precio_maximo'] as int : int.tryParse(item['precio_maximo']?.toString() ?? '');
-    final bool esInvalido = (min != null && precio < min) || (max != null && precio > max);
+    final precio = item['precio'] is int
+        ? item['precio'] as int
+        : int.tryParse(item['precio']?.toString() ?? '0') ?? 0;
+    final min = item['precio_minimo'] is int
+        ? item['precio_minimo'] as int
+        : int.tryParse(item['precio_minimo']?.toString() ?? '');
+    final max = item['precio_maximo'] is int
+        ? item['precio_maximo'] as int
+        : int.tryParse(item['precio_maximo']?.toString() ?? '');
+    final bool esInvalido =
+        (min != null && precio < min) || (max != null && precio > max);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12.0),
@@ -986,7 +1232,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
         color: AppPalette.surface,
         borderRadius: BorderRadius.circular(12.0),
         border: Border.all(
-          color: esInvalido ? AppPalette.error : AppPalette.primary.withValues(alpha: 0.2),
+          color: esInvalido
+              ? AppPalette.error
+              : AppPalette.primary.withValues(alpha: 0.2),
           width: esInvalido ? 1.5 : 1.0,
         ),
       ),
@@ -998,7 +1246,10 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 3.0),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8.0,
+                  vertical: 3.0,
+                ),
                 decoration: BoxDecoration(
                   color: AppPalette.primary.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(6.0),
@@ -1007,7 +1258,11 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.inventory_2_outlined, size: 13, color: AppPalette.primary),
+                    const Icon(
+                      Icons.inventory_2_outlined,
+                      size: 13,
+                      color: AppPalette.primary,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       'Inventario',
@@ -1021,7 +1276,11 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.delete_outline, color: AppPalette.error, size: 20),
+                icon: const Icon(
+                  Icons.delete_outline,
+                  color: AppPalette.error,
+                  size: 20,
+                ),
                 onPressed: () {
                   _controller.removeItemInventariado(idActivo);
                   CartController.instance.eliminarItem(idActivo);
@@ -1040,9 +1299,13 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
           const SizedBox(height: 4),
           Text(
             'SKU: ${item['sku']} • Pasillo: ${item['pasillo'] ?? 'S/P'}${item['pallet'] != null && item['pallet'].toString().isNotEmpty && item['pallet'] != 'S/P' ? " • Pallet: ${item['pallet']}" : ""}',
-            style: AppTypography.small.copyWith(color: AppPalette.textSecondary, fontSize: 13),
+            style: AppTypography.small.copyWith(
+              color: AppPalette.textSecondary,
+              fontSize: 13,
+            ),
           ),
-          if (item['notas_preparacion'] != null && item['notas_preparacion'].toString().trim().isNotEmpty) ...[
+          if (item['notas_preparacion'] != null &&
+              item['notas_preparacion'].toString().trim().isNotEmpty) ...[
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -1053,12 +1316,19 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.assignment_outlined, size: 14, color: AppPalette.primary),
+                  const Icon(
+                    Icons.assignment_outlined,
+                    size: 14,
+                    color: AppPalette.primary,
+                  ),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       'Preparación: ${item['notas_preparacion']}',
-                      style: AppTypography.small.copyWith(color: AppPalette.textSecondary, fontSize: 12),
+                      style: AppTypography.small.copyWith(
+                        color: AppPalette.textSecondary,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                 ],
@@ -1089,45 +1359,64 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                       keyboardType: TextInputType.number,
                       inputFormatters: [MilesTextInputFormatter()],
                       style: AppTypography.body.copyWith(
-                        color: esInvalido ? AppPalette.error : AppPalette.secondary,
+                        color: esInvalido
+                            ? AppPalette.error
+                            : AppPalette.secondary,
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
                       ),
                       decoration: InputDecoration(
                         prefixText: '\$ ',
                         prefixStyle: TextStyle(
-                          color: esInvalido ? AppPalette.error : AppPalette.secondary,
+                          color: esInvalido
+                              ? AppPalette.error
+                              : AppPalette.secondary,
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
                         ),
                         isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
                         filled: true,
                         fillColor: AppPalette.background,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
                           borderSide: BorderSide(
-                            color: esInvalido ? AppPalette.error : Colors.white12,
+                            color: esInvalido
+                                ? AppPalette.error
+                                : Colors.white12,
                           ),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
                           borderSide: BorderSide(
-                            color: esInvalido ? AppPalette.error : Colors.white12,
+                            color: esInvalido
+                                ? AppPalette.error
+                                : Colors.white12,
                           ),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
                           borderSide: BorderSide(
-                            color: esInvalido ? AppPalette.error : AppPalette.primary,
+                            color: esInvalido
+                                ? AppPalette.error
+                                : AppPalette.primary,
                             width: 1.5,
                           ),
                         ),
                       ),
                       onChanged: (val) {
                         final nuevo = CurrencyFormatter.parse(val);
-                        _controller.updateItemInventariadoPrecio(idActivo, nuevo);
-                        CartController.instance.actualizarPrecio(idActivo, nuevo);
+                        _controller.updateItemInventariadoPrecio(
+                          idActivo,
+                          nuevo,
+                        );
+                        CartController.instance.actualizarPrecio(
+                          idActivo,
+                          nuevo,
+                        );
                       },
                     ),
                     if (min != null && max != null) ...[
@@ -1137,7 +1426,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                         style: AppTypography.small.copyWith(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: esInvalido ? AppPalette.error : AppPalette.textSecondary,
+                          color: esInvalido
+                              ? AppPalette.error
+                              : AppPalette.textSecondary,
                         ),
                       ),
                     ],
@@ -1157,22 +1448,32 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('2. Datos del Cliente (Micro-CRM)', style: AppTypography.title.copyWith(fontSize: 16)),
+        Text(
+          '2. Datos del Cliente (Micro-CRM)',
+          style: AppTypography.title.copyWith(fontSize: 16),
+        ),
         const SizedBox(height: 12),
 
         // Botón Interactivo Consumidor Final (Sin RUT) - Clickable en toda el área
         Material(
-          color: _esClienteAnonimo ? AppPalette.secondary.withValues(alpha: 0.15) : AppPalette.surface,
+          color: _esClienteAnonimo
+              ? AppPalette.secondary.withValues(alpha: 0.15)
+              : AppPalette.surface,
           borderRadius: BorderRadius.circular(10.0),
           child: InkWell(
             borderRadius: BorderRadius.circular(10.0),
             onTap: () => _toggleClienteAnonimo(!_esClienteAnonimo),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14.0,
+                vertical: 10.0,
+              ),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(10.0),
                 border: Border.all(
-                  color: _esClienteAnonimo ? AppPalette.secondary : Colors.white12,
+                  color: _esClienteAnonimo
+                      ? AppPalette.secondary
+                      : Colors.white12,
                   width: _esClienteAnonimo ? 1.5 : 1.0,
                 ),
               ),
@@ -1185,7 +1486,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                         Icon(
                           Icons.no_accounts_outlined,
                           size: 22,
-                          color: _esClienteAnonimo ? AppPalette.secondary : AppPalette.textSecondary,
+                          color: _esClienteAnonimo
+                              ? AppPalette.secondary
+                              : AppPalette.textSecondary,
                         ),
                         const SizedBox(width: 10),
                         Expanded(
@@ -1195,14 +1498,19 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                               Text(
                                 'Consumidor Final (Sin RUT)',
                                 style: AppTypography.body.copyWith(
-                                  fontSize: 13,
+                                  fontSize: 14,
                                   fontWeight: FontWeight.bold,
-                                  color: _esClienteAnonimo ? AppPalette.secondary : AppPalette.textPrimary,
+                                  color: _esClienteAnonimo
+                                      ? AppPalette.secondary
+                                      : AppPalette.textPrimary,
                                 ),
                               ),
                               Text(
                                 'Toca aquí para venta rápida sin registrar datos',
-                                style: AppTypography.small.copyWith(color: AppPalette.textSecondary, fontSize: 11),
+                                style: AppTypography.small.copyWith(
+                                  color: AppPalette.textSecondary,
+                                  fontSize: 13,
+                                ),
                               ),
                             ],
                           ),
@@ -1230,19 +1538,26 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
             decoration: BoxDecoration(
               color: AppPalette.secondary.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(10.0),
-              border: Border.all(color: AppPalette.secondary.withValues(alpha: 0.4)),
+              border: Border.all(
+                color: AppPalette.secondary.withValues(alpha: 0.4),
+              ),
             ),
             child: Row(
               children: [
-                const Icon(Icons.info_outline, color: AppPalette.secondary, size: 20),
-                const SizedBox(width: 10),
+                const Icon(
+                  Icons.info_outline,
+                  color: AppPalette.secondary,
+                  size: 22,
+                ),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     'Aviso: La orden se asignará al cliente Consumidor Final (RUT 6.666.666-6). El cliente solo podrá pagar y retirar en caja presentando su Número de Orden.',
-                    style: AppTypography.small.copyWith(
-                      color: AppPalette.secondary,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
+                    style: AppTypography.body.copyWith(
+                      color: const Color(0xFFF1F5F9),
+                      fontWeight: FontWeight.w500,
+                      fontSize: 13.5,
+                      height: 1.35,
                     ),
                   ),
                 ),
@@ -1254,7 +1569,8 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
           Builder(
             builder: (context) {
               final rutText = _rutController.text.trim();
-              final bool rutInvalido = !_esClienteAnonimo &&
+              final bool rutInvalido =
+                  !_esClienteAnonimo &&
                   rutText.isNotEmpty &&
                   !RutValidator.isValid(rutText);
               final String? rutError = rutInvalido
@@ -1271,204 +1587,306 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            key: const Key('input_rut_cliente'),
-                            controller: _rutController,
-                            focusNode: _rutFocusNode,
-                            style: AppTypography.body.copyWith(color: Colors.white),
-                            inputFormatters: [RutFormatter()],
-                            decoration: _inputDeco(
-                              label: 'RUT Cliente *',
-                              hint: 'Ej: 12.345.678-9',
-                              icon: Icons.badge_outlined,
-                              errorText: rutError,
-                              suffix: _isSearchingCliente
-                                  ? const SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: AppPalette.primary))
-                                  : IconButton(
-                                      icon: const Icon(Icons.search,
-                                          color: AppPalette.primary, size: 20),
-                                      tooltip: 'Buscar por RUT',
-                                      onPressed: _buscarClientePorRut,
-                                    ),
-                            ),
-                            onChanged: (val) {
-                              setState(() {});
-                              _actualizarClienteLocal();
-                            },
-                          ),
-                        ),
-                      ],
+                    _buildFieldHeader(
+                      'RUT Cliente *',
+                      icon: Icons.badge_outlined,
                     ),
-                    const SizedBox(height: 12),
-
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            key: const Key('input_cliente_nombres'),
-                            controller: _clienteNombresController,
-                            style: AppTypography.body.copyWith(color: Colors.white),
-                            decoration: _inputDeco(
-                              label: 'Nombres *',
-                              hint: 'Ej: Juan',
-                              icon: Icons.person,
-                            ),
-                            onChanged: (val) {
-                              setState(() {});
-                              _actualizarClienteLocal();
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: TextField(
-                            key: const Key('input_cliente_apellidos'),
-                            controller: _clienteApellidosController,
-                            style: AppTypography.body.copyWith(color: Colors.white),
-                            decoration: _inputDeco(
-                              label: 'Apellidos *',
-                              hint: 'Ej: Pérez',
-                              icon: Icons.person_outline,
-                            ),
-                            onChanged: (val) => _actualizarClienteLocal(),
-                          ),
-                        ),
-                      ],
-                    ),
-                const SizedBox(height: 12),
-
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _clienteTelefonoController,
-                        style: AppTypography.body.copyWith(color: Colors.white),
-                        keyboardType: TextInputType.phone,
-                        decoration: _inputDeco(
-                          label: 'Teléfono (Opcional)',
-                          hint: 'Ej: +56 9 1234 5678',
-                          icon: Icons.phone,
-                        ),
-                        onChanged: (val) => _actualizarClienteLocal(),
+                    TextField(
+                      key: const Key('input_rut_cliente'),
+                      controller: _rutController,
+                      focusNode: _rutFocusNode,
+                      style: AppTypography.body.copyWith(
+                        color: Colors.white,
+                        fontSize: 14.5,
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextField(
-                        controller: _clienteEmailController,
-                        style: AppTypography.body.copyWith(color: Colors.white),
-                        keyboardType: TextInputType.emailAddress,
-                        decoration: _inputDeco(
-                          label: 'Correo Electrónico (Opcional)',
-                          hint: 'Ej: cliente@correo.com',
-                          icon: Icons.email_outlined,
-                        ),
-                        onChanged: (val) => _actualizarClienteLocal(),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        isExpanded: true,
-                        value: _regionCliente,
-                        dropdownColor: AppPalette.surface,
-                        style: const TextStyle(color: Colors.white, fontSize: 13),
-                        icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF94A3B8)),
-                        decoration: _inputDeco(
-                          label: 'Región (Opcional)',
-                          hint: 'Seleccione Región...',
-                          icon: Icons.map_outlined,
-                        ),
-                        hint: const Text(
-                          'Seleccione Región...',
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
-                        ),
-                        items: ChileGeografia.regiones.map((r) => DropdownMenuItem(
-                          value: r,
-                          child: Text(
-                            r,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: Colors.white, fontSize: 13),
-                          ),
-                        )).toList(),
-                        onChanged: (val) {
-                          setState(() {
-                            _regionCliente = val;
-                            _comunaCliente = null;
-                            _actualizarClienteLocal();
-                          });
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        isExpanded: true,
-                        value: (ChileGeografia.obtenerComunas(_regionCliente).contains(_comunaCliente))
-                            ? _comunaCliente
-                            : null,
-                        dropdownColor: AppPalette.surface,
-                        style: const TextStyle(color: Colors.white, fontSize: 13),
-                        icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF94A3B8)),
-                        decoration: _inputDeco(
-                          label: 'Comuna (Opcional)',
-                          hint: 'Seleccione Comuna...',
-                          icon: Icons.location_city,
-                        ).copyWith(
-                          enabled: _regionCliente != null && _regionCliente!.isNotEmpty,
-                        ),
-                        hint: Text(
-                          _regionCliente != null && _regionCliente!.isNotEmpty
-                              ? 'Seleccione Comuna...'
-                              : 'Seleccione región primero',
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: _regionCliente != null && _regionCliente!.isNotEmpty
-                                ? const Color(0xFF94A3B8)
-                                : const Color(0xFF64748B),
-                            fontSize: 13,
-                          ),
-                        ),
-                        items: (_regionCliente != null && _regionCliente!.isNotEmpty)
-                            ? ChileGeografia.obtenerComunas(_regionCliente).map((c) => DropdownMenuItem(
-                                value: c,
-                                child: Text(
-                                  c,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                      inputFormatters: [RutFormatter()],
+                      decoration: _inputDeco(
+                        hint: 'Ej: 12.345.678-9',
+                        errorText: rutError,
+                        suffix: _isSearchingCliente
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppPalette.primary,
                                 ),
-                              )).toList()
-                            : const [],
-                        onChanged: (_regionCliente != null && _regionCliente!.isNotEmpty)
-                            ? (val) {
-                                setState(() {
-                                  _comunaCliente = val;
-                                  _actualizarClienteLocal();
-                                });
-                              }
-                            : null,
+                              )
+                            : IconButton(
+                                icon: const Icon(
+                                  Icons.search,
+                                  color: AppPalette.primary,
+                                  size: 20,
+                                ),
+                                tooltip: 'Buscar por RUT',
+                                onPressed: _buscarClientePorRut,
+                              ),
                       ),
+                      onChanged: (val) {
+                        setState(() {});
+                        _actualizarClienteLocal();
+                      },
+                    ),
+                    const SizedBox(height: 14),
+
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildFieldHeader(
+                                'Nombres *',
+                                icon: Icons.person,
+                              ),
+                              TextField(
+                                key: const Key('input_cliente_nombres'),
+                                controller: _clienteNombresController,
+                                style: AppTypography.body.copyWith(
+                                  color: Colors.white,
+                                  fontSize: 14.5,
+                                ),
+                                decoration: _inputDeco(hint: 'Ej: Juan'),
+                                onChanged: (val) {
+                                  setState(() {});
+                                  _actualizarClienteLocal();
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildFieldHeader(
+                                'Apellidos *',
+                                icon: Icons.person_outline,
+                              ),
+                              TextField(
+                                key: const Key('input_cliente_apellidos'),
+                                controller: _clienteApellidosController,
+                                style: AppTypography.body.copyWith(
+                                  color: Colors.white,
+                                  fontSize: 14.5,
+                                ),
+                                decoration: _inputDeco(hint: 'Ej: Pérez'),
+                                onChanged: (val) => _actualizarClienteLocal(),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildFieldHeader(
+                                'Teléfono (Opcional)',
+                                icon: Icons.phone,
+                              ),
+                              TextField(
+                                controller: _clienteTelefonoController,
+                                style: AppTypography.body.copyWith(
+                                  color: Colors.white,
+                                  fontSize: 14.5,
+                                ),
+                                keyboardType: TextInputType.phone,
+                                decoration: _inputDeco(
+                                  hint: 'Ej: +56 9 1234 5678',
+                                ),
+                                onChanged: (val) => _actualizarClienteLocal(),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildFieldHeader(
+                                'Correo(Opcional)',
+                                icon: Icons.email_outlined,
+                              ),
+                              TextField(
+                                controller: _clienteEmailController,
+                                style: AppTypography.body.copyWith(
+                                  color: Colors.white,
+                                  fontSize: 14.5,
+                                ),
+                                keyboardType: TextInputType.emailAddress,
+                                decoration: _inputDeco(
+                                  hint: 'Ej: cliente@correo.com',
+                                ),
+                                onChanged: (val) => _actualizarClienteLocal(),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildFieldHeader(
+                                'Región (Opcional)',
+                                icon: Icons.map_outlined,
+                              ),
+                              DropdownButtonFormField<String>(
+                                isExpanded: true,
+                                value: _regionCliente,
+                                dropdownColor: AppPalette.surface,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                ),
+                                icon: const Icon(
+                                  Icons.arrow_drop_down,
+                                  color: Color(0xFF94A3B8),
+                                ),
+                                decoration: _inputDeco(
+                                  hint: 'Seleccione Región...',
+                                ),
+                                hint: const Text(
+                                  'Seleccione Región...',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: Color(0xFF94A3B8),
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                items: ChileGeografia.regiones
+                                    .map(
+                                      (r) => DropdownMenuItem(
+                                        value: r,
+                                        child: Text(
+                                          r,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: (val) {
+                                  setState(() {
+                                    _regionCliente = val;
+                                    _comunaCliente = null;
+                                    _actualizarClienteLocal();
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildFieldHeader(
+                                'Comuna (Opcional)',
+                                icon: Icons.location_city,
+                              ),
+                              DropdownButtonFormField<String>(
+                                isExpanded: true,
+                                value:
+                                    (ChileGeografia.obtenerComunas(
+                                      _regionCliente,
+                                    ).contains(_comunaCliente))
+                                    ? _comunaCliente
+                                    : null,
+                                dropdownColor: AppPalette.surface,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                ),
+                                icon: const Icon(
+                                  Icons.arrow_drop_down,
+                                  color: Color(0xFF94A3B8),
+                                ),
+                                decoration:
+                                    _inputDeco(
+                                      hint: 'Seleccione Comuna...',
+                                    ).copyWith(
+                                      enabled:
+                                          _regionCliente != null &&
+                                          _regionCliente!.isNotEmpty,
+                                    ),
+                                hint: Text(
+                                  _regionCliente != null &&
+                                          _regionCliente!.isNotEmpty
+                                      ? 'Seleccione Comuna...'
+                                      : 'Seleccione región primero',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color:
+                                        _regionCliente != null &&
+                                            _regionCliente!.isNotEmpty
+                                        ? const Color(0xFF94A3B8)
+                                        : const Color(0xFF64748B),
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                items:
+                                    (_regionCliente != null &&
+                                        _regionCliente!.isNotEmpty)
+                                    ? ChileGeografia.obtenerComunas(
+                                            _regionCliente,
+                                          )
+                                          .map(
+                                            (c) => DropdownMenuItem(
+                                              value: c,
+                                              child: Text(
+                                                c,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                            ),
+                                          )
+                                          .toList()
+                                    : const [],
+                                onChanged:
+                                    (_regionCliente != null &&
+                                        _regionCliente!.isNotEmpty)
+                                    ? (val) {
+                                        setState(() {
+                                          _comunaCliente = val;
+                                          _actualizarClienteLocal();
+                                        });
+                                      }
+                                    : null,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
-            ),
-          );
-        },
-      ),
+              );
+            },
+          ),
         ],
       ],
     );
@@ -1479,28 +1897,61 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('3. Condiciones Comerciales y Abonos', style: AppTypography.title.copyWith(fontSize: 16)),
+        Text(
+          '3. Condiciones Comerciales y Abonos',
+          style: AppTypography.title.copyWith(fontSize: 16),
+        ),
         const SizedBox(height: 14),
 
         Container(
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: AppPalette.surface, borderRadius: BorderRadius.circular(12)),
+          decoration: BoxDecoration(
+            color: AppPalette.surface,
+            borderRadius: BorderRadius.circular(12),
+          ),
           child: Column(
             children: [
               if (_controller.subtotalInventario > 0)
-                _buildResumenRow('Subtotal Repuestos Inventario:', CurrencyFormatter.formatCLP(_controller.subtotalInventario)),
+                _buildResumenRow(
+                  'Subtotal Repuestos Inventario:',
+                  CurrencyFormatter.formatCLP(_controller.subtotalInventario),
+                ),
               if (_controller.subtotalManuales > 0)
-                _buildResumenRow('Subtotal Ítems Manuales:', CurrencyFormatter.formatCLP(_controller.subtotalManuales)),
+                _buildResumenRow(
+                  'Subtotal Ítems Manuales:',
+                  CurrencyFormatter.formatCLP(_controller.subtotalManuales),
+                ),
               if (_controller.subtotalReservas > 0)
-                _buildResumenRow('Subtotal Ventas en Verde:', CurrencyFormatter.formatCLP(_controller.subtotalReservas)),
+                _buildResumenRow(
+                  'Subtotal Ventas en Verde:',
+                  CurrencyFormatter.formatCLP(_controller.subtotalReservas),
+                ),
               if (_controller.descuento > 0)
-                _buildResumenRow('Descuento a Favor:', '- ${CurrencyFormatter.formatCLP(_controller.descuento)}', color: const Color(0xFFEF5350)),
+                _buildResumenRow(
+                  'Descuento a Favor:',
+                  '- ${CurrencyFormatter.formatCLP(_controller.descuento)}',
+                  color: const Color(0xFFEF5350),
+                ),
               const Divider(color: Colors.white24, height: 20),
-              _buildResumenRow('TOTAL DE LA VENTA:', CurrencyFormatter.formatCLP(_controller.totalVenta), isBold: true, color: AppPalette.primary),
+              _buildResumenRow(
+                'TOTAL DE LA VENTA:',
+                CurrencyFormatter.formatCLP(_controller.totalVenta),
+                isBold: true,
+                color: AppPalette.primary,
+              ),
               if (_controller.totalAbonos > 0) ...[
                 const SizedBox(height: 8),
-                _buildResumenRow('Total Abonos Acordados:', CurrencyFormatter.formatCLP(_controller.totalAbonos), color: AppPalette.textSecondary),
-                _buildResumenRow('Saldo Pendiente a Cobrar en Caja:', CurrencyFormatter.formatCLP(_controller.montoPendiente), isBold: true, color: AppPalette.primary),
+                _buildResumenRow(
+                  'Total Abonos Acordados:',
+                  CurrencyFormatter.formatCLP(_controller.totalAbonos),
+                  color: AppPalette.textSecondary,
+                ),
+                _buildResumenRow(
+                  'Saldo Pendiente a Cobrar en Caja:',
+                  CurrencyFormatter.formatCLP(_controller.montoPendiente),
+                  isBold: true,
+                  color: AppPalette.primary,
+                ),
               ],
             ],
           ),
@@ -1510,28 +1961,39 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
         // Campo de Descuento por Vale a Favor (Sincronizado)
         Container(
           padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(color: AppPalette.surface, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
+          decoration: BoxDecoration(
+            color: AppPalette.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.white12),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  const Icon(Icons.confirmation_number_outlined, size: 16, color: AppPalette.primary),
-                  const SizedBox(width: 6),
-                  Text('Descuento por Vale a Favor (\$):', style: AppTypography.small.copyWith(fontWeight: FontWeight.bold)),
+                  const Icon(
+                    Icons.confirmation_number_outlined,
+                    size: 18,
+                    color: AppPalette.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Descuento por Vale a Favor (\$):',
+                    style: AppTypography.body.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      fontSize: 14,
+                    ),
+                  ),
                 ],
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
               TextField(
                 controller: _descuentoController,
                 keyboardType: TextInputType.number,
                 inputFormatters: [MilesTextInputFormatter()],
                 style: AppTypography.body.copyWith(color: Colors.white),
-                decoration: _inputDeco(
-                  label: 'Descuento por Vale a Favor (\$) (Opcional)',
-                  hint: 'Ej: 50.000',
-                  icon: Icons.local_offer_outlined,
-                ),
+                decoration: _inputDeco(hint: 'Ej: 50.000'),
                 onChanged: (val) {
                   final desc = CurrencyFormatter.parse(val);
                   _controller.setDescuento(desc);
@@ -1541,7 +2003,11 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                 const SizedBox(height: 6),
                 Text(
                   'Descuento aplicado: - ${CurrencyFormatter.formatCLP(_controller.descuento)}',
-                  style: AppTypography.small.copyWith(color: const Color(0xFFEF5350), fontSize: 12, fontWeight: FontWeight.w600),
+                  style: AppTypography.small.copyWith(
+                    color: const Color(0xFFEF5350),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ],
             ],
@@ -1552,19 +2018,31 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
         // Campo de Abono / Anticipo Editable
         Container(
           padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(color: AppPalette.surface, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
+          decoration: BoxDecoration(
+            color: AppPalette.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.white12),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  const Icon(Icons.payments_outlined, size: 16, color: AppPalette.primary),
-                  const SizedBox(width: 6),
+                  const Icon(
+                    Icons.payments_outlined,
+                    size: 18,
+                    color: AppPalette.primary,
+                  ),
+                  const SizedBox(width: 8),
                   Text(
                     _controller.reservas.isNotEmpty
                         ? 'Abono / Anticipo Venta en Verde (\$):'
                         : 'Abono / Anticipo Inicial (\$):',
-                    style: AppTypography.small.copyWith(fontWeight: FontWeight.bold),
+                    style: AppTypography.body.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      fontSize: 14,
+                    ),
                   ),
                 ],
               ),
@@ -1572,19 +2050,20 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                 const SizedBox(height: 4),
                 Text(
                   'Ingrese aquí el monto de abono acordado para la venta en verde (o \$0 para que el cliente pague el total en caja).',
-                  style: AppTypography.small.copyWith(color: AppPalette.textSecondary, fontSize: 11),
+                  style: AppTypography.small.copyWith(
+                    color: AppPalette.textSecondary,
+                    fontSize: 12,
+                  ),
                 ),
               ],
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
               TextField(
                 controller: _montoAbonoController,
                 keyboardType: TextInputType.number,
                 inputFormatters: [MilesTextInputFormatter()],
                 style: AppTypography.body.copyWith(color: Colors.white),
                 decoration: _inputDeco(
-                  label: 'Monto de Abono / Anticipo (\$) (Opcional)',
                   hint: 'Ej: 50.000 (0 para pagar total en caja)',
-                  icon: Icons.payments_outlined,
                 ),
                 onChanged: (val) {
                   final ab = CurrencyFormatter.parse(val);
@@ -1595,7 +2074,10 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                 const SizedBox(height: 6),
                 Text(
                   'El cliente abonará ${CurrencyFormatter.formatCLP(_controller.totalAbonos)} y quedará un saldo de ${CurrencyFormatter.formatCLP(_controller.montoPendiente)} en Caja.',
-                  style: AppTypography.small.copyWith(color: AppPalette.secondary, fontSize: 12),
+                  style: AppTypography.small.copyWith(
+                    color: AppPalette.secondary,
+                    fontSize: 12,
+                  ),
                 ),
               ],
             ],
@@ -1609,14 +2091,20 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
             decoration: BoxDecoration(
               color: AppPalette.surface,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppPalette.primary.withValues(alpha: 0.3)),
+              border: Border.all(
+                color: AppPalette.primary.withValues(alpha: 0.3),
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.assignment_outlined, size: 16, color: AppPalette.primary),
+                    const Icon(
+                      Icons.assignment_outlined,
+                      size: 16,
+                      color: AppPalette.primary,
+                    ),
                     const SizedBox(width: 6),
                     Text(
                       'Notas de Preparación para Bodega:',
@@ -1656,38 +2144,96 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('4. Revisión Final y Emisión de Orden', style: AppTypography.title.copyWith(fontSize: 16)),
+        Text(
+          '4. Revisión Final y Emisión de Orden',
+          style: AppTypography.title.copyWith(fontSize: 16),
+        ),
         const SizedBox(height: 14),
 
         Container(
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: AppPalette.surface, borderRadius: BorderRadius.circular(12)),
+          decoration: BoxDecoration(
+            color: AppPalette.surface,
+            borderRadius: BorderRadius.circular(12),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('RESUMEN DE CLIENTE & ENTREGA', style: AppTypography.small.copyWith(color: AppPalette.textSecondary, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+              Text(
+                'RESUMEN DE CLIENTE & ENTREGA',
+                style: AppTypography.small.copyWith(
+                  color: AppPalette.textSecondary,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5,
+                ),
+              ),
               const SizedBox(height: 6),
-              Text('Cliente: ${cli?.nombreCompleto ?? "Consumidor Final"} (${cli?.rut ?? "6.666.666-6"})', style: AppTypography.body.copyWith(fontWeight: FontWeight.bold)),
-              Text('Modalidad: Retiro en Mesón / Bodega', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
+              Text(
+                'Cliente: ${cli?.nombreCompleto ?? "Consumidor Final"} (${cli?.rut ?? "6.666.666-6"})',
+                style: AppTypography.body.copyWith(fontWeight: FontWeight.bold),
+              ),
+              Text(
+                'Modalidad: Retiro en Mesón / Bodega',
+                style: AppTypography.small.copyWith(
+                  color: AppPalette.textSecondary,
+                ),
+              ),
               const Divider(color: Colors.white24, height: 20),
 
-              Text('DETALLE COMERCIAL', style: AppTypography.small.copyWith(color: AppPalette.textSecondary, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+              Text(
+                'DETALLE COMERCIAL',
+                style: AppTypography.small.copyWith(
+                  color: AppPalette.textSecondary,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5,
+                ),
+              ),
               const SizedBox(height: 10),
-              _buildResumenRow('Total Artículos:', '${_controller.totalItemsCount}'),
+              _buildResumenRow(
+                'Total Artículos:',
+                '${_controller.totalItemsCount}',
+              ),
               if (_controller.subtotalInventario > 0)
-                _buildResumenRow('Subtotal Repuestos Inventario:', CurrencyFormatter.formatCLP(_controller.subtotalInventario)),
+                _buildResumenRow(
+                  'Subtotal Repuestos Inventario:',
+                  CurrencyFormatter.formatCLP(_controller.subtotalInventario),
+                ),
               if (_controller.subtotalManuales > 0)
-                _buildResumenRow('Subtotal Ítems Manuales:', CurrencyFormatter.formatCLP(_controller.subtotalManuales)),
+                _buildResumenRow(
+                  'Subtotal Ítems Manuales:',
+                  CurrencyFormatter.formatCLP(_controller.subtotalManuales),
+                ),
               if (_controller.subtotalReservas > 0)
-                _buildResumenRow('Subtotal Ventas en Verde:', CurrencyFormatter.formatCLP(_controller.subtotalReservas)),
+                _buildResumenRow(
+                  'Subtotal Ventas en Verde:',
+                  CurrencyFormatter.formatCLP(_controller.subtotalReservas),
+                ),
               if (_controller.descuento > 0)
-                _buildResumenRow('Descuento a Favor:', '- ${CurrencyFormatter.formatCLP(_controller.descuento)}', color: const Color(0xFFEF5350)),
+                _buildResumenRow(
+                  'Descuento a Favor:',
+                  '- ${CurrencyFormatter.formatCLP(_controller.descuento)}',
+                  color: const Color(0xFFEF5350),
+                ),
               const Divider(color: Colors.white24, height: 20),
-              _buildResumenRow('TOTAL DE LA VENTA:', CurrencyFormatter.formatCLP(_controller.totalVenta), isBold: true, color: AppPalette.primary),
+              _buildResumenRow(
+                'TOTAL DE LA VENTA:',
+                CurrencyFormatter.formatCLP(_controller.totalVenta),
+                isBold: true,
+                color: AppPalette.primary,
+              ),
               if (_controller.totalAbonos > 0) ...[
                 const SizedBox(height: 6),
-                _buildResumenRow('Total Abonos Acordados:', CurrencyFormatter.formatCLP(_controller.totalAbonos), color: AppPalette.textSecondary),
-                _buildResumenRow('Saldo a Pagar en Caja:', CurrencyFormatter.formatCLP(_controller.montoPendiente), isBold: true, color: AppPalette.primary),
+                _buildResumenRow(
+                  'Total Abonos Acordados:',
+                  CurrencyFormatter.formatCLP(_controller.totalAbonos),
+                  color: AppPalette.textSecondary,
+                ),
+                _buildResumenRow(
+                  'Saldo a Pagar en Caja:',
+                  CurrencyFormatter.formatCLP(_controller.montoPendiente),
+                  isBold: true,
+                  color: AppPalette.primary,
+                ),
               ],
             ],
           ),
@@ -1698,11 +2244,29 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
           width: double.infinity,
           height: 50,
           child: ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(backgroundColor: AppPalette.success, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppPalette.success,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
             icon: _controller.isLoading
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
                 : const Icon(Icons.check_circle_outline, size: 22),
-            label: Text(_controller.isLoading ? 'Emitiendo Orden...' : 'CONFIRMAR Y EMITIR ORDEN', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            label: Text(
+              _controller.isLoading
+                  ? 'Emitiendo Orden...'
+                  : 'CONFIRMAR Y EMITIR ORDEN',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            ),
             onPressed: _controller.isLoading ? null : _confirmarYEnviarOrden,
           ),
         ),
@@ -1710,9 +2274,14 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     );
   }
 
-  Widget _buildResumenRow(String label, String value, {bool isBold = false, Color? color}) {
+  Widget _buildResumenRow(
+    String label,
+    String value, {
+    bool isBold = false,
+    Color? color,
+  }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1721,9 +2290,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
             child: Text(
               label,
               style: TextStyle(
-                color: AppPalette.textSecondary,
-                fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-                fontSize: isBold ? 14 : 13,
+                color: Colors.white,
+                fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
+                fontSize: isBold ? 15.5 : 14.5,
               ),
             ),
           ),
@@ -1733,9 +2302,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               value,
               textAlign: TextAlign.end,
               style: TextStyle(
-                color: color ?? AppPalette.textPrimary,
+                color: color ?? Colors.white,
                 fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
-                fontSize: isBold ? 15 : 13,
+                fontSize: isBold ? 16.5 : 14.5,
               ),
             ),
           ),
@@ -1751,7 +2320,8 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
 
     final bool puedeAvanzar;
     if (_controller.currentStep == 0) {
-      puedeAvanzar = _controller.totalItemsCount > 0 &&
+      puedeAvanzar =
+          _controller.totalItemsCount > 0 &&
           !CartController.instance.hayPreciosInvalidos;
     } else if (_controller.currentStep == 1) {
       if (_esClienteAnonimo) {
@@ -1778,11 +2348,14 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
             Expanded(
               child: OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
-                    foregroundColor: AppPalette.textSecondary,
-                    side: const BorderSide(color: Colors.white24)),
+                  foregroundColor: AppPalette.textSecondary,
+                  side: const BorderSide(color: Colors.white24),
+                ),
                 icon: const Icon(Icons.arrow_back, size: 16),
                 label: const Text('Anterior', overflow: TextOverflow.ellipsis),
-                onPressed: _controller.isLoading ? null : _controller.previousStep,
+                onPressed: _controller.isLoading
+                    ? null
+                    : _controller.previousStep,
               ),
             )
           else
@@ -1799,36 +2372,38 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                   foregroundColor: AppPalette.textPrimary,
                   disabledBackgroundColor: AppPalette.surface,
                   disabledForegroundColor: AppPalette.textSecondary,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                 ),
                 icon: const Icon(Icons.arrow_forward, size: 16),
                 label: const Text('Siguiente', overflow: TextOverflow.ellipsis),
-              onPressed: puedeAvanzar
-                  ? () {
-                      if (_controller.currentStep == 1) {
-                        if (_esClienteAnonimo) {
-                          _controller.setCliente(
-                            const ClienteWizardModel(
-                              idCliente: 'cli-cf',
-                              rut: '6.666.666-6',
-                              nombres: 'Consumidor',
-                              apellidos: 'Final',
-                              comuna: 'Viña del Mar',
-                              consentimientoLegal: true,
-                              estado: 'Activo',
-                            ),
-                          );
-                        } else {
-                          _actualizarClienteLocal();
+                onPressed: puedeAvanzar
+                    ? () {
+                        if (_controller.currentStep == 1) {
+                          if (_esClienteAnonimo) {
+                            _controller.setCliente(
+                              const ClienteWizardModel(
+                                idCliente: 'cli-cf',
+                                rut: '6.666.666-6',
+                                nombres: 'Consumidor',
+                                apellidos: 'Final',
+                                comuna: 'Viña del Mar',
+                                consentimientoLegal: true,
+                                estado: 'Activo',
+                              ),
+                            );
+                          } else {
+                            _actualizarClienteLocal();
+                          }
+                          _prellenarDatosDespachoSiAplica();
+                        } else if (_controller.currentStep == 2) {
+                          _actualizarDatosDespachoLocal();
                         }
-                        _prellenarDatosDespachoSiAplica();
-                      } else if (_controller.currentStep == 2) {
-                        _actualizarDatosDespachoLocal();
+                        _controller.nextStep();
                       }
-                      _controller.nextStep();
-                    }
-                  : null,
+                    : null,
               ),
             ),
         ],
@@ -1836,46 +2411,76 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     );
   }
 
+  Widget _buildFieldHeader(String title, {IconData? icon}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (icon != null) ...[
+            Padding(
+              padding: const EdgeInsets.only(top: 2.0),
+              child: Icon(icon, size: 15, color: AppPalette.primary),
+            ),
+            const SizedBox(width: 6),
+          ],
+          Expanded(
+            child: Text(
+              title,
+              style: AppTypography.body.copyWith(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+                height: 1.25,
+              ),
+              softWrap: true,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   InputDecoration _inputDeco({
-    required String label,
     String? hint,
-    required IconData icon,
     Widget? suffix,
     String? errorText,
   }) {
     return InputDecoration(
       isDense: true,
-      labelText: label,
-      labelStyle: const TextStyle(
-        color: Color(0xFF94A3B8),
-        fontSize: 13,
-        fontWeight: FontWeight.w500,
-      ),
-      floatingLabelStyle: const TextStyle(
-        color: AppPalette.primary,
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-      ),
-      floatingLabelBehavior: FloatingLabelBehavior.always,
+      labelText: null,
       hintText: hint,
-      hintStyle: const TextStyle(
-        color: Color(0xFF64748B),
-        fontSize: 13,
-      ),
-      prefixIcon: Icon(icon, color: AppPalette.primary, size: 18),
-      prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+      hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
       suffixIcon: suffix,
       errorText: errorText,
-      errorStyle: const TextStyle(color: AppPalette.error, fontSize: 11, fontWeight: FontWeight.bold),
+      errorStyle: const TextStyle(
+        color: AppPalette.error,
+        fontSize: 11,
+        fontWeight: FontWeight.bold,
+      ),
       filled: true,
       fillColor: AppPalette.background,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white24)),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white24)),
-      errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppPalette.error, width: 1.5)),
-      focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppPalette.error, width: 1.5)),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppPalette.primary, width: 1.5)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Color(0xFF334155), width: 1.0),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Color(0xFF334155), width: 1.0),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: AppPalette.error, width: 1.5),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: AppPalette.error, width: 1.5),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: AppPalette.primary, width: 1.5),
+      ),
     );
   }
 }

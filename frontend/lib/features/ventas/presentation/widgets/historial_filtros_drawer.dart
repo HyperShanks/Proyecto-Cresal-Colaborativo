@@ -26,10 +26,10 @@ class HistorialFiltrosDrawer extends StatelessWidget {
     return Text(
       title,
       style: AppTypography.small.copyWith(
-        fontSize: 12,
+        fontSize: 13,
         fontWeight: FontWeight.bold,
-        letterSpacing: 1.0,
-        color: AppPalette.textSecondary,
+        letterSpacing: 0.8,
+        color: const Color(0xFFCBD5E1),
       ),
     );
   }
@@ -42,31 +42,34 @@ class HistorialFiltrosDrawer extends StatelessWidget {
   }) {
     final selectedColor = activeColor ?? AppPalette.primary;
 
-    return ChoiceChip(
-      label: Text(
-        label,
-        style: TextStyle(
-          color: isSelected ? AppPalette.textPrimary : AppPalette.textSecondary,
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          fontSize: 13,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => onSelected(!isSelected),
+        borderRadius: BorderRadius.circular(8.0),
+        splashColor: selectedColor.withValues(alpha: 0.25),
+        highlightColor: Colors.transparent,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8.0),
+          decoration: BoxDecoration(
+            color: isSelected ? selectedColor : AppPalette.background,
+            borderRadius: BorderRadius.circular(8.0),
+            border: Border.all(
+              color: isSelected ? selectedColor : Colors.transparent,
+              width: 1.0,
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: isSelected ? Colors.white : const Color(0xFFCBD5E1),
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+              fontSize: 13.5,
+            ),
+          ),
         ),
       ),
-      selected: isSelected,
-      onSelected: onSelected,
-      selectedColor: selectedColor,
-      backgroundColor: AppPalette.background,
-      elevation: 0,
-      pressElevation: 0,
-      side: BorderSide(
-        color: isSelected
-            ? selectedColor
-            : Colors.white.withValues(alpha: 0.08),
-        width: 1,
-      ),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8.0),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
     );
   }
 
@@ -226,9 +229,9 @@ class HistorialFiltrosDrawer extends StatelessWidget {
                       height: 48.0,
                       child: OutlinedButton(
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: AppPalette.textSecondary,
-                          disabledForegroundColor: AppPalette.textSecondary.withValues(alpha: 0.38),
-                          side: const BorderSide(color: Colors.white24),
+                          foregroundColor: AppPalette.error,
+                          disabledForegroundColor: AppPalette.error.withValues(alpha: 0.38),
+                          side: BorderSide(color: AppPalette.error.withValues(alpha: 0.5)),
                           padding: const EdgeInsets.symmetric(horizontal: 8.0),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8.0),
@@ -243,7 +246,7 @@ class HistorialFiltrosDrawer extends StatelessWidget {
                           child: Text(
                             'Limpiar',
                             maxLines: 1,
-                            style: TextStyle(fontWeight: FontWeight.w600),
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                           ),
                         ),
                       ),
@@ -257,7 +260,7 @@ class HistorialFiltrosDrawer extends StatelessWidget {
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppPalette.primary,
-                          foregroundColor: AppPalette.textPrimary,
+                          foregroundColor: Colors.white,
                           elevation: 0,
                           padding: const EdgeInsets.symmetric(horizontal: 8.0),
                           shape: RoundedRectangleBorder(
@@ -273,7 +276,7 @@ class HistorialFiltrosDrawer extends StatelessWidget {
                           child: Text(
                             'Aplicar Filtros',
                             maxLines: 1,
-                            style: TextStyle(fontWeight: FontWeight.bold),
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                           ),
                         ),
                       ),
