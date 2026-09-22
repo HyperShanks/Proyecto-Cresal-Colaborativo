@@ -1802,7 +1802,27 @@ def despaletizar_activo(
         else:
             activo.observacion_estado = nota_reversion
 
-        # 4. Limpiar fotos comerciales asociadas en Multimedia_Activo
+        # 4. Limpiar fotos físicas del bucket de Supabase Storage y registros en Multimedia_Activo
+        fotos_asociadas = (
+            db.query(Multimedia_Activo)
+            .filter(Multimedia_Activo.id_activo == id_activo)
+            .all()
+        )
+        BUCKET_NAME = "multimedia-activos"
+        if supabase and fotos_asociadas:
+            rutas_a_borrar = []
+            for f in fotos_asociadas:
+                url = f.url_storage or ""
+                if f"{BUCKET_NAME}/" in url:
+                    path_archivo = url.split(f"{BUCKET_NAME}/")[-1].split("?")[0].strip()
+                    if path_archivo:
+                        rutas_a_borrar.append(path_archivo)
+            if rutas_a_borrar:
+                try:
+                    supabase.storage.from_(BUCKET_NAME).remove(rutas_a_borrar)
+                except Exception as se:
+                    print(f"⚠️ Error al eliminar archivos físicos de Supabase Storage: {se}")
+
         db.query(Multimedia_Activo).filter(Multimedia_Activo.id_activo == id_activo).delete()
 
         db.commit()
