@@ -578,13 +578,34 @@ class HeartbeatCarritoResponse(BaseModel):
 
 
 class MisReservasItemResponse(BaseModel):
-    """Resumen de un ítem reservado actualmente por el usuario."""
+    """Resumen de un ítem reservado actualmente por el usuario, enriquecido para rehidratación del carrito."""
     model_config = ConfigDict(from_attributes=True)
     id_activo: UUID
     sku_qr_fisico: str
     version_lock: int
     reserva_expira_en: datetime
     segundos_restantes: int
+
+    # Datos enriquecidos para reconstrucción / rehidratación del carrito (SSOT)
+    id_categoria: Optional[int] = None
+    nombre_categoria: Optional[str] = None
+    id_sucursal_actual: Optional[int] = None
+    nombre_sucursal: Optional[str] = None
+    precio_referencia: Optional[int] = None
+    precio_minimo: Optional[int] = None
+    precio_maximo: Optional[int] = None
+    ubicacion_pasillo: Optional[str] = None
+    ubicacion_pallet: Optional[str] = None
+    ubicacion_galpon: Optional[str] = None
+    id_vehiculo: Optional[UUID] = None
+    marca: Optional[str] = None
+    modelo: Optional[str] = None
+    anio: Optional[int] = None
+    numero_motor: Optional[str] = None
+    cilindrada: Optional[str] = None
+    combustible: Optional[str] = None
+    transmision_tipo: Optional[str] = None
+    imagenes: List[str] = []
 
 
 # ==========================================

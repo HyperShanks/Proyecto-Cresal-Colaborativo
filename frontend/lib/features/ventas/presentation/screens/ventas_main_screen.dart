@@ -20,7 +20,8 @@ class VentasMainScreen extends StatefulWidget {
   State<VentasMainScreen> createState() => _VentasMainScreenState();
 }
 
-class _VentasMainScreenState extends State<VentasMainScreen> {
+class _VentasMainScreenState extends State<VentasMainScreen>
+    with WidgetsBindingObserver {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final GlobalKey<CatalogoScreenState> _catalogoKey =
       GlobalKey<CatalogoScreenState>();
@@ -37,7 +38,21 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _cargarDatosUsuario();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      CartController.instance.reconciliarConBackend();
+    }
   }
 
   Future<void> _cargarDatosUsuario() async {
@@ -442,6 +457,8 @@ class _VentasMainScreenState extends State<VentasMainScreen> {
                   _historialKey.currentState?.refrescar();
                 } else if (_esJefeVentas && index == 2) {
                   _bandejaPreciosKey.currentState?.refrescar();
+                } else if (index == tabs.length - 1) {
+                  CartController.instance.reconciliarConBackend();
                 }
               },
               backgroundColor: AppPalette.surface,

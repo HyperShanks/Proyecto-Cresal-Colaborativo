@@ -392,3 +392,6 @@ def test_consultar_mis_reservas_con_tiempo_restante(client, db_session):
     mi_item = next((it for it in items if it["id_activo"] == str(activo_id)), None)
     assert mi_item is not None
     assert mi_item["segundos_restantes"] > 0
+    assert mi_item["precio_referencia"] == 220000
+    assert mi_item["id_categoria"] == 1
+    assert "sku_qr_fisico" in mi_item

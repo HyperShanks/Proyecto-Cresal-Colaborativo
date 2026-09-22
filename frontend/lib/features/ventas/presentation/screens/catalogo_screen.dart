@@ -341,13 +341,14 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
         item.versionLock,
       );
 
-      if (!mounted) return;
-
       final updatedItem = item.copyWith(
         versionLock: reserva['version_lock'] as int? ?? (item.versionLock + 1),
       );
 
+      // Agrega al CartController global inmediatamente para no perder el ítem aunque el widget se desmonte
       final agregado = CartController.instance.agregarInventariado(updatedItem);
+
+      if (!mounted) return;
 
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(

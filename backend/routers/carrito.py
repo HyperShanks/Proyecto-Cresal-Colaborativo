@@ -1,12 +1,21 @@
 from datetime import datetime, timezone, timedelta
 from uuid import UUID
-from typing import List
+from typing import List, Dict
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_
 
 from database import get_db
-from models import Activo_Inventariado, Usuario
+from models import (
+    Activo_Inventariado,
+    Usuario,
+    Vehiculo_Origen,
+    Categoria_Activo,
+    Sucursal,
+    Detalle_Motor,
+    Detalle_Caja_Cambio,
+    Multimedia_Activo,
+)
 from core.security import get_current_user
 from schemas import (
     ReservaCarritoRequest,
@@ -306,7 +315,19 @@ def obtener_mis_reservas(
     now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
 
     reservas = (
-        db.query(Activo_Inventariado)
+        db.query(
+            Activo_Inventariado,
+            Vehiculo_Origen,
+            Categoria_Activo,
+            Sucursal,
+            Detalle_Motor,
+            Detalle_Caja_Cambio,
+        )
+        .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
+        .outerjoin(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
+        .outerjoin(Sucursal, Activo_Inventariado.id_sucursal_actual == Sucursal.id_sucursal)
+        .outerjoin(Detalle_Motor, Activo_Inventariado.id_activo == Detalle_Motor.id_activo)
+        .outerjoin(Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo)
         .filter(
             Activo_Inventariado.id_estado == 2,
             Activo_Inventariado.reservado_por == current_user.id_usuario,
@@ -315,17 +336,94 @@ def obtener_mis_reservas(
         .all()
     )
 
+    activo_ids = [activo.id_activo for activo, *_ in reservas]
+    fotos_db = (
+        db.query(Multimedia_Activo.id_activo, Multimedia_Activo.url_storage)
+        .filter(Multimedia_Activo.id_activo.in_(activo_ids))
+        .all()
+    ) if activo_ids else []
+    fotos_map: Dict[UUID, List[str]] = {}
+    for act_id, url in fotos_db:
+        fotos_map.setdefault(act_id, []).append(url)
+
+    cajas_vehiculo_ids = [
+        activo.id_vehiculo
+        for activo, _, cat, _, _, _ in reservas
+        if cat and cat.id_categoria == 2 and activo.id_vehiculo is not None
+    ]
+    motores_donantes: Dict[UUID, Detalle_Motor] = {}
+    if cajas_vehiculo_ids:
+        motores_db = (
+            db.query(Activo_Inventariado.id_vehiculo, Detalle_Motor)
+            .join(Detalle_Motor, Activo_Inventariado.id_activo == Detalle_Motor.id_activo)
+            .filter(
+                Activo_Inventariado.id_vehiculo.in_(cajas_vehiculo_ids),
+                Activo_Inventariado.id_categoria == 1,
+            )
+            .all()
+        )
+        for v_id, dm in motores_db:
+            motores_donantes[v_id] = dm
+
     items = []
-    for r in reservas:
-        segundos = int((r.reserva_expira_en - now_utc).total_seconds()) if r.reserva_expira_en else 0
+    for activo, vehiculo, cat, suc, motor, caja in reservas:
+        segundos = int((activo.reserva_expira_en - now_utc).total_seconds()) if activo.reserva_expira_en else 0
+        lista_fotos = fotos_map.get(activo.id_activo, [])
+        motor_donante = motores_donantes.get(activo.id_vehiculo) if (cat and cat.id_categoria == 2 and activo.id_vehiculo) else None
+
+        cilindrada_val = None
+        combustible_val = None
+        transmision_val = None
+        numero_motor_val = None
+
+        if cat and cat.id_categoria == 1 and motor:
+            cilindrada_val = motor.cilindrada
+            combustible_val = motor.combustible
+            transmision_val = motor.transmision_tipo
+            numero_motor_val = motor.numero_motor
+        elif cat and cat.id_categoria == 2:
+            transmision_val = caja.transmision_tipo if caja else None
+            if motor_donante:
+                cilindrada_val = motor_donante.cilindrada
+                combustible_val = motor_donante.combustible
+            numero_motor_val = None
+        elif motor:
+            cilindrada_val = motor.cilindrada
+            combustible_val = motor.combustible
+            transmision_val = motor.transmision_tipo
+            if cat and cat.id_categoria == 1:
+                numero_motor_val = motor.numero_motor
+        elif caja:
+            transmision_val = caja.transmision_tipo
+
         items.append(
             MisReservasItemResponse(
-                id_activo=r.id_activo,
-                sku_qr_fisico=r.sku_qr_fisico,
-                version_lock=r.version_lock,
-                reserva_expira_en=r.reserva_expira_en,
+                id_activo=activo.id_activo,
+                sku_qr_fisico=activo.sku_qr_fisico,
+                version_lock=activo.version_lock,
+                reserva_expira_en=activo.reserva_expira_en,
                 segundos_restantes=max(0, segundos),
+                id_categoria=cat.id_categoria if cat else None,
+                nombre_categoria=cat.nombre_categoria if cat else None,
+                id_sucursal_actual=suc.id_sucursal if suc else None,
+                nombre_sucursal=suc.nombre_sucursal if suc else None,
+                precio_referencia=activo.precio_referencia,
+                precio_minimo=activo.precio_minimo,
+                precio_maximo=activo.precio_maximo,
+                ubicacion_pasillo=activo.ubicacion_pasillo,
+                ubicacion_pallet=activo.ubicacion_pallet,
+                ubicacion_galpon=getattr(activo, "ubicacion_galpon", None),
+                id_vehiculo=vehiculo.id_vehiculo if vehiculo else None,
+                marca=vehiculo.marca if vehiculo else None,
+                modelo=vehiculo.modelo if vehiculo else None,
+                anio=vehiculo.anio if vehiculo else None,
+                numero_motor=numero_motor_val,
+                cilindrada=cilindrada_val,
+                combustible=combustible_val,
+                transmision_tipo=transmision_val,
+                imagenes=lista_fotos,
             )
         )
 
     return items
+

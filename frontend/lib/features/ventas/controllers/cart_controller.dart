@@ -22,7 +22,13 @@ class CartController extends ChangeNotifier {
   bool _estaCargandoPersistencia = false;
 
   CartController._internal({FlutterSecureStorage? storage})
-      : _storage = storage ?? const FlutterSecureStorage() {
+      : _storage = storage ??
+            const FlutterSecureStorage(
+              aOptions: AndroidOptions(
+                encryptedSharedPreferences: true,
+                resetOnError: true,
+              ),
+            ) {
     unawaited(cargarDesdeAlmacenamiento());
   }
 
@@ -119,7 +125,7 @@ class CartController extends ChangeNotifier {
         }
       }
 
-      if (reconciliarBackend && _items.any((i) => i.esInventariado)) {
+      if (reconciliarBackend) {
         unawaited(reconciliarConBackend());
       }
     } catch (e) {
@@ -129,8 +135,9 @@ class CartController extends ChangeNotifier {
     }
   }
 
-  /// Reconcilia los activos inventariados reservados con el estado en el backend.
+  /// Reconcilia los activos inventariados reservados con el estado en el backend (SSOT).
   /// Si una reserva expiró mientras la app estuvo cerrada, se remueve del carrito.
+  /// Si hay reservas activas en backend que no están en memoria local, se rehidratan automáticamente.
   Future<void> reconciliarConBackend() async {
     try {
       final misReservas = await CarritoService.obtenerMisReservas();
@@ -145,6 +152,8 @@ class CartController extends ChangeNotifier {
           .toSet();
 
       bool huboCambios = false;
+
+      // 1. Remover ítems locales cuyas reservas hayan expirado o no existan en el backend
       _items.removeWhere((item) {
         if (item.esInventariado) {
           final sigueVigente = idsActivosVigentes.contains(item.id);
@@ -155,6 +164,51 @@ class CartController extends ChangeNotifier {
         }
         return false;
       });
+
+      // 2. REHIDRATACIÓN (SSOT): Restaurar cualquier reserva activa que esté en el backend pero no en el carrito local
+      final idsLocales = _items.where((i) => i.esInventariado).map((i) => i.id).toSet();
+      for (final r in misReservas) {
+        final idActivo = r['id_activo']?.toString();
+        if (idActivo != null && !idsLocales.contains(idActivo)) {
+          if (!tieneVentaEnVerde) {
+            final catalogoItem = CatalogoItem(
+              idActivo: idActivo,
+              skuQrFisico: r['sku_qr_fisico']?.toString() ?? '',
+              precioReferencia: r['precio_referencia'] as int?,
+              precioMinimo: r['precio_minimo'] as int?,
+              precioMaximo: r['precio_maximo'] as int?,
+              idCategoria: r['id_categoria'] as int? ?? 0,
+              nombreCategoria: r['nombre_categoria']?.toString() ?? 'Repuesto',
+              idSucursalActual: r['id_sucursal_actual'] as int? ?? 1,
+              nombreSucursal: r['nombre_sucursal']?.toString() ?? 'Sucursal no especificada',
+              idVehiculo: r['id_vehiculo']?.toString(),
+              marca: r['marca']?.toString(),
+              modelo: r['modelo']?.toString(),
+              anio: r['anio'] as int?,
+              ubicacionPasillo: r['ubicacion_pasillo']?.toString(),
+              ubicacionPallet: r['ubicacion_pallet']?.toString(),
+              ubicacionGalpon: r['ubicacion_galpon']?.toString(),
+              numeroMotor: r['numero_motor']?.toString(),
+              cilindrada: r['cilindrada']?.toString(),
+              combustible: r['combustible']?.toString(),
+              transmisionTipo: r['transmision_tipo']?.toString(),
+              imagenes: (r['imagenes'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? const [],
+              versionLock: r['version_lock'] as int? ?? 1,
+              idEstado: 2,
+              estadoActivo: 'Reservado',
+            );
+
+            final cartItem = InventariadoCartItem(
+              catalogoItem: catalogoItem,
+              precioFinal: catalogoItem.precioSugerido ?? catalogoItem.precioReferencia ?? 0,
+            );
+
+            _items.add(cartItem);
+            idsLocales.add(idActivo);
+            huboCambios = true;
+          }
+        }
+      }
 
       if (huboCambios) {
         notifyListeners();
