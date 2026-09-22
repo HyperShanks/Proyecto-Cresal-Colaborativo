@@ -8,6 +8,7 @@ import '../../../auth/services/auth_service.dart';
 import '../../../paletizado/domain/models/etiqueta_data.dart';
 import '../../services/inventario_service.dart';
 import '../widgets/editar_activo_modal.dart';
+import '../widgets/dialogo_despaletizar.dart';
 
 class DetalleActivoScreen extends StatefulWidget {
   final Map<String, dynamic> activo;
@@ -119,6 +120,35 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
         _activo['version_lock'] = resultado['version_lock'];
       }
     });
+  }
+
+  Future<void> _confirmarDespaletizado() async {
+    final idActivo = _activo['id_activo']?.toString() ?? '';
+    final sku = _activo['sku']?.toString() ?? _activo['sku_qr_fisico']?.toString() ?? 'S/N';
+    final categoria = _activo['categoria']?.toString() ?? 'Repuesto';
+    final numeroIngreso = _activo['numero_ingreso']?.toString();
+
+    final exito = await DialogoDespaletizar.mostrar(
+      context,
+      idActivo: idActivo,
+      sku: sku,
+      categoria: categoria,
+      numeroIngreso: numeroIngreso,
+    );
+
+    if (exito == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Repuesto $sku despaletizado exitosamente. Ha retornado a "En Desarme".',
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+          backgroundColor: AppPalette.success,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      Navigator.of(context).pop({'despaletizado': true, 'id_activo': idActivo});
+    }
   }
 
   Future<void> _subirNuevaFoto(ImageSource source) async {
@@ -351,13 +381,20 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
           tooltip: 'Volver',
         ),
         actions: [
-          if (_puedeEditar && _esEstadoEditable)
+          if (_puedeEditar && _esEstadoEditable) ...[
+            IconButton(
+              key: const Key('btn_despaletizar_activo'),
+              icon: const Icon(Icons.undo_rounded, color: AppPalette.error, size: 24),
+              tooltip: 'Despaletizar (Revertir a Desarme)',
+              onPressed: _confirmarDespaletizado,
+            ),
             IconButton(
               key: const Key('btn_editar_activo'),
               icon: const Icon(Icons.edit_note, color: AppPalette.primary, size: 26),
               tooltip: 'Editar datos y ubicación',
               onPressed: _abrirModalEdicion,
             ),
+          ],
         ],
       ),
       body: SingleChildScrollView(
@@ -811,6 +848,30 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
                       ),
                     ),
                   ),
+                  if (_puedeEditar && _esEstadoEditable) ...[
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: OutlinedButton.icon(
+                        key: const Key('btn_despaletizar_activo_bottom'),
+                        onPressed: _confirmarDespaletizado,
+                        icon: const Icon(Icons.undo_rounded, color: AppPalette.error, size: 18),
+                        label: Text(
+                          'DESPALETIZAR (REVERTIR A DESARME)',
+                          style: AppTypography.button.copyWith(
+                            color: AppPalette.error,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: AppPalette.error.withValues(alpha: 0.5)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   SizedBox(
                     width: double.infinity,

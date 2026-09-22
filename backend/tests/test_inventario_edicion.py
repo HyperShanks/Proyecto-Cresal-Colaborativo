@@ -16,6 +16,7 @@ from models import (
     Activo_Inventariado,
     Detalle_Motor,
     Detalle_Caja_Cambio,
+    Multimedia_Activo,
 )
 from core.security import create_access_token
 from conftest import TestingSessionLocal
@@ -99,7 +100,8 @@ def db_session(setup_database):
         est_vend = Estado_Activo(id_estado=3, nombre_estado="Vendido")
         est_entr = Estado_Activo(id_estado=6, nombre_estado="Entregado")
         est_palet = Estado_Activo(id_estado=7, nombre_estado="Paletizado")
-        db.add_all([est_disp, est_res, est_vend, est_entr, est_palet])
+        est_desarme = Estado_Activo(id_estado=5, nombre_estado="En Desarme")
+        db.add_all([est_disp, est_res, est_vend, est_entr, est_palet, est_desarme])
 
         # Vehículo de origen
         vehiculo = Vehiculo_Origen(
@@ -662,4 +664,95 @@ def test_editar_activo_caja_permite_cilindrada_y_combustible(client, db_session)
     assert motor_propio is not None
     assert motor_propio.cilindrada == "2.0L"
     assert motor_propio.combustible == "Gasolina"
+
+
+def test_despaletizar_activo_exitoso(client, db_session):
+    """
+    Verifica que un bodeguero pueda despaletizar un activo paletizado:
+    - Retorna a id_estado = 5 (En Desarme).
+    - Ubicación galpón, pasillo y pallet en None.
+    - qr_impreso = False.
+    - Elimina registros de fotos comerciales en Multimedia_Activo.
+    """
+    user_bodega = db_session["user_bodega"]
+    activo_paletizado = db_session["activo_paletizado"]
+    db = db_session["db"]
+
+    # Agregar una foto asociada previa
+    foto = Multimedia_Activo(
+        id_multimedia=uuid.uuid4(),
+        id_activo=activo_paletizado.id_activo,
+        url_storage="https://supabase.co/storage/foto1.jpg",
+        tipo_archivo="imagen",
+    )
+    db.add(foto)
+    db.commit()
+
+    token = create_access_token(data={"sub": str(user_bodega.id_usuario)})
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = client.post(
+        f"/api/v1/inventario/{activo_paletizado.id_activo}/despaletizar",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id_estado"] == 5
+    assert data["ubicacion_galpon"] is None
+    assert data["ubicacion_pasillo"] is None
+    assert data["ubicacion_pallet"] is None
+    assert data["qr_impreso"] is False
+    assert "despaletizado exitosamente" in data["mensaje"].lower()
+
+    # Verificar en BD
+    db.refresh(activo_paletizado)
+    assert activo_paletizado.id_estado == 5
+    assert activo_paletizado.ubicacion_pasillo is None
+    assert activo_paletizado.ubicacion_pallet is None
+    assert activo_paletizado.qr_impreso is False
+    assert "[Despaletizado por" in activo_paletizado.observacion_estado
+
+    # Las fotos comerciales asociadas deben haber sido eliminadas
+    fotos_count = db.query(Multimedia_Activo).filter(Multimedia_Activo.id_activo == activo_paletizado.id_activo).count()
+    assert fotos_count == 0
+
+
+def test_despaletizar_activo_rechazo_estado_invalido(client, db_session):
+    """
+    Verifica que no se permita despaletizar un activo vendido o reservado.
+    """
+    user_bodega = db_session["user_bodega"]
+    activo_vendido = db_session["activo_vendido"]
+
+    token = create_access_token(data={"sub": str(user_bodega.id_usuario)})
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = client.post(
+        f"/api/v1/inventario/{activo_vendido.id_activo}/despaletizar",
+        headers=headers,
+    )
+
+    assert response.status_code == 400
+    detail = response.json().get("detail", "")
+    assert "No es posible despaletizar" in detail
+
+
+def test_despaletizar_activo_rechazo_rol_no_autorizado(client, db_session):
+    """
+    Verifica que un vendedor (id_rol=2) no pueda despaletizar activos.
+    """
+    user_vendedor = db_session["user_vendedor"]
+    activo_1 = db_session["activo_1"]
+
+    token = create_access_token(data={"sub": str(user_vendedor.id_usuario)})
+    headers = {"Authorization": f"Bearer {token}"}
+
+    response = client.post(
+        f"/api/v1/inventario/{activo_1.id_activo}/despaletizar",
+        headers=headers,
+    )
+
+    assert response.status_code == 403
+
 

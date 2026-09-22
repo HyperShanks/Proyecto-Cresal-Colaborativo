@@ -268,5 +268,48 @@ class InventarioService {
       rethrow;
     }
   }
+
+  /// Despaletiza un activo y lo devuelve al estado "En Desarme", liberando su ubicación física (HU anti-equivocación).
+  static Future<Map<String, dynamic>> despaletizarActivo(
+    String idActivo, {
+    http.Client? client,
+  }) async {
+    final httpClient = client ?? http.Client();
+    try {
+      final uri = Uri.parse('${ApiConstants.inventarioEndpoint}/$idActivo/despaletizar');
+      final token = await AuthService.getToken();
+      final headers = {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      };
+
+      final response = await httpClient
+          .post(uri, headers: headers)
+          .timeout(const Duration(seconds: 35));
+
+      Map<String, dynamic> body = {};
+      if (response.body.isNotEmpty) {
+        try {
+          body = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        } catch (_) {}
+      }
+
+      if (response.statusCode == 200) {
+        return body;
+      } else if (response.statusCode == 401) {
+        AuthService.manejarSesionExpirada();
+        throw Exception('Tu sesión ha expirado. Por favor ingresa tu PIN nuevamente.');
+      } else {
+        final msg = body['message_user'] ?? body['detail'] ?? 'Error al despaletizar activo: ${response.statusCode}';
+        throw Exception(msg);
+      }
+    } catch (e) {
+      if (e.toString().contains('SocketException') || e.toString().contains('TimeoutException')) {
+        throw Exception('Error de conexión con el servidor. Revisa tu conexión a internet.');
+      }
+      rethrow;
+    }
+  }
 }
+
 

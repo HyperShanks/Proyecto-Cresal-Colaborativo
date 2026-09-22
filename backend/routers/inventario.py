@@ -1730,3 +1730,102 @@ def buscar_activo_por_numero_ingreso(
         },
         "total_pendientes": len(activos_pendientes),
     }
+
+
+@router.post(
+    "/{id_activo}/despaletizar",
+    summary="Despaletizar repuesto y devolver a estado En Desarme",
+    description="Permite a bodega revertir un activo paletizado o disponible por error al estado 'En Desarme', liberando la ubicación física y reiniciando el QR.",
+)
+def despaletizar_activo(
+    id_activo: UUID,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_bodeguero_or_admin),
+):
+    activo = (
+        db.query(Activo_Inventariado)
+        .filter(Activo_Inventariado.id_activo == id_activo)
+        .first()
+    )
+    if not activo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Activo inventariado con ID '{id_activo}' no encontrado.",
+        )
+
+    # 1. Regla de Negocio: Solo activos en estado 'Paletizado' (7) o 'Disponible' (1) pueden ser despaletizados
+    estado_actual = (
+        db.query(Estado_Activo)
+        .filter(Estado_Activo.id_estado == activo.id_estado)
+        .first()
+    )
+    nombre_estado_actual = (estado_actual.nombre_estado if estado_actual else "").strip().lower()
+    estados_permitidos = {"disponible", "paletizado"}
+    ids_permitidos = {1, 7}
+
+    if activo.id_estado not in ids_permitidos and nombre_estado_actual not in estados_permitidos:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"No es posible despaletizar un repuesto en estado '{estado_actual.nombre_estado if estado_actual else activo.id_estado}'. "
+                   f"Solo se pueden revertir repuestos en estado 'Paletizado' o 'Disponible'.",
+        )
+
+    # 2. Obtener estado 'En Desarme' (id_estado = 5)
+    estado_desarme = (
+        db.query(Estado_Activo)
+        .filter(
+            or_(
+                Estado_Activo.id_estado == 5,
+                func.lower(Estado_Activo.nombre_estado) == "en desarme",
+                func.lower(Estado_Activo.nombre_estado) == "desarme",
+            )
+        )
+        .first()
+    )
+    id_estado_desarme = estado_desarme.id_estado if estado_desarme else 5
+
+    try:
+        # 3. Transacción atómica de reversión
+        activo.id_estado = id_estado_desarme
+        activo.ubicacion_galpon = None
+        activo.ubicacion_pasillo = None
+        activo.ubicacion_pallet = None
+        activo.qr_impreso = False
+        activo.version_lock = (activo.version_lock or 0) + 1
+        activo.fecha_actualizacion = datetime.now(timezone.utc).replace(tzinfo=None)
+
+        # Nota de auditoría en observacion_estado
+        nombre_completo = f"{current_user.nombres} {current_user.apellidos}".strip()
+        nota_reversion = f"[Despaletizado por {nombre_completo} el {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')}]"
+        if activo.observacion_estado:
+            activo.observacion_estado = f"{activo.observacion_estado} | {nota_reversion}"
+        else:
+            activo.observacion_estado = nota_reversion
+
+        # 4. Limpiar fotos comerciales asociadas en Multimedia_Activo
+        db.query(Multimedia_Activo).filter(Multimedia_Activo.id_activo == id_activo).delete()
+
+        db.commit()
+        db.refresh(activo)
+
+        return {
+            "id_activo": str(activo.id_activo),
+            "sku_qr_fisico": activo.sku_qr_fisico,
+            "mensaje": "Activo despaletizado exitosamente. Ha retornado al estado 'En Desarme' y su ubicación ha sido liberada.",
+            "id_estado": activo.id_estado,
+            "version_lock": activo.version_lock,
+            "qr_impreso": activo.qr_impreso,
+            "ubicacion_galpon": activo.ubicacion_galpon,
+            "ubicacion_pasillo": activo.ubicacion_pasillo,
+            "ubicacion_pallet": activo.ubicacion_pallet,
+        }
+
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al revertir paletizado del activo: {str(e)}",
+        )
