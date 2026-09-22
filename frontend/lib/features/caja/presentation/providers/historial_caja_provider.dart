@@ -151,6 +151,37 @@ class HistorialCajaProvider extends ChangeNotifier {
     }
   }
 
+  /// Recarga silenciosa en segundo plano manteniendo la página y filtros activos sin mostrar spinner
+  Future<void> cargarHistorialSilencioso({int? pagina}) async {
+    final targetPagina = pagina ?? _state.paginaActual;
+    try {
+      final response = await _cajaService.obtenerHistorialCaja(
+        sucursalId: sucursalId,
+        periodo: _state.periodo.codigo,
+        fechaDesde: _state.fechaDesde,
+        fechaHasta: _state.fechaHasta,
+        estadoOrden: _state.estadoOrden,
+        metodoPago: _state.metodoPago,
+        busqueda: _state.busqueda.isEmpty ? null : _state.busqueda,
+        montoMin: _state.montoMin,
+        montoMax: _state.montoMax,
+        pagina: targetPagina,
+      );
+
+      _state = _state.copyWith(
+        isLoading: false,
+        data: response,
+        paginaActual: targetPagina,
+      );
+    } catch (_) {
+      // Silenciar errores en ciclo en segundo plano
+    } finally {
+      if (!_isDisposed) {
+        notifyListeners();
+      }
+    }
+  }
+
   void cambiarPeriodo(PeriodoHistorial nuevoPeriodo) {
     if (_state.periodo == nuevoPeriodo && nuevoPeriodo != PeriodoHistorial.rango) return;
     _state = _state.copyWith(

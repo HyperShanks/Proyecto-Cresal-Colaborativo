@@ -160,6 +160,43 @@ class CajaProvider extends ChangeNotifier {
     }
   }
 
+  /// Consulta periódica en segundo plano sin interrumpir ni mostrar loaders (SPEC-HU-TAREA-21).
+  /// Respeta el cobro activo si la cajera está ingresando montos o pagos divididos.
+  Future<void> cargarCobrosPendientesSilencioso({int? sucursalId}) async {
+    // Si se está procesando un cobro o la cajera ya ingresó pagos divididos, no interrumpir
+    if (_isProcesandoCobro || _pagosDivididos.isNotEmpty) {
+      debugPrint('[CajaProvider] Polling omitido: Cobro en curso o pagos ingresados.');
+      return;
+    }
+
+    try {
+      if (sucursalId != null) {
+        _sucursalId = sucursalId;
+      }
+
+      final items = await _cajaService.obtenerCobrosPendientes(
+        sucursalId: _sucursalId,
+        busqueda: null,
+        tipoOperacion: 'TODOS',
+      );
+
+      // Reconciliación en memoria: verificar si hubo cambios reales
+      final idsActuales = _todosLosCobros.map((c) => '${c.idReferencia}_${c.saldoPendiente}').join(',');
+      final idsNuevos = items.map((c) => '${c.idReferencia}_${c.saldoPendiente}').join(',');
+
+      if (idsActuales == idsNuevos) {
+        // Cero cambios: no llamamos notifyListeners() para evitar repaints innecesarios
+        return;
+      }
+
+      _todosLosCobros = items;
+      _aplicarFiltrosLocales();
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[CajaProvider] Error en sondeo silencioso (ignorado): $e');
+    }
+  }
+
   /// Aplica los filtros de píldoras y búsqueda sobre la colección en memoria.
   void _aplicarFiltrosLocales() {
     var resultado = List<CobroPendienteModel>.from(_todosLosCobros);

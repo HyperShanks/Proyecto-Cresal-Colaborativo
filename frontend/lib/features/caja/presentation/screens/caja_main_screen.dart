@@ -10,6 +10,7 @@ import '../widgets/caja_drawer.dart';
 import '../widgets/bandeja_cobros_panel.dart';
 import '../widgets/panel_detalle_cobro.dart';
 import 'historial_caja_screen.dart';
+import '../../../../core/services/silent_polling_manager.dart';
 
 /// Contenedor principal de escritorio para el Módulo de Caja (CRES-213 / CRES-214).
 /// Implementa Sidebar Dinámico Colapsable (256px / 80px) y Grid 4/12 + 8/12 Master-Detail.
@@ -37,6 +38,7 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
   String _cajeraNombre = 'Lorena Valenzuela';
   String _sucursalNombre = 'Casa Matriz • Viña del Mar';
   int _idSucursal = 1;
+  SilentPollingManager? _cajaPollingManager;
 
   @override
   void initState() {
@@ -51,6 +53,22 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
     }
 
     _cargarDatosCajera();
+
+    _cajaPollingManager = SilentPollingManager(
+      interval: const Duration(seconds: 12),
+      debugLabel: 'CajaPolling',
+      shouldPause: () =>
+          _selectedNavIndex != 0 ||
+          _cajaProvider.isProcesandoCobro ||
+          _cajaProvider.pagosDivididos.isNotEmpty,
+      onPoll: () async {
+        if (mounted && _selectedNavIndex == 0) {
+          await _cajaProvider.cargarCobrosPendientesSilencioso(
+            sucursalId: _idSucursal,
+          );
+        }
+      },
+    )..start();
   }
 
   @override
@@ -65,13 +83,17 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
   @override
   void didPopNext() {
     super.didPopNext();
-    _cajaProvider.cargarCobrosPendientes(sucursalId: _idSucursal);
-    _historialKey.currentState?.refrescar();
+    if (_selectedNavIndex == 0) {
+      _cajaProvider.cargarCobrosPendientesSilencioso(sucursalId: _idSucursal);
+    } else if (_selectedNavIndex == 1) {
+      _historialKey.currentState?.refrescar();
+    }
   }
 
   @override
   void dispose() {
     routeObserver.unsubscribe(this);
+    _cajaPollingManager?.dispose();
     if (_providerInterno) {
       _cajaProvider.dispose();
     }
@@ -320,7 +342,11 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
                     setState(() {
                       _selectedNavIndex = 0;
                     });
-                    _cajaProvider.cargarCobrosPendientes(sucursalId: _idSucursal);
+                    if (_cajaProvider.cobros.isEmpty) {
+                      _cajaProvider.cargarCobrosPendientes(sucursalId: _idSucursal);
+                    } else {
+                      _cajaProvider.cargarCobrosPendientesSilencioso(sucursalId: _idSucursal);
+                    }
                   },
                 ),
                 const SizedBox(height: 6),
@@ -333,7 +359,7 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
                     setState(() {
                       _selectedNavIndex = 1;
                     });
-                    _historialKey.currentState?.refrescar();
+                    _historialKey.currentState?.refrescarSilencioso();
                   },
                 ),
                 const SizedBox(height: 6),

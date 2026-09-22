@@ -28,6 +28,7 @@ class HistorialCajaScreen extends StatefulWidget {
 class HistorialCajaScreenState extends State<HistorialCajaScreen> with RouteAware {
   late final HistorialCajaProvider _provider;
   bool _providerInterno = false;
+  bool _isModalAbierto = false;
   final TextEditingController _searchController = TextEditingController();
 
   @override
@@ -62,12 +63,19 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen> with RouteAwar
   @override
   void didPopNext() {
     super.didPopNext();
-    refrescar();
+    if (!_isModalAbierto) {
+      refrescarSilencioso();
+    }
   }
 
   /// Método público para forzar recarga (Auto-Refresh SPEC-HU-TAREA-20)
   void refrescar() {
     _provider.cargarHistorial(pagina: 1);
+  }
+
+  /// Recarga silenciosa en segundo plano manteniendo la página y filtros activos
+  void refrescarSilencioso() {
+    _provider.cargarHistorialSilencioso();
   }
 
   Future<void> _initAsync() async {
@@ -90,14 +98,19 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen> with RouteAwar
   }
 
   Future<void> _abrirDialogoRangoFechas() async {
-    final res = await FiltroRangoFechasDialog.show(
-      context,
-      fechaDesde: _provider.state.fechaDesde,
-      fechaHasta: _provider.state.fechaHasta,
-    );
+    _isModalAbierto = true;
+    try {
+      final res = await FiltroRangoFechasDialog.show(
+        context,
+        fechaDesde: _provider.state.fechaDesde,
+        fechaHasta: _provider.state.fechaHasta,
+      );
 
-    if (!mounted || res == null) return;
-    _provider.aplicarRangoFechas(res['desde']!, res['hasta']!);
+      if (!mounted || res == null) return;
+      _provider.aplicarRangoFechas(res['desde']!, res['hasta']!);
+    } finally {
+      _isModalAbierto = false;
+    }
   }
 
   @override
@@ -544,7 +557,14 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen> with RouteAwar
       paginaActual: state.paginaActual,
       totalPaginas: state.data!.totalPaginas,
       onCambiarPagina: (pag) => _provider.cargarHistorial(pagina: pag),
-      onVerDetalle: (orden) => DetalleAuditoriaDialog.show(context, orden),
+      onVerDetalle: (orden) async {
+        _isModalAbierto = true;
+        try {
+          await DetalleAuditoriaDialog.show(context, orden);
+        } finally {
+          _isModalAbierto = false;
+        }
+      },
     );
   }
 

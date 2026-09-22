@@ -42,7 +42,7 @@ class _ReingresoTareasScreenState extends State<ReingresoTareasScreen> {
     bool isSubmitting = false;
     String? modalError;
 
-    await showDialog<bool>(
+    final bool? confirmado = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
@@ -242,7 +242,9 @@ class _ReingresoTareasScreenState extends State<ReingresoTareasScreen> {
     skuController.dispose();
 
     if (!mounted) return;
-    _cargarTareas();
+    if (confirmado == true) {
+      _cargarTareas();
+    }
   }
 
   @override

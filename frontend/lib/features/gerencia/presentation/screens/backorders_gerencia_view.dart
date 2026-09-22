@@ -29,11 +29,52 @@ class BackordersGerenciaViewState extends State<BackordersGerenciaView> {
   Timer? _debounceTimer;
 
   /// Permite a vistas contenedoras (como [DashboardGerenciaView]) solicitar una recarga explícita.
-  Future<void> refrescar({int? idSucursal, bool actualizarSucursal = false}) async {
+  Future<void> refrescar({
+    int? idSucursal,
+    bool actualizarSucursal = false,
+    bool silent = false,
+  }) async {
     if (actualizarSucursal) {
       _idSucursal = idSucursal;
     }
+    if (silent) {
+      await refrescarSilencioso();
+      return;
+    }
     await _cargarDatos();
+  }
+
+  /// Permite refrescar KPIs y lista de reservas en verde de forma silenciosa en segundo plano.
+  Future<void> refrescarSilencioso({
+    int? idSucursal,
+    bool actualizarSucursal = false,
+  }) async {
+    if (!mounted) return;
+    if (actualizarSucursal) {
+      _idSucursal = idSucursal;
+    }
+    try {
+      final futures = await Future.wait([
+        GerenciaService.obtenerBackordersKpis(idSucursal: _idSucursal),
+        GerenciaService.obtenerBackorders(
+          idSucursal: _idSucursal,
+          estado: _filtroEstado,
+          busqueda: _busquedaController.text.trim(),
+        ),
+      ]);
+      if (!mounted) return;
+      final kpisData = futures[0] as BackordersKpisModel;
+      final listData = futures[1] as PaginatedBackordersResponse;
+      setState(() {
+        _kpis = kpisData;
+        _backorders = listData.items;
+        _totalCount = listData.totalCount;
+        _totalRecaudadoSenas = listData.totalRecaudadoSenas;
+      });
+      debugPrint('🌱 [GERENCIA-VENTAS_EN_VERDE] ✅ Sincronización silenciosa completada');
+    } catch (e) {
+      debugPrint('🌱 [GERENCIA-VENTAS_EN_VERDE] ⚠️ Error en refresco silencioso (ignorado): $e');
+    }
   }
 
   int? _idSucursal;

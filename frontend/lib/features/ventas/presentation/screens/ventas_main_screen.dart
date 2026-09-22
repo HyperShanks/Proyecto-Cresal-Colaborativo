@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
@@ -36,6 +37,7 @@ class _VentasMainScreenState extends State<VentasMainScreen>
   int? _idRol;
   String? _userSucursal;
   int _pendientesTasacionCount = 0;
+  Timer? _updateCheckTimer;
 
   @override
   void initState() {
@@ -43,7 +45,7 @@ class _VentasMainScreenState extends State<VentasMainScreen>
     WidgetsBinding.instance.addObserver(this);
     _cargarDatosUsuario();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Future.delayed(const Duration(seconds: 3), () {
+      _updateCheckTimer = Timer(const Duration(seconds: 3), () {
         if (mounted) {
           AppUpdateChecker.check(context, showIfUpToDate: false);
         }
@@ -53,6 +55,7 @@ class _VentasMainScreenState extends State<VentasMainScreen>
 
   @override
   void dispose() {
+    _updateCheckTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -486,11 +489,11 @@ class _VentasMainScreenState extends State<VentasMainScreen>
                 });
                 _actualizarPendientesTasacion();
                 if (index == 0) {
-                  _catalogoKey.currentState?.refrescarCatalogo();
+                  _catalogoKey.currentState?.refrescarCatalogoSilencioso();
                 } else if (index == 1) {
-                  _historialKey.currentState?.refrescar();
+                  _historialKey.currentState?.refrescarSilencioso();
                 } else if (_esJefeVentas && index == 2) {
-                  _bandejaPreciosKey.currentState?.refrescar();
+                  _bandejaPreciosKey.currentState?.refrescarSilencioso();
                 } else if (index == tabs.length - 1) {
                   CartController.instance.reconciliarConBackend();
                 }

@@ -36,7 +36,33 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
 
   void _onSyncNotification() {
     if (mounted) {
-      _cargarDatos();
+      if (_todasEntregas.isNotEmpty) {
+        _cargarDatosSilencioso();
+      } else {
+        _cargarDatos();
+      }
+    }
+  }
+
+  Future<void> _cargarDatosSilencioso() async {
+    try {
+      final data = await OrdenesService.obtenerEntregasEnvios(
+        busquedaCliente: _clienteFilterController.text.trim().isNotEmpty
+            ? _clienteFilterController.text.trim()
+            : null,
+        busquedaVendedor: _vendedorFilterController.text.trim().isNotEmpty
+            ? _vendedorFilterController.text.trim()
+            : null,
+        estadoPago: _estadoPagoFilter != 'todos' ? _estadoPagoFilter : null,
+      );
+      if (!mounted) return;
+      setState(() {
+        _todasEntregas = data;
+        _errorMessage = null;
+        _isLoading = false;
+      });
+    } catch (_) {
+      // Silenciar errores transitorios en segundo plano
     }
   }
 

@@ -140,8 +140,8 @@ void main() {
     });
   });
 
-  group('SPEC-HU-TAREA-20: AlertasScreen TabController Auto-Refresh', () {
-    testWidgets('Cambio de pestaña en AlertasScreen recarga alertas', (tester) async {
+  group('SPEC-HU-TAREA-21: AlertasScreen In-Memory Tabs & Non-Destructive Refresh', () {
+    testWidgets('Cambio de pestaña en AlertasScreen es instantáneo en memoria sin refetch agresivo', (tester) async {
       int fetchCount = 0;
       final mockTareas = [
         const TareaAlerta(
@@ -150,6 +150,13 @@ void main() {
           tituloPieza: 'Cilindro Maestro',
           accionRequerida: 'PREPARAR',
           ubicacion: 'A-10',
+        ),
+        const TareaAlerta(
+          idTarea: 'IMP-1',
+          tipoAlerta: 'IMPRESION',
+          tituloPieza: 'Etiqueta Termostato',
+          accionRequerida: 'IMPRIMIR QR',
+          ubicacion: 'B-20',
         ),
       ];
 
@@ -168,19 +175,27 @@ void main() {
 
       // Carga inicial
       expect(fetchCount, 1);
+      expect(find.text('Cilindro Maestro'), findsOneWidget);
 
-      // Tocar tab "Imprimir"
+      // Tocar tab "Imprimir" (navegación instantánea en memoria sin refetch)
       await tester.tap(find.text('Imprimir'));
       await tester.pumpAndSettle();
 
-      // Al cambiar de tab, TabController invoca _refreshAlertas()
-      expect(fetchCount, greaterThanOrEqualTo(2));
+      expect(fetchCount, 1);
+      expect(find.text('Etiqueta Termostato'), findsOneWidget);
 
       // Tocar tab "Re-integración"
       await tester.tap(find.text('Re-integración'));
       await tester.pumpAndSettle();
 
-      expect(fetchCount, greaterThanOrEqualTo(3));
+      expect(fetchCount, 1);
+      expect(find.text('Sin re-integraciones pendientes'), findsOneWidget);
+
+      // Botón de refresco manual en AppBar actualiza explícitamente
+      await tester.tap(find.byTooltip('Actualizar tareas'));
+      await tester.pumpAndSettle();
+
+      expect(fetchCount, 2);
     });
   });
 

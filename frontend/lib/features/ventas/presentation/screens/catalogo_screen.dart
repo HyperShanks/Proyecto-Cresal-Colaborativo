@@ -6,11 +6,13 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../../../core/routes/route_observer.dart';
+import '../../../../core/services/silent_polling_manager.dart';
 import '../../../auth/services/auth_service.dart';
 import '../../controllers/cart_controller.dart';
 import '../../models/catalogo_model.dart';
 import '../../services/catalogo_service.dart';
 import '../../services/carrito_service.dart';
+import '../../services/ordenes_sync_notifier.dart';
 import '../widgets/catalogo_item_card.dart';
 import '../widgets/filtros_drawer.dart';
 import '../widgets/modal_backorder_form.dart';
@@ -40,6 +42,7 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
   final ScrollController _scrollController = ScrollController();
 
   Timer? _debounceTimer;
+  SilentPollingManager? _pollingManager;
 
   /// Método público para forzar la recarga del catálogo desde el backend
   /// (usado tras derivar órdenes a caja para sincronizar stock en tiempo real).
@@ -47,9 +50,43 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
     await _fetchCatalogo(resetPagination: true);
   }
 
+  /// Recarga silenciosa en segundo plano sin reiniciar paginación ni resetear scroll.
+  Future<void> refrescarCatalogoSilencioso() async {
+    if (!mounted || _isLoadingInitial || _isLoadingMore) return;
+    try {
+      final currentQuery = _searchController.text.trim();
+      final countToFetch = _items.isEmpty ? _limit : _items.length;
+
+      final response = await CatalogoService.obtenerCatalogo(
+        q: currentQuery.isNotEmpty ? currentQuery : null,
+        idCategoria: _idCategoria,
+        idSucursal: _idSucursalFiltro,
+        marca: _marca,
+        anio: _anio,
+        cilindrada: _cilindrada,
+        transmision: _transmision,
+        limit: countToFetch,
+        offset: 0,
+      );
+
+      if (!mounted) return;
+
+      final itemsDisponibles = response.items
+          .where((i) => i.estadoActivo?.toLowerCase() != 'vendido' && i.estadoActivo?.toLowerCase() != 'de baja')
+          .toList();
+
+      setState(() {
+        _items = itemsDisponibles;
+        _totalCount = response.totalCount;
+      });
+    } catch (_) {
+      // Ignorar errores en ciclo silencioso
+    }
+  }
+
   void _onExternalRefresh() {
     if (mounted) {
-      refrescarCatalogo();
+      refrescarCatalogoSilencioso();
     }
   }
 
@@ -92,8 +129,20 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
   void initState() {
     super.initState();
     CatalogoScreen.refreshNotifier.addListener(_onExternalRefresh);
+    OrdenesSyncNotifier.instance.addListener(_onExternalRefresh);
     _scrollController.addListener(_onScroll);
     _cargarSucursalYCatalogo();
+    _iniciarPollingSilencioso();
+  }
+
+  void _iniciarPollingSilencioso() {
+    _pollingManager?.dispose();
+    _pollingManager = SilentPollingManager(
+      interval: const Duration(seconds: 30),
+      debugLabel: 'CatalogoPolling',
+      shouldPause: () => _isLoadingInitial || _isLoadingMore,
+      onPoll: refrescarCatalogoSilencioso,
+    )..start();
   }
 
   @override
@@ -108,13 +157,15 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
   @override
   void didPopNext() {
     super.didPopNext();
-    refrescarCatalogo();
+    refrescarCatalogoSilencioso();
   }
 
   @override
   void dispose() {
     routeObserver.unsubscribe(this);
+    _pollingManager?.dispose();
     CatalogoScreen.refreshNotifier.removeListener(_onExternalRefresh);
+    OrdenesSyncNotifier.instance.removeListener(_onExternalRefresh);
     _debounceTimer?.cancel();
     _searchController.dispose();
     _scrollController.dispose();
