@@ -102,13 +102,49 @@ Un cliente entra a las 18:25 a comprar un motor de $1.800.000. A las 18:30 suena
 
 | ID Rol | Rol | Restricción Horaria | Justificación Operativa |
 | :---: | :--- | :---: | :--- |
-| **1** | **Bodeguero** | **Sujeto a Turno** | La PDA física permanece en la base de carga de la bodega. Despachos y recepciones solo ocurren con el patio abierto. |
-| **2** | **Vendedor Mesón** | **Sujeto a Turno + Gracia** | Opera en el mostrador físico de la sucursal. Regulado por el horario del local comercial. |
-| **3** | **Caja** | **Sujeto a Turno + Cierre** | Cobros vinculados a la presencia de la cajera en la estación POS. Requiere ventana de gracia para cuadre diario. |
-| **4** | **Gerente** | **Exento (24/7)** | Requiere supervisar KPIs, facturación y auditorías en cualquier momento (ej. domingo en la noche). |
-| **5** | **Administrador** | **Exento (24/7)** | Mantenimiento técnico de infraestructura, diagnósticos y configuración de sistema. |
-| **6** | **Jefe de Ventas** | **Exento (24/7)** | Tasación de precios en `/bandeja_precios`, aprobaciones de crédito y supervisión comercial. |
+| **1** | **Bodeguero** | **Sujeto a Turno Estricto** | **Operaciones de patio reguladas**: Bloqueo estricto de salidas por barrera digital (`/bodega/escanear-salida`) y recepción física fuera de turno. |
+| **2** | **Vendedor Mesón** | **Exento (24/7)** | **Venta y cotización continua**: Puede consultar repuestos, armar cotizaciones y crear ventas en cualquier momento (ej. fines de semana o noche para clientes de alto valor). |
+| **3** | **Caja** | **Sujeto a Turno + Gracia** | **Movimientos de dinero regulados**: Bloqueo de cobros (`/caja/cobros/registrar`) fuera de jornada. Posee 30 min de gracia para cuadre diario y clientes en mostrador. |
+| **4** | **Gerente** | **Exento (24/7)** | Requiere supervisar KPIs, facturación y auditorías en cualquier momento (ej. domingo en la noche desde su hogar). |
+| **5** | **Administrador** | **Exento (24/7)** | Mantenimiento técnico de infraestructura, diagnósticos, registros y configuración de sistema. |
+| **6** | **Jefe de Ventas** | **Exento (24/7)** | Tasación de precios en `/bandeja_precios`, aprobaciones de crédito y supervisión comercial 24/7. |
 | **7** | **Vendedor Online** | **Exento (24/7)** | Canal omnicanal y remoto; cotizaciones y coordinación de despachos para regiones a deshora. |
+
+---
+
+### 7.1. Tratamiento del Horario de Chile y Estacionalidad (Verano vs. Invierno)
+
+Un aspecto técnico vital en la arquitectura de `backend/core/policies.py` es la gestión del huso horario oficial de Chile continental:
+* **Resolución vía IANA:** El sistema utiliza `ZoneInfo("America/Santiago")` nativo de Python (`zoneinfo`).
+* **Cambio de hora automático:** Chile alterna entre el Horario de Invierno (**UTC-4**) y el Horario de Verano (**UTC-3**). Al apoyarse en la base de datos de husos horarios IANA, **el backend calcula automáticamente la hora oficial local sin requerir cálculos manuales de offset UTC ni mantenimiento de tablas en la base de datos**.
+* **Zero Overhead en Supabase:** No se crean tablas de horarios por sucursal en PostgreSQL. La evaluación ocurre en microsegundos en la memoria RAM del servidor de FastAPI en Render.
+
+---
+
+### 7.2. Operaciones Físicas Bloqueadas Fuera de Turno
+
+Para evitar merma, robo hormiga o fraudes nocturnos en el patio de desarme, las restricciones horarias se aplican en los puntos neurálgicos:
+1. **Barrera Digital de Salida (`POST /api/v1/bodega/escanear-salida`):** Si un bodeguero intenta liberar una pieza de noche o en domingo, la API retorna `HTTP 403 Forbidden` (`validar_horario_operativo_bodega`). Solo roles 4 y 5 pueden autorizar una salida extraordinaria.
+2. **Cobros en Mostrador (`POST /api/v1/caja/cobros/registrar`):** Si la cajera intenta asentar pagos presenciales fuera de turno, la API retorna `HTTP 403 Forbidden` (`validar_horario_operativo_caja`).
+3. **Creación de Órdenes para Roles Regulados (`POST /api/v1/ordenes`):** Los roles regulados no pueden emitir órdenes fuera de turno, salvo que el activo posea una reserva atómica activa en BD (`reserva_expira_en > now`).
+
+---
+
+### 7.3. Política de Inactividad y Segundo Plano (15 Minutos No Destructivo)
+
+En terminales de mostrador y PDAs rugerizadas, los operarios con frecuencia minimizan la app para usar la calculadora, revisar un mensaje en WhatsApp o atender una llamada breve:
+* **Comportamiento en segundo plano (< 15 minutos):** La sesión permanece activa. El operario vuelve a la app instantáneamente sin recargas ni solicitud de PIN.
+* **Inactividad prolongada (>= 15 minutos):** `home_screen.dart` detecta `difference.inMinutes >= 15`.
+* **Bloqueo NO destructivo:** **No se ejecuta `AuthService.clearToken()`**. El carrito local y las reservas en la base de datos permanecen intactas. La aplicación redirige limpiamente a `/login` (`PinLoginScreen`). Al digitar su PIN de 4 dígitos en 2 segundos, el usuario retoma exactamente el trabajo donde lo dejó.
+
+---
+
+### 7.4. Mecanismo de Seguridad en el PIN (Límite de 10 Intentos Fallidos)
+
+Para proteger los terminales enrolados contra intentos de adivinación de PIN de 4 dígitos:
+* **Tolerancia a microcortes de red:** Si la petición falla por Wi-Fi o red (`isNetworkError`), el contador de intentos **no se incrementa**.
+* **Conteo de credenciales inválidas:** Cada PIN incorrecto incrementa el contador local (`_failedAttempts`) y ejecuta una animación de sacudida (*shake feedback*).
+* **Bloqueo fatal al 10° intento:** Al décimo fallo consecutivo, la interfaz bloquea el terminal mostrando un diálogo irreversible (`AlertDialog`) que impide continuar tipeando, forzando la intervención del supervisor o el reinicio de la aplicación.
 
 ---
 
@@ -117,38 +153,29 @@ Un cliente entra a las 18:25 a comprar un motor de $1.800.000. A las 18:30 suena
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Vendedor as Vendedor (Mesón)
+    actor Vendedor as Vendedor (Mesón/Online)
+    actor Bodeguero as Bodeguero (Patio)
     participant App as App Flutter (POS/Móvil)
     participant API as FastAPI Backend
     participant DB as PostgreSQL (Supabase)
 
-    Note over Vendedor,DB: Inicio de Jornada (08:30 AM)
-    Vendedor->>App: Ingresa PIN "2002" en PinLoginScreen
-    App->>API: POST /api/auth/login-pin (id_usuario, pin)
+    Note over Vendedor,DB: Operación Comercial Continua (24/7)
+    Vendedor->>App: Ingresa PIN en terminal
+    App->>API: POST /api/auth/login-pin
     API-->>App: JWT Bearer (Vigencia 24 Horas)
-    App->>App: Carga Carrito persistido desde Storage
-
-    Note over Vendedor,DB: Operación Diaria (Venta de Motor al Filo del Cierre - 18:25 PM)
-    Vendedor->>App: Agrega Motor al Carrito
-    App->>API: POST /api/v1/carrito/reservar (id_activo)
-    API->>DB: UPDATE Activo_Inventariado (id_estado=2, reserva_expira_en=now+15min)
-    API-->>App: 200 OK (Motor Reservado)
-
-    Note over Vendedor,DB: Cierre de Tienda (18:30 PM) -> Sucursal Cierra Puertas
-    Note over Vendedor,DB: Vendedor finaliza datos del cliente (18:38 PM - Dentro de Gracia)
-    Vendedor->>App: Presiona "Confirmar Venta"
-    App->>API: POST /api/v1/ordenes (Items, Cliente, Despacho)
-    API->>API: validar_horario_operativo_ordenes()
-    Note right of API: Hora 18:38 en Chile: Está dentro de la gracia (18:30 - 19:00).<br/>Además, el motor tiene reserva activa en BD.
-    API->>DB: Inserción ACID de Orden_Venta y Detalle
-    API-->>App: 201 Created (Orden Generada Exitosamente)
-
-    Note over Vendedor,DB: Intento Fuera de Horario (Ej: Domingo 15:00 PM sin reserva)
-    Vendedor->>App: Intenta crear orden nueva
+    Note over Vendedor,API: Vendedor crea orden un domingo a las 22:00
+    Vendedor->>App: Enviar Orden de Venta
     App->>API: POST /api/v1/ordenes
-    API->>API: validar_horario_operativo_ordenes()
-    API-->>App: 403 Forbidden ("Los domingos la sucursal permanece cerrada...")
-    App-->>Vendedor: Muestra advertencia amigable sin destruir el carrito
+    API->>API: validar_horario_operativo_ordenes() (Rol 2 está EXENTO 24/7)
+    API->>DB: Inserción ACID exitosa
+    API-->>App: 201 Created (Venta Registrada)
+
+    Note over Bodeguero,DB: Control Estricto en Patio (Noche / Domingo)
+    Bodeguero->>App: Intenta escanear salida QR a las 23:00
+    App->>API: POST /api/v1/bodega/escanear-salida
+    API->>API: validar_horario_operativo_bodega() (Rol 1 REGULADO)
+    API-->>App: 403 Forbidden ("Operación de bodega rechazada: Cerrado...")
+    App-->>Bodeguero: Muestra alerta amigable y bloquea liberación física
 ```
 
 ---
@@ -163,27 +190,60 @@ Las modificaciones fueron verificadas contra la suite de pruebas unitarias y de 
    - Cierre nocturno semanal (L-V 20:30) -> `PASSED`.
    - Sábado regular (11:00) y sábado gracia (14:15) -> `PASSED`.
    - Domingo cerrado -> `PASSED`.
-   - Bypass para roles exentos (4, 5, 6, 7) en domingo a las 23:00 -> `PASSED`.
-   - Vendedor mesón fuera de horario con reserva viva de motor en BD -> `PASSED`.
-   - Vendedor mesón fuera de horario con reserva expirada -> Rechazo `403` -> `PASSED`.
+   - **Bypass para todos los roles comerciales y ejecutivos (2, 4, 5, 6, 7) en domingo a las 23:00 -> `PASSED`.**
+   - **Validación de salida de bodega bloqueada fuera de horario (Rol 1) -> `PASSED`.**
+   - **Bypass de bodega para administrador (Rol 5) en emergencia nocturna -> `PASSED`.**
+   - **Validación de cobros en caja bloqueados fuera de horario (Rol 3) -> `PASSED`.**
+   - Rol regulado en horario de gracia con reserva activa en BD -> `PASSED`.
+   - Rol regulado fuera de horario con reserva expirada -> Rechazo `403` -> `PASSED`.
+   - Total: **15 pruebas unitarias ejecutadas exitosamente (15 passed)**.
 2. **Pruebas de Autenticación y Enrolamiento (`pytest tests/test_auth_enrolamiento_pin.py tests/test_auth_register.py -v`):**
    - 16 pruebas ejecutadas exitosamente (`16 passed`).
-3. **Pruebas de Integración Transaccional de Órdenes (`pytest tests/test_ordenes_transaccional.py -v`):**
-   - 9 pruebas de transaccionalidad ACID ejecutadas exitosamente (`9 passed`).
-4. **Pruebas en Frontend (`flutter test test/api_service_test.dart test/features/auth/`):**
-   - 28 pruebas widget y unitarias ejecutadas exitosamente (`28 passed`).
-   - `flutter analyze lib/features/auth/services/auth_service.dart`: 0 advertencias, 0 errores.
+3. **Pruebas en Frontend (`flutter test test/features/auth/ test/features/home/`):**
+   - 48 pruebas widget y unitarias ejecutadas exitosamente (`48 passed`).
+   - `flutter analyze lib/features/home/presentation/screens/home_screen.dart`: 0 advertencias, 0 errores.
 
 ---
 
-## 10. Auditoría de Identidad: Desacople de Datos Mock y Patrón de Caché de Sesión en Memoria
+## 10. Guía Práctica: Cómo Probarlo en la Vida Real
 
-### 10.1. El Problema del "Cargando..." vs. Apps Reales
+### Prueba 1: Vendedor Operando 24/7
+1. Iniciar sesión con un Vendedor de Mesón (`carlos.mendoza@cresal.cl` / PIN: `2002`).
+2. Enviar una orden de venta fuera de horario (ej. domingo en la tarde o noche).
+3. **Resultado esperado:** La orden se crea exitosamente con código `201 Created`, ya que los roles de venta operan 24/7 sin bloqueos.
+
+### Prueba 2: Salida de Bodega Bloqueada de Noche
+1. Iniciar sesión con el Bodeguero (`bodega@cresal.cl` / PIN: `1001`).
+2. Intentar escanear la salida de un repuesto en la barrera digital (`POST /api/v1/bodega/escanear-salida`) fuera del horario comercial (después de las 19:00 o en domingo).
+3. **Resultado esperado:** La API responde con `403 Forbidden` informando que la sucursal está cerrada y no se permite la salida física de piezas fuera de turno.
+
+### Prueba 3: Cobro de Caja Bloqueado de Noche
+1. Iniciar sesión con la Cajera (`lorena.valenzuela@cresal.cl` / PIN: `3003`).
+2. Intentar procesar un cobro presencial (`POST /api/v1/caja/cobros/registrar`) fuera de horario comercial y fuera de los 30 min de gracia.
+3. **Resultado esperado:** La API responde con `403 Forbidden` impidiendo asentar cobros con la sucursal cerrada.
+
+### Prueba 4: Segundo Plano de 15 Minutos en Flutter (Calculadora / Inactividad)
+1. Abrir la app con cualquier usuario y agregar repuestos al carrito.
+2. Minimizar la app o cambiar a la calculadora de Windows/Android durante 2 minutos y volver.
+3. **Resultado esperado:** La app vuelve inmediatamente sin pedir PIN y con el carrito intacto.
+4. Si la app permanece minimizada más de 15 minutos y se reabre:
+5. **Resultado esperado:** Redirige a la pantalla de PIN de cortesía. Al ingresar el PIN de 4 dígitos, la sesión se reanuda conservando intacto el carrito y la sucursal.
+
+### Prueba 5: Límite de 10 Intentos en Pantalla de PIN
+1. En `PinLoginScreen`, ingresar un PIN incorrecto deliberadamente.
+2. Verificar que se muestra el mensaje con el contador flotante: *(Intento 1 de 10)*.
+3. Al alcanzar el intento 10, la app despliega el diálogo bloqueante de seguridad impidiendo nuevos intentos.
+
+---
+
+## 11. Auditoría de Identidad: Desacople de Datos Mock y Patrón de Caché de Sesión en Memoria
+
+### 11.1. El Problema del "Cargando..." vs. Apps Reales
 En el desarrollo de aplicaciones empresariales modernas (Slack, Gmail, ERPs de retail), existen dos malas prácticas frecuentes al mostrar el perfil del usuario:
 1. **Hardcodear datos de prueba (Mocks en producción):** Dejar nombres como `"Roberto Gerente"`, correos fijos como `'gerente@cresal.cl'` o `'Lorena Valenzuela'` como valores por defecto en variables de estado.
 2. **El antipatrón del texto "Cargando...":** Mostrar textos parpadeantes como *"Cargando..."* o `"Hola, Cargando..."` en los saludos y barras laterales mientras se lee el almacenamiento persistente asíncrono (`FlutterSecureStorage`).
 
-### 10.2. Solución Aplicada: Caché Síncrona en Memoria (`_currentUserCache`)
+### 11.2. Solución Aplicada: Caché Síncrona en Memoria (`_currentUserCache`)
 Para erradicar ambos problemas y lograr una experiencia fluida con cero parpadeos:
 - **Caché en Memoria Instantánea:** Al momento de autenticar (`enrolarTerminal` o `loginConPin`), el modelo `AuthUserModel` devuelto por FastAPI se almacena en memoria (`AuthService._currentUserCache`).
 - **Persistencia Segura de Email:** Se agregó la clave `_userEmailKey = 'user_email'` en `FlutterSecureStorage` junto al método público `AuthService.getEmailUsuario()`.
