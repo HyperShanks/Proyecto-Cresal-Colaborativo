@@ -63,7 +63,7 @@ class VehiculoResponse(BaseModel):
     patente: Optional[str] = None # Opcional, según lo dicta tu DBML
     marca: str
     modelo: str
-    anio: int
+    anio: Optional[int] = None
     traccion: Optional[str] = None
 
 class PatenteInput(BaseModel):
@@ -482,7 +482,7 @@ class VehiculoInventarioResponse(BaseModel):
     patente: Optional[str] = None
     marca: str
     modelo: str
-    anio: int
+    anio: Optional[int] = None
     traccion: Optional[str] = None
     # Aquí podríamos agregar más campos técnicos (motor, caja) a medida que los necesitemos
 
@@ -1021,6 +1021,9 @@ class EditarActivoRequest(BaseModel):
     combustible: Optional[str] = None
     transmision_tipo: Optional[str] = None
     traccion: Optional[str] = None
+    marca: Optional[str] = None
+    modelo: Optional[str] = None
+    anio: Optional[int] = None
     version_lock_esperado: int
 
 
@@ -1039,6 +1042,9 @@ class EditarActivoResponse(BaseModel):
     combustible: Optional[str] = None
     transmision_tipo: Optional[str] = None
     traccion: Optional[str] = None
+    marca: Optional[str] = None
+    modelo: Optional[str] = None
+    anio: Optional[int] = None
     version_lock: int
     mensaje: str = "Activo actualizado exitosamente."
 

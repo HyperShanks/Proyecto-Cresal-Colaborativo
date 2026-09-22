@@ -15,6 +15,7 @@ from models import (
     Vehiculo_Origen,
     Activo_Inventariado,
     Detalle_Motor,
+    Detalle_Caja_Cambio,
 )
 from core.security import create_access_token
 from conftest import TestingSessionLocal
@@ -534,3 +535,131 @@ def test_campos_inmutables_blindados(client, db_session):
     assert activo_1.id_sucursal_actual == sucursal_original
     assert activo_1.precio_referencia == precio_original
     assert activo_1.ubicacion_pasillo == "P-100"
+
+
+def test_editar_activo_vehiculo_origen_y_specs_motor(client, db_session):
+    """
+    Verifica que al editar un motor se puedan actualizar marca, modelo, año,
+    tracción y transmisión (cross-specs vehicular y técnico).
+    """
+    user_bodega = db_session["user_bodega"]
+    activo_1 = db_session["activo_1"]
+
+    db = db_session["db"]
+    db.refresh(activo_1)
+    v_actual = activo_1.version_lock
+
+    token = create_access_token(data={"sub": str(user_bodega.id_usuario)})
+    headers = {"Authorization": f"Bearer {token}"}
+
+    payload = {
+        "marca": "Nissan",
+        "modelo": "Sentra B17",
+        "anio": 2022,
+        "traccion": "4x2",
+        "transmision_tipo": "CVT",
+        "cilindrada": "1.8L",
+        "combustible": "Gasolina",
+        "version_lock_esperado": v_actual,
+    }
+
+    response = client.patch(
+        f"/api/v1/inventario/{activo_1.id_activo}",
+        json=payload,
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["marca"] == "Nissan"
+    assert data["modelo"] == "Sentra B17"
+    assert data["anio"] == 2022
+    assert data["traccion"] == "4x2"
+    assert data["transmision_tipo"] == "CVT"
+    assert data["cilindrada"] == "1.8L"
+
+    # Verificar persistencia en Vehiculo_Origen y Detalle_Motor
+    vehiculo = db.query(Vehiculo_Origen).filter(Vehiculo_Origen.id_vehiculo == activo_1.id_vehiculo).first()
+    assert vehiculo.marca == "Nissan"
+    assert vehiculo.modelo == "Sentra B17"
+    assert vehiculo.anio == 2022
+    assert vehiculo.traccion == "4x2"
+
+    motor = db.query(Detalle_Motor).filter(Detalle_Motor.id_activo == activo_1.id_activo).first()
+    assert motor.transmision_tipo == "CVT"
+    assert motor.cilindrada == "1.8L"
+
+
+def test_editar_activo_caja_permite_cilindrada_y_combustible(client, db_session):
+    """
+    Verifica que al editar una caja de cambio se puedan registrar cilindrada, combustible,
+    marca, modelo y año.
+    """
+    user_bodega = db_session["user_bodega"]
+    db = db_session["db"]
+
+    # Crear una caja de cambios en estado disponible
+    caja_activo = Activo_Inventariado(
+        id_activo=uuid.uuid4(),
+        sku_qr_fisico="CAJ-HON-CIV-001",
+        id_categoria=2,  # Caja de Cambio
+        id_estado=1,     # Disponible
+        id_sucursal_actual=1,
+        ubicacion_pasillo="P-08",
+        precio_referencia=350000,
+        version_lock=1,
+        estado="Activo",
+    )
+    db.add(caja_activo)
+    caja_detalle = Detalle_Caja_Cambio(
+        id_activo=caja_activo.id_activo,
+        transmision_tipo="Manual",
+    )
+    db.add(caja_detalle)
+    db.commit()
+
+    token = create_access_token(data={"sub": str(user_bodega.id_usuario)})
+    headers = {"Authorization": f"Bearer {token}"}
+
+    payload = {
+        "marca": "Honda",
+        "modelo": "Civic",
+        "anio": 2019,
+        "traccion": "FWD",
+        "transmision_tipo": "Manual 6MT",
+        "cilindrada": "2.0L",
+        "combustible": "Gasolina",
+        "version_lock_esperado": 1,
+    }
+
+    response = client.patch(
+        f"/api/v1/inventario/{caja_activo.id_activo}",
+        json=payload,
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["marca"] == "Honda"
+    assert data["modelo"] == "Civic"
+    assert data["anio"] == 2019
+    assert data["traccion"] == "FWD"
+    assert data["transmision_tipo"] == "Manual 6MT"
+    assert data["cilindrada"] == "2.0L"
+
+    # Verificar que se creó Vehiculo_Origen y se actualizó Detalle_Caja_Cambio y Detalle_Motor
+    db.refresh(caja_activo)
+    assert caja_activo.id_vehiculo is not None
+    vehiculo = db.query(Vehiculo_Origen).filter(Vehiculo_Origen.id_vehiculo == caja_activo.id_vehiculo).first()
+    assert vehiculo.marca == "Honda"
+    assert vehiculo.modelo == "Civic"
+    assert vehiculo.anio == 2019
+
+    caja = db.query(Detalle_Caja_Cambio).filter(Detalle_Caja_Cambio.id_activo == caja_activo.id_activo).first()
+    assert caja.transmision_tipo == "Manual 6MT"
+
+    motor_propio = db.query(Detalle_Motor).filter(Detalle_Motor.id_activo == caja_activo.id_activo).first()
+    assert motor_propio is not None
+    assert motor_propio.cilindrada == "2.0L"
+    assert motor_propio.combustible == "Gasolina"
+

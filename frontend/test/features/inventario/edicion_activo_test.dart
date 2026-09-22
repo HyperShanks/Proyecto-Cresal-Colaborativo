@@ -122,16 +122,22 @@ void main() {
       'id_activo': 'act-999',
       'sku': 'MOT-123',
       'categoria': 'Motor',
+      'marca': 'Toyota',
+      'modelo': 'Corolla',
+      'anio': 2021,
       'pasillo': 'P-01',
       'pallet': 'PL-02',
       'galpon': 'G-Principal',
       'observacion': 'Excelente estado',
       'numero_motor': '1NZ-FE',
       'cilindrada': '1.5L',
+      'combustible': 'Gasolina',
+      'transmision': 'Manual',
+      'traccion': 'FWD',
       'version_lock': 1,
     };
 
-    testWidgets('Renderiza campos iniciales de activo para edición de ubicación', (tester) async {
+    testWidgets('Renderiza campos iniciales de activo para edición de vehículo, ubicación y specs', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -141,12 +147,17 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Editar Ubicación de Motor'), findsOneWidget);
+      expect(find.text('Editar Activo: Motor'), findsOneWidget);
       expect(find.text('SKU: MOT-123'), findsOneWidget);
+      expect(find.text('Toyota'), findsOneWidget);
+      expect(find.text('Corolla'), findsOneWidget);
+      expect(find.text('2021'), findsOneWidget);
       expect(find.text('P-01'), findsOneWidget);
       expect(find.text('PL-02'), findsOneWidget);
       expect(find.text('G-Principal'), findsOneWidget);
-      expect(find.text('GUARDAR UBICACIÓN'), findsOneWidget);
+      expect(find.text('1NZ-FE'), findsOneWidget);
+      expect(find.text('1.5L'), findsOneWidget);
+      expect(find.text('GUARDAR CAMBIOS'), findsOneWidget);
       expect(find.text('CANCELAR'), findsOneWidget);
     });
 
@@ -218,10 +229,10 @@ void main() {
       await tester.tap(find.text('CANCELAR'));
       await tester.pumpAndSettle();
 
-      // Debe aparecer el diálogo con el texto exigido en SPEC-HU-TAREA-11
+      // Debe aparecer el diálogo con el texto correspondiente
       expect(find.text('Descartar cambios'), findsOneWidget);
       expect(
-        find.text('Tienes cambios sin guardar en la ubicación. ¿Estás seguro de que quieres salir y descartar las modificaciones?'),
+        find.text('Tienes cambios sin guardar. ¿Estás seguro de que quieres salir y descartar las modificaciones?'),
         findsOneWidget,
       );
 
@@ -230,7 +241,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Descartar cambios'), findsNothing);
-      expect(find.text('GUARDAR UBICACIÓN'), findsOneWidget);
+      expect(find.text('GUARDAR CAMBIOS'), findsOneWidget);
 
       // Ahora si se pulsa "CANCELAR" y luego "Descartar", el modal se cierra
       await tester.tap(find.text('CANCELAR'));
@@ -240,7 +251,77 @@ void main() {
       await tester.tap(find.text('Descartar'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Editar Ubicación de Motor'), findsNothing);
+      expect(find.text('Editar Activo: Motor'), findsNothing);
+    });
+
+    testWidgets('Modificar marca o modelo activa dirty check y muestra diálogo', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () {
+                  showModalBottomSheet(
+                    context: context,
+                    builder: (_) => EditarActivoModal(activo: activoMotor),
+                  );
+                },
+                child: const Text('Abrir'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Abrir'));
+      await tester.pumpAndSettle();
+
+      // Modificar Marca
+      final marcaField = find.widgetWithText(TextField, 'Toyota');
+      expect(marcaField, findsOneWidget);
+      await tester.enterText(marcaField, 'Nissan');
+      await tester.pumpAndSettle();
+
+      // Presionar CANCELAR
+      await tester.tap(find.text('CANCELAR'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Descartar cambios'), findsOneWidget);
+    });
+
+    testWidgets('Permite editar cilindrada, transmisión y tracción en activos de categoría Caja', (tester) async {
+      final activoCaja = {
+        'id_activo': 'caj-555',
+        'sku': 'CAJ-HON-001',
+        'categoria': 'Caja de Cambio',
+        'marca': 'Honda',
+        'modelo': 'Civic',
+        'anio': 2019,
+        'pasillo': 'P-03',
+        'pallet': 'PL-11',
+        'galpon': 'G-1',
+        'transmision': 'Manual',
+        'traccion': 'FWD',
+        'cilindrada': '2.0L',
+        'combustible': 'Gasolina',
+        'version_lock': 1,
+      };
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: EditarActivoModal(activo: activoCaja),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Editar Activo: Caja de Cambio'), findsOneWidget);
+      expect(find.text('Honda'), findsOneWidget);
+      expect(find.text('Civic'), findsOneWidget);
+      expect(find.text('2019'), findsOneWidget);
+      expect(find.text('2.0L'), findsOneWidget);
+      expect(find.text('ESPECIFICACIONES TÉCNICAS'), findsOneWidget);
     });
   });
 }

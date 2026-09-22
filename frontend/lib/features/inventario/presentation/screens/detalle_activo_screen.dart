@@ -106,6 +106,15 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
       if (resultado['traccion'] != null) {
         _activo['traccion'] = resultado['traccion'];
       }
+      if (resultado['marca'] != null && resultado['marca'].toString().isNotEmpty) {
+        _activo['marca'] = resultado['marca'];
+      }
+      if (resultado['modelo'] != null && resultado['modelo'].toString().isNotEmpty) {
+        _activo['modelo'] = resultado['modelo'];
+      }
+      if (resultado['anio'] != null) {
+        _activo['anio'] = resultado['anio'];
+      }
       if (resultado['version_lock'] != null) {
         _activo['version_lock'] = resultado['version_lock'];
       }
@@ -299,6 +308,7 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
 
     final String marca = _activo['marca']?.toString() ?? 'Desconocida';
     final String modelo = _activo['modelo']?.toString() ?? 'Desconocido';
+    final String? anio = (_activo['anio'] ?? _activo['ano'] ?? _activo['vehiculo']?['anio'])?.toString();
     final String sku = _activo['sku']?.toString() ?? 'S/N';
     final String estado = _activo['estado']?.toString() ?? 'DISPONIBLE';
 
@@ -393,7 +403,9 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
                           style: const TextStyle(color: Colors.white),
                         ),
                         TextSpan(
-                          text: modelo,
+                          text: (anio != null && anio.isNotEmpty && anio != '0' && anio != 'null' && anio != 'S/A')
+                              ? '$modelo ($anio)'
+                              : modelo,
                           style: const TextStyle(color: AppPalette.primary),
                         ),
                       ],
@@ -696,19 +708,21 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
                   const SizedBox(height: 14),
 
                   _buildSpecCard('Nº DE INGRESO VEHÍCULO', numeroIngreso),
+                  if (anio != null && anio.isNotEmpty && anio != '0' && anio != 'null' && anio != 'S/A')
+                    _buildSpecCard('AÑO DEL VEHÍCULO', anio),
 
-                  if (idCategoria == 1 && numeroMotor != null && numeroMotor.isNotEmpty && numeroMotor != 'N/A')
+                  if (idCategoria == 1 && numeroMotor != null && numeroMotor.isNotEmpty && numeroMotor != 'N/A' && numeroMotor != 'S/A' && numeroMotor != 'null')
                     _buildSpecCard('Número de Motor', numeroMotor),
 
                   // Renderizado dinámico de especificaciones técnicas compartidas (SPEC-HU-TAREA-17)
                   ...[
-                    if (cilindrada.isNotEmpty && (cilindrada != 'N/A' || esMotor || idCategoria == 2))
+                    if (cilindrada.isNotEmpty && cilindrada != 'N/A' && cilindrada != 'S/A' && cilindrada != 'null')
                       {'titulo': 'CILINDRADA', 'valor': cilindrada},
-                    if (combustible.isNotEmpty && (combustible != 'N/A' || esMotor || idCategoria == 2))
+                    if (combustible.isNotEmpty && combustible != 'N/A' && combustible != 'S/A' && combustible != 'null')
                       {'titulo': 'COMBUSTIBLE', 'valor': combustible},
-                    if (transmision.isNotEmpty && transmision != 'N/A')
+                    if (transmision.isNotEmpty && transmision != 'N/A' && transmision != 'S/A' && transmision != 'null')
                       {'titulo': 'TRANSMISIÓN', 'valor': transmision},
-                    if (traccion != null && traccion.isNotEmpty && traccion != 'N/A')
+                    if (traccion != null && traccion.isNotEmpty && traccion != 'N/A' && traccion != 'S/A' && traccion != 'null')
                       {'titulo': 'TRACCIÓN', 'valor': traccion},
                   ].map((spec) => _buildSpecCard(spec['titulo']!, spec['valor']!)),
 

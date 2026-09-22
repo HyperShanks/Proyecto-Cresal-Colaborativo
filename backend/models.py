@@ -124,7 +124,7 @@ class Vehiculo_Origen(Base):
     vin = Column(String(17), nullable=True, unique=True)
     marca = Column(String(100), nullable=False)
     modelo = Column(String(100), nullable=False)
-    anio = Column(Integer, nullable=False)
+    anio = Column(Integer, nullable=True)
     traccion = Column(String(50), nullable=True)
     estado = Column(String(20), nullable=False, server_default="Activo")
     fecha_creacion = Column(DateTime, nullable=False, server_default=text("now()"))

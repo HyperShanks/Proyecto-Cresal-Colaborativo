@@ -1328,7 +1328,48 @@ def editar_activo_inventariado(
                        "Los datos se actualizarán ahora para que revises los cambios antes de volver a editar.",
             )
 
-        # Actualizar o insertar especificaciones técnicas según la categoría del activo
+        # Actualizar datos en Vehiculo_Origen si se especificaron
+        traccion_actualizada = None
+        marca_actualizada = None
+        modelo_actualizado = None
+        anio_actualizado = None
+
+        vehiculo_obj = None
+        if activo_existente.id_vehiculo:
+            vehiculo_obj = db.query(Vehiculo_Origen).filter(Vehiculo_Origen.id_vehiculo == activo_existente.id_vehiculo).first()
+        elif any(v is not None for v in [payload.marca, payload.modelo, payload.anio, payload.traccion]):
+            # Si el activo no tenía vehículo asociado pero se ingresaron datos vehiculares, creamos el Vehiculo_Origen
+            nuevo_vehiculo = Vehiculo_Origen(
+                id_vehiculo=uuid.uuid4(),
+                numero_ingreso=f"ING-{uuid.uuid4().hex[:6].upper()}",
+                marca=payload.marca.strip() if payload.marca else "Desconocida",
+                modelo=payload.modelo.strip() if payload.modelo else "Desconocido",
+                anio=payload.anio if payload.anio is not None else 2000,
+                traccion=payload.traccion.strip() if payload.traccion else None,
+                estado="Activo",
+            )
+            db.add(nuevo_vehiculo)
+            db.flush()
+            activo_existente.id_vehiculo = nuevo_vehiculo.id_vehiculo
+            vehiculo_obj = nuevo_vehiculo
+
+        if vehiculo_obj:
+            if payload.traccion is not None:
+                vehiculo_obj.traccion = payload.traccion.strip() if payload.traccion else None
+            if payload.marca is not None and payload.marca.strip():
+                vehiculo_obj.marca = payload.marca.strip()
+            if payload.modelo is not None and payload.modelo.strip():
+                vehiculo_obj.modelo = payload.modelo.strip()
+            if payload.anio is not None:
+                vehiculo_obj.anio = payload.anio
+            vehiculo_obj.fecha_actualizacion = datetime.now(timezone.utc).replace(tzinfo=None)
+
+            traccion_actualizada = vehiculo_obj.traccion
+            marca_actualizada = vehiculo_obj.marca
+            modelo_actualizado = vehiculo_obj.modelo
+            anio_actualizado = vehiculo_obj.anio
+
+        # Actualizar o insertar especificaciones técnicas (Motor, Caja o Repuestos generales)
         if activo_existente.id_categoria == 1:
             motor = db.query(Detalle_Motor).filter(Detalle_Motor.id_activo == id_activo).first()
             if not motor:
@@ -1342,6 +1383,18 @@ def editar_activo_inventariado(
                 motor.combustible = payload.combustible.strip() if payload.combustible else None
             if payload.transmision_tipo is not None:
                 motor.transmision_tipo = payload.transmision_tipo.strip() if payload.transmision_tipo else None
+
+            # Sincronizar caja donante del mismo vehículo si existe y se actualizó la transmisión
+            if activo_existente.id_vehiculo and payload.transmision_tipo is not None:
+                caja_donante = (
+                    db.query(Detalle_Caja_Cambio)
+                    .join(Activo_Inventariado, Detalle_Caja_Cambio.id_activo == Activo_Inventariado.id_activo)
+                    .filter(Activo_Inventariado.id_vehiculo == activo_existente.id_vehiculo)
+                    .first()
+                )
+                if caja_donante:
+                    caja_donante.transmision_tipo = payload.transmision_tipo.strip() if payload.transmision_tipo else None
+
         elif activo_existente.id_categoria == 2:
             caja = db.query(Detalle_Caja_Cambio).filter(Detalle_Caja_Cambio.id_activo == id_activo).first()
             if not caja:
@@ -1350,14 +1403,51 @@ def editar_activo_inventariado(
             if payload.transmision_tipo is not None:
                 caja.transmision_tipo = payload.transmision_tipo.strip() if payload.transmision_tipo else None
 
-        # Actualizar tracción en Vehiculo_Origen si se especificó
-        traccion_actualizada = None
-        if activo_existente.id_vehiculo:
-            vehiculo_obj = db.query(Vehiculo_Origen).filter(Vehiculo_Origen.id_vehiculo == activo_existente.id_vehiculo).first()
-            if vehiculo_obj:
-                if payload.traccion is not None:
-                    vehiculo_obj.traccion = payload.traccion.strip() if payload.traccion else None
-                traccion_actualizada = vehiculo_obj.traccion
+            # Si se especificó cilindrada, combustible o número de motor en una caja:
+            # - Actualizamos o creamos Detalle_Motor propio para este activo (para persistencia directa)
+            if payload.cilindrada is not None or payload.combustible is not None or payload.numero_motor is not None:
+                motor_propio = db.query(Detalle_Motor).filter(Detalle_Motor.id_activo == id_activo).first()
+                if not motor_propio:
+                    motor_propio = Detalle_Motor(id_activo=id_activo)
+                    db.add(motor_propio)
+                if payload.cilindrada is not None:
+                    motor_propio.cilindrada = payload.cilindrada.strip() if payload.cilindrada else None
+                if payload.combustible is not None:
+                    motor_propio.combustible = payload.combustible.strip() if payload.combustible else None
+                if payload.numero_motor is not None:
+                    motor_propio.numero_motor = payload.numero_motor.strip() if payload.numero_motor else None
+                if payload.transmision_tipo is not None:
+                    motor_propio.transmision_tipo = payload.transmision_tipo.strip() if payload.transmision_tipo else None
+
+            # - Si existe un motor donante asociado al mismo id_vehiculo, mantenemos sincronizada la cilindrada, combustible y transmisión
+            if activo_existente.id_vehiculo:
+                motor_donante = (
+                    db.query(Detalle_Motor)
+                    .join(Activo_Inventariado, Detalle_Motor.id_activo == Activo_Inventariado.id_activo)
+                    .filter(Activo_Inventariado.id_vehiculo == activo_existente.id_vehiculo, Activo_Inventariado.id_activo != id_activo)
+                    .first()
+                )
+                if motor_donante:
+                    if payload.cilindrada is not None:
+                        motor_donante.cilindrada = payload.cilindrada.strip() if payload.cilindrada else None
+                    if payload.combustible is not None:
+                        motor_donante.combustible = payload.combustible.strip() if payload.combustible else None
+                    if payload.transmision_tipo is not None:
+                        motor_donante.transmision_tipo = payload.transmision_tipo.strip() if payload.transmision_tipo else None
+        else:
+            if any(v is not None for v in [payload.cilindrada, payload.combustible, payload.numero_motor, payload.transmision_tipo]):
+                motor_propio = db.query(Detalle_Motor).filter(Detalle_Motor.id_activo == id_activo).first()
+                if not motor_propio:
+                    motor_propio = Detalle_Motor(id_activo=id_activo)
+                    db.add(motor_propio)
+                if payload.cilindrada is not None:
+                    motor_propio.cilindrada = payload.cilindrada.strip() if payload.cilindrada else None
+                if payload.combustible is not None:
+                    motor_propio.combustible = payload.combustible.strip() if payload.combustible else None
+                if payload.numero_motor is not None:
+                    motor_propio.numero_motor = payload.numero_motor.strip() if payload.numero_motor else None
+                if payload.transmision_tipo is not None:
+                    motor_propio.transmision_tipo = payload.transmision_tipo.strip() if payload.transmision_tipo else None
 
         db.commit()
 
@@ -1366,8 +1456,22 @@ def editar_activo_inventariado(
         motor_actual = db.query(Detalle_Motor).filter(Detalle_Motor.id_activo == id_activo).first()
         caja_actual = db.query(Detalle_Caja_Cambio).filter(Detalle_Caja_Cambio.id_activo == id_activo).first()
 
-        combustible_res = motor_actual.combustible if motor_actual else None
-        transmision_res = (motor_actual.transmision_tipo if motor_actual else None) or (caja_actual.transmision_tipo if caja_actual else None)
+        motor_donante_lectura = None
+        if activo_existente.id_vehiculo and activo_existente.id_categoria == 2 and not motor_actual:
+            motor_donante_lectura = (
+                db.query(Detalle_Motor)
+                .join(Activo_Inventariado, Detalle_Motor.id_activo == Activo_Inventariado.id_activo)
+                .filter(Activo_Inventariado.id_vehiculo == activo_existente.id_vehiculo)
+                .first()
+            )
+
+        cilindrada_res = (motor_actual.cilindrada if motor_actual else None) or (motor_donante_lectura.cilindrada if motor_donante_lectura else None)
+        combustible_res = (motor_actual.combustible if motor_actual else None) or (motor_donante_lectura.combustible if motor_donante_lectura else None)
+        transmision_res = (
+            (caja_actual.transmision_tipo if caja_actual else None)
+            or (motor_actual.transmision_tipo if motor_actual else None)
+            or (motor_donante_lectura.transmision_tipo if motor_donante_lectura else None)
+        )
 
         return EditarActivoResponse(
             id_activo=activo_existente.id_activo,
@@ -1377,10 +1481,13 @@ def editar_activo_inventariado(
             ubicacion_pallet=activo_existente.ubicacion_pallet,
             observacion_estado=activo_existente.observacion_estado,
             numero_motor=motor_actual.numero_motor if motor_actual else None,
-            cilindrada=motor_actual.cilindrada if motor_actual else None,
+            cilindrada=cilindrada_res,
             combustible=combustible_res,
             transmision_tipo=transmision_res,
             traccion=traccion_actualizada,
+            marca=marca_actualizada,
+            modelo=modelo_actualizado,
+            anio=anio_actualizado,
             version_lock=activo_existente.version_lock,
             mensaje="Activo actualizado exitosamente.",
         )
