@@ -314,232 +314,375 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setModalState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                left: 20,
-                right: 20,
-                top: 20,
-                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-              ),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Cabecera del Modal de Filtros
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            return SafeArea(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.88,
+                ),
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    left: 20,
+                    right: 20,
+                    top: 14,
+                    bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+                  ),
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        // Handle bar centrado
+                        Center(
+                          child: Container(
+                            width: 36,
+                            height: 4,
+                            margin: const EdgeInsets.only(bottom: 14),
+                            decoration: BoxDecoration(
+                              color: Colors.white24,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                        ),
+
+                        // Cabecera del Modal de Filtros
                         Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Icon(Icons.tune_rounded, color: AppPalette.primary, size: 22),
-                            const SizedBox(width: 8),
-                            Text('Filtros de Búsqueda', style: AppTypography.title),
+                            Row(
+                              children: [
+                                const Icon(Icons.tune_rounded, color: AppPalette.primary, size: 22),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Filtros de Búsqueda',
+                                  style: AppTypography.title.copyWith(color: AppPalette.textPrimary),
+                                ),
+                              ],
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close, color: AppPalette.textSecondary),
+                              onPressed: () => Navigator.of(ctx).pop(),
+                            ),
                           ],
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.close, color: AppPalette.textSecondary),
-                          onPressed: () => Navigator.of(ctx).pop(),
-                        ),
-                      ],
-                    ),
-                    const Divider(color: Colors.white10, height: 20),
+                        const Divider(color: Colors.white10, height: 20),
 
-                    // Buscador 1: Cliente (Nombre, RUT, Teléfono)
-                    Text(
-                      'Búsqueda por Cliente',
-                      style: AppTypography.small.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: AppPalette.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    TextField(
-                      controller: _clienteFilterController,
-                      style: AppTypography.body.copyWith(fontSize: 14),
-                      decoration: InputDecoration(
-                        hintText: 'Nombre, RUT o Teléfono del cliente / receptor...',
-                        hintStyle: AppTypography.small.copyWith(color: AppPalette.textSecondary),
-                        prefixIcon: const Icon(Icons.person_search_outlined, size: 20, color: AppPalette.textSecondary),
-                        filled: true,
-                        fillColor: AppPalette.background,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-
-                    // Buscador 2: Vendedor (Creador o Asignado)
-                    Text(
-                      'Búsqueda por Vendedor',
-                      style: AppTypography.small.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: AppPalette.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    TextField(
-                      controller: _vendedorFilterController,
-                      style: AppTypography.body.copyWith(fontSize: 14),
-                      decoration: InputDecoration(
-                        hintText: 'Nombre del vendedor creador o asignado...',
-                        hintStyle: AppTypography.small.copyWith(color: AppPalette.textSecondary),
-                        prefixIcon: const Icon(Icons.badge_outlined, size: 20, color: AppPalette.textSecondary),
-                        filled: true,
-                        fillColor: AppPalette.background,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-
-                    // Filtro 3: Estado de Pago
-                    Text(
-                      'Estado de Pago / Liquidación',
-                      style: AppTypography.small.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: AppPalette.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      children: [
-                        ChoiceChip(
-                          label: const Text('Todos'),
-                          selected: _estadoPagoFilter == 'todos',
-                          onSelected: (selected) {
-                            if (selected) setModalState(() => _estadoPagoFilter = 'todos');
-                          },
-                          selectedColor: AppPalette.primary.withValues(alpha: 0.25),
-                          labelStyle: TextStyle(
-                            color: _estadoPagoFilter == 'todos' ? AppPalette.primary : AppPalette.textSecondary,
+                        // Buscador 1: Cliente (Nombre, RUT, Teléfono)
+                        Text(
+                          'Búsqueda por Cliente',
+                          style: AppTypography.small.copyWith(
                             fontWeight: FontWeight.bold,
+                            color: AppPalette.textSecondary,
                           ),
                         ),
-                        ChoiceChip(
-                          label: const Text('Pagados'),
-                          selected: _estadoPagoFilter == 'pagados',
-                          onSelected: (selected) {
-                            if (selected) setModalState(() => _estadoPagoFilter = 'pagados');
-                          },
-                          selectedColor: AppPalette.success.withValues(alpha: 0.25),
-                          labelStyle: TextStyle(
-                            color: _estadoPagoFilter == 'pagados' ? AppPalette.success : AppPalette.textSecondary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        ChoiceChip(
-                          label: const Text('Con Saldo Pendiente'),
-                          selected: _estadoPagoFilter == 'pendientes',
-                          onSelected: (selected) {
-                            if (selected) setModalState(() => _estadoPagoFilter = 'pendientes');
-                          },
-                          selectedColor: AppPalette.warning.withValues(alpha: 0.25),
-                          labelStyle: TextStyle(
-                            color: _estadoPagoFilter == 'pendientes' ? AppPalette.warning : AppPalette.textSecondary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-
-                    // Filtro 4: Tipo de Pedido / Modalidad
-                    Text(
-                      'Tipo de Pedido / Modalidad',
-                      style: AppTypography.small.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: AppPalette.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      children: [
-                        ChoiceChip(
-                          label: const Text('Todos'),
-                          selected: _tipoEntregaFilter == 'todos',
-                          onSelected: (selected) {
-                            if (selected) setModalState(() => _tipoEntregaFilter = 'todos');
-                          },
-                          selectedColor: AppPalette.primary.withValues(alpha: 0.25),
-                          labelStyle: TextStyle(
-                            color: _tipoEntregaFilter == 'todos' ? AppPalette.primary : AppPalette.textSecondary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        ChoiceChip(
-                          label: const Text('Solo Retiros'),
-                          selected: _tipoEntregaFilter == 'retiro',
-                          onSelected: (selected) {
-                            if (selected) setModalState(() => _tipoEntregaFilter = 'retiro');
-                          },
-                          selectedColor: AppPalette.primary.withValues(alpha: 0.25),
-                          labelStyle: TextStyle(
-                            color: _tipoEntregaFilter == 'retiro' ? AppPalette.primary : AppPalette.textSecondary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        ChoiceChip(
-                          label: const Text('Solo Despachos'),
-                          selected: _tipoEntregaFilter == 'despacho',
-                          onSelected: (selected) {
-                            if (selected) setModalState(() => _tipoEntregaFilter = 'despacho');
-                          },
-                          selectedColor: AppPalette.secondary.withValues(alpha: 0.25),
-                          labelStyle: TextStyle(
-                            color: _tipoEntregaFilter == 'despacho' ? AppPalette.secondary : AppPalette.textSecondary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        ChoiceChip(
-                          label: const Text('Solo Traslados'),
-                          selected: _tipoEntregaFilter == 'traslado',
-                          onSelected: (selected) {
-                            if (selected) setModalState(() => _tipoEntregaFilter = 'traslado');
-                          },
-                          selectedColor: const Color(0xFFAB47BC).withValues(alpha: 0.25),
-                          labelStyle: TextStyle(
-                            color: _tipoEntregaFilter == 'traslado' ? const Color(0xFFAB47BC) : AppPalette.textSecondary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Botonera de Acción del Modal
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppPalette.textSecondary,
-                              side: const BorderSide(color: Colors.white24),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        const SizedBox(height: 6),
+                        TextField(
+                          controller: _clienteFilterController,
+                          style: AppTypography.body.copyWith(fontSize: 14, color: AppPalette.textPrimary),
+                          cursorColor: AppPalette.primary,
+                          decoration: InputDecoration(
+                            isDense: true,
+                            hintText: 'Nombre, RUT o Teléfono del cliente / receptor...',
+                            hintStyle: AppTypography.small.copyWith(
+                              color: AppPalette.textSecondary.withValues(alpha: 0.65),
                             ),
-                            onPressed: _limpiarFiltros,
-                            child: const Text('LIMPIAR'),
+                            prefixIcon: const Icon(
+                              Icons.person_search_outlined,
+                              size: 20,
+                              color: AppPalette.textSecondary,
+                            ),
+                            filled: true,
+                            fillColor: AppPalette.background,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: const BorderSide(color: Colors.white12),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: const BorderSide(color: Colors.white12),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: const BorderSide(color: AppPalette.primary, width: 1.5),
+                            ),
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppPalette.primary,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            ),
-                            onPressed: _aplicarFiltros,
-                            child: const Text('APLICAR FILTROS', style: TextStyle(fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 14),
+
+                        // Buscador 2: Vendedor (Creador o Asignado)
+                        Text(
+                          'Búsqueda por Vendedor',
+                          style: AppTypography.small.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: AppPalette.textSecondary,
                           ),
+                        ),
+                        const SizedBox(height: 6),
+                        TextField(
+                          controller: _vendedorFilterController,
+                          style: AppTypography.body.copyWith(fontSize: 14, color: AppPalette.textPrimary),
+                          cursorColor: AppPalette.primary,
+                          decoration: InputDecoration(
+                            isDense: true,
+                            hintText: 'Nombre del vendedor creador o asignado...',
+                            hintStyle: AppTypography.small.copyWith(
+                              color: AppPalette.textSecondary.withValues(alpha: 0.65),
+                            ),
+                            prefixIcon: const Icon(
+                              Icons.badge_outlined,
+                              size: 20,
+                              color: AppPalette.textSecondary,
+                            ),
+                            filled: true,
+                            fillColor: AppPalette.background,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: const BorderSide(color: Colors.white12),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: const BorderSide(color: Colors.white12),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: const BorderSide(color: AppPalette.primary, width: 1.5),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+
+                        // Filtro 3: Estado de Pago
+                        Text(
+                          'Estado de Pago / Liquidación',
+                          style: AppTypography.small.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: AppPalette.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            ChoiceChip(
+                              label: const Text('Todos'),
+                              selected: _estadoPagoFilter == 'todos',
+                              onSelected: (selected) {
+                                if (selected) setModalState(() => _estadoPagoFilter = 'todos');
+                              },
+                              backgroundColor: AppPalette.background,
+                              selectedColor: AppPalette.primary.withValues(alpha: 0.22),
+                              side: BorderSide(
+                                color: _estadoPagoFilter == 'todos'
+                                    ? AppPalette.primary.withValues(alpha: 0.6)
+                                    : Colors.white12,
+                              ),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              visualDensity: VisualDensity.compact,
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              labelStyle: TextStyle(
+                                color: _estadoPagoFilter == 'todos' ? AppPalette.primary : AppPalette.textSecondary,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                            ChoiceChip(
+                              label: const Text('Pagados'),
+                              selected: _estadoPagoFilter == 'pagados',
+                              onSelected: (selected) {
+                                if (selected) setModalState(() => _estadoPagoFilter = 'pagados');
+                              },
+                              backgroundColor: AppPalette.background,
+                              selectedColor: AppPalette.success.withValues(alpha: 0.22),
+                              side: BorderSide(
+                                color: _estadoPagoFilter == 'pagados'
+                                    ? AppPalette.success.withValues(alpha: 0.6)
+                                    : Colors.white12,
+                              ),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              visualDensity: VisualDensity.compact,
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              labelStyle: TextStyle(
+                                color: _estadoPagoFilter == 'pagados' ? AppPalette.success : AppPalette.textSecondary,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                            ChoiceChip(
+                              label: const Text('Con Saldo Pendiente'),
+                              selected: _estadoPagoFilter == 'pendientes',
+                              onSelected: (selected) {
+                                if (selected) setModalState(() => _estadoPagoFilter = 'pendientes');
+                              },
+                              backgroundColor: AppPalette.background,
+                              selectedColor: AppPalette.warning.withValues(alpha: 0.22),
+                              side: BorderSide(
+                                color: _estadoPagoFilter == 'pendientes'
+                                    ? AppPalette.warning.withValues(alpha: 0.6)
+                                    : Colors.white12,
+                              ),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              visualDensity: VisualDensity.compact,
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              labelStyle: TextStyle(
+                                color: _estadoPagoFilter == 'pendientes' ? AppPalette.warning : AppPalette.textSecondary,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+
+                        // Filtro 4: Tipo de Pedido / Modalidad
+                        Text(
+                          'Tipo de Pedido / Modalidad',
+                          style: AppTypography.small.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: AppPalette.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            ChoiceChip(
+                              label: const Text('Todos'),
+                              selected: _tipoEntregaFilter == 'todos',
+                              onSelected: (selected) {
+                                if (selected) setModalState(() => _tipoEntregaFilter = 'todos');
+                              },
+                              backgroundColor: AppPalette.background,
+                              selectedColor: AppPalette.primary.withValues(alpha: 0.22),
+                              side: BorderSide(
+                                color: _tipoEntregaFilter == 'todos'
+                                    ? AppPalette.primary.withValues(alpha: 0.6)
+                                    : Colors.white12,
+                              ),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              visualDensity: VisualDensity.compact,
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              labelStyle: TextStyle(
+                                color: _tipoEntregaFilter == 'todos' ? AppPalette.primary : AppPalette.textSecondary,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                            ChoiceChip(
+                              label: const Text('Solo Retiros'),
+                              selected: _tipoEntregaFilter == 'retiro',
+                              onSelected: (selected) {
+                                if (selected) setModalState(() => _tipoEntregaFilter = 'retiro');
+                              },
+                              backgroundColor: AppPalette.background,
+                              selectedColor: AppPalette.primary.withValues(alpha: 0.22),
+                              side: BorderSide(
+                                color: _tipoEntregaFilter == 'retiro'
+                                    ? AppPalette.primary.withValues(alpha: 0.6)
+                                    : Colors.white12,
+                              ),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              visualDensity: VisualDensity.compact,
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              labelStyle: TextStyle(
+                                color: _tipoEntregaFilter == 'retiro' ? AppPalette.primary : AppPalette.textSecondary,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                            ChoiceChip(
+                              label: const Text('Solo Despachos'),
+                              selected: _tipoEntregaFilter == 'despacho',
+                              onSelected: (selected) {
+                                if (selected) setModalState(() => _tipoEntregaFilter = 'despacho');
+                              },
+                              backgroundColor: AppPalette.background,
+                              selectedColor: AppPalette.secondary.withValues(alpha: 0.22),
+                              side: BorderSide(
+                                color: _tipoEntregaFilter == 'despacho'
+                                    ? AppPalette.secondary.withValues(alpha: 0.6)
+                                    : Colors.white12,
+                              ),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              visualDensity: VisualDensity.compact,
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              labelStyle: TextStyle(
+                                color: _tipoEntregaFilter == 'despacho' ? AppPalette.secondary : AppPalette.textSecondary,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                            ChoiceChip(
+                              label: const Text('Solo Traslados'),
+                              selected: _tipoEntregaFilter == 'traslado',
+                              onSelected: (selected) {
+                                if (selected) setModalState(() => _tipoEntregaFilter = 'traslado');
+                              },
+                              backgroundColor: AppPalette.background,
+                              selectedColor: const Color(0xFFAB47BC).withValues(alpha: 0.22),
+                              side: BorderSide(
+                                color: _tipoEntregaFilter == 'traslado'
+                                    ? const Color(0xFFAB47BC).withValues(alpha: 0.6)
+                                    : Colors.white12,
+                              ),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              visualDensity: VisualDensity.compact,
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              labelStyle: TextStyle(
+                                color: _tipoEntregaFilter == 'traslado' ? const Color(0xFFAB47BC) : AppPalette.textSecondary,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+
+                        // Botonera de Acción del Modal
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppPalette.textSecondary,
+                                  side: const BorderSide(color: Colors.white24),
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                ),
+                                onPressed: _limpiarFiltros,
+                                child: const FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text('LIMPIAR'),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppPalette.primary,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                ),
+                                onPressed: _aplicarFiltros,
+                                child: const FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    'APLICAR FILTROS',
+                                    style: TextStyle(fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             );
@@ -1398,228 +1541,296 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
         .where((e) => e.tipoEntrega.toLowerCase() == 'traslado')
         .length;
 
-    return Container(
-      color: AppPalette.background,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 1. Barra de Búsqueda In-Line Reactiva
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: TextField(
-              key: const Key('buscador_entregas_textfield'),
-              controller: _searchController,
-              onChanged: (val) {
-                setState(() {
-                  _searchQuery = val;
-                });
-              },
-              style: AppTypography.body.copyWith(
-                color: AppPalette.textPrimary,
-                fontSize: 14,
-              ),
-              cursorColor: AppPalette.primary,
-              decoration: InputDecoration(
-                hintText: 'Buscar por Folio, Cliente, RUT o Vendedor...',
-                hintStyle: AppTypography.body.copyWith(
-                  color: AppPalette.textSecondary.withValues(alpha: 0.65),
-                  fontSize: 13,
-                ),
-                prefixIcon: const Icon(
-                  Icons.search_rounded,
-                  color: AppPalette.textSecondary,
-                  size: 20,
-                ),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        key: const Key('btn_limpiar_busqueda_entregas'),
-                        icon: const Icon(
-                          Icons.clear,
-                          color: AppPalette.textSecondary,
-                          size: 18,
-                        ),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() {
-                            _searchQuery = '';
-                          });
-                        },
-                        tooltip: 'Limpiar búsqueda',
-                      )
-                    : null,
-                filled: true,
-                fillColor: AppPalette.surface,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Colors.white12),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Colors.white12),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: AppPalette.primary, width: 1.5),
-                ),
-              ),
-            ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final bool isDesktop = constraints.maxWidth >= 920;
+
+        final searchBar = TextField(
+          key: const Key('buscador_entregas_textfield'),
+          controller: _searchController,
+          onChanged: (val) {
+            setState(() {
+              _searchQuery = val;
+            });
+          },
+          style: AppTypography.body.copyWith(
+            color: AppPalette.textPrimary,
+            fontSize: 13.5,
           ),
-
-          // 2. Fila Desplazable de Filtros Rápidos
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: Row(
-              children: [
-                // Chip Especial: Mis Entregas Asignadas
-                FilterChip(
-                  key: const Key('chip_mis_asignadas'),
-                  avatar: Icon(
-                    Icons.person_pin_circle_rounded,
-                    size: 16,
-                    color: _soloMisAsignadas ? Colors.white : AppPalette.primary,
-                  ),
-                  label: Text(
-                    'Mis Asignadas ($misAsignadasCount)',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                      color: _soloMisAsignadas ? Colors.white : AppPalette.primary,
+          cursorColor: AppPalette.primary,
+          decoration: InputDecoration(
+            isDense: true,
+            hintText: 'Buscar por Folio, Cliente, RUT, Vendedor o SKU...',
+            hintStyle: AppTypography.body.copyWith(
+              color: AppPalette.textSecondary.withValues(alpha: 0.6),
+              fontSize: 13,
+            ),
+            prefixIcon: const Icon(
+              Icons.search_rounded,
+              color: AppPalette.textSecondary,
+              size: 20,
+            ),
+            suffixIcon: _searchQuery.isNotEmpty
+                ? IconButton(
+                    key: const Key('btn_limpiar_busqueda_entregas'),
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: AppPalette.textSecondary,
+                      size: 18,
                     ),
-                  ),
-                  selected: _soloMisAsignadas,
-                  onSelected: (selected) {
-                    setState(() {
-                      _soloMisAsignadas = selected;
-                    });
-                  },
-                  selectedColor: AppPalette.primary,
-                  backgroundColor: AppPalette.primary.withValues(alpha: 0.12),
-                  side: BorderSide(
-                    color: _soloMisAsignadas
-                        ? AppPalette.primary
-                        : AppPalette.primary.withValues(alpha: 0.35),
-                  ),
-                ),
-                const SizedBox(width: 8),
-
-                // Separador vertical sutil
-                Container(
-                  height: 22,
-                  width: 1,
-                  color: Colors.white12,
-                  margin: const EdgeInsets.symmetric(horizontal: 2),
-                ),
-                const SizedBox(width: 8),
-
-                // Chip: Todos
-                ChoiceChip(
-                  label: Text('Todas (${validas.length})'),
-                  selected: _tipoEntregaFilter == 'todos',
-                  onSelected: (selected) {
-                    if (selected) setState(() => _tipoEntregaFilter = 'todos');
-                  },
-                  selectedColor: AppPalette.primary.withValues(alpha: 0.25),
-                  labelStyle: TextStyle(
-                    color: _tipoEntregaFilter == 'todos'
-                        ? AppPalette.primary
-                        : AppPalette.textSecondary,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(width: 6),
-
-                // Chip: Retiros
-                ChoiceChip(
-                  label: Text('Retiros ($retirosCount)'),
-                  selected: _tipoEntregaFilter == 'retiro',
-                  onSelected: (selected) {
-                    if (selected) setState(() => _tipoEntregaFilter = 'retiro');
-                  },
-                  selectedColor: AppPalette.primary.withValues(alpha: 0.25),
-                  labelStyle: TextStyle(
-                    color: _tipoEntregaFilter == 'retiro'
-                        ? AppPalette.primary
-                        : AppPalette.textSecondary,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(width: 6),
-
-                // Chip: Despachos
-                ChoiceChip(
-                  label: Text('Despachos ($despachosCount)'),
-                  selected: _tipoEntregaFilter == 'despacho',
-                  onSelected: (selected) {
-                    if (selected) setState(() => _tipoEntregaFilter = 'despacho');
-                  },
-                  selectedColor: AppPalette.secondary.withValues(alpha: 0.25),
-                  labelStyle: TextStyle(
-                    color: _tipoEntregaFilter == 'despacho'
-                        ? AppPalette.secondary
-                        : AppPalette.textSecondary,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(width: 6),
-
-                // Chip: Traslados (si hay)
-                if (trasladosCount > 0 || _tipoEntregaFilter == 'traslado') ...[
-                  ChoiceChip(
-                    label: Text('Traslados ($trasladosCount)'),
-                    selected: _tipoEntregaFilter == 'traslado',
-                    onSelected: (selected) {
-                      if (selected) setState(() => _tipoEntregaFilter = 'traslado');
-                    },
-                    selectedColor: const Color(0xFFAB47BC).withValues(alpha: 0.25),
-                    labelStyle: TextStyle(
-                      color: _tipoEntregaFilter == 'traslado'
-                          ? const Color(0xFFAB47BC)
-                          : AppPalette.textSecondary,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                ],
-
-                // Chip rápido de limpiar si hay filtros activos
-                if (_tieneFiltrosActivos) ...[
-                  ActionChip(
-                    avatar: const Icon(Icons.clear_all, size: 16, color: AppPalette.warning),
-                    label: const Text(
-                      'Limpiar',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: AppPalette.warning,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    backgroundColor: AppPalette.warning.withValues(alpha: 0.1),
-                    side: BorderSide(color: AppPalette.warning.withValues(alpha: 0.3)),
                     onPressed: () {
+                      _searchController.clear();
                       setState(() {
-                        _searchController.clear();
                         _searchQuery = '';
-                        _soloMisAsignadas = false;
-                        _tipoEntregaFilter = 'todos';
-                        _estadoPagoFilter = 'todos';
-                        _clienteFilterController.clear();
-                        _vendedorFilterController.clear();
                       });
                     },
-                  ),
-                ],
-              ],
+                    tooltip: 'Limpiar búsqueda',
+                  )
+                : null,
+            filled: true,
+            fillColor: AppPalette.surface,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: Colors.white12),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: Colors.white12),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: AppPalette.primary, width: 1.5),
             ),
           ),
-          const SizedBox(height: 6),
-        ],
-      ),
+        );
+
+        final chipsRow = Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Chip Especial: Mis Entregas Asignadas
+            FilterChip(
+              key: const Key('chip_mis_asignadas'),
+              avatar: Icon(
+                Icons.person_pin_circle_rounded,
+                size: 16,
+                color: _soloMisAsignadas ? Colors.white : AppPalette.primary,
+              ),
+              label: Text(
+                'Mis Asignadas ($misAsignadasCount)',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                  color: _soloMisAsignadas ? Colors.white : AppPalette.primary,
+                ),
+              ),
+              selected: _soloMisAsignadas,
+              onSelected: (selected) {
+                setState(() {
+                  _soloMisAsignadas = selected;
+                });
+              },
+              selectedColor: AppPalette.primary,
+              backgroundColor: AppPalette.surface,
+              side: BorderSide(
+                color: _soloMisAsignadas
+                    ? AppPalette.primary
+                    : AppPalette.primary.withValues(alpha: 0.45),
+              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            const SizedBox(width: 8),
+
+            // Separador vertical sutil en tono oscuro
+            Container(
+              height: 20,
+              width: 1,
+              color: Colors.white12,
+              margin: const EdgeInsets.symmetric(horizontal: 2),
+            ),
+            const SizedBox(width: 8),
+
+            // Chip: Todos
+            ChoiceChip(
+              label: Text('Todas (${validas.length})'),
+              selected: _tipoEntregaFilter == 'todos',
+              onSelected: (selected) {
+                if (selected) setState(() => _tipoEntregaFilter = 'todos');
+              },
+              backgroundColor: AppPalette.surface,
+              selectedColor: AppPalette.primary.withValues(alpha: 0.22),
+              side: BorderSide(
+                color: _tipoEntregaFilter == 'todos'
+                    ? AppPalette.primary.withValues(alpha: 0.6)
+                    : Colors.white12,
+              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              labelStyle: TextStyle(
+                color: _tipoEntregaFilter == 'todos'
+                    ? AppPalette.primary
+                    : AppPalette.textSecondary,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(width: 6),
+
+            // Chip: Retiros
+            ChoiceChip(
+              label: Text('Retiros ($retirosCount)'),
+              selected: _tipoEntregaFilter == 'retiro',
+              onSelected: (selected) {
+                if (selected) setState(() => _tipoEntregaFilter = 'retiro');
+              },
+              backgroundColor: AppPalette.surface,
+              selectedColor: AppPalette.primary.withValues(alpha: 0.22),
+              side: BorderSide(
+                color: _tipoEntregaFilter == 'retiro'
+                    ? AppPalette.primary.withValues(alpha: 0.6)
+                    : Colors.white12,
+              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              labelStyle: TextStyle(
+                color: _tipoEntregaFilter == 'retiro'
+                    ? AppPalette.primary
+                    : AppPalette.textSecondary,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(width: 6),
+
+            // Chip: Despachos
+            ChoiceChip(
+              label: Text('Despachos ($despachosCount)'),
+              selected: _tipoEntregaFilter == 'despacho',
+              onSelected: (selected) {
+                if (selected) setState(() => _tipoEntregaFilter = 'despacho');
+              },
+              backgroundColor: AppPalette.surface,
+              selectedColor: AppPalette.secondary.withValues(alpha: 0.22),
+              side: BorderSide(
+                color: _tipoEntregaFilter == 'despacho'
+                    ? AppPalette.secondary.withValues(alpha: 0.6)
+                    : Colors.white12,
+              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              labelStyle: TextStyle(
+                color: _tipoEntregaFilter == 'despacho'
+                    ? AppPalette.secondary
+                    : AppPalette.textSecondary,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(width: 6),
+
+            // Chip: Traslados (si hay)
+            if (trasladosCount > 0 || _tipoEntregaFilter == 'traslado') ...[
+              ChoiceChip(
+                label: Text('Traslados ($trasladosCount)'),
+                selected: _tipoEntregaFilter == 'traslado',
+                onSelected: (selected) {
+                  if (selected) setState(() => _tipoEntregaFilter = 'traslado');
+                },
+                backgroundColor: AppPalette.surface,
+                selectedColor: const Color(0xFFAB47BC).withValues(alpha: 0.22),
+                side: BorderSide(
+                  color: _tipoEntregaFilter == 'traslado'
+                      ? const Color(0xFFAB47BC).withValues(alpha: 0.6)
+                      : Colors.white12,
+                ),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                labelStyle: TextStyle(
+                  color: _tipoEntregaFilter == 'traslado'
+                      ? const Color(0xFFAB47BC)
+                      : AppPalette.textSecondary,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(width: 6),
+            ],
+
+            // Chip rápido de limpiar si hay filtros activos
+            if (_tieneFiltrosActivos) ...[
+              ActionChip(
+                avatar: const Icon(Icons.clear_all, size: 16, color: AppPalette.warning),
+                label: const Text(
+                  'Limpiar',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppPalette.warning,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                backgroundColor: AppPalette.warning.withValues(alpha: 0.12),
+                side: BorderSide(color: AppPalette.warning.withValues(alpha: 0.35)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                onPressed: () {
+                  setState(() {
+                    _searchController.clear();
+                    _searchQuery = '';
+                    _soloMisAsignadas = false;
+                    _tipoEntregaFilter = 'todos';
+                    _estadoPagoFilter = 'todos';
+                    _clienteFilterController.clear();
+                    _vendedorFilterController.clear();
+                  });
+                },
+              ),
+            ],
+          ],
+        );
+
+        return Container(
+          color: AppPalette.background,
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+          child: isDesktop
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      flex: 4,
+                      child: searchBar,
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      flex: 6,
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        physics: const BouncingScrollPhysics(),
+                        child: chipsRow,
+                      ),
+                    ),
+                  ],
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    searchBar,
+                    const SizedBox(height: 8),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      child: chipsRow,
+                    ),
+                  ],
+                ),
+        );
+      },
     );
   }
 

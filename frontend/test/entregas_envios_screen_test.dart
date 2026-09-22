@@ -539,9 +539,14 @@ void main() {
       expect(filtroComuna.first.folio, 'ORD-1234XYZW');
     });
 
-    testWidgets('Buscador in-line y chips de filtros en EntregasEnviosScreen', (tester) async {
+    testWidgets('Buscador in-line y chips de filtros en EntregasEnviosScreen responden a diferentes pantallas sin pixel overflow', (tester) async {
       await const FlutterSecureStorage().write(key: 'user_id_rol', value: '2');
       await const FlutterSecureStorage().write(key: 'user_rol', value: 'Vendedor');
+
+      // 1. Pantalla móvil estrecha (360 x 700)
+      tester.view.physicalSize = const Size(360, 700);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
 
       await tester.pumpWidget(
         const MaterialApp(
@@ -549,8 +554,14 @@ void main() {
         ),
       );
 
-      // El título está visible
       expect(find.text('Retiro y Envíos'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      // 2. Pantalla Desktop amplia (1280 x 800)
+      tester.view.physicalSize = const Size(1280, 800);
+      await tester.pump();
+      expect(find.text('Retiro y Envíos'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
   });
 }
