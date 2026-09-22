@@ -14,6 +14,8 @@ import '../widgets/metodos_pago_chart.dart';
 import 'inventario_gerencia_view.dart';
 import 'ordenes_gerencia_view.dart';
 import 'backorders_gerencia_view.dart';
+import '../../../../core/widgets/update_dialog.dart';
+import '../../../../core/services/app_update_service.dart';
 
 /// Enumeración de vistas principales del panel gerencial (HU-5.1 y HU-5.2).
 enum VistaGerencia { dashboard, ordenes, inventario, backorders }
@@ -92,6 +94,13 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
       duration: const Duration(milliseconds: 900),
     );
     _cargarDatosIniciales();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future.delayed(const Duration(seconds: 3), () {
+        if (mounted) {
+          AppUpdateChecker.check(context, showIfUpToDate: false);
+        }
+      });
+    });
   }
 
   @override
@@ -636,6 +645,19 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                       }
                     },
                   ),
+
+                  const SizedBox(height: 12),
+                  const Divider(color: Colors.white12, height: 1),
+                  const SizedBox(height: 6),
+
+                  // 5. Botón de Actualizaciones
+                  _buildSidebarNavItem(
+                    icon: Icons.system_update_alt_rounded,
+                    label: 'Actualizaciones',
+                    isSelected: false,
+                    badgeText: null,
+                    onTap: () => AppUpdateChecker.check(context, showIfUpToDate: true),
+                  ),
                 ],
               ),
             ),
@@ -687,6 +709,18 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
+                              ),
+                              FutureBuilder<String>(
+                                future: AppUpdateService().getCurrentVersion(),
+                                builder: (context, snapshot) {
+                                  return Text(
+                                    'v${snapshot.data ?? "..."}',
+                                    style: const TextStyle(
+                                      color: Colors.white38,
+                                      fontSize: 9,
+                                    ),
+                                  );
+                                },
                               ),
                             ],
                           ),

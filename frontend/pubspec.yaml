@@ -41,6 +41,10 @@ dependencies:
   crypto: ^3.0.7
   material_symbols_icons: ^4.2790.0
   fl_chart: ^1.2.0
+  # Actualizaciones automáticas (OTA)
+  package_info_plus: ^8.0.0
+  path_provider: ^2.1.4
+  open_filex: ^4.5.0
 
 dev_dependencies:
   flutter_test:

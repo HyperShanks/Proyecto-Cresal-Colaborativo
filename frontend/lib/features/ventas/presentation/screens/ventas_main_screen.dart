@@ -8,6 +8,8 @@ import 'checkout_wizard_screen.dart';
 import 'catalogo_screen.dart';
 import 'historial_screen.dart';
 import 'bandeja_precios_screen.dart';
+import '../../../../core/widgets/update_dialog.dart';
+import '../../../../core/services/app_update_service.dart';
 
 /// Contenedor Principal para el Mesón de Ventas.
 /// Implementa un BottomNavigationBar con IndexedStack dinámico según el rol:
@@ -40,6 +42,13 @@ class _VentasMainScreenState extends State<VentasMainScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _cargarDatosUsuario();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future.delayed(const Duration(seconds: 3), () {
+        if (mounted) {
+          AppUpdateChecker.check(context, showIfUpToDate: false);
+        }
+      });
+    });
   }
 
   @override
@@ -247,8 +256,33 @@ class _VentasMainScreenState extends State<VentasMainScreen>
               );
             },
           ),
+          _buildDrawerItem(
+            icon: Icons.system_update_alt_rounded,
+            label: 'BUSCAR ACTUALIZACIONES',
+            onTap: () {
+              Navigator.of(context).pop();
+              AppUpdateChecker.check(context, showIfUpToDate: true);
+            },
+          ),
 
           const Spacer(),
+
+          // Versión actual de la app
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: FutureBuilder<String>(
+              future: AppUpdateService().getCurrentVersion(),
+              builder: (context, snapshot) {
+                return Text(
+                  'Cresal App v${snapshot.data ?? "..."}',
+                  style: AppTypography.small.copyWith(
+                    color: AppPalette.textSecondary.withValues(alpha: 0.6),
+                    fontSize: 11,
+                  ),
+                );
+              },
+            ),
+          ),
 
           // ── Botón de Cerrar Sesión (anclado en la parte inferior) ─────────
           Padding(
