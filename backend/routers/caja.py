@@ -46,6 +46,7 @@ from schemas import (
     HistorialCajaResponse,
 )
 from core.security import require_caja_role
+from core.policies import validar_horario_operativo_caja
 
 router = APIRouter(
     prefix="/api/v1/caja",
@@ -619,6 +620,9 @@ def registrar_cobro(
     Endpoint transaccional para registro de cobros en caja (SPEC-HU-03).
     Soporta pago único o dividido (split payment) sobre Orden_Venta y Reservas_Backorder.
     """
+    # -1. Validación de Horario Comercial de Caja (bloquea cobros presenciales con local cerrado)
+    validar_horario_operativo_caja(current_user)
+
     # 0. Validación de Métodos Seleccionados (SPEC-HU-07)
     if not payload.pagos or len(payload.pagos) == 0:
         raise HTTPException(

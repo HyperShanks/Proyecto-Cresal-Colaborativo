@@ -38,6 +38,7 @@ from schemas import (
     ResumenAlertasDTO,
 )
 from core.security import get_current_user
+from core.policies import validar_horario_operativo_bodega
 
 router = APIRouter(prefix="/api/v1/bodega", tags=["Tablero Operativo"])
 
@@ -684,6 +685,9 @@ def escanear_salida(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
+    # 0. Validación de Horario Operativo de Bodega (Bloqueo de salidas nocturnas y domingos)
+    validar_horario_operativo_bodega(current_user)
+
     token = payload.qr_transaccional_salida.strip()
     user_ident = f"{current_user.nombres} {current_user.apellidos} ({current_user.email})".strip()
     print(f"🚪 [BARRERA] Iniciando confirmación de entrega para token: '{token}' por: {user_ident}")

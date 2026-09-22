@@ -19,6 +19,7 @@ const String _idRolKey = 'user_id_rol';
 const String _sucursalKey = 'user_sucursal_id';
 const String _sucursalNombreKey = 'user_sucursal_nombre';
 const String _nombreUsuarioKey = 'user_nombre_completo';
+const String _userEmailKey = 'user_email';
 const String _userModelKey = 'user_model_json';
 
 // Claves de almacenamiento seguro para enrolamiento de terminal
@@ -61,6 +62,12 @@ class AuthResult {
 // SERVICIO PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
 class AuthService {
+  /// Caché en memoria del usuario autenticado (evita estados "Cargando..." o parpadeos en vistas)
+  static AuthUserModel? _currentUserCache;
+
+  /// Retorna inmediatamente el modelo de usuario cacheado en memoria si existe
+  static AuthUserModel? get cachedUser => _currentUserCache;
+
   static const _storage = FlutterSecureStorage(
     aOptions: AndroidOptions(
       encryptedSharedPreferences: true,
@@ -169,7 +176,7 @@ class AuthService {
           idSucursal: int.tryParse(sucursalId ?? '1') ?? 1,
         );
 
-        // Guardar token, rol, id_rol, sucursal y modelo de usuario
+        // Guardar token, rol, id_rol, sucursal, email y modelo de usuario
         await _storage.write(key: _tokenKey, value: token);
         await _storage.write(key: _rolKey, value: rolText);
         if (idRol != null) {
@@ -184,7 +191,11 @@ class AuthService {
         if (nombreCompleto.isNotEmpty) {
           await _storage.write(key: _nombreUsuarioKey, value: nombreCompleto);
         }
+        if (userEmail.isNotEmpty) {
+          await _storage.write(key: _userEmailKey, value: userEmail);
+        }
         await _storage.write(key: _userModelKey, value: jsonEncode(userModel.toJson()));
+        _currentUserCache = userModel;
 
         // Guardar datos de enrolamiento del terminal
         if (idUsuario.isNotEmpty) {
@@ -300,7 +311,11 @@ class AuthService {
             value: nombreCompleto,
           );
         }
+        if (email.isNotEmpty) {
+          await _storage.write(key: _userEmailKey, value: email);
+        }
         await _storage.write(key: _userModelKey, value: jsonEncode(userModel.toJson()));
+        _currentUserCache = userModel;
 
         // Asegurar que las claves de enrolamiento se mantengan persistidas
         await _storage.write(key: _enrolledUserIdKey, value: idUsuario);
@@ -436,16 +451,38 @@ class AuthService {
   static Future<String?> getNombreSucursal() =>
       _readSafe(_sucursalNombreKey);
 
-  /// Recupera el nombre completo del usuario autenticado.
-  static Future<String?> getNombreUsuario() => _readSafe(_nombreUsuarioKey);
+  /// Recupera el nombre completo del usuario autenticado de forma rápida.
+  static Future<String?> getNombreUsuario() async {
+    if (_currentUserCache != null && _currentUserCache!.nombres.isNotEmpty) {
+      return '${_currentUserCache!.nombres} ${_currentUserCache!.apellidos}'.trim();
+    }
+    return _readSafe(_nombreUsuarioKey);
+  }
+
+  /// Recupera el correo electrónico del usuario autenticado (sin hardcodear datos de sesión).
+  static Future<String?> getEmailUsuario() async {
+    if (_currentUserCache != null && _currentUserCache!.email.isNotEmpty) {
+      return _currentUserCache!.email;
+    }
+    final direct = await _readSafe(_userEmailKey);
+    if (direct != null && direct.isNotEmpty) return direct;
+
+    final user = await getAuthUser();
+    if (user != null && user.email.isNotEmpty) return user.email;
+
+    return _readSafe(_enrolledUserEmailKey);
+  }
 
   /// Recupera el modelo completo de sesión AuthUserModel si está disponible.
   static Future<AuthUserModel?> getAuthUser() async {
+    if (_currentUserCache != null) return _currentUserCache;
+
     final jsonStr = await _readSafe(_userModelKey);
     if (jsonStr != null && jsonStr.isNotEmpty) {
       try {
         final map = jsonDecode(jsonStr) as Map<String, dynamic>;
-        return AuthUserModel.fromJson(map);
+        _currentUserCache = AuthUserModel.fromJson(map);
+        return _currentUserCache;
       } catch (_) {}
     }
     // Reconstruir con claves sueltas si no existe el JSON compuesto
@@ -454,23 +491,27 @@ class AuthService {
     final idRol = await getIdRol() ?? 0;
     final rol = await getRol() ?? '';
     final nombreCompleto = await getNombreUsuario() ?? '';
+    final email = await _readSafe(_userEmailKey) ?? await _readSafe(_enrolledUserEmailKey) ?? '';
     final sucursalId = await getSucursalId() ?? 1;
 
-    return AuthUserModel(
+    final recontructed = AuthUserModel(
       idUsuario: '',
       rutUsuario: '',
       nombres: nombreCompleto,
       apellidos: '',
-      email: '',
+      email: email,
       idRol: idRol,
       nombreRol: rol,
       idSucursal: sucursalId,
     );
+    _currentUserCache = recontructed;
+    return recontructed;
   }
 
   /// Elimina el token, rol y datos de sesión activa (para logout o sesiones expiradas),
   /// liberando las reservas del carrito en backend y preservando la vinculación/enrolamiento del terminal.
   static Future<void> clearToken() async {
+    _currentUserCache = null;
     try {
       await CartController.instance.liberarYVaciarEnBackend();
     } catch (_) {
@@ -483,6 +524,7 @@ class AuthService {
     await _storage.delete(key: _sucursalKey);
     await _storage.delete(key: _sucursalNombreKey);
     await _storage.delete(key: _nombreUsuarioKey);
+    await _storage.delete(key: _userEmailKey);
     await _storage.delete(key: _userModelKey);
   }
 
@@ -493,6 +535,7 @@ class AuthService {
   /// Invalida las claves de sesión activa sin destruir ni vaciar el carrito del usuario,
   /// permitiendo que al reingresar el PIN en el terminal conserve sus productos intactos.
   static Future<void> manejarSesionExpirada() async {
+    _currentUserCache = null;
     ThemeController.reset();
     await _storage.delete(key: _tokenKey);
     await _storage.delete(key: _rolKey);
@@ -500,6 +543,7 @@ class AuthService {
     await _storage.delete(key: _sucursalKey);
     await _storage.delete(key: _sucursalNombreKey);
     await _storage.delete(key: _nombreUsuarioKey);
+    await _storage.delete(key: _userEmailKey);
     await _storage.delete(key: _userModelKey);
 
     BodegaPollingService.instance.reset();

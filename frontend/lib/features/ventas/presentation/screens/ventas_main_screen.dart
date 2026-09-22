@@ -30,8 +30,8 @@ class _VentasMainScreenState extends State<VentasMainScreen>
   final GlobalKey<BandejaPreciosScreenState> _bandejaPreciosKey =
       GlobalKey<BandejaPreciosScreenState>();
   int _currentIndex = 0;
-  String? _userRol;
-  int? _idRol;
+  String? _userRol = AuthService.cachedUser?.nombreRol;
+  int? _idRol = AuthService.cachedUser?.idRol;
   String? _userSucursal;
   int _pendientesTasacionCount = 0;
 

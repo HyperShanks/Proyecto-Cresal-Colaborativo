@@ -18,6 +18,8 @@ from core.policies import (
     TZ_CHILE,
     evaluar_horario_sucursal,
     validar_horario_operativo_ordenes,
+    validar_horario_operativo_bodega,
+    validar_horario_operativo_caja,
 )
 from models import Usuario, Activo_Inventariado
 
@@ -94,46 +96,49 @@ def test_roles_exentos_permitidos_siempre():
     # Domingo en la noche (23:00)
     dt_domingo_noche = datetime(2026, 9, 20, 23, 0, tzinfo=TZ_CHILE)
 
-    # Rol 4 (Gerente), 5 (Admin), 6 (Jefe Ventas), 7 (Vendedor Online)
-    for id_rol in [4, 5, 6, 7]:
+    # Rol 2 (Vendedor Mesón), 4 (Gerente), 5 (Admin), 6 (Jefe Ventas), 7 (Vendedor Online)
+    for id_rol in [2, 4, 5, 6, 7]:
         user = MockUsuario(id_rol=id_rol)
         permitido = validar_horario_operativo_ordenes(user, ahora_local=dt_domingo_noche)
         assert permitido is True
 
 
-def test_vendedor_meson_horario_regular_permitido():
+def test_rol_regulado_horario_regular_permitido():
     # Miércoles a las 15:00
     dt_miercoles = datetime(2026, 9, 16, 15, 0, tzinfo=TZ_CHILE)
-    user = MockUsuario(id_rol=2)  # Vendedor Mesón
-    assert validar_horario_operativo_ordenes(user, ahora_local=dt_miercoles) is True
+    for id_rol in [1, 3]:  # Bodega y Caja
+        user = MockUsuario(id_rol=id_rol)
+        assert validar_horario_operativo_ordenes(user, ahora_local=dt_miercoles) is True
 
 
-def test_vendedor_meson_periodo_gracia_permitido():
+def test_rol_regulado_periodo_gracia_permitido():
     # Miércoles a las 18:40 (Cierre 18:30 + Gracia hasta 19:00)
     dt_gracia = datetime(2026, 9, 16, 18, 40, tzinfo=TZ_CHILE)
-    user = MockUsuario(id_rol=2)
-    assert validar_horario_operativo_ordenes(user, ahora_local=dt_gracia) is True
+    for id_rol in [1, 3]:
+        user = MockUsuario(id_rol=id_rol)
+        assert validar_horario_operativo_ordenes(user, ahora_local=dt_gracia) is True
 
 
-def test_vendedor_meson_fuera_horario_rechazado_403():
+def test_rol_regulado_fuera_horario_rechazado_403():
     # Miércoles a las 21:00 (Sin reserva activa)
     dt_noche = datetime(2026, 9, 16, 21, 0, tzinfo=TZ_CHILE)
-    user = MockUsuario(id_rol=2)
-    with pytest.raises(HTTPException) as exc_info:
-        validar_horario_operativo_ordenes(user, items_orden=[], ahora_local=dt_noche)
-    assert exc_info.value.status_code == 403
-    assert "Operación rechazada" in exc_info.value.detail
+    for id_rol in [1, 3]:
+        user = MockUsuario(id_rol=id_rol)
+        with pytest.raises(HTTPException) as exc_info:
+            validar_horario_operativo_ordenes(user, items_orden=[], ahora_local=dt_noche)
+        assert exc_info.value.status_code == 403
+        assert "Operación rechazada" in exc_info.value.detail
 
 
 from unittest.mock import MagicMock
 
 def test_respeto_transaccion_activa_con_reserva_viva():
     """
-    Si son las 19:15 (pasado incluso el periodo de gracia), pero el vendedor
+    Si son las 19:15 (pasado incluso el periodo de gracia), pero un rol regulado
     posee una reserva atómica activa en BD (motor en el carrito), la orden procede.
     """
     user_id = uuid.uuid4()
-    user = MockUsuario(id_rol=2, id_usuario=user_id)
+    user = MockUsuario(id_rol=3, id_usuario=user_id)
 
     # Simular base de datos con reserva activa encontrada
     mock_db = MagicMock()
@@ -159,7 +164,7 @@ def test_rechazo_si_reserva_expirada_fuera_de_horario():
     se debe rechazar con 403 Forbidden.
     """
     user_id = uuid.uuid4()
-    user = MockUsuario(id_rol=2, id_usuario=user_id)
+    user = MockUsuario(id_rol=3, id_usuario=user_id)
 
     mock_db = MagicMock()
     # first() retorna None (no hay reservas activas vigentes)
@@ -177,4 +182,45 @@ def test_rechazo_si_reserva_expirada_fuera_de_horario():
         )
     assert exc_info.value.status_code == 403
     assert "Operación rechazada" in exc_info.value.detail
+
+
+def test_validar_horario_operativo_bodega():
+    # Bodeguero (id_rol 1) dentro de horario regular -> OK
+    dt_abierto = datetime(2026, 9, 16, 11, 0, tzinfo=TZ_CHILE)
+    bodeguero = MockUsuario(id_rol=1)
+    assert validar_horario_operativo_bodega(bodeguero, ahora_local=dt_abierto) is True
+
+    # Bodeguero en periodo de gracia (18:45) -> OK
+    dt_gracia = datetime(2026, 9, 16, 18, 45, tzinfo=TZ_CHILE)
+    assert validar_horario_operativo_bodega(bodeguero, ahora_local=dt_gracia) is True
+
+    # Bodeguero de noche (22:00) -> 403
+    dt_noche = datetime(2026, 9, 16, 22, 0, tzinfo=TZ_CHILE)
+    with pytest.raises(HTTPException) as exc_info:
+        validar_horario_operativo_bodega(bodeguero, ahora_local=dt_noche)
+    assert exc_info.value.status_code == 403
+    assert "Operación de bodega rechazada" in exc_info.value.detail
+
+    # Gerente (id_rol 4) o Admin (id_rol 5) de noche -> Bypass 24/7 OK
+    admin = MockUsuario(id_rol=5)
+    assert validar_horario_operativo_bodega(admin, ahora_local=dt_noche) is True
+
+
+def test_validar_horario_operativo_caja():
+    # Caja (id_rol 3) dentro de horario regular -> OK
+    dt_abierto = datetime(2026, 9, 16, 11, 0, tzinfo=TZ_CHILE)
+    cajera = MockUsuario(id_rol=3)
+    assert validar_horario_operativo_caja(cajera, ahora_local=dt_abierto) is True
+
+    # Caja en periodo de gracia para cuadre (18:45) -> OK
+    dt_gracia = datetime(2026, 9, 16, 18, 45, tzinfo=TZ_CHILE)
+    assert validar_horario_operativo_caja(cajera, ahora_local=dt_gracia) is True
+
+    # Caja de noche (22:00) o domingo -> 403
+    dt_domingo = datetime(2026, 9, 20, 15, 0, tzinfo=TZ_CHILE)
+    with pytest.raises(HTTPException) as exc_info:
+        validar_horario_operativo_caja(cajera, ahora_local=dt_domingo)
+    assert exc_info.value.status_code == 403
+    assert "Operación de caja rechazada" in exc_info.value.detail
+
 

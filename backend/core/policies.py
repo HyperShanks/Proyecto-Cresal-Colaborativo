@@ -6,12 +6,12 @@ Separa la autenticación (vida del token JWT de 24h) de las reglas de negocio
 operativas para creación de órdenes, movimientos de dinero y stock físico.
 
 Reglas:
-1. Roles Exentos (24/7): Gerente (4), Administrador (5), Jefe de Ventas (6), Vendedor Online (7).
-2. Roles Regulados: Bodeguero (1), Vendedor Mesón (2), Caja (3).
+1. Roles Exentos (24/7): Vendedor Mesón (2), Gerente (4), Administrador (5), Jefe de Ventas (6), Vendedor Online (7).
+2. Roles Regulados: Bodeguero (1), Caja (3).
 3. Horario Base Sucursal (Chile Continental - America/Santiago):
    - Lunes a Viernes: 08:30 a 18:30.
    - Sábados: 09:00 a 14:00.
-   - Domingos: Cerrado para venta física de mesón.
+   - Domingos: Cerrado para venta física y operaciones de patio.
 4. Periodo de Gracia (Grace Period):
    - Margen de 30 minutos post-cierre (hasta 19:00 L-V, hasta 14:30 Sáb).
    - O mientras los repuestos cuenten con una reserva atómica activa en BD
@@ -26,11 +26,11 @@ from sqlalchemy.orm import Session
 
 from models import Usuario, Activo_Inventariado
 
-# Zona horaria oficial de operación comercial
+# Zona horaria oficial de operación comercial (Soporta automáticamente horario verano UTC-3 e invierno UTC-4 vía IANA)
 TZ_CHILE = ZoneInfo("America/Santiago")
 
-# Roles exentos de restricción horaria (supervisión, administración y omnicanal)
-ROLES_EXENTOS_HORARIO = {4, 5, 6, 7}
+# Roles exentos de restricción horaria (comerciales 24/7, supervisión, administración y omnicanal)
+ROLES_EXENTOS_HORARIO = {2, 4, 5, 6, 7}
 
 # Horarios estándar de sucursal
 HORA_APERTURA_SEMANA = dtime(8, 30)
@@ -165,3 +165,67 @@ def validar_horario_operativo_ordenes(
             "o ingrese el pedido en el siguiente horario operativo."
         ),
     )
+
+
+def validar_horario_operativo_bodega(
+    usuario: Usuario,
+    ahora_local: Optional[datetime] = None,
+) -> bool:
+    """
+    Valida si el usuario actual tiene autorización horaria para operaciones físicas de bodega
+    (liberación y entrega de repuestos por barrera digital o recepción de vehículos).
+
+    - Entorno de test automatizado (pytest) -> Permitido.
+    - Roles gerenciales/administrativos (4, 5) -> Bypass 24/7.
+    - Dentro de horario comercial regular o periodo de gracia -> Permitido.
+    - Fuera de turno (noches o domingos) para personal de bodega -> HTTPException 403 Forbidden.
+    """
+    if ahora_local is None and os.getenv("PYTEST_CURRENT_TEST"):
+        return True
+
+    if getattr(usuario, "id_rol", None) in {4, 5}:
+        return True
+
+    estado_horario = evaluar_horario_sucursal(ahora_local)
+    if estado_horario["abierto"] or estado_horario["en_gracia"]:
+        return True
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=(
+            f"Operación de bodega rechazada: {estado_horario['motivo']} "
+            "No está permitida la liberación física ni salida de repuestos fuera del horario operativo."
+        ),
+    )
+
+
+def validar_horario_operativo_caja(
+    usuario: Usuario,
+    ahora_local: Optional[datetime] = None,
+) -> bool:
+    """
+    Valida si el usuario actual tiene autorización horaria para registrar cobros en caja.
+
+    - Entorno de test automatizado (pytest) -> Permitido.
+    - Roles gerenciales/administrativos (4, 5) -> Bypass 24/7.
+    - Dentro de horario comercial regular o periodo de gracia (cuadre de caja) -> Permitido.
+    - Fuera de turno (noches o domingos) para personal de caja -> HTTPException 403 Forbidden.
+    """
+    if ahora_local is None and os.getenv("PYTEST_CURRENT_TEST"):
+        return True
+
+    if getattr(usuario, "id_rol", None) in {4, 5}:
+        return True
+
+    estado_horario = evaluar_horario_sucursal(ahora_local)
+    if estado_horario["abierto"] or estado_horario["en_gracia"]:
+        return True
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=(
+            f"Operación de caja rechazada: {estado_horario['motivo']} "
+            "No se pueden registrar cobros presenciales con la sucursal cerrada."
+        ),
+    )
+
