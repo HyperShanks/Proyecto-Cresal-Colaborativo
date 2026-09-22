@@ -180,7 +180,7 @@ void main() {
       expect(controller.clienteSeleccionado?.nombres, equals('Roberto'));
     });
 
-    test('Validación de traslado inter-sucursal impide seleccionar misma sucursal origen y destino', () {
+    test('Validación de abonos impide ingresar un monto mayor al total de la venta (Paso 2 -> Paso 3)', () {
       controller.addItemInventariado(idActivo: 'act-001', sku: 'SKU-1', descripcion: 'Alternador', precio: 80000);
       controller.setCliente(
         const ClienteWizardModel(
@@ -192,19 +192,18 @@ void main() {
           estado: 'Activo',
         ),
       );
-      controller.nextStep(); // Paso 1
-      controller.nextStep(); // Paso 2
+      controller.nextStep(); // A paso 1
+      controller.nextStep(); // A paso 2 (Abonos)
+      expect(controller.currentStep, equals(2));
 
-      controller.setTipoEntrega('Traslado');
-      controller.setIdSucursalActual(1); // Viña del Mar
-      // Forzar que el destino sea igual al origen
-      controller.setIdSucursalDestino(1);
+      // Asignar abono mayor al total de la venta
+      controller.setAbonoAdicional(100000);
       expect(controller.validateStep3(), isFalse);
       expect(controller.nextStep(), isFalse);
-      expect(controller.errorMessage, contains('no puede ser igual'));
+      expect(controller.errorMessage, contains('monto de abono no puede ser superior'));
 
-      // Asignar destino válido (Limache)
-      controller.setIdSucursalDestino(2);
+      // Ajustar abono válido
+      controller.setAbonoAdicional(50000);
       expect(controller.validateStep3(), isTrue);
       expect(controller.nextStep(), isTrue);
       expect(controller.currentStep, equals(3));
@@ -361,12 +360,14 @@ void main() {
       expect(find.text('Checkout Transaccional'), findsOneWidget);
       expect(find.text('Ítems'), findsOneWidget);
       expect(find.text('Cliente'), findsOneWidget);
+      expect(find.text('Abonos'), findsOneWidget);
+      expect(find.text('Confirmar'), findsOneWidget);
       expect(find.text('Venta en Verde'), findsOneWidget);
       expect(find.text('Venta libre'), findsOneWidget);
       expect(find.text('Siguiente'), findsNothing);
     });
 
-    testWidgets('CheckoutWizardScreen permite activar Consumidor Final y avanzar de paso', (tester) async {
+    testWidgets('CheckoutWizardScreen permite activar Consumidor Final y avanzar de paso a Abonos', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: CheckoutWizardScreen(
@@ -391,12 +392,11 @@ void main() {
 
       expect(find.textContaining('RUT 6.666.666-6'), findsOneWidget);
 
-      // Avanzar a Paso 2 (Logística)
+      // Avanzar a Paso 2 (Abonos)
       await tester.tap(find.text('Siguiente'));
       await tester.pumpAndSettle();
 
-      expect(find.text('3. Modalidad de Entrega y Despacho'), findsOneWidget);
-      expect(find.text('Traslado Sucursal'), findsOneWidget);
+      expect(find.text('3. Condiciones Comerciales y Abonos'), findsOneWidget);
     });
 
     testWidgets('CheckoutWizardScreen botón Venta libre abre VentaLibreDialog, agrega ítem y oculta botón Siguiente si está vacío', (tester) async {
@@ -439,7 +439,7 @@ void main() {
       expect(find.byKey(const Key('btn_siguiente_wizard')), findsOneWidget);
     });
 
-    testWidgets('CheckoutWizardScreen Paso 3 Despacho Domicilio sincroniza datos y avanza a Paso 4 sin error', (tester) async {
+    testWidgets('CheckoutWizardScreen flujo completo de 4 pasos (Ítems -> Cliente -> Abonos -> Confirmar)', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: CheckoutWizardScreen(
@@ -451,7 +451,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Paso 0 -> Paso 1
+      // Paso 0 -> Paso 1 (Cliente)
       await tester.tap(find.text('Siguiente'));
       await tester.pumpAndSettle();
 
@@ -459,32 +459,19 @@ void main() {
       await tester.tap(find.byKey(const Key('switch_cliente_anonimo')));
       await tester.pumpAndSettle();
 
-      // Paso 1 -> Paso 2 (Logística)
+      // Paso 1 -> Paso 2 (Abonos)
       await tester.tap(find.text('Siguiente'));
       await tester.pumpAndSettle();
 
-      expect(find.text('3. Modalidad de Entrega y Despacho'), findsOneWidget);
+      expect(find.text('3. Condiciones Comerciales y Abonos'), findsOneWidget);
 
-      // Seleccionar Despacho Domicilio
-      await tester.tap(find.text('Despacho Domicilio'));
-      await tester.pumpAndSettle();
-
-      // Ingresar Dirección
-      final dirFinder = find.widgetWithText(TextField, 'Dirección de Entrega *');
-      await tester.enterText(dirFinder, 'Av. Libertad 123');
-      await tester.pumpAndSettle();
-
-      // Región y Comuna ya vienen precargadas por Consumidor Final (Valparaíso / Viña del Mar)
-      expect(find.text('Valparaíso'), findsWidgets);
-      expect(find.text('Viña del Mar'), findsWidgets);
-
-      // Avanzar a Paso 3 (Abonos)
+      // Paso 2 -> Paso 3 (Confirmar)
       await tester.tap(find.text('Siguiente'));
       await tester.pumpAndSettle();
 
-      // No debe mostrar el mensaje de error de despacho y debe estar en el Paso 4
-      expect(find.text('Complete todos los campos obligatorios para el despacho a domicilio.'), findsNothing);
-      expect(find.text('4. Condiciones Comerciales y Abonos'), findsOneWidget);
+      expect(find.text('4. Revisión Final y Emisión de Orden'), findsOneWidget);
+      expect(find.text('Modalidad: Retiro en Mesón / Bodega'), findsOneWidget);
+      expect(find.text('CONFIRMAR Y EMITIR ORDEN'), findsOneWidget);
     });
   });
 }

@@ -74,9 +74,9 @@ class CheckoutWizardController extends ChangeNotifier {
       _itemsManuales.fold<int>(0, (sum, m) => sum + m.cantidad) +
       _reservas.length;
 
-  // ── Gestión de Pasos ──────────────────────────────────────────────────────
+  // ── Gestión de Pasos (0: Ítems, 1: Cliente, 2: Abonos, 3: Confirmación) ───────
   void setStep(int step) {
-    if (step >= 0 && step <= 4) {
+    if (step >= 0 && step <= 3) {
       _currentStep = step;
       _errorMessage = null;
       notifyListeners();
@@ -98,19 +98,12 @@ class CheckoutWizardController extends ChangeNotifier {
       return false;
     }
     if (_currentStep == 2 && !validateStep3()) {
-      _errorMessage = _tipoEntrega == 'Traslado'
-          ? 'La sucursal de destino no puede ser igual a la sucursal actual.'
-          : 'Complete todos los campos obligatorios para el despacho a domicilio.';
-      notifyListeners();
-      return false;
-    }
-    if (_currentStep == 3 && !validateStep4()) {
       _errorMessage = 'El monto de abono no puede ser superior al total de la venta.';
       notifyListeners();
       return false;
     }
 
-    if (_currentStep < 4) {
+    if (_currentStep < 3) {
       _currentStep++;
       notifyListeners();
       return true;
@@ -129,17 +122,8 @@ class CheckoutWizardController extends ChangeNotifier {
   bool validateStep1() =>
       totalItemsCount > 0 && !CartController.instance.hayPreciosInvalidos;
   bool validateStep2() => _clienteSeleccionado != null && _clienteSeleccionado!.rut.trim().isNotEmpty;
-  bool validateStep3() {
-    if (_tipoEntrega == 'Retiro') return true;
-    if (_tipoEntrega == 'Traslado') {
-      return _idSucursalDestino != _idSucursalActual;
-    }
-    if (_datosDespacho == null) return false;
-    return _datosDespacho!.direccionEnvio.trim().isNotEmpty &&
-        _datosDespacho!.receptorNombres.trim().isNotEmpty &&
-        _datosDespacho!.receptorRut.trim().isNotEmpty;
-  }
-  bool validateStep4() => totalAbonos <= totalVenta;
+  bool validateStep3() => totalAbonos <= totalVenta;
+  bool validateStep4() => totalAbonos <= totalVenta; // Compatibilidad legacy
 
   // ── Modificadores de Estado ───────────────────────────────────────────────
   void clearErrorMessage() {
@@ -378,8 +362,8 @@ class CheckoutWizardController extends ChangeNotifier {
       final request = CheckoutWizardRequestModel(
         idCliente: _clienteSeleccionado!.idCliente,
         cliente: _clienteSeleccionado,
-        tipoEntrega: _tipoEntrega,
-        idSucursalDestino: _tipoEntrega == 'Traslado' ? _idSucursalDestino : null,
+        tipoEntrega: 'Retiro',
+        idSucursalDestino: null,
         idVendedorAsignado: _idVendedorAsignado,
         totalVenta: totalVenta,
         descuento: _descuento,
@@ -394,9 +378,7 @@ class CheckoutWizardController extends ChangeNotifier {
         }).toList(),
         itemsManuales: _itemsManuales,
         reservas: _reservas,
-        datosDespacho: _tipoEntrega == 'Despacho Domicilio' || _tipoEntrega == 'Despacho' || _tipoEntrega == 'Traslado'
-            ? _datosDespacho
-            : null,
+        datosDespacho: null,
       );
 
       final response = await VentasService.processCheckoutWizard(request, client: client);

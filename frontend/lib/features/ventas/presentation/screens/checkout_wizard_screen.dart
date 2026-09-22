@@ -563,7 +563,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Checkout Transaccional', style: AppTypography.title.copyWith(fontSize: 18)),
-            Text('Flujo Secuencial de 5 Pasos • Ventas y Ventas en Verde', style: AppTypography.small.copyWith(color: AppPalette.secondary, fontSize: 12)),
+            Text('Flujo Secuencial de 4 Pasos • Retiro en Tienda', style: AppTypography.small.copyWith(color: AppPalette.secondary, fontSize: 12)),
           ],
         ),
         actions: [
@@ -611,15 +611,15 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     );
   }
 
-  // ── Stepper Bar ───────────────────────────────────────────────────────────
+  // ── Stepper Bar (4 Pasos) ──────────────────────────────────────────────────
   Widget _buildStepProgressBar() {
-    final stepLabels = ['Ítems', 'Cliente', 'Logística', 'Abonos', 'Confirmar'];
+    final stepLabels = ['Ítems', 'Cliente', 'Abonos', 'Confirmar'];
 
     return Container(
       color: AppPalette.surface,
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
       child: Row(
-        children: List.generate(5, (index) {
+        children: List.generate(4, (index) {
           final isCompleted = index < _controller.currentStep;
           final isCurrent = index == _controller.currentStep;
           return Expanded(
@@ -669,7 +669,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                     ],
                   ),
                 ),
-                if (index < 4)
+                if (index < 3)
                   Container(
                     width: 20,
                     height: 2,
@@ -691,12 +691,10 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
       case 1:
         return _buildStep2Cliente();
       case 2:
-        return _buildStep3Logistica();
+        return _buildStep3Condiciones();
       case 3:
-        return _buildStep4Condiciones();
-      case 4:
       default:
-        return _buildStep5Confirmacion();
+        return _buildStep4Confirmacion();
     }
   }
 
@@ -1476,431 +1474,12 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     );
   }
 
-  // ── PASO 3: LOGÍSTICA (RETIRO / DESPACHO / TRASLADO) ──────────────────────
-  Widget _buildStep3Logistica() {
+  // ── PASO 3: CONDICIONES COMERCIALES & ABONOS ──────────────────────────────
+  Widget _buildStep3Condiciones() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('3. Modalidad de Entrega y Despacho', style: AppTypography.title.copyWith(fontSize: 16)),
-        const SizedBox(height: 14),
-
-        // Selector de 3 Opciones: Retiro, Despacho, Traslado
-        Row(
-          children: [
-            _buildDeliveryChoice('Retiro en Tienda', 'Retiro', Icons.storefront_outlined),
-            const SizedBox(width: 8),
-            _buildDeliveryChoice('Despacho Domicilio', 'Despacho Domicilio', Icons.local_shipping_outlined),
-            const SizedBox(width: 8),
-            _buildDeliveryChoice('Traslado Sucursal', 'Traslado', Icons.sync_alt_outlined),
-          ],
-        ),
-        const SizedBox(height: 16),
-
-        if (_controller.tipoEntrega == 'Retiro') ...[
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(color: AppPalette.surface, borderRadius: BorderRadius.circular(12)),
-            child: Row(
-              children: [
-                const Icon(Icons.storefront_rounded, color: AppPalette.success, size: 36),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Retiro en Mesón de Sucursal', style: AppTypography.body.copyWith(fontWeight: FontWeight.bold)),
-                      Text('El cliente retira los repuestos físicos directamente en el mesón tras completar el pago o abono.', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ] else if (_controller.tipoEntrega == 'Despacho Domicilio' || _controller.tipoEntrega == 'Despacho') ...[
-          Builder(
-            builder: (context) {
-              final receptorRutText = _receptorRutController.text.trim();
-              final bool receptorRutInvalido = receptorRutText.isNotEmpty &&
-                  receptorRutText != '6.666.666-6' &&
-                  !RutValidator.isValid(receptorRutText);
-              final String? receptorRutError = receptorRutInvalido
-                  ? 'RUT inválido. Verifique el número ingresado.'
-                  : null;
-
-              return Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppPalette.surface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppPalette.secondary.withValues(alpha: 0.4)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Datos del Receptor y Dirección de Envío:', style: AppTypography.body.copyWith(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _direccionController,
-                      style: AppTypography.body.copyWith(color: Colors.white),
-                      decoration: _inputDeco(
-                        label: 'Dirección de Entrega *',
-                        hint: 'Ej: Av. Libertad 1234, Depto 402',
-                        icon: Icons.home_outlined,
-                      ),
-                      onChanged: (val) {
-                        setState(() {});
-                        _actualizarDatosDespachoLocal();
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            isExpanded: true,
-                            value: _regionDespacho,
-                            dropdownColor: AppPalette.surface,
-                            style: const TextStyle(color: Colors.white, fontSize: 13),
-                            icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF94A3B8)),
-                            decoration: _inputDeco(
-                              label: 'Región Destino *',
-                              hint: 'Seleccione región...',
-                              icon: Icons.map_outlined,
-                            ),
-                            hint: const Text(
-                              'Seleccione región...',
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
-                            ),
-                            items: ChileGeografia.regiones.map((r) => DropdownMenuItem(
-                              value: r,
-                              child: Text(
-                                r,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(color: Colors.white, fontSize: 13),
-                              ),
-                            )).toList(),
-                            onChanged: (val) {
-                              setState(() {
-                                _regionDespacho = val;
-                                _comunaDespacho = null;
-                              });
-                              _actualizarDatosDespachoLocal();
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            isExpanded: true,
-                            value: (ChileGeografia.obtenerComunas(_regionDespacho).contains(_comunaDespacho))
-                                ? _comunaDespacho
-                                : null,
-                            dropdownColor: AppPalette.surface,
-                            style: const TextStyle(color: Colors.white, fontSize: 13),
-                            icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF94A3B8)),
-                            decoration: _inputDeco(
-                              label: 'Comuna Destino *',
-                              hint: 'Seleccione comuna...',
-                              icon: Icons.location_city,
-                            ).copyWith(
-                              enabled: _regionDespacho != null && _regionDespacho!.isNotEmpty,
-                            ),
-                            hint: Text(
-                              _regionDespacho != null && _regionDespacho!.isNotEmpty
-                                  ? 'Seleccione comuna...'
-                                  : 'Seleccione región primero',
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: _regionDespacho != null && _regionDespacho!.isNotEmpty
-                                    ? const Color(0xFF94A3B8)
-                                    : const Color(0xFF64748B),
-                                fontSize: 13,
-                              ),
-                            ),
-                            items: (_regionDespacho != null && _regionDespacho!.isNotEmpty)
-                                ? ChileGeografia.obtenerComunas(_regionDespacho).map((c) => DropdownMenuItem(
-                                    value: c,
-                                    child: Text(
-                                      c,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(color: Colors.white, fontSize: 13),
-                                    ),
-                                  )).toList()
-                                : const [],
-                            onChanged: (_regionDespacho != null && _regionDespacho!.isNotEmpty)
-                                ? (val) {
-                                    setState(() => _comunaDespacho = val);
-                                    _actualizarDatosDespachoLocal();
-                                  }
-                                : null,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _empresaTransporteController,
-                      style: AppTypography.body.copyWith(color: Colors.white),
-                      decoration: _inputDeco(
-                        label: 'Empresa de Transporte *',
-                        hint: 'Ej: Starken, Chilexpress, Correos',
-                        icon: Icons.local_shipping,
-                      ),
-                      onChanged: (val) {
-                        setState(() {});
-                        _actualizarDatosDespachoLocal();
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      key: const Key('input_receptor_rut'),
-                      controller: _receptorRutController,
-                      style: AppTypography.body.copyWith(color: Colors.white),
-                      inputFormatters: [RutFormatter()],
-                      decoration: _inputDeco(
-                        label: 'RUT Receptor *',
-                        hint: 'Ej: 15.678.901-2',
-                        icon: Icons.badge,
-                        errorText: receptorRutError,
-                      ),
-                      onChanged: (val) {
-                        setState(() {});
-                        _actualizarDatosDespachoLocal();
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _receptorNombresController,
-                      style: AppTypography.body.copyWith(color: Colors.white),
-                      decoration: _inputDeco(
-                        label: 'Nombre Receptor *',
-                        hint: 'Ej: María González',
-                        icon: Icons.person,
-                      ),
-                      onChanged: (val) {
-                        setState(() {});
-                        _actualizarDatosDespachoLocal();
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _receptorTelefonoController,
-                      keyboardType: TextInputType.phone,
-                      style: AppTypography.body.copyWith(color: Colors.white),
-                      decoration: _inputDeco(
-                        label: 'Teléfono Receptor *',
-                        hint: 'Ej: +56 9 8765 4321',
-                        icon: Icons.phone,
-                      ),
-                      onChanged: (val) {
-                        setState(() {});
-                        _actualizarDatosDespachoLocal();
-                      },
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        ] else if (_controller.tipoEntrega == 'Traslado') ...[
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppPalette.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppPalette.primary.withValues(alpha: 0.4)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Configuración de Traslado Inter-Sucursal:', style: AppTypography.body.copyWith(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppPalette.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: AppPalette.primary.withValues(alpha: 0.3)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.storefront_outlined, size: 16, color: AppPalette.primary),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Sucursal actual (Origen): ${_idSucursalActual == 1 ? "Viña del Mar" : "Limache"}',
-                        style: AppTypography.small.copyWith(color: AppPalette.primary, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<int>(
-                  isExpanded: true,
-                  value: _idSucursalDestino,
-                  dropdownColor: AppPalette.surface,
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
-                  icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF94A3B8)),
-                  decoration: _inputDeco(label: 'Sucursal Destino *', icon: Icons.swap_horiz),
-                  items: [
-                    DropdownMenuItem(
-                      value: 1,
-                      enabled: _idSucursalActual != 1,
-                      child: Text(
-                        _idSucursalActual == 1
-                            ? 'Sucursal Viña del Mar (Actual - Deshabilitada)'
-                            : 'Sucursal Viña del Mar',
-                        style: TextStyle(
-                          color: _idSucursalActual == 1
-                              ? AppPalette.textSecondary.withValues(alpha: 0.4)
-                              : Colors.white,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    DropdownMenuItem(
-                      value: 2,
-                      enabled: _idSucursalActual != 2,
-                      child: Text(
-                        _idSucursalActual == 2
-                            ? 'Sucursal Limache (Actual - Deshabilitada)'
-                            : 'Sucursal Limache',
-                        style: TextStyle(
-                          color: _idSucursalActual == 2
-                              ? AppPalette.textSecondary.withValues(alpha: 0.4)
-                              : Colors.white,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                  onChanged: (val) {
-                    if (val != null && val != _idSucursalActual) {
-                      setState(() => _idSucursalDestino = val);
-                      _controller.setIdSucursalDestino(val);
-                      _actualizarDatosDespachoLocal();
-                    }
-                  },
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'ℹ️ Se generará automáticamente la orden de traslado logístico para que Bodega envíe la pieza desde ${_idSucursalActual == 1 ? "Viña del Mar" : "Limache"} hacia ${_idSucursalDestino == 1 ? "Viña del Mar" : "Limache"}.',
-                  style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: _receptorRutController,
-                  style: AppTypography.body.copyWith(color: Colors.white),
-                  decoration: _inputDeco(
-                    label: 'RUT quien retira en destino (Opcional)',
-                    hint: 'Ej: 12.345.678-9',
-                    icon: Icons.badge,
-                  ),
-                  onChanged: (val) => _actualizarDatosDespachoLocal(),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: _receptorNombresController,
-                  style: AppTypography.body.copyWith(color: Colors.white),
-                  decoration: _inputDeco(
-                    label: 'Nombre quien retira (Opcional)',
-                    hint: 'Ej: Pedro Soto',
-                    icon: Icons.person,
-                  ),
-                  onChanged: (val) => _actualizarDatosDespachoLocal(),
-                ),
-              ],
-            ),
-          ),
-        ],
-
-        if (_esVendedorOnline) ...[
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(color: AppPalette.surface, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white12)),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Responsable de Entrega en Sucursal (Venta Online)', style: AppTypography.small.copyWith(fontWeight: FontWeight.bold, color: AppPalette.secondary)),
-                const SizedBox(height: 8),
-                DropdownButtonHideUnderline(
-                  child: DropdownButton<String?>(
-                    value: _idVendedorAsignado,
-                    dropdownColor: AppPalette.surface,
-                    isExpanded: true,
-                    icon: const Icon(Icons.arrow_drop_down, color: AppPalette.primary),
-                    items: [
-                      const DropdownMenuItem<String?>(
-                        value: null,
-                        child: Text('Mesón General (Cualquier vendedor)'),
-                      ),
-                      ..._vendedoresDisponibles.map(
-                        (v) => DropdownMenuItem<String?>(
-                          value: v.idUsuario,
-                          child: Text('Vendedor: ${v.nombreCompleto} (${v.rut})'),
-                        ),
-                      ),
-                    ],
-                    onChanged: (val) {
-                      setState(() => _idVendedorAsignado = val);
-                      _actualizarDatosDespachoLocal();
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildDeliveryChoice(String label, String value, IconData icon) {
-    final isSelected = _controller.tipoEntrega == value;
-    return Expanded(
-      child: Material(
-        color: isSelected ? AppPalette.primary.withValues(alpha: 0.18) : AppPalette.surface,
-        borderRadius: BorderRadius.circular(10),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(10),
-          onTap: () {
-            _controller.setTipoEntrega(value);
-            if (value == 'Traslado') {
-              if (_idSucursalDestino == _idSucursalActual) {
-                _idSucursalDestino = (_idSucursalActual == 1 ? 2 : 1);
-              }
-              _controller.setIdSucursalActual(_idSucursalActual);
-              _controller.setIdSucursalDestino(_idSucursalDestino);
-            }
-            _actualizarDatosDespachoLocal();
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: isSelected ? AppPalette.primary : Colors.white12, width: isSelected ? 1.5 : 1),
-            ),
-            child: Column(
-              children: [
-                Icon(icon, size: 20, color: isSelected ? AppPalette.primary : AppPalette.textSecondary),
-                const SizedBox(height: 6),
-                Text(label, style: TextStyle(fontSize: 11, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: isSelected ? AppPalette.textPrimary : AppPalette.textSecondary), textAlign: TextAlign.center),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ── PASO 4: CONDICIONES COMERCIALES & ABONOS ──────────────────────────────
-  Widget _buildStep4Condiciones() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('4. Condiciones Comerciales y Abonos', style: AppTypography.title.copyWith(fontSize: 16)),
+        Text('3. Condiciones Comerciales y Abonos', style: AppTypography.title.copyWith(fontSize: 16)),
         const SizedBox(height: 14),
 
         Container(
@@ -2070,14 +1649,14 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     );
   }
 
-  // ── PASO 5: CONFIRMACIÓN Y EMISIÓN ────────────────────────────────────────
-  Widget _buildStep5Confirmacion() {
+  // ── PASO 4: REVISIÓN FINAL & EMISIÓN (ACID) ──────────────────────────────
+  Widget _buildStep4Confirmacion() {
     final cli = _controller.clienteSeleccionado;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('5. Revisión Final y Emisión de Orden', style: AppTypography.title.copyWith(fontSize: 16)),
+        Text('4. Revisión Final y Emisión de Orden', style: AppTypography.title.copyWith(fontSize: 16)),
         const SizedBox(height: 14),
 
         Container(
@@ -2089,11 +1668,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               Text('RESUMEN DE CLIENTE & ENTREGA', style: AppTypography.small.copyWith(color: AppPalette.textSecondary, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
               const SizedBox(height: 6),
               Text('Cliente: ${cli?.nombreCompleto ?? "Consumidor Final"} (${cli?.rut ?? "6.666.666-6"})', style: AppTypography.body.copyWith(fontWeight: FontWeight.bold)),
-              Text('Modalidad: ${_controller.tipoEntrega}', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
-              if (_controller.tipoEntrega == 'Despacho Domicilio' && _controller.datosDespacho != null)
-                Text('Destino: ${_controller.datosDespacho!.direccionEnvio} • Receptor: ${_controller.datosDespacho!.receptorNombres}', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
-              if (_controller.tipoEntrega == 'Traslado')
-                Text('Traslado: ${_idSucursalActual == 1 ? "Viña del Mar" : "Limache"} ➔ ${_idSucursalDestino == 1 ? "Viña del Mar" : "Limache"}', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
+              Text('Modalidad: Retiro en Mesón / Bodega', style: AppTypography.small.copyWith(color: AppPalette.textSecondary)),
               const Divider(color: Colors.white24, height: 20),
 
               Text('DETALLE COMERCIAL', style: AppTypography.small.copyWith(color: AppPalette.textSecondary, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
@@ -2188,21 +1763,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
             rut.isNotEmpty && nom.isNotEmpty && RutValidator.isValid(rut);
       }
     } else if (_controller.currentStep == 2) {
-      if (_controller.tipoEntrega == 'Despacho Domicilio' ||
-          _controller.tipoEntrega == 'Despacho') {
-        final rRut = _receptorRutController.text.trim();
-        final dir = _direccionController.text.trim();
-        final rNom = _receptorNombresController.text.trim();
-        final com = _comunaDespacho?.trim() ?? '';
-        final bool rutValido = rRut == '6.666.666-6' || RutValidator.isValid(rRut);
-        puedeAvanzar = dir.isNotEmpty &&
-            rNom.isNotEmpty &&
-            rRut.isNotEmpty &&
-            com.isNotEmpty &&
-            rutValido;
-      } else {
-        puedeAvanzar = true;
-      }
+      puedeAvanzar = _controller.totalAbonos <= _controller.totalVenta;
     } else {
       puedeAvanzar = true;
     }
@@ -2229,7 +1790,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
 
           const SizedBox(width: 12),
 
-          if (_controller.currentStep < 4)
+          if (_controller.currentStep < 3)
             Expanded(
               child: ElevatedButton.icon(
                 key: const Key('btn_siguiente_wizard'),
