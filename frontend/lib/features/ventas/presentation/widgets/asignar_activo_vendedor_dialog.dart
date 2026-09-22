@@ -348,7 +348,7 @@ class _AsignarActivoVendedorDialogState
               ),
               const SizedBox(height: 6),
               Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   // Selector de Prefijo (MOT- / CAJ-)
                   Container(
@@ -401,6 +401,7 @@ class _AsignarActivoVendedorDialogState
                         letterSpacing: 0.5,
                       ),
                       textCapitalization: TextCapitalization.characters,
+                      keyboardType: TextInputType.text,
                       decoration: InputDecoration(
                         hintText: 'Número de ingreso (ej: 1000)',
                         hintStyle: AppTypography.body.copyWith(
@@ -423,25 +424,32 @@ class _AsignarActivoVendedorDialogState
                       onSubmitted: (_) => _validarSku(),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppPalette.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    icon: _isValidando
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                          )
-                        : const Icon(Icons.search, size: 18),
-                    label: const Text('Validar', style: TextStyle(fontWeight: FontWeight.bold)),
-                    onPressed: _isValidando ? null : _validarSku,
-                  ),
                 ],
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                height: 46,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppPalette.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    elevation: 0,
+                  ),
+                  icon: _isValidando
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        )
+                      : const Icon(Icons.search, size: 18),
+                  label: const Text(
+                    'Validar',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  onPressed: _isValidando ? null : _validarSku,
+                ),
               ),
 
               // ── Error de Validación ────────────────────────────────
