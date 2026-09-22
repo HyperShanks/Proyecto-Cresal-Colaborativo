@@ -18,10 +18,15 @@ class EntregasEnviosScreen extends StatefulWidget {
 
 class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
   // Controladores y Estados de Filtros
+  final TextEditingController _searchController = TextEditingController();
   final TextEditingController _clienteFilterController = TextEditingController();
   final TextEditingController _vendedorFilterController = TextEditingController();
+  String _searchQuery = '';
+  bool _soloMisAsignadas = false;
+  String? _currentUserId;
+  String? _currentUserName;
   String _estadoPagoFilter = 'todos'; // 'todos', 'pagados', 'pendientes'
-  String _tipoEntregaFilter = 'todos'; // 'todos', 'retiro', 'despacho'
+  String _tipoEntregaFilter = 'todos'; // 'todos', 'retiro', 'despacho', 'traslado'
 
   List<EntregaEnvioModel> _todasEntregas = [];
   bool _isLoading = true;
@@ -87,18 +92,31 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
       Navigator.of(context).pop();
       return;
     }
+
+    final authUser = await AuthService.getAuthUser();
+    final nombre = await AuthService.getNombreUsuario();
+    if (mounted) {
+      setState(() {
+        _currentUserId = authUser?.idUsuario;
+        _currentUserName = nombre ?? authUser?.nombreCompleto;
+      });
+    }
+
     _cargarDatos();
   }
 
   @override
   void dispose() {
     OrdenesSyncNotifier.instance.removeListener(_onSyncNotification);
+    _searchController.dispose();
     _clienteFilterController.dispose();
     _vendedorFilterController.dispose();
     super.dispose();
   }
 
   bool get _tieneFiltrosActivos =>
+      _searchQuery.isNotEmpty ||
+      _soloMisAsignadas ||
       _clienteFilterController.text.trim().isNotEmpty ||
       _vendedorFilterController.text.trim().isNotEmpty ||
       _estadoPagoFilter != 'todos' ||
@@ -134,6 +152,29 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
     }
   }
 
+  bool _isAsignadaAMi(EntregaEnvioModel e) {
+    if (_currentUserId != null &&
+        e.idVendedorAsignado != null &&
+        e.idVendedorAsignado!.trim().isNotEmpty &&
+        e.idVendedorAsignado == _currentUserId) {
+      return true;
+    }
+    if (_currentUserName != null &&
+        _currentUserName!.trim().isNotEmpty &&
+        e.vendedorAsignadoNombre != null &&
+        e.vendedorAsignadoNombre!.trim().isNotEmpty) {
+      final userTokens = _currentUserName!
+          .toLowerCase()
+          .split(' ')
+          .where((t) => t.length > 2);
+      final asignadoLower = e.vendedorAsignadoNombre!.toLowerCase();
+      for (final token in userTokens) {
+        if (asignadoLower.contains(token)) return true;
+      }
+    }
+    return false;
+  }
+
   List<EntregaEnvioModel> get _ordenesFiltradas {
     var lista = _todasEntregas.where((e) {
       if (e.esVentaEnVerde && (!e.estaPagada || !e.tieneQrDisponible)) {
@@ -142,29 +183,117 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
       return true;
     }).toList();
 
-    if (_tipoEntregaFilter == 'todos') return lista;
-    if (_tipoEntregaFilter == 'despacho') {
-      return lista
-          .where((e) =>
-              e.tipoEntrega.toLowerCase() == 'despacho' ||
-              e.tipoEntrega.toLowerCase() == 'despacho domicilio')
-          .toList();
+    // 1. Filtro rápido de "Mis Asignadas" (Responsabilidad de entrega física)
+    if (_soloMisAsignadas) {
+      lista = lista.where(_isAsignadaAMi).toList();
     }
-    if (_tipoEntregaFilter == 'traslado') {
-      return lista
-          .where((e) => e.tipoEntrega.toLowerCase() == 'traslado')
-          .toList();
+
+    // 2. Filtro por Modalidad de Entrega
+    if (_tipoEntregaFilter != 'todos') {
+      if (_tipoEntregaFilter == 'despacho') {
+        lista = lista
+            .where((e) =>
+                e.tipoEntrega.toLowerCase() == 'despacho' ||
+                e.tipoEntrega.toLowerCase() == 'despacho domicilio')
+            .toList();
+      } else if (_tipoEntregaFilter == 'traslado') {
+        lista = lista
+            .where((e) => e.tipoEntrega.toLowerCase() == 'traslado')
+            .toList();
+      } else {
+        lista = lista
+            .where((e) => e.tipoEntrega.toLowerCase() == _tipoEntregaFilter)
+            .toList();
+      }
     }
-    return lista
-        .where((e) => e.tipoEntrega.toLowerCase() == _tipoEntregaFilter)
-        .toList();
+
+    // 3. Filtro por Estado de Pago
+    if (_estadoPagoFilter != 'todos') {
+      if (_estadoPagoFilter == 'pagados') {
+        lista = lista.where((e) => e.estaPagada).toList();
+      } else if (_estadoPagoFilter == 'pendientes') {
+        lista = lista.where((e) => e.tieneSaldoPendiente).toList();
+      }
+    }
+
+    // 4. Buscador Reactivo Unificado (Folio, Cliente, RUT, Teléfono, Vendedor Online, Vendedor Responsable, Repuesto)
+    final q = _searchQuery.trim().toLowerCase();
+    if (q.isNotEmpty) {
+      final qSinPuntos = q.replaceAll('.', '').replaceAll('-', '');
+      lista = lista.where((e) {
+        // Coincidencia por Folio
+        if (e.folioDisplay.toLowerCase().contains(q) ||
+            e.folio.toLowerCase().contains(q)) {
+          return true;
+        }
+        // Coincidencia por Cliente (Nombre completo o display)
+        if (e.cliente != null &&
+            e.cliente!.nombreCompleto.toLowerCase().contains(q)) {
+          return true;
+        }
+        if (e.clienteDisplay.toLowerCase().contains(q)) {
+          return true;
+        }
+        // Coincidencia por RUT de Cliente (tolerante a puntos y guión)
+        if (e.cliente != null && e.cliente!.rutCliente.isNotEmpty) {
+          final rutLimpio = e.cliente!.rutCliente
+              .replaceAll('.', '')
+              .replaceAll('-', '')
+              .toLowerCase();
+          if (rutLimpio.contains(qSinPuntos)) return true;
+        }
+        // Coincidencia por Teléfono de Contacto
+        if (e.cliente?.telefono != null && e.cliente!.telefono!.contains(q)) {
+          return true;
+        }
+        if (e.despacho?.receptorTelefono != null &&
+            e.despacho!.receptorTelefono.contains(q)) {
+          return true;
+        }
+        // Coincidencia por Receptor y Comuna de Despacho
+        if (e.despacho != null &&
+            e.despacho!.receptorNombres.toLowerCase().contains(q)) {
+          return true;
+        }
+        if (e.despacho?.comunaDestino != null &&
+            e.despacho!.comunaDestino!.toLowerCase().contains(q)) {
+          return true;
+        }
+        // Coincidencia por Vendedor Creador (Online / Central)
+        if (e.vendedorNombre != null &&
+            e.vendedorNombre!.toLowerCase().contains(q)) {
+          return true;
+        }
+        // Coincidencia por Vendedor Asignado (Responsable en tienda de la entrega)
+        if (e.vendedorAsignadoNombre != null &&
+            e.vendedorAsignadoNombre!.toLowerCase().contains(q)) {
+          return true;
+        }
+        // Coincidencia por Título o SKU del Repuesto
+        if (e.detalles.any((d) =>
+            d.tituloDisplay.toLowerCase().contains(q) ||
+            (d.skuQrFisico != null &&
+                d.skuQrFisico!.toLowerCase().contains(q)))) {
+          return true;
+        }
+
+        return false;
+      }).toList();
+    }
+
+    return lista;
   }
 
   void _limpiarFiltros() {
+    _searchController.clear();
     _clienteFilterController.clear();
     _vendedorFilterController.clear();
-    _estadoPagoFilter = 'todos';
-    _tipoEntregaFilter = 'todos';
+    setState(() {
+      _searchQuery = '';
+      _soloMisAsignadas = false;
+      _estadoPagoFilter = 'todos';
+      _tipoEntregaFilter = 'todos';
+    });
     Navigator.of(context).pop();
     _cargarDatos();
   }
@@ -1235,11 +1364,262 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: _isLoading
+      body: _isLoading && _todasEntregas.isEmpty
           ? const Center(child: CircularProgressIndicator(color: AppPalette.primary))
-          : _errorMessage != null
+          : _errorMessage != null && _todasEntregas.isEmpty
               ? _buildErrorView()
-              : _buildListaRetirosYEnvios(),
+              : Column(
+                  children: [
+                    _buildSearchAndFiltersHeader(),
+                    Expanded(child: _buildListaRetirosYEnvios()),
+                  ],
+                ),
+    );
+  }
+
+  Widget _buildSearchAndFiltersHeader() {
+    final validas = _todasEntregas.where((e) {
+      if (e.esVentaEnVerde && (!e.estaPagada || !e.tieneQrDisponible)) {
+        return false;
+      }
+      return true;
+    }).toList();
+
+    final misAsignadasCount = validas.where(_isAsignadaAMi).length;
+    final retirosCount = validas
+        .where((e) => e.tipoEntrega.toLowerCase() == 'retiro')
+        .length;
+    final despachosCount = validas
+        .where((e) =>
+            e.tipoEntrega.toLowerCase() == 'despacho' ||
+            e.tipoEntrega.toLowerCase() == 'despacho domicilio')
+        .length;
+    final trasladosCount = validas
+        .where((e) => e.tipoEntrega.toLowerCase() == 'traslado')
+        .length;
+
+    return Container(
+      color: AppPalette.background,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 1. Barra de Búsqueda In-Line Reactiva
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: TextField(
+              key: const Key('buscador_entregas_textfield'),
+              controller: _searchController,
+              onChanged: (val) {
+                setState(() {
+                  _searchQuery = val;
+                });
+              },
+              style: AppTypography.body.copyWith(
+                color: AppPalette.textPrimary,
+                fontSize: 14,
+              ),
+              cursorColor: AppPalette.primary,
+              decoration: InputDecoration(
+                hintText: 'Buscar por Folio, Cliente, RUT o Vendedor...',
+                hintStyle: AppTypography.body.copyWith(
+                  color: AppPalette.textSecondary.withValues(alpha: 0.65),
+                  fontSize: 13,
+                ),
+                prefixIcon: const Icon(
+                  Icons.search_rounded,
+                  color: AppPalette.textSecondary,
+                  size: 20,
+                ),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        key: const Key('btn_limpiar_busqueda_entregas'),
+                        icon: const Icon(
+                          Icons.clear,
+                          color: AppPalette.textSecondary,
+                          size: 18,
+                        ),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() {
+                            _searchQuery = '';
+                          });
+                        },
+                        tooltip: 'Limpiar búsqueda',
+                      )
+                    : null,
+                filled: true,
+                fillColor: AppPalette.surface,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Colors.white12),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: Colors.white12),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: AppPalette.primary, width: 1.5),
+                ),
+              ),
+            ),
+          ),
+
+          // 2. Fila Desplazable de Filtros Rápidos
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: Row(
+              children: [
+                // Chip Especial: Mis Entregas Asignadas
+                FilterChip(
+                  key: const Key('chip_mis_asignadas'),
+                  avatar: Icon(
+                    Icons.person_pin_circle_rounded,
+                    size: 16,
+                    color: _soloMisAsignadas ? Colors.white : AppPalette.primary,
+                  ),
+                  label: Text(
+                    'Mis Asignadas ($misAsignadasCount)',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                      color: _soloMisAsignadas ? Colors.white : AppPalette.primary,
+                    ),
+                  ),
+                  selected: _soloMisAsignadas,
+                  onSelected: (selected) {
+                    setState(() {
+                      _soloMisAsignadas = selected;
+                    });
+                  },
+                  selectedColor: AppPalette.primary,
+                  backgroundColor: AppPalette.primary.withValues(alpha: 0.12),
+                  side: BorderSide(
+                    color: _soloMisAsignadas
+                        ? AppPalette.primary
+                        : AppPalette.primary.withValues(alpha: 0.35),
+                  ),
+                ),
+                const SizedBox(width: 8),
+
+                // Separador vertical sutil
+                Container(
+                  height: 22,
+                  width: 1,
+                  color: Colors.white12,
+                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                ),
+                const SizedBox(width: 8),
+
+                // Chip: Todos
+                ChoiceChip(
+                  label: Text('Todas (${validas.length})'),
+                  selected: _tipoEntregaFilter == 'todos',
+                  onSelected: (selected) {
+                    if (selected) setState(() => _tipoEntregaFilter = 'todos');
+                  },
+                  selectedColor: AppPalette.primary.withValues(alpha: 0.25),
+                  labelStyle: TextStyle(
+                    color: _tipoEntregaFilter == 'todos'
+                        ? AppPalette.primary
+                        : AppPalette.textSecondary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(width: 6),
+
+                // Chip: Retiros
+                ChoiceChip(
+                  label: Text('Retiros ($retirosCount)'),
+                  selected: _tipoEntregaFilter == 'retiro',
+                  onSelected: (selected) {
+                    if (selected) setState(() => _tipoEntregaFilter = 'retiro');
+                  },
+                  selectedColor: AppPalette.primary.withValues(alpha: 0.25),
+                  labelStyle: TextStyle(
+                    color: _tipoEntregaFilter == 'retiro'
+                        ? AppPalette.primary
+                        : AppPalette.textSecondary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(width: 6),
+
+                // Chip: Despachos
+                ChoiceChip(
+                  label: Text('Despachos ($despachosCount)'),
+                  selected: _tipoEntregaFilter == 'despacho',
+                  onSelected: (selected) {
+                    if (selected) setState(() => _tipoEntregaFilter = 'despacho');
+                  },
+                  selectedColor: AppPalette.secondary.withValues(alpha: 0.25),
+                  labelStyle: TextStyle(
+                    color: _tipoEntregaFilter == 'despacho'
+                        ? AppPalette.secondary
+                        : AppPalette.textSecondary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(width: 6),
+
+                // Chip: Traslados (si hay)
+                if (trasladosCount > 0 || _tipoEntregaFilter == 'traslado') ...[
+                  ChoiceChip(
+                    label: Text('Traslados ($trasladosCount)'),
+                    selected: _tipoEntregaFilter == 'traslado',
+                    onSelected: (selected) {
+                      if (selected) setState(() => _tipoEntregaFilter = 'traslado');
+                    },
+                    selectedColor: const Color(0xFFAB47BC).withValues(alpha: 0.25),
+                    labelStyle: TextStyle(
+                      color: _tipoEntregaFilter == 'traslado'
+                          ? const Color(0xFFAB47BC)
+                          : AppPalette.textSecondary,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                ],
+
+                // Chip rápido de limpiar si hay filtros activos
+                if (_tieneFiltrosActivos) ...[
+                  ActionChip(
+                    avatar: const Icon(Icons.clear_all, size: 16, color: AppPalette.warning),
+                    label: const Text(
+                      'Limpiar',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppPalette.warning,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    backgroundColor: AppPalette.warning.withValues(alpha: 0.1),
+                    side: BorderSide(color: AppPalette.warning.withValues(alpha: 0.3)),
+                    onPressed: () {
+                      setState(() {
+                        _searchController.clear();
+                        _searchQuery = '';
+                        _soloMisAsignadas = false;
+                        _tipoEntregaFilter = 'todos';
+                        _estadoPagoFilter = 'todos';
+                        _clienteFilterController.clear();
+                        _vendedorFilterController.clear();
+                      });
+                    },
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 6),
+        ],
+      ),
     );
   }
 
@@ -1347,10 +1727,15 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
               const SizedBox(height: 16),
               TextButton.icon(
                 onPressed: () {
+                  _searchController.clear();
                   _clienteFilterController.clear();
                   _vendedorFilterController.clear();
-                  _estadoPagoFilter = 'todos';
-                  _tipoEntregaFilter = 'todos';
+                  setState(() {
+                    _searchQuery = '';
+                    _soloMisAsignadas = false;
+                    _estadoPagoFilter = 'todos';
+                    _tipoEntregaFilter = 'todos';
+                  });
                   _cargarDatos();
                 },
                 icon: const Icon(Icons.filter_alt_off),

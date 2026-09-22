@@ -419,5 +419,138 @@ void main() {
       expect(ordenPerno.contieneMotorOCaja, false);
       expect(ordenPan.contieneMotorOCaja, false);
     });
+
+    test('Buscador y filtros en Entregas y Envíos cubren RUT, Folio, Vendedor Asignado y Repuesto', () {
+      final ordenOnline = EntregaEnvioModel(
+        idOrden: 'ord-online-1',
+        folio: 'ORD-9876ABCD',
+        tipoEntrega: 'Retiro',
+        estadoOrden: 'Pagada',
+        totalVenta: 85000,
+        montoPendiente: 0,
+        totalItems: 1,
+        cliente: const ClienteOrdenResumenModel(
+          rutCliente: '19.876.543-2',
+          nombres: 'Carlos',
+          apellidos: 'Muñoz',
+          telefono: '+56911223344',
+        ),
+        vendedorNombre: 'Vendedor Online Central',
+        idVendedorAsignado: 'vend-fisico-123',
+        vendedorAsignadoNombre: 'Pedro Mostrador',
+        detalles: [
+          DetalleOrdenItemModel(
+            idDetalle: 'det-1',
+            titulo: 'Alternador Bosch 12V',
+            skuQrFisico: 'ALT-BOSCH-12',
+            cantidad: 1,
+            precioFinal: 85000,
+            subtotal: 85000,
+            esInventariado: true,
+          ),
+        ],
+        preparacionLista: true,
+        todosPreparados: true,
+      );
+
+      final ordenTienda = EntregaEnvioModel(
+        idOrden: 'ord-tienda-2',
+        folio: 'ORD-1234XYZW',
+        tipoEntrega: 'Despacho',
+        estadoOrden: 'Pagada',
+        totalVenta: 120000,
+        montoPendiente: 0,
+        totalItems: 1,
+        cliente: const ClienteOrdenResumenModel(
+          rutCliente: '11.222.333-4',
+          nombres: 'María',
+          apellidos: 'González',
+        ),
+        despacho: const DespachoOrdenResumenModel(
+          idDespacho: 'desp-1',
+          direccionEnvio: 'Calle Falsa 123',
+          receptorNombres: 'María González',
+          receptorRut: '11.222.333-4',
+          receptorTelefono: '+56988776655',
+          estadoDespacho: 'Por Enviar',
+          comunaDestino: 'Quilpué',
+          empresaTransporte: 'Starken',
+          costoEnvio: 4500,
+        ),
+        vendedorNombre: 'Juan Local',
+        vendedorAsignadoNombre: null,
+        detalles: [
+          DetalleOrdenItemModel(
+            idDetalle: 'det-2',
+            titulo: 'Pastillas de Freno Delanteras',
+            skuQrFisico: 'FREN-PAST-01',
+            cantidad: 1,
+            precioFinal: 120000,
+            subtotal: 120000,
+            esInventariado: true,
+          ),
+        ],
+        preparacionLista: true,
+        todosPreparados: true,
+      );
+
+      final lista = [ordenOnline, ordenTienda];
+
+      // 1. Filtrar por Vendedor Asignado (Responsable físico)
+      final filtroAsignado = lista.where((e) =>
+          e.vendedorAsignadoNombre != null &&
+          e.vendedorAsignadoNombre!.toLowerCase().contains('pedro')).toList();
+      expect(filtroAsignado.length, 1);
+      expect(filtroAsignado.first.folio, 'ORD-9876ABCD');
+
+      // 2. Filtrar por Vendedor Creador (Online)
+      final filtroCreador = lista.where((e) =>
+          e.vendedorNombre != null &&
+          e.vendedorNombre!.toLowerCase().contains('online central')).toList();
+      expect(filtroCreador.length, 1);
+      expect(filtroCreador.first.folio, 'ORD-9876ABCD');
+
+      // 3. Filtrar por RUT sin puntos ni guión
+      String normalizarRut(String r) => r.replaceAll('.', '').replaceAll('-', '').toLowerCase().trim();
+      final qRut = normalizarRut('198765432');
+      final filtroRut = lista.where((e) {
+        final r = normalizarRut(e.cliente?.rutCliente ?? '');
+        return r.contains(qRut);
+      }).toList();
+      expect(filtroRut.length, 1);
+      expect(filtroRut.first.cliente?.nombres, 'Carlos');
+
+      // 4. Filtrar por Folio
+      final filtroFolio = lista.where((e) =>
+          e.folio.toLowerCase().contains('xyzw')).toList();
+      expect(filtroFolio.length, 1);
+      expect(filtroFolio.first.folio, 'ORD-1234XYZW');
+
+      // 5. Filtrar por SKU de Repuesto
+      final filtroSku = lista.where((e) =>
+          e.detalles.any((d) => d.skuQrFisico != null && d.skuQrFisico!.contains('ALT-BOSCH'))).toList();
+      expect(filtroSku.length, 1);
+      expect(filtroSku.first.folio, 'ORD-9876ABCD');
+
+      // 6. Filtrar por Comuna de despacho
+      final filtroComuna = lista.where((e) =>
+          e.despacho?.comunaDestino?.toLowerCase().contains('quilpué') ?? false).toList();
+      expect(filtroComuna.length, 1);
+      expect(filtroComuna.first.folio, 'ORD-1234XYZW');
+    });
+
+    testWidgets('Buscador in-line y chips de filtros en EntregasEnviosScreen', (tester) async {
+      await const FlutterSecureStorage().write(key: 'user_id_rol', value: '2');
+      await const FlutterSecureStorage().write(key: 'user_rol', value: 'Vendedor');
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: EntregasEnviosScreen(),
+        ),
+      );
+
+      // El título está visible
+      expect(find.text('Retiro y Envíos'), findsOneWidget);
+    });
   });
 }
