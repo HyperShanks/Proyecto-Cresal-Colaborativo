@@ -185,7 +185,7 @@ class _AsignarActivoVendedorDialogState
     );    return Dialog(
       backgroundColor: AppPalette.surface,
       surfaceTintColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: const BorderSide(color: Colors.white12),
@@ -587,9 +587,12 @@ class _AsignarActivoVendedorDialogState
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                       icon: const Icon(Icons.warning_amber_rounded, size: 18),
-                      label: const Text(
-                        'Ignorar advertencia y forzar asignación manual',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      label: const Flexible(
+                        child: Text(
+                          'Forzar asignación manual (Ignorar advertencia)',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
                       ),
                       onPressed: () {
                         setState(() {
@@ -642,7 +645,10 @@ class _AsignarActivoVendedorDialogState
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                       onPressed: _isAsignando ? null : () => Navigator.of(context).pop(),
-                      child: const Text('Cancelar', style: TextStyle(fontWeight: FontWeight.bold)),
+                      child: const FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text('Cancelar', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -662,9 +668,12 @@ class _AsignarActivoVendedorDialogState
                               child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                             )
                           : const Icon(Icons.check_circle_rounded, size: 18),
-                      label: const Text(
-                        'Asignar y Generar QR',
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                      label: const FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          'Asignar y Generar QR',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
                       ),
                       onPressed: puedeConfirmar ? _asignarActivo : null,
                     ),

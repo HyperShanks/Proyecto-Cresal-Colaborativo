@@ -462,11 +462,19 @@ class _VentasMainScreenState extends State<VentasMainScreen>
   Widget build(BuildContext context) {
     final tabs = _buildTabs();
     final safeIndex = _currentIndex.clamp(0, tabs.length - 1);
+    final mediaQuery = MediaQuery.of(context);
 
-    return Scaffold(
-      key: _scaffoldKey,
-      backgroundColor: AppPalette.background,
-      drawer: _buildDrawer(context),
+    return MediaQuery(
+      data: mediaQuery.copyWith(
+        textScaler: mediaQuery.textScaler.clamp(
+          minScaleFactor: 1.0,
+          maxScaleFactor: 1.15,
+        ),
+      ),
+      child: Scaffold(
+        key: _scaffoldKey,
+        backgroundColor: AppPalette.background,
+        drawer: _buildDrawer(context),
       body: IndexedStack(index: safeIndex, children: tabs),
       bottomNavigationBar: ListenableBuilder(
         listenable: CartController.instance,
@@ -513,6 +521,7 @@ class _VentasMainScreenState extends State<VentasMainScreen>
           );
         },
       ),
-    );
-  }
+    ),
+  );
+}
 }

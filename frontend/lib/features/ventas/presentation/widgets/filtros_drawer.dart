@@ -61,12 +61,13 @@ class FiltrosDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final drawerBg = isDark ? AppPalette.background : AppPalette.surfaceLight;
-    final surfaceColor = isDark ? AppPalette.surface : AppPalette.backgroundLight;
-    final textPrimaryColor = isDark ? AppPalette.textPrimary : AppPalette.textPrimaryLight;
-    final textSecondaryColor = isDark ? AppPalette.textSecondary : AppPalette.textSecondaryLight;
-    final dividerColor = isDark ? AppPalette.surface : AppPalette.borderLight;
+    // El catálogo de ventas en mesón utiliza la paleta oscura de alto contraste
+    const isDark = true;
+    const drawerBg = AppPalette.background;
+    const surfaceColor = AppPalette.surface;
+    const textPrimaryColor = AppPalette.textPrimary;
+    const textSecondaryColor = AppPalette.textSecondary;
+    const dividerColor = Colors.white12;
 
     // Listas seguras para dropdowns (evitan AssertionError si el valor actual no está en la lista)
     final List<String> listaMarcas = [
@@ -242,7 +243,7 @@ class FiltrosDrawer extends StatelessWidget {
                     DropdownButtonFormField<String?>(
                       initialValue: (marca != null && listaMarcas.contains(marca)) ? marca : null,
                       isExpanded: true,
-                      dropdownColor: isDark ? AppPalette.surface : AppPalette.surfaceLight,
+                      dropdownColor: AppPalette.surface,
                       style: AppTypography.body.copyWith(color: textPrimaryColor),
                       icon: Icon(
                         Icons.arrow_drop_down,
@@ -280,7 +281,7 @@ class FiltrosDrawer extends StatelessWidget {
                     DropdownButtonFormField<int?>(
                       initialValue: (anio != null && listaAnios.contains(anio)) ? anio : null,
                       isExpanded: true,
-                      dropdownColor: isDark ? AppPalette.surface : AppPalette.surfaceLight,
+                      dropdownColor: AppPalette.surface,
                       style: AppTypography.body.copyWith(color: textPrimaryColor),
                       icon: Icon(
                         Icons.arrow_drop_down,
@@ -318,7 +319,7 @@ class FiltrosDrawer extends StatelessWidget {
                     DropdownButtonFormField<String?>(
                       initialValue: (cilindrada != null && listaCilindradas.contains(cilindrada)) ? cilindrada : null,
                       isExpanded: true,
-                      dropdownColor: isDark ? AppPalette.surface : AppPalette.surfaceLight,
+                      dropdownColor: AppPalette.surface,
                       style: AppTypography.body.copyWith(color: textPrimaryColor),
                       icon: Icon(
                         Icons.arrow_drop_down,
@@ -463,6 +464,7 @@ class FiltrosDrawer extends StatelessWidget {
                     'Limpiar filtros',
                     style: AppTypography.button.copyWith(
                       color: AppPalette.error,
+                      fontSize: 14,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -471,7 +473,7 @@ class FiltrosDrawer extends StatelessWidget {
                     backgroundColor: isDark ? surfaceColor : AppPalette.errorBg,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8.0),
-                      side: BorderSide(color: AppPalette.error.withValues(alpha: 0.3)),
+                      side: BorderSide(color: AppPalette.error.withValues(alpha: 0.5)),
                     ),
                   ),
                 ),
@@ -487,10 +489,10 @@ class FiltrosDrawer extends StatelessWidget {
     return Text(
       title,
       style: AppTypography.small.copyWith(
-        fontSize: 12,
+        fontSize: 13,
         fontWeight: FontWeight.bold,
-        letterSpacing: 1.0,
-        color: textColor,
+        letterSpacing: 0.8,
+        color: const Color(0xFFCBD5E1),
       ),
     );
   }
@@ -501,34 +503,34 @@ class FiltrosDrawer extends StatelessWidget {
     required bool isSelected,
     required ValueChanged<bool> onSelected,
   }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return ChoiceChip(
-      label: Text(
-        label,
-        style: TextStyle(
-          color: isSelected
-              ? Colors.white
-              : (isDark ? AppPalette.textSecondary : AppPalette.textPrimaryLight),
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          fontSize: 13,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => onSelected(!isSelected),
+        borderRadius: BorderRadius.circular(8.0),
+        splashColor: AppPalette.primary.withValues(alpha: 0.25),
+        highlightColor: Colors.transparent,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8.0),
+          decoration: BoxDecoration(
+            color: isSelected ? AppPalette.primary : const Color(0xFF1E293B),
+            borderRadius: BorderRadius.circular(8.0),
+            border: Border.all(
+              color: isSelected ? AppPalette.primary : Colors.transparent,
+              width: 1.0,
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: isSelected ? Colors.white : const Color(0xFFCBD5E1),
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+              fontSize: 13.5,
+            ),
+          ),
         ),
       ),
-      selected: isSelected,
-      onSelected: onSelected,
-      selectedColor: AppPalette.primary,
-      backgroundColor: isDark ? AppPalette.surface : AppPalette.backgroundLight,
-      elevation: 0,
-      pressElevation: 0,
-      side: BorderSide(
-        color: isSelected
-            ? AppPalette.primary
-            : (isDark ? Colors.white.withValues(alpha: 0.08) : AppPalette.borderLight),
-        width: 1,
-      ),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8.0),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
     );
   }
 
@@ -536,30 +538,29 @@ class FiltrosDrawer extends StatelessWidget {
     required BuildContext context,
     required String hintText,
   }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return InputDecoration(
       hintText: hintText,
-      hintStyle: AppTypography.body.copyWith(
-        color: isDark ? AppPalette.textSecondary : AppPalette.textSecondaryLight,
+      hintStyle: const TextStyle(
+        color: Color(0xFF94A3B8),
         fontSize: 14,
       ),
       filled: true,
-      fillColor: isDark ? AppPalette.surface : AppPalette.backgroundLight,
+      fillColor: AppPalette.surface,
       contentPadding: const EdgeInsets.symmetric(
         horizontal: 16.0,
-        vertical: 12.0,
+        vertical: 13.0,
       ),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10.0),
-        borderSide: BorderSide(
-          color: isDark ? Colors.white.withValues(alpha: 0.08) : AppPalette.borderLight,
+        borderSide: const BorderSide(
+          color: Color(0xFF334155),
           width: 1.0,
         ),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10.0),
-        borderSide: BorderSide(
-          color: isDark ? Colors.white.withValues(alpha: 0.08) : AppPalette.borderLight,
+        borderSide: const BorderSide(
+          color: Color(0xFF334155),
           width: 1.0,
         ),
       ),

@@ -470,7 +470,7 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
           children: [
             Icon(
               icon,
-              size: 14.0,
+              size: 16.0,
               color: isSelected ? AppPalette.primary : AppPalette.textSecondary,
             ),
             const SizedBox(width: 4.0),
@@ -482,7 +482,7 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
                   titulo,
                   maxLines: 1,
                   style: TextStyle(
-                    fontSize: 12.0,
+                    fontSize: 14.0,
                     fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                     color: isSelected ? AppPalette.textPrimary : AppPalette.textSecondary,
                     fontFamily: AppTypography.fontFamily,
@@ -730,11 +730,11 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
                         borderRadius: BorderRadius.circular(8.0),
                       ),
                     ),
-                    icon: const Icon(Icons.qr_code_scanner, size: 18.0),
+                    icon: const Icon(Icons.qr_code_scanner, size: 20.0),
                     label: const Text(
-                      'Asignar Activo Físico (Llegó a Bodega)',
+                      'Asignar Activo Físico',
                       style: TextStyle(
-                        fontSize: 13.0,
+                        fontSize: 14.0,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -1005,6 +1005,7 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
             onPressed: _isLoading ? null : _cargarOrdenes,
             tooltip: 'Actualizar lista',
           ),
+          const SizedBox(width: 8),
         ],
       ),
       endDrawer: HistorialFiltrosDrawer(

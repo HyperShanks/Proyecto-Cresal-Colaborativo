@@ -540,10 +540,11 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
         actions: [
           IconButton(
             key: const Key('btn_refrescar_catalogo_appbar'),
-            icon: const Icon(Icons.refresh, color: AppPalette.primary),
+            icon: const Icon(Icons.refresh, color: AppPalette.textPrimary),
             tooltip: 'Actualizar catálogo',
             onPressed: () => _fetchCatalogo(resetPagination: true),
           ),
+          const SizedBox(width: 8),
         ],
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -663,7 +664,7 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
             // ── Fila de Chips de Filtros Activos ────────────────────────────
             if (_tieneFiltrosActivos)
               Container(
-                height: 36,
+                height: 40,
                 margin: const EdgeInsets.only(bottom: 8.0),
                 child: ListView(
                   scrollDirection: Axis.horizontal,
@@ -721,24 +722,45 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
                       ),
                     Padding(
                       padding: const EdgeInsets.only(left: 4.0),
-                      child: ActionChip(
-                        label: const Text(
-                          'Limpiar todos',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: AppPalette.error,
-                            fontWeight: FontWeight.bold,
+                      child: Material(
+                        color: AppPalette.surface,
+                        borderRadius: BorderRadius.circular(8.0),
+                        child: InkWell(
+                          onTap: _limpiarFiltros,
+                          borderRadius: BorderRadius.circular(8.0),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12.0,
+                              vertical: 7.0,
+                            ),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(8.0),
+                              border: Border.all(
+                                color: AppPalette.error.withValues(alpha: 0.6),
+                                width: 1.2,
+                              ),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.close,
+                                  size: 15,
+                                  color: AppPalette.error,
+                                ),
+                                SizedBox(width: 5),
+                                Text(
+                                  'Limpiar todos',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: AppPalette.error,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                        backgroundColor: AppPalette.surface,
-                        side: BorderSide(
-                          color: AppPalette.error.withValues(alpha: 0.4),
-                          width: 1.0,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8.0),
-                        ),
-                        onPressed: _limpiarFiltros,
                       ),
                     ),
                   ],
@@ -761,31 +783,45 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
   }) {
     return Container(
       margin: const EdgeInsets.only(right: 6.0),
-      child: Chip(
-        color: WidgetStateProperty.resolveWith<Color>((states) {
-          return AppPalette.primary.withValues(alpha: 0.18);
-        }),
-        backgroundColor: AppPalette.primary.withValues(alpha: 0.18),
-        label: Text(
-          label,
-          style: const TextStyle(
-            color: AppPalette.primary,
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
+      child: Material(
+        color: AppPalette.surface,
+        borderRadius: BorderRadius.circular(8.0),
+        child: InkWell(
+          onTap: onDeleted,
+          borderRadius: BorderRadius.circular(8.0),
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 10.0,
+              vertical: 7.0,
+            ),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8.0),
+              border: Border.all(
+                color: AppPalette.primary,
+                width: 1.2,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: AppPalette.primary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(width: 6.0),
+                const Icon(
+                  Icons.close,
+                  size: 15,
+                  color: AppPalette.primary,
+                ),
+              ],
+            ),
           ),
         ),
-        deleteIcon: const Icon(
-          Icons.close,
-          size: 14,
-          color: AppPalette.primary,
-        ),
-        deleteButtonTooltipMessage: 'Quitar filtro',
-        onDeleted: onDeleted,
-        side: const BorderSide(color: AppPalette.primary, width: 1.2),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8.0),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 4.0),
       ),
     );
   }

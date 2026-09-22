@@ -792,6 +792,7 @@ class _CarritoScreenState extends State<CarritoScreen> {
                   onPressed: () => _confirmarVaciarCarrito(context),
                   tooltip: 'Vaciar carrito',
                 ),
+                const SizedBox(width: 8),
               ],
             ],
           ),
@@ -1717,19 +1718,19 @@ class _CarritoScreenState extends State<CarritoScreen> {
       children: [
         Text(
           label,
-          style: AppTypography.small.copyWith(
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
-            color: AppPalette.textSecondary,
+          style: AppTypography.body.copyWith(
+            fontSize: 13.5,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
           ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 6),
         TextFormField(
           controller: controller,
           focusNode: focusNode,
           keyboardType: keyboardType,
           inputFormatters: inputFormatters,
-          style: AppTypography.body.copyWith(fontSize: 13),
+          style: AppTypography.body.copyWith(fontSize: 14.5, color: Colors.white),
           validator: validator ??
               (isRequired
                   ? (val) {
@@ -1741,33 +1742,36 @@ class _CarritoScreenState extends State<CarritoScreen> {
                   : null),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: AppTypography.small.copyWith(
-              color: AppPalette.neutral,
-              fontSize: 12,
+            hintStyle: const TextStyle(
+              color: Color(0xFF94A3B8),
+              fontSize: 14,
             ),
             suffixIcon: suffixIcon,
             filled: true,
             fillColor: AppPalette.background,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8.0),
-              borderSide: BorderSide(
-                color: Colors.white.withValues(alpha: 0.08),
+              borderSide: const BorderSide(
+                color: Color(0xFF334155),
+                width: 1.0,
               ),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8.0),
-              borderSide: BorderSide(
-                color: Colors.white.withValues(alpha: 0.08),
+              borderSide: const BorderSide(
+                color: Color(0xFF334155),
+                width: 1.0,
               ),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8.0),
               borderSide: const BorderSide(
                 color: AppPalette.primary,
+                width: 1.5,
               ),
             ),
-            errorStyle: const TextStyle(color: AppPalette.error, fontSize: 10),
+            errorStyle: const TextStyle(color: AppPalette.error, fontSize: 11, fontWeight: FontWeight.bold),
           ),
         ),
       ],
@@ -1789,15 +1793,15 @@ class _CarritoScreenState extends State<CarritoScreen> {
       children: [
         Text(
           label,
-          style: AppTypography.small.copyWith(
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
+          style: AppTypography.body.copyWith(
+            fontSize: 13.5,
+            fontWeight: FontWeight.w600,
             color: enabled
-                ? AppPalette.textSecondary
-                : AppPalette.textSecondary.withValues(alpha: 0.4),
+                ? Colors.white
+                : Colors.white38,
           ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 6),
         DropdownButtonFormField<String>(
           isExpanded: true,
           value: effectiveValue,
@@ -1805,17 +1809,17 @@ class _CarritoScreenState extends State<CarritoScreen> {
               ? Text(
                   hint,
                   overflow: TextOverflow.ellipsis,
-                  style: AppTypography.small.copyWith(
+                  style: TextStyle(
                     color: enabled
-                        ? AppPalette.neutral
-                        : AppPalette.neutral.withValues(alpha: 0.4),
-                    fontSize: 12,
+                        ? const Color(0xFF94A3B8)
+                        : const Color(0xFF64748B),
+                    fontSize: 14,
                   ),
                 )
               : null,
           dropdownColor: AppPalette.surface,
           style: AppTypography.body.copyWith(
-            fontSize: 13,
+            fontSize: 14,
             color: enabled ? Colors.white : Colors.white38,
           ),
           decoration: InputDecoration(
@@ -1823,17 +1827,19 @@ class _CarritoScreenState extends State<CarritoScreen> {
             fillColor: enabled
                 ? AppPalette.background
                 : AppPalette.background.withValues(alpha: 0.4),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8.0),
-              borderSide: BorderSide(
-                color: Colors.white.withValues(alpha: 0.08),
+              borderSide: const BorderSide(
+                color: Color(0xFF334155),
+                width: 1.0,
               ),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8.0),
-              borderSide: BorderSide(
-                color: Colors.white.withValues(alpha: 0.08),
+              borderSide: const BorderSide(
+                color: Color(0xFF334155),
+                width: 1.0,
               ),
             ),
             disabledBorder: OutlineInputBorder(
@@ -1849,7 +1855,7 @@ class _CarritoScreenState extends State<CarritoScreen> {
                     value: item,
                     child: Text(
                       item,
-                      style: AppTypography.body.copyWith(fontSize: 13),
+                      style: AppTypography.body.copyWith(fontSize: 14),
                       overflow: TextOverflow.ellipsis,
                     ),
                   );
