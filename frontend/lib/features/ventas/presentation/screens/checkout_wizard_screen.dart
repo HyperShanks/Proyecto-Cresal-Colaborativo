@@ -645,7 +645,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
             children: [
               Text(
                 'Checkout Transaccional',
-                style: AppTypography.title.copyWith(fontSize: 18),
+                style: AppTypography.title.copyWith(fontSize: 20),
               ),
               Text(
                 'Flujo Secuencial de 4 Pasos • Retiro en Tienda',
@@ -972,7 +972,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                 const SizedBox(height: 4),
                 Text(
                   'Añada productos desde el Catálogo, cargue ítems manuales o cree una Reserva por Encargo (Compra en Verde).',
-                  style: AppTypography.small.copyWith(
+                  style: AppTypography.body.copyWith(
                     color: AppPalette.textSecondary,
                   ),
                   textAlign: TextAlign.center,

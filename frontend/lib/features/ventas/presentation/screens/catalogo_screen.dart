@@ -28,10 +28,7 @@ class CatalogoScreen extends StatefulWidget {
   /// tras tasación de precios u otros eventos externos.
   static final ValueNotifier<int> refreshNotifier = ValueNotifier<int>(0);
 
-  const CatalogoScreen({
-    super.key,
-    this.onOpenMenuDrawer,
-  });
+  const CatalogoScreen({super.key, this.onOpenMenuDrawer});
 
   @override
   State<CatalogoScreen> createState() => CatalogoScreenState();
@@ -72,7 +69,11 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
       if (!mounted) return;
 
       final itemsDisponibles = response.items
-          .where((i) => i.estadoActivo?.toLowerCase() != 'vendido' && i.estadoActivo?.toLowerCase() != 'de baja')
+          .where(
+            (i) =>
+                i.estadoActivo?.toLowerCase() != 'vendido' &&
+                i.estadoActivo?.toLowerCase() != 'de baja',
+          )
           .toList();
 
       setState(() {
@@ -246,7 +247,9 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
     final currentScroll = _scrollController.position.pixels;
 
     if (maxScroll > 0 && currentScroll >= maxScroll * 0.8) {
-      if (!_isLoadingMore && !_isLoadingInitial && _items.length < _totalCount) {
+      if (!_isLoadingMore &&
+          !_isLoadingInitial &&
+          _items.length < _totalCount) {
         _fetchCatalogo(resetPagination: false);
       }
     }
@@ -286,7 +289,11 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
       if (!mounted) return;
 
       final itemsDisponibles = response.items
-          .where((i) => i.estadoActivo?.toLowerCase() != 'vendido' && i.estadoActivo?.toLowerCase() != 'de baja')
+          .where(
+            (i) =>
+                i.estadoActivo?.toLowerCase() != 'vendido' &&
+                i.estadoActivo?.toLowerCase() != 'de baja',
+          )
           .toList();
 
       setState(() {
@@ -333,12 +340,18 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
           duration: const Duration(seconds: 3),
           content: Row(
             children: [
-              const Icon(Icons.warning_amber_rounded, color: AppPalette.error, size: 20),
+              const Icon(
+                Icons.warning_amber_rounded,
+                color: AppPalette.error,
+                size: 20,
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   '¡Lo sentimos! Este repuesto acaba de ser reservado por otro vendedor hace un instante.',
-                  style: AppTypography.small.copyWith(color: AppPalette.textPrimary),
+                  style: AppTypography.small.copyWith(
+                    color: AppPalette.textPrimary,
+                  ),
                 ),
               ),
             ],
@@ -356,12 +369,18 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
           duration: const Duration(seconds: 2),
           content: Row(
             children: [
-              const Icon(Icons.info_outline, color: AppPalette.secondary, size: 20),
+              const Icon(
+                Icons.info_outline,
+                color: AppPalette.secondary,
+                size: 20,
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   'Este activo ya está en el carrito',
-                  style: AppTypography.small.copyWith(color: AppPalette.textPrimary),
+                  style: AppTypography.small.copyWith(
+                    color: AppPalette.textPrimary,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -419,7 +438,9 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
                   agregado
                       ? '${item.tituloRepuesto} agregado al carrito'
                       : 'Este activo ya está en el carrito',
-                  style: AppTypography.small.copyWith(color: AppPalette.textPrimary),
+                  style: AppTypography.small.copyWith(
+                    color: AppPalette.textPrimary,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -434,7 +455,10 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
         setState(() {
           final idx = _items.indexWhere((it) => it.idActivo == item.idActivo);
           if (idx != -1) {
-            _items[idx] = _items[idx].copyWith(idEstado: 2, estadoActivo: 'Reservado');
+            _items[idx] = _items[idx].copyWith(
+              idEstado: 2,
+              estadoActivo: 'Reservado',
+            );
           }
         });
       }
@@ -446,12 +470,18 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
           duration: const Duration(seconds: 4),
           content: Row(
             children: [
-              const Icon(Icons.warning_amber_rounded, color: AppPalette.error, size: 20),
+              const Icon(
+                Icons.warning_amber_rounded,
+                color: AppPalette.error,
+                size: 20,
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   e.message,
-                  style: AppTypography.small.copyWith(color: AppPalette.textPrimary),
+                  style: AppTypography.small.copyWith(
+                    color: AppPalette.textPrimary,
+                  ),
                 ),
               ),
             ],
@@ -472,7 +502,6 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
       );
     }
   }
-
 
   // ── Construcción de la Vista ──────────────────────────────────────────────
 
@@ -549,14 +578,11 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'CATÁLOGO DE REPUESTOS',
-              style: AppTypography.title,
-            ),
+            const Text('Catálogo de Repuestos', style: AppTypography.title),
             if (!_isLoadingInitial && _errorMessage == null)
               Text(
                 '$_totalCount repuestos disponibles',
-                style: AppTypography.small.copyWith(fontSize: 12),
+                style: AppTypography.small.copyWith(fontSize: 14),
               ),
           ],
         ),
@@ -589,12 +615,18 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
                         ),
                         suffixIcon: _searchController.text.isNotEmpty
                             ? IconButton(
-                                icon: const Icon(Icons.clear, color: AppPalette.textSecondary),
+                                icon: const Icon(
+                                  Icons.clear,
+                                  color: AppPalette.textSecondary,
+                                ),
                                 onPressed: _onClearSearch,
                                 tooltip: 'Limpiar búsqueda',
                               )
                             : null,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16.0,
+                          vertical: 14.0,
+                        ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12.0),
                           borderSide: BorderSide(
@@ -609,7 +641,10 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12.0),
-                          borderSide: const BorderSide(color: AppPalette.primary, width: 1.5),
+                          borderSide: const BorderSide(
+                            color: AppPalette.primary,
+                            width: 1.5,
+                          ),
                         ),
                       ),
                     ),
@@ -681,7 +716,9 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
                       ),
                     if (_idSucursalFiltro != null)
                       _buildActiveFilterChip(
-                        label: _idSucursalFiltro == 1 ? 'Viña del Mar' : 'Limache',
+                        label: _idSucursalFiltro == 1
+                            ? 'Viña del Mar'
+                            : 'Limache',
                         onDeleted: () {
                           setState(() => _idSucursalFiltro = null);
                           _cargarOpcionesFiltros();
@@ -768,9 +805,7 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
               ),
 
             // ── Contenido Principal (Lista / Carga / Error) ─────────────────
-            Expanded(
-              child: _buildBody(),
-            ),
+            Expanded(child: _buildBody()),
           ],
         ),
       ),
@@ -796,10 +831,7 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
             ),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(8.0),
-              border: Border.all(
-                color: AppPalette.primary,
-                width: 1.2,
-              ),
+              border: Border.all(color: AppPalette.primary, width: 1.2),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -813,11 +845,7 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
                   ),
                 ),
                 const SizedBox(width: 6.0),
-                const Icon(
-                  Icons.close,
-                  size: 15,
-                  color: AppPalette.primary,
-                ),
+                const Icon(Icons.close, size: 15, color: AppPalette.primary),
               ],
             ),
           ),
@@ -829,9 +857,7 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
   Widget _buildBody() {
     if (_isLoadingInitial) {
       return const Center(
-        child: CircularProgressIndicator(
-          color: AppPalette.primary,
-        ),
+        child: CircularProgressIndicator(color: AppPalette.primary),
       );
     }
 
@@ -851,12 +877,18 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.error_outline, size: 48, color: AppPalette.error),
+                const Icon(
+                  Icons.error_outline,
+                  size: 48,
+                  color: AppPalette.error,
+                ),
                 const SizedBox(height: 12),
                 Text(
                   _errorMessage!,
                   textAlign: TextAlign.center,
-                  style: AppTypography.body.copyWith(color: AppPalette.textSecondary),
+                  style: AppTypography.body.copyWith(
+                    color: AppPalette.textSecondary,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 ElevatedButton.icon(
@@ -911,18 +943,28 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
                       ? 'Intenta ajustar los filtros o el término de búsqueda.'
                       : 'No hay repuestos disponibles en el inventario.',
                   textAlign: TextAlign.center,
-                  style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
+                  style: AppTypography.body.copyWith(
+                    color: AppPalette.textSecondary,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppPalette.secondary,
                     foregroundColor: AppPalette.background,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                   icon: const Icon(Icons.bookmark_add, size: 18),
-                  label: const Text('¿NO ESTÁ? VENTA EN VERDE', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                  label: const Text(
+                    '¿NO ESTÁ? VENTA EN VERDE',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
                   onPressed: () async {
                     if (CartController.instance.items.isNotEmpty) {
                       ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -953,7 +995,9 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
                     if (!ok) {
                       messenger.showSnackBar(
                         const SnackBar(
-                          content: Text('Las ventas en verde deben tramitarse de manera individual. Por favor vacía el carrito antes de agregar una venta en verde.'),
+                          content: Text(
+                            'Las ventas en verde deben tramitarse de manera individual. Por favor vacía el carrito antes de agregar una venta en verde.',
+                          ),
                           backgroundColor: AppPalette.error,
                         ),
                       );
@@ -961,13 +1005,16 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
                     }
                     messenger.showSnackBar(
                       SnackBar(
-                        content: Text('Venta en verde (${reserva.marcaRequerida} ${reserva.modeloRequerido}) añadida al Checkout Wizard.'),
+                        content: Text(
+                          'Venta en verde (${reserva.marcaRequerida} ${reserva.modeloRequerido}) añadida al Checkout Wizard.',
+                        ),
                         backgroundColor: AppPalette.secondary,
                       ),
                     );
                   },
                 ),
-                if (_tieneFiltrosActivos || _searchController.text.isNotEmpty) ...[
+                if (_tieneFiltrosActivos ||
+                    _searchController.text.isNotEmpty) ...[
                   const SizedBox(height: 10),
                   TextButton(
                     onPressed: () {
@@ -976,7 +1023,9 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
                     },
                     child: Text(
                       'Limpiar todos los filtros',
-                      style: AppTypography.button.copyWith(color: AppPalette.primary),
+                      style: AppTypography.button.copyWith(
+                        color: AppPalette.primary,
+                      ),
                     ),
                   ),
                 ],
@@ -994,7 +1043,12 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
       child: ListView.builder(
         controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16.0, 4.0, 16.0, 80.0), // Margen inferior para el FAB
+        padding: const EdgeInsets.fromLTRB(
+          16.0,
+          4.0,
+          16.0,
+          80.0,
+        ), // Margen inferior para el FAB
         itemCount: _items.length + (_isLoadingMore ? 1 : 0),
         itemBuilder: (context, index) {
           if (index == _items.length) {

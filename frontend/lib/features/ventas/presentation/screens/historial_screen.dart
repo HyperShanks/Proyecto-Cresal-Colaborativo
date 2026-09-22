@@ -171,7 +171,9 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
         client: widget.client,
       );
 
-      if (!mounted || requestId != _activeRequestId || _seccionActual != seccionSolicitada) {
+      if (!mounted ||
+          requestId != _activeRequestId ||
+          _seccionActual != seccionSolicitada) {
         return;
       }
 
@@ -193,7 +195,9 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
         } catch (_) {}
       }
 
-      if (!mounted || requestId != _activeRequestId || _seccionActual != seccionSolicitada) {
+      if (!mounted ||
+          requestId != _activeRequestId ||
+          _seccionActual != seccionSolicitada) {
         return;
       }
 
@@ -207,7 +211,10 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
         _isLoading = false;
       });
     } catch (e) {
-      if (!mounted || requestId != _activeRequestId || _seccionActual != seccionSolicitada) return;
+      if (!mounted ||
+          requestId != _activeRequestId ||
+          _seccionActual != seccionSolicitada)
+        return;
       setState(() {
         _errorMessage = e.toString().replaceFirst('Exception: ', '');
         _isLoading = false;
@@ -229,7 +236,10 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
         client: widget.client,
       );
 
-      if (!mounted || requestId != _activeRequestId || _seccionActual != seccionSolicitada) return;
+      if (!mounted ||
+          requestId != _activeRequestId ||
+          _seccionActual != seccionSolicitada)
+        return;
       _ordenarOrdenes(ordenes);
 
       int conteo = _conteoPorAsignar;
@@ -247,7 +257,10 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
         } catch (_) {}
       }
 
-      if (!mounted || requestId != _activeRequestId || _seccionActual != seccionSolicitada) return;
+      if (!mounted ||
+          requestId != _activeRequestId ||
+          _seccionActual != seccionSolicitada)
+        return;
 
       setState(() {
         if (seccionSolicitada == 'por_asignar') {
@@ -274,24 +287,36 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
     return _ordenes.where((orden) {
       // 1. Folio / ID de Orden / Token QR
       final idMatch = orden.idOrden.toLowerCase().contains(cleanQuery);
-      final folioMatch = orden.folioDisplay.toLowerCase().contains(cleanQuery) ||
+      final folioMatch =
+          orden.folioDisplay.toLowerCase().contains(cleanQuery) ||
           orden.folioDisplay.toLowerCase().contains(query);
-      final qrMatch = orden.qrTransaccionalSalida != null &&
+      final qrMatch =
+          orden.qrTransaccionalSalida != null &&
           orden.qrTransaccionalSalida!.toLowerCase().contains(cleanQuery);
 
       // 2. Cliente: Nombre Completo y RUT
       final cliente = orden.cliente;
-      final clienteNombreMatch = cliente != null &&
+      final clienteNombreMatch =
+          cliente != null &&
           cliente.nombreCompleto.toLowerCase().contains(cleanQuery);
-      final clienteRutMatch = cliente != null &&
+      final clienteRutMatch =
+          cliente != null &&
           (cliente.rutCliente.toLowerCase().contains(cleanQuery) ||
-              cliente.rutCliente.replaceAll('.', '').replaceAll('-', '').toLowerCase().contains(cleanQuery.replaceAll('.', '').replaceAll('-', '')));
+              cliente.rutCliente
+                  .replaceAll('.', '')
+                  .replaceAll('-', '')
+                  .toLowerCase()
+                  .contains(
+                    cleanQuery.replaceAll('.', '').replaceAll('-', ''),
+                  ));
 
       // 3. Despacho: Receptor y RUT
       final despacho = orden.despacho;
-      final receptorNombreMatch = despacho != null &&
+      final receptorNombreMatch =
+          despacho != null &&
           despacho.receptorNombres.toLowerCase().contains(cleanQuery);
-      final receptorRutMatch = despacho != null &&
+      final receptorRutMatch =
+          despacho != null &&
           despacho.receptorRut.toLowerCase().contains(cleanQuery);
 
       // 4. Marca / Modelo / Título o SKU del Repuesto en líneas de detalle
@@ -347,7 +372,10 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
             _searchQuery = val;
           });
         },
-        style: AppTypography.body.copyWith(color: AppPalette.textPrimary, fontSize: 14),
+        style: AppTypography.body.copyWith(
+          color: AppPalette.textPrimary,
+          fontSize: 14,
+        ),
         cursorColor: AppPalette.primary,
         decoration: InputDecoration(
           hintText: 'Buscar por Folio, Cliente, RUT o Repuesto...',
@@ -392,10 +420,7 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10.0),
-            borderSide: const BorderSide(
-              color: AppPalette.primary,
-              width: 1.5,
-            ),
+            borderSide: const BorderSide(color: AppPalette.primary, width: 1.5),
           ),
         ),
       ),
@@ -458,10 +483,15 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
         decoration: BoxDecoration(
-          color: isSelected ? AppPalette.primary.withValues(alpha: 0.2) : Colors.transparent,
+          color: isSelected
+              ? AppPalette.primary.withValues(alpha: 0.2)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(8.0),
           border: isSelected
-              ? Border.all(color: AppPalette.primary.withValues(alpha: 0.6), width: 1.0)
+              ? Border.all(
+                  color: AppPalette.primary.withValues(alpha: 0.6),
+                  width: 1.0,
+                )
               : Border.all(color: Colors.transparent, width: 1.0),
         ),
         child: Row(
@@ -482,9 +512,13 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
                   titulo,
                   maxLines: 1,
                   style: TextStyle(
-                    fontSize: 14.0,
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                    color: isSelected ? AppPalette.textPrimary : AppPalette.textSecondary,
+                    fontSize: 16.0,
+                    fontWeight: isSelected
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                    color: isSelected
+                        ? AppPalette.textPrimary
+                        : AppPalette.textSecondary,
                     fontFamily: AppTypography.fontFamily,
                   ),
                 ),
@@ -493,7 +527,10 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
             if (badgeCount > 0) ...[
               const SizedBox(width: 4.0),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5.0, vertical: 1.5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 5.0,
+                  vertical: 1.5,
+                ),
                 decoration: BoxDecoration(
                   color: isSelected ? AppPalette.secondary : AppPalette.warning,
                   borderRadius: BorderRadius.circular(10.0),
@@ -516,7 +553,9 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
 
   Widget _buildOrdenPorAsignarCard(OrdenHistorialModel orden) {
     // Guardia de seguridad: Asegurar que la orden sea venta en verde con ítem pendiente
-    final tieneBackorderPendiente = orden.detalles.any((d) => !d.esInventariado);
+    final tieneBackorderPendiente = orden.detalles.any(
+      (d) => !d.esInventariado,
+    );
     if (!tieneBackorderPendiente) {
       return const SizedBox.shrink();
     }
@@ -579,7 +618,10 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
                     ),
                     const SizedBox(width: 8.0),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 4.0),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10.0,
+                        vertical: 4.0,
+                      ),
                       decoration: BoxDecoration(
                         color: AppPalette.warning.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(20.0),
@@ -591,7 +633,11 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.pending_actions, size: 13.0, color: AppPalette.warning),
+                          const Icon(
+                            Icons.pending_actions,
+                            size: 13.0,
+                            color: AppPalette.warning,
+                          ),
                           const SizedBox(width: 4.0),
                           Text(
                             'Por Asignar Activo',
@@ -623,7 +669,8 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
                     const SizedBox(width: 6.0),
                     Expanded(
                       child: Text(
-                        orden.cliente != null && orden.cliente!.nombres.isNotEmpty
+                        orden.cliente != null &&
+                                orden.cliente!.nombres.isNotEmpty
                             ? '${orden.cliente!.nombreCompleto} (${orden.cliente!.rutCliente})'
                             : 'Cliente General',
                         style: AppTypography.body.copyWith(
@@ -659,11 +706,16 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
                       child: Align(
                         alignment: Alignment.centerRight,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 2.0),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8.0,
+                            vertical: 2.0,
+                          ),
                           decoration: BoxDecoration(
                             color: AppPalette.success.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(4.0),
-                            border: Border.all(color: AppPalette.success.withValues(alpha: 0.4)),
+                            border: Border.all(
+                              color: AppPalette.success.withValues(alpha: 0.4),
+                            ),
                           ),
                           child: Text(
                             'Pagada al 100% (${orden.totalVentaFormateado})',
@@ -784,7 +836,9 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
             const SizedBox(height: 8.0),
             Text(
               'No hay resultados para "$_searchQuery". Verifica el folio (#...), cliente, RUT o nombre del repuesto.',
-              style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
+              style: AppTypography.small.copyWith(
+                color: AppPalette.textSecondary,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20.0),
@@ -792,7 +846,9 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppPalette.primary,
                 side: const BorderSide(color: AppPalette.primary),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                ),
               ),
               icon: const Icon(Icons.clear, size: 18.0),
               label: const Text('Limpiar Búsqueda'),
@@ -829,7 +885,9 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
                     ? Icons.assignment_turned_in_outlined
                     : Icons.receipt_long_outlined,
                 size: 54.0,
-                color: esPorAsignar ? AppPalette.success : AppPalette.textSecondary,
+                color: esPorAsignar
+                    ? AppPalette.success
+                    : AppPalette.textSecondary,
               ),
             ),
             const SizedBox(height: 20.0),
@@ -837,10 +895,10 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
               esPorAsignar
                   ? 'Sin ventas en verde por asignar'
                   : _filtroEstado != null
-                      ? 'No hay órdenes en estado "$_filtroEstado"'
-                      : _verTodas
-                          ? 'No tienes órdenes en tu historial'
-                          : 'No has generado órdenes hoy',
+                  ? 'No hay órdenes en estado "$_filtroEstado"'
+                  : _verTodas
+                  ? 'No tienes órdenes en tu historial'
+                  : 'No has generado órdenes hoy',
               style: AppTypography.title.copyWith(fontSize: 18.0),
               textAlign: TextAlign.center,
             ),
@@ -849,11 +907,13 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
               esPorAsignar
                   ? 'Todas tus ventas en verde pagadas ya cuentan con su activo físico asignado o están en proceso.'
                   : _filtroEstado != null
-                      ? 'Prueba cambiando o limpiando los filtros para ver otras ventas.'
-                      : _verTodas
-                          ? 'Tus ventas derivadas a caja aparecerán aquí con su estado en tiempo real.'
-                          : 'Las ventas creadas durante el día se listarán aquí para su seguimiento y gestión.',
-              style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
+                  ? 'Prueba cambiando o limpiando los filtros para ver otras ventas.'
+                  : _verTodas
+                  ? 'Tus ventas derivadas a caja aparecerán aquí con su estado en tiempo real.'
+                  : 'Las ventas creadas durante el día se listarán aquí para su seguimiento y gestión.',
+              style: AppTypography.small.copyWith(
+                color: AppPalette.textSecondary,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24.0),
@@ -862,11 +922,23 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppPalette.primary,
                   side: const BorderSide(color: AppPalette.primary),
-                  padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20.0,
+                    vertical: 12.0,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8.0),
+                  ),
                 ),
-                icon: Icon(_filtroEstado != null ? Icons.filter_alt_off : Icons.history, size: 18.0),
-                label: Text(_filtroEstado != null ? 'Limpiar Filtros' : 'Ver Historial Completo'),
+                icon: Icon(
+                  _filtroEstado != null ? Icons.filter_alt_off : Icons.history,
+                  size: 18.0,
+                ),
+                label: Text(
+                  _filtroEstado != null
+                      ? 'Limpiar Filtros'
+                      : 'Ver Historial Completo',
+                ),
                 onPressed: () {
                   setState(() {
                     _filtroEstado = null;
@@ -892,16 +964,20 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline, size: 48.0, color: AppPalette.error),
-            const SizedBox(height: 16.0),
-            const Text(
-              'Error al cargar órdenes',
-              style: AppTypography.title,
+            const Icon(
+              Icons.error_outline,
+              size: 48.0,
+              color: AppPalette.error,
             ),
+            const SizedBox(height: 16.0),
+            const Text('Error al cargar órdenes', style: AppTypography.title),
             const SizedBox(height: 8.0),
             Text(
-              _errorMessage ?? 'Ocurrió un error inesperado al conectar con el servidor.',
-              style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
+              _errorMessage ??
+                  'Ocurrió un error inesperado al conectar con el servidor.',
+              style: AppTypography.small.copyWith(
+                color: AppPalette.textSecondary,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20.0),
@@ -910,7 +986,9 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
                 backgroundColor: AppPalette.primary,
                 foregroundColor: AppPalette.textPrimary,
                 elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                ),
               ),
               icon: const Icon(Icons.refresh, size: 18.0),
               label: const Text('Reintentar'),
@@ -943,18 +1021,15 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Mis Órdenes de Venta',
-              style: AppTypography.title,
-            ),
+            const Text('Mis Órdenes', style: AppTypography.title),
             Text(
               _seccionActual == 'por_asignar'
                   ? 'Ventas en verde pagadas pendientes de activo'
                   : _filtroEstado != null
-                      ? 'Filtro: $_filtroEstado (${_verTodas ? "Historial" : "Hoy"})'
-                      : _verTodas
-                          ? 'Historial completo de ventas'
-                          : 'Ventas del día (Hoy)',
+                  ? 'Filtro: $_filtroEstado (${_verTodas ? "Historial" : "Hoy"})'
+                  : _verTodas
+                  ? 'Historial completo de ventas'
+                  : 'Ventas del día (Hoy)',
               style: AppTypography.small.copyWith(
                 fontSize: 12.0,
                 color: (_seccionActual == 'por_asignar' || hayFiltrosActivos)
@@ -973,7 +1048,9 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
                 IconButton(
                   icon: Icon(
                     Icons.tune,
-                    color: hayFiltrosActivos ? AppPalette.secondary : AppPalette.textPrimary,
+                    color: hayFiltrosActivos
+                        ? AppPalette.secondary
+                        : AppPalette.textPrimary,
                   ),
                   onPressed: () {
                     setState(() {
@@ -1044,61 +1121,61 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
                     child: CircularProgressIndicator(color: AppPalette.primary),
                   )
                 : _errorMessage != null
-                    ? _buildErrorState()
-                    : _ordenes.isEmpty
-                        ? RefreshIndicator(
-                            onRefresh: _cargarOrdenes,
-                            color: AppPalette.primary,
-                            backgroundColor: AppPalette.surface,
-                            child: ListView(
-                              physics: const AlwaysScrollableScrollPhysics(),
-                              children: [
-                                SizedBox(
-                                  height: MediaQuery.of(context).size.height * 0.65,
-                                  child: _buildEmptyState(),
-                                ),
-                              ],
-                            ),
-                          )
-                        : ordenesMostradas.isEmpty
-                            ? RefreshIndicator(
-                                onRefresh: _cargarOrdenes,
-                                color: AppPalette.primary,
-                                backgroundColor: AppPalette.surface,
-                                child: ListView(
-                                  physics: const AlwaysScrollableScrollPhysics(),
-                                  children: [
-                                    SizedBox(
-                                      height: MediaQuery.of(context).size.height * 0.65,
-                                      child: _buildNoSearchResultsState(),
-                                    ),
-                                  ],
-                                ),
-                              )
-                            : RefreshIndicator(
-                                onRefresh: _cargarOrdenes,
-                                color: AppPalette.primary,
-                                backgroundColor: AppPalette.surface,
-                                child: ListView.builder(
-                                  physics: const AlwaysScrollableScrollPhysics(),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16.0,
-                                    vertical: 8.0,
-                                  ),
-                                  itemCount: ordenesMostradas.length,
-                                  itemBuilder: (context, index) {
-                                    final orden = ordenesMostradas[index];
-                                    if (_seccionActual == 'por_asignar') {
-                                      return _buildOrdenPorAsignarCard(orden);
-                                    }
-                                    return OrdenCard(
-                                      orden: orden,
-                                      onTap: () => _abrirDetalleOrden(orden),
-                                      onEstadoDespachoCambiado: _cargarOrdenes,
-                                    );
-                                  },
-                                ),
-                              ),
+                ? _buildErrorState()
+                : _ordenes.isEmpty
+                ? RefreshIndicator(
+                    onRefresh: _cargarOrdenes,
+                    color: AppPalette.primary,
+                    backgroundColor: AppPalette.surface,
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      children: [
+                        SizedBox(
+                          height: MediaQuery.of(context).size.height * 0.65,
+                          child: _buildEmptyState(),
+                        ),
+                      ],
+                    ),
+                  )
+                : ordenesMostradas.isEmpty
+                ? RefreshIndicator(
+                    onRefresh: _cargarOrdenes,
+                    color: AppPalette.primary,
+                    backgroundColor: AppPalette.surface,
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      children: [
+                        SizedBox(
+                          height: MediaQuery.of(context).size.height * 0.65,
+                          child: _buildNoSearchResultsState(),
+                        ),
+                      ],
+                    ),
+                  )
+                : RefreshIndicator(
+                    onRefresh: _cargarOrdenes,
+                    color: AppPalette.primary,
+                    backgroundColor: AppPalette.surface,
+                    child: ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16.0,
+                        vertical: 8.0,
+                      ),
+                      itemCount: ordenesMostradas.length,
+                      itemBuilder: (context, index) {
+                        final orden = ordenesMostradas[index];
+                        if (_seccionActual == 'por_asignar') {
+                          return _buildOrdenPorAsignarCard(orden);
+                        }
+                        return OrdenCard(
+                          orden: orden,
+                          onTap: () => _abrirDetalleOrden(orden),
+                          onEstadoDespachoCambiado: _cargarOrdenes,
+                        );
+                      },
+                    ),
+                  ),
           ),
         ],
       ),

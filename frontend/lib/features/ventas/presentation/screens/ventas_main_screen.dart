@@ -375,7 +375,8 @@ class _VentasMainScreenState extends State<VentasMainScreen>
         BandejaPreciosScreen(
           key: _bandejaPreciosKey,
           onOpenMenuDrawer: () => _scaffoldKey.currentState?.openDrawer(),
-          onRefreshCatalogo: () => _catalogoKey.currentState?.refrescarCatalogo(),
+          onRefreshCatalogo: () =>
+              _catalogoKey.currentState?.refrescarCatalogo(),
         ),
       );
     }
@@ -475,53 +476,55 @@ class _VentasMainScreenState extends State<VentasMainScreen>
         key: _scaffoldKey,
         backgroundColor: AppPalette.background,
         drawer: _buildDrawer(context),
-      body: IndexedStack(index: safeIndex, children: tabs),
-      bottomNavigationBar: ListenableBuilder(
-        listenable: CartController.instance,
-        builder: (context, _) {
-          final totalItems = CartController.instance.totalItems;
-          final navItems = _buildNavItems(totalItems);
+        body: IndexedStack(index: safeIndex, children: tabs),
+        bottomNavigationBar: ListenableBuilder(
+          listenable: CartController.instance,
+          builder: (context, _) {
+            final totalItems = CartController.instance.totalItems;
+            final navItems = _buildNavItems(totalItems);
 
-          return Container(
-            decoration: const BoxDecoration(
-              color: AppPalette.surface,
-              border: Border(
-                top: BorderSide(color: Colors.white10, width: 1.0),
+            return Container(
+              decoration: const BoxDecoration(
+                color: AppPalette.surface,
+                border: Border(
+                  top: BorderSide(color: Colors.white10, width: 1.0),
+                ),
               ),
-            ),
-            child: BottomNavigationBar(
-              currentIndex: safeIndex,
-              onTap: (index) {
-                setState(() {
-                  _currentIndex = index;
-                });
-                _actualizarPendientesTasacion();
-                if (index == 0) {
-                  _catalogoKey.currentState?.refrescarCatalogoSilencioso();
-                } else if (index == 1) {
-                  _historialKey.currentState?.refrescarSilencioso();
-                } else if (_esJefeVentas && index == 2) {
-                  _bandejaPreciosKey.currentState?.refrescarSilencioso();
-                } else if (index == tabs.length - 1) {
-                  CartController.instance.reconciliarConBackend();
-                }
-              },
-              backgroundColor: AppPalette.surface,
-              selectedItemColor: AppPalette.primary,
-              unselectedItemColor: AppPalette.neutral,
-              selectedLabelStyle: AppTypography.small.copyWith(
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
+              child: BottomNavigationBar(
+                currentIndex: safeIndex,
+                onTap: (index) {
+                  setState(() {
+                    _currentIndex = index;
+                  });
+                  _actualizarPendientesTasacion();
+                  if (index == 0) {
+                    _catalogoKey.currentState?.refrescarCatalogoSilencioso();
+                  } else if (index == 1) {
+                    _historialKey.currentState?.refrescarSilencioso();
+                  } else if (_esJefeVentas && index == 2) {
+                    _bandejaPreciosKey.currentState?.refrescarSilencioso();
+                  } else if (index == tabs.length - 1) {
+                    CartController.instance.reconciliarConBackend();
+                  }
+                },
+                backgroundColor: AppPalette.surface,
+                selectedItemColor: AppPalette.primary,
+                unselectedItemColor: AppPalette.neutral,
+                selectedLabelStyle: AppTypography.small.copyWith(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+                unselectedLabelStyle: AppTypography.small.copyWith(
+                  fontSize: 11,
+                ),
+                type: BottomNavigationBarType.fixed,
+                elevation: 0,
+                items: navItems,
               ),
-              unselectedLabelStyle: AppTypography.small.copyWith(fontSize: 11),
-              type: BottomNavigationBarType.fixed,
-              elevation: 0,
-              items: navItems,
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 }
