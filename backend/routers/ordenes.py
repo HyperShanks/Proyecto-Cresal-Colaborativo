@@ -1959,8 +1959,24 @@ def pagar_orden(
                     d.estado_preparacion = "Listo"
                     d.fecha_preparacion = now_utc
 
-                orden.estado_orden = "Completada"
-                print("✅ [PAGO] Orden de solo misceláneos saldada: completada automáticamente.")
+                # Si es una venta online (vendedor online o tiene responsable asignado),
+                # o requiere despacho/retiro en sucursal con entrega física pendiente:
+                # debe quedar en 'Pagada' para que el responsable en sucursal la vea
+                # en 'Entregas y Envíos' y pueda marcar la entrega física cuando el cliente retire.
+                es_pendiente_entrega = False
+                if orden.id_vendedor_asignado is not None or despacho_asociado is not None:
+                    es_pendiente_entrega = True
+                else:
+                    v_creador = db.query(Usuario).filter(Usuario.id_usuario == orden.id_vendedor).first()
+                    if v_creador and v_creador.id_rol == 7:
+                        es_pendiente_entrega = True
+
+                if es_pendiente_entrega:
+                    orden.estado_orden = "Pagada"
+                    print("📦 [PAGO] Orden con entrega/despacho pendiente de misceláneos: queda en 'Pagada'.")
+                else:
+                    orden.estado_orden = "Completada"
+                    print("✅ [PAGO] Orden presencial de solo misceláneos saldada: completada automáticamente.")
         else:
             orden.estado_orden = "Reservada"
             orden.qr_transaccional_salida = None

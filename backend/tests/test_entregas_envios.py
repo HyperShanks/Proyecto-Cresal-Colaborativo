@@ -711,3 +711,134 @@ def test_ventas_en_verde_no_pagadas_o_sin_qr_no_aparecen_en_entregas_envios(clie
         db.close()
 
 
+def test_venta_libre_online_permanece_pagada_hasta_entrega(client, auth_headers):
+    """
+    Verifica que una venta libre (solo misceláneos) emitida online y asignada a un vendedor:
+    1. Al pagarse en caja queda en estado 'Pagada' (NO pasa directo a 'Completada').
+    2. Aparece en el listado de Entregas y Envíos para el vendedor asignado con saldo $0.
+    3. Al confirmar entrega en tienda ('/{id_orden}/entregar'), pasa a 'Completada' y sale del listado.
+    """
+    db = TestingSessionLocal()
+    try:
+        user_cajero = models.Usuario(
+            id_usuario=uuid.uuid4(),
+            rut_usuario="22.111.333-4",
+            nombres="Cajero",
+            apellidos="Test",
+            email="cajero_test@cresal.cl",
+            id_rol=3,
+            id_sucursal=1,
+            password_hash="dummy",
+            pin_acceso="8880",
+            estado="Activo",
+        )
+        db.add(user_cajero)
+
+        vend_asignado = models.Usuario(
+            id_usuario=uuid.uuid4(),
+            rut_usuario="23.456.789-0",
+            nombres="Vendedor",
+            apellidos="Responsable",
+            email="resp@cresal.cl",
+            id_rol=2,
+            id_sucursal=1,
+            password_hash="dummy",
+            pin_acceso="8881",
+            estado="Activo",
+        )
+        db.add(vend_asignado)
+
+        online_seller = models.Usuario(
+            id_usuario=uuid.uuid4(),
+            rut_usuario="24.567.890-1",
+            nombres="Marcela",
+            apellidos="Online",
+            email="online@cresal.cl",
+            id_rol=7,
+            id_sucursal=1,
+            password_hash="dummy",
+            pin_acceso="8882",
+            estado="Activo",
+        )
+        db.add(online_seller)
+
+        cli = models.Cliente(
+            id_cliente=uuid.uuid4(),
+            rut_cliente="25.678.901-2",
+            nombres="Cliente",
+            apellidos="Online",
+            telefono="+56911223344",
+            consentimiento_legal=True,
+        )
+        db.add(cli)
+        db.flush()
+
+        # 1. Crear Orden de Venta Libre con id_vendedor_asignado
+        orden_libre = models.Orden_Venta(
+            id_orden=uuid.uuid4(),
+            id_cliente=cli.id_cliente,
+            id_vendedor=online_seller.id_usuario,
+            id_vendedor_asignado=vend_asignado.id_usuario,
+            id_sucursal=1,
+            estado_orden="Reservada",
+            total_venta=35000,
+            monto_pendiente=35000,
+            abono_requerido=0,
+            fecha_creacion=datetime.now(),
+        )
+        db.add(orden_libre)
+        db.flush()
+
+        det_libre = models.Detalle_Orden(
+            id_detalle=uuid.uuid4(),
+            id_orden=orden_libre.id_orden,
+            id_activo=None,
+            descripcion_manual="Tapa de Radiador y Manguera Superior (Venta Libre)",
+            cantidad=1,
+            precio_final=35000,
+            estado_preparacion="Listo",
+        )
+        db.add(det_libre)
+        db.commit()
+
+        # 2. Pagar la orden en Caja con saldo 0
+        token_cajero = create_access_token(data={"sub": str(user_cajero.id_usuario), "id_rol": 4, "id_sucursal": 1})
+        headers_caj = {"Authorization": f"Bearer {token_cajero}"}
+
+        pago_payload = {
+            "monto": 35000,
+            "metodo_pago": "Efectivo",
+            "tipo_comprobante": "Boleta",
+        }
+        res_pago = client.post(f"/api/v1/ordenes/{orden_libre.id_orden}/pagar", json=pago_payload, headers=headers_caj)
+        assert res_pago.status_code == 200, res_pago.text
+        data_pago = res_pago.json()
+        assert data_pago["estado_orden"] == "Pagada", f"Se esperaba Pagada pero fue {data_pago['estado_orden']}"
+
+        # 3. Consultar como Vendedor Asignado en Entregas y Envíos
+        token_asig = create_access_token(data={"sub": str(vend_asignado.id_usuario), "id_rol": 2, "id_sucursal": 1})
+        headers_asig = {"Authorization": f"Bearer {token_asig}"}
+
+        res_entregas = client.get("/api/v1/ordenes/entregas-envios?sucursal_id=1", headers=headers_asig)
+        assert res_entregas.status_code == 200
+        data_entregas = res_entregas.json()
+        item_encontrado = next((x for x in data_entregas if x["id_orden"] == str(orden_libre.id_orden)), None)
+        assert item_encontrado is not None, "La orden debe ser visible para el vendedor asignado"
+        assert item_encontrado["monto_pendiente"] == 0
+        assert item_encontrado["preparacion_lista"] is True
+
+        # 4. Confirmar Entrega en Tienda por el vendedor asignado
+        res_entrega = client.patch(f"/api/v1/ordenes/{orden_libre.id_orden}/entregar", headers=headers_asig)
+        assert res_entrega.status_code == 200, res_entrega.text
+        assert res_entrega.json()["estado_orden"] == "Completada"
+
+        # 5. La orden ya no debe aparecer en entregas-envios
+        res_post = client.get("/api/v1/ordenes/entregas-envios?sucursal_id=1", headers=headers_asig)
+        assert res_post.status_code == 200
+        assert not any(x["id_orden"] == str(orden_libre.id_orden) for x in res_post.json())
+
+    finally:
+        db.close()
+
+
+
