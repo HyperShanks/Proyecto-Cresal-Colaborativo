@@ -42,6 +42,12 @@ class CobroPendienteCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isVenta = orden.esVenta;
+    final bool tieneAbonoInicial = (orden.abonoRequerido > 0 ||
+            (orden.montoACobrar > 0 && orden.montoACobrar < orden.totalOperacion)) &&
+        orden.esPrimerAbono;
+    final int montoAbonoInicial =
+        orden.abonoRequerido > 0 ? orden.abonoRequerido : orden.montoACobrar;
+
     final badgeBg = isVenta
         ? AppPalette.secondary.withValues(alpha: 0.15)
         : const Color(0xFF4F46E5).withValues(alpha: 0.12);
@@ -140,6 +146,36 @@ class CobroPendienteCard extends StatelessWidget {
                     ),
                   ],
                 ),
+                if (tieneAbonoInicial) ...[
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF3E8FF),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFFC084FC), width: 1),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.savings_rounded, size: 12, color: Color(0xFF7E22CE)),
+                        const SizedBox(width: 4),
+                        Text(
+                          'ABONO INICIAL: ${formatClp(montoAbonoInicial)}',
+                          style: AppTypography.small.copyWith(
+                            color: const Color(0xFF7E22CE),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 8),
 
                 // ── FILA 2: Cliente destacado, RUT y Vendedor ──
@@ -263,22 +299,31 @@ class CobroPendienteCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            orden.abonoPrevio > 0
-                                ? 'Saldo Pendiente:'
-                                : (!isVenta
-                                    ? (orden.montoACobrar < orden.totalOperacion
-                                        ? 'Abono Inicial:'
-                                        : 'Total Reserva:')
-                                    : (orden.montoACobrar < orden.totalOperacion
-                                        ? 'Abono Acordado:'
-                                        : 'Total a Pagar:')),
+                            tieneAbonoInicial
+                                ? 'Abono Inicial Acordado:'
+                                : (orden.abonoPrevio > 0
+                                    ? 'Saldo Pendiente:'
+                                    : (!isVenta ? 'Total Reserva:' : 'Total a Pagar:')),
                             style: AppTypography.small.copyWith(
-                              color: AppPalette.textSecondaryLight,
+                              color: tieneAbonoInicial
+                                  ? const Color(0xFF7E22CE)
+                                  : AppPalette.textSecondaryLight,
                               fontSize: 12,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
-                          if (orden.abonoPrevio > 0) ...[
+                          if (tieneAbonoInicial) ...[
+                            Text(
+                              'Saldo: ${formatClp(orden.totalOperacion - montoAbonoInicial)} • Total: ${formatClp(orden.totalOperacion)}',
+                              style: AppTypography.small.copyWith(
+                                color: AppPalette.textSecondaryLight,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ] else if (orden.abonoPrevio > 0) ...[
                             Text(
                               'Total: ${formatClp(orden.totalOperacion)} • Abonos: ${formatClp(orden.abonoPrevio)}',
                               style: AppTypography.small.copyWith(
@@ -295,13 +340,19 @@ class CobroPendienteCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      formatClp(orden.saldoPendiente > 0 ? orden.saldoPendiente : orden.montoACobrar),
+                      formatClp(
+                        tieneAbonoInicial
+                            ? montoAbonoInicial
+                            : (orden.abonoPrevio > 0
+                                ? (orden.saldoPendiente > 0 ? orden.saldoPendiente : orden.montoACobrar)
+                                : (orden.saldoPendiente > 0 ? orden.saldoPendiente : orden.totalOperacion)),
+                      ),
                       style: AppTypography.title.copyWith(
                         fontSize: 18,
                         fontWeight: FontWeight.w900,
-                        color: isVenta
-                            ? AppPalette.success
-                            : const Color(0xFF4F46E5),
+                        color: tieneAbonoInicial
+                            ? const Color(0xFF7E22CE)
+                            : (isVenta ? AppPalette.success : const Color(0xFF4F46E5)),
                       ),
                     ),
                   ],

@@ -5,6 +5,8 @@ import '../../../../routes/app_routes.dart';
 import '../../../auth/services/auth_service.dart';
 import '../../../alertas/services/bodega_polling_service.dart';
 import '../../../paletizado/services/paletizado_service.dart';
+import '../../../../core/widgets/update_dialog.dart';
+import '../../../../core/services/app_update_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HOME SCREEN — Panel principal de Bodega (Terminal Bodega) protegido por sesión
@@ -36,6 +38,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _guardRoute();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AppUpdateChecker.check(context, showIfUpToDate: false);
+    });
   }
 
   @override
@@ -272,6 +277,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             label: 'CONFIGURACIÓN',
             onTap: () => Navigator.of(context).pop(),
           ),
+          _buildDrawerItem(
+            icon: Icons.system_update_alt_rounded,
+            label: 'BUSCAR ACTUALIZACIONES',
+            onTap: () {
+              Navigator.of(context).pop();
+              AppUpdateChecker.check(context, showIfUpToDate: true);
+            },
+          ),
           const Spacer(),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -298,6 +311,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
               ),
             ),
+          ),
+          FutureBuilder<String>(
+            future: AppUpdateService().getCurrentVersion(),
+            builder: (context, snapshot) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Text(
+                  'Cresal App v${snapshot.data ?? "..."}',
+                  style: AppTypography.small.copyWith(
+                    color: AppPalette.textSecondary.withValues(alpha: 0.6),
+                    fontSize: 11,
+                  ),
+                ),
+              );
+            },
           ),
         ],
       ),

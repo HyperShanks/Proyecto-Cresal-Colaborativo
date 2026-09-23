@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../../auth/services/auth_service.dart';
+import '../../../../core/widgets/update_dialog.dart';
+import '../../../../core/services/app_update_service.dart';
 
 /// Sidebar / Drawer lateral para el Módulo de Caja.
 /// Diseñado con AppPalette.tertiary (#004C89) y AppTypography.
@@ -152,6 +154,20 @@ class CajaDrawer extends StatelessWidget {
                       } else {
                         Navigator.of(context).pushNamed('/tickets');
                       }
+                    },
+                  ),
+                  const SizedBox(height: 6),
+                  _buildMenuItem(
+                    context: context,
+                    icon: Icons.system_update_alt_rounded,
+                    title: 'Buscar Actualizaciones',
+                    subtitle: 'Comprobar nueva versión',
+                    isSelected: false,
+                    onTap: () {
+                      if (Scaffold.maybeOf(context)?.isDrawerOpen ?? false) {
+                        Navigator.of(context).pop();
+                      }
+                      AppUpdateChecker.check(context, showIfUpToDate: true);
                     },
                   ),
                 ],
@@ -350,33 +366,53 @@ class CajaDrawer extends StatelessWidget {
   Widget _buildLogoutButton(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: SizedBox(
-        width: double.infinity,
-        child: TextButton.icon(
-          style: TextButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            foregroundColor: Colors.white,
-            backgroundColor: AppPalette.error.withValues(alpha: 0.25),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-              side: BorderSide(
-                color: AppPalette.error.withValues(alpha: 0.5),
-                width: 1,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: double.infinity,
+            child: TextButton.icon(
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                foregroundColor: Colors.white,
+                backgroundColor: AppPalette.error.withValues(alpha: 0.25),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  side: BorderSide(
+                    color: AppPalette.error.withValues(alpha: 0.5),
+                    width: 1,
+                  ),
+                ),
               ),
+              icon: const Icon(Icons.logout_rounded, size: 18, color: Colors.white),
+              label: Text(
+                'CERRAR SESIÓN',
+                style: AppTypography.button.copyWith(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                  fontSize: 13,
+                  color: Colors.white,
+                ),
+              ),
+              onPressed: () => _handleLogout(context),
             ),
           ),
-          icon: const Icon(Icons.logout_rounded, size: 18, color: Colors.white),
-          label: Text(
-            'CERRAR SESIÓN',
-            style: AppTypography.button.copyWith(
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.5,
-              fontSize: 13,
-              color: Colors.white,
-            ),
+          const SizedBox(height: 10),
+          FutureBuilder<String>(
+            future: AppUpdateService().getCurrentVersion(),
+            builder: (context, snapshot) {
+              return Center(
+                child: Text(
+                  'Cresal App v${snapshot.data ?? "..."}',
+                  style: AppTypography.small.copyWith(
+                    color: Colors.white.withValues(alpha: 0.5),
+                    fontSize: 11,
+                  ),
+                ),
+              );
+            },
           ),
-          onPressed: () => _handleLogout(context),
-        ),
+        ],
       ),
     );
   }

@@ -196,6 +196,13 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
 
                     // ── 5. Ubicación en Bodega ───────────────────────────────
                     _buildUbicacionCard(),
+                    if (widget.item.observacionEstado != null &&
+                        widget.item.observacionEstado!.trim().isNotEmpty &&
+                        widget.item.observacionEstado!.trim().toLowerCase() != 'null' &&
+                        widget.item.observacionEstado!.trim() != 'Sin observaciones registradas.') ...[
+                      const SizedBox(height: 24),
+                      _buildObservacionBodegaCard(),
+                    ],
                     const SizedBox(height: 20),
                   ],
                 ),
@@ -621,6 +628,53 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Observaciones de Bodega / Estado del Activo
+  Widget _buildObservacionBodegaCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18.0),
+      decoration: BoxDecoration(
+        color: AppPalette.surface,
+        borderRadius: BorderRadius.circular(14.0),
+        border: Border.all(
+          color: AppPalette.secondary.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.sticky_note_2_outlined, size: 20, color: AppPalette.secondary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'OBSERVACIÓN DE BODEGA / ESTADO',
+                  style: AppTypography.title.copyWith(
+                    fontSize: 15,
+                    letterSpacing: 1.0,
+                    fontWeight: FontWeight.bold,
+                    color: AppPalette.secondary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const Divider(color: Colors.white10, height: 24),
+          Text(
+            widget.item.observacionEstado!.trim(),
+            style: AppTypography.body.copyWith(
+              fontSize: 14,
+              height: 1.4,
+              color: AppPalette.textPrimary,
+            ),
           ),
         ],
       ),

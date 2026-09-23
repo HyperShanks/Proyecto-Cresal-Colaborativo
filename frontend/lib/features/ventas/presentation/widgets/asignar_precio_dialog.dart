@@ -219,6 +219,53 @@ class _AsignarPrecioDialogState extends State<AsignarPrecioDialog> {
                           fontSize: 11.0,
                         ),
                       ),
+                      if (widget.activo.observacionEstado != null &&
+                          widget.activo.observacionEstado!.trim().isNotEmpty &&
+                          widget.activo.observacionEstado!.trim().toLowerCase() != 'null' &&
+                          widget.activo.observacionEstado!.trim() != 'Sin observaciones registradas.') ...[
+                        const SizedBox(height: 8.0),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 8.0),
+                          decoration: BoxDecoration(
+                            color: AppPalette.secondary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8.0),
+                            border: Border.all(
+                              color: AppPalette.secondary.withValues(alpha: 0.3),
+                              width: 1.0,
+                            ),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(Icons.sticky_note_2_outlined, size: 16.0, color: AppPalette.secondary),
+                              const SizedBox(width: 8.0),
+                              Expanded(
+                                child: RichText(
+                                  text: TextSpan(
+                                    style: AppTypography.small.copyWith(
+                                      color: AppPalette.textPrimary,
+                                      fontSize: 12.0,
+                                    ),
+                                    children: [
+                                      const TextSpan(
+                                        text: 'Obs. Bodega: ',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: AppPalette.secondary,
+                                        ),
+                                      ),
+                                      TextSpan(
+                                        text: widget.activo.observacionEstado!.trim(),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

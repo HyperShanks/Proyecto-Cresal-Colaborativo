@@ -173,6 +173,54 @@ class PendientePrecioCard extends StatelessWidget {
                   ],
                 ),
 
+                if (activo.observacionEstado != null &&
+                    activo.observacionEstado!.trim().isNotEmpty &&
+                    activo.observacionEstado!.trim() != 'null' &&
+                    activo.observacionEstado!.trim() != 'Sin observaciones registradas.') ...[
+                  const SizedBox(height: 10.0),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 8.0),
+                    decoration: BoxDecoration(
+                      color: AppPalette.secondary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8.0),
+                      border: Border.all(
+                        color: AppPalette.secondary.withValues(alpha: 0.3),
+                        width: 1.0,
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.sticky_note_2_outlined, size: 16.0, color: AppPalette.secondary),
+                        const SizedBox(width: 8.0),
+                        Expanded(
+                          child: RichText(
+                            text: TextSpan(
+                              style: AppTypography.small.copyWith(
+                                color: AppPalette.textPrimary,
+                                fontSize: 12.0,
+                              ),
+                              children: [
+                                const TextSpan(
+                                  text: 'Obs. Bodega: ',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: AppPalette.secondary,
+                                  ),
+                                ),
+                                TextSpan(
+                                  text: activo.observacionEstado!.trim(),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
                 const SizedBox(height: 14.0),
 
                 // ── Botón de Acción: Asignar Precio ────────────────────────

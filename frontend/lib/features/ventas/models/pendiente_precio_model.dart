@@ -27,6 +27,7 @@ class ActivoPendientePrecioModel {
   final int? precioReferencia;
   final int? precioMinimo;
   final int? precioMaximo;
+  final String? observacionEstado;
 
   const ActivoPendientePrecioModel({
     required this.idActivo,
@@ -54,6 +55,7 @@ class ActivoPendientePrecioModel {
     this.precioReferencia,
     this.precioMinimo,
     this.precioMaximo,
+    this.observacionEstado,
   });
 
   factory ActivoPendientePrecioModel.fromJson(Map<String, dynamic> json) {
@@ -108,6 +110,7 @@ class ActivoPendientePrecioModel {
       precioReferencia: (json['precio_referencia'] as num?)?.toInt(),
       precioMinimo: (json['precio_minimo'] as num?)?.toInt(),
       precioMaximo: (json['precio_maximo'] as num?)?.toInt(),
+      observacionEstado: json['observacion_estado']?.toString() ?? json['observacion']?.toString(),
     );
   }
 

@@ -249,7 +249,16 @@ class CajaProvider extends ChangeNotifier {
     _ordenSeleccionada = orden;
     _ultimoResultadoCobro = null;
     if (orden != null) {
-      if (orden.esPrimerAbono && orden.pisoPrimerAbono > 0) {
+      final bool tieneAbonoAcordado = (orden.abonoRequerido > 0 ||
+              (orden.montoACobrar > 0 && orden.montoACobrar < orden.totalOperacion)) &&
+          orden.esPrimerAbono;
+      final int abonoInicial =
+          orden.abonoRequerido > 0 ? orden.abonoRequerido : orden.montoACobrar;
+
+      if (tieneAbonoAcordado && abonoInicial > 0) {
+        _modalidad = 'ABONO';
+        _montoDeclarado = abonoInicial;
+      } else if (orden.esPrimerAbono && orden.pisoPrimerAbono > 0) {
         _modalidad = 'ABONO';
         _montoDeclarado = orden.pisoPrimerAbono;
       } else {
@@ -284,7 +293,15 @@ class CajaProvider extends ChangeNotifier {
       if (_modalidad == 'LIQUIDACION') {
         _montoDeclarado = saldo;
       } else if (_modalidad == 'ABONO') {
-        if (_ordenSeleccionada!.esPrimerAbono && _ordenSeleccionada!.pisoPrimerAbono > 0) {
+        final abonoAcordado = _ordenSeleccionada!.abonoRequerido > 0
+            ? _ordenSeleccionada!.abonoRequerido
+            : (_ordenSeleccionada!.montoACobrar > 0 && _ordenSeleccionada!.montoACobrar < saldo
+                ? _ordenSeleccionada!.montoACobrar
+                : 0);
+
+        if (abonoAcordado > 0 && _ordenSeleccionada!.esPrimerAbono) {
+          _montoDeclarado = abonoAcordado;
+        } else if (_ordenSeleccionada!.esPrimerAbono && _ordenSeleccionada!.pisoPrimerAbono > 0) {
           _montoDeclarado = _ordenSeleccionada!.pisoPrimerAbono;
         } else {
           final sugerido = (saldo * 0.5).round();

@@ -633,6 +633,11 @@ def listar_ordenes_auditoria(
     pagos_por_orden: Dict[int, List[Transaccion_Pago]] = defaultdict(list)
     articulos_por_orden: Dict[int, List[HistorialArticuloDTO]] = defaultdict(list)
 
+    # Resolución de cajera activa por sucursal para órdenes históricas que requieran fallback
+    cajeras_db = db.query(Usuario).filter(Usuario.id_rol == 3, Usuario.estado == "Activo").all()
+    cajeras_activas_por_sucursal = {u.id_sucursal: f"{u.nombres} {u.apellidos or ''}".strip() for u in cajeras_db}
+    cajera_general = next(iter(cajeras_activas_por_sucursal.values()), None) or "Caja"
+
     if orden_ids:
         todos_pagos = (
             db.query(Transaccion_Pago)
@@ -710,7 +715,14 @@ def listar_ordenes_auditoria(
 
         # Timeline de movimientos
         vendedor_nom = f"{vendedor.nombres} {vendedor.apellidos or ''}".strip()
-        cajera_nom = f"{cajera.nombres} {cajera.apellidos or ''}".strip() if cajera else "Lorena Valenzuela"
+        if cajera:
+            cajera_nom = f"{cajera.nombres} {cajera.apellidos or ''}".strip()
+        elif orden.estado_orden and orden.estado_orden.lower() == "anulada":
+            cajera_nom = "Sin cobro"
+        elif pagos_db or (orden.estado_orden and orden.estado_orden.lower() in ["completada", "pagada", "entregada"]):
+            cajera_nom = cajeras_activas_por_sucursal.get(orden.id_sucursal, cajera_general)
+        else:
+            cajera_nom = "Pendiente de cobro"
 
         movimientos = [
             HistorialMovimientoDTO(
@@ -2404,10 +2416,17 @@ def obtener_orden(
         f"{vendedor.nombres} {vendedor.apellidos or ''}".strip()
         if vendedor else "Vendedor General"
     )
-    nom_caja = (
-        f"{cajera.nombres} {cajera.apellidos or ''}".strip()
-        if cajera else "Lorena Valenzuela"
-    )
+    if cajera:
+        nom_caja = f"{cajera.nombres} {cajera.apellidos or ''}".strip()
+    elif orden.estado_orden and orden.estado_orden.lower() == "anulada":
+        nom_caja = "Sin cobro"
+    elif pagos or (orden.estado_orden and orden.estado_orden.lower() in ["completada", "pagada", "entregada"]):
+        cajera_suc = db.query(Usuario).filter(Usuario.id_rol == 3, Usuario.id_sucursal == orden.id_sucursal, Usuario.estado == "Activo").first()
+        if not cajera_suc:
+            cajera_suc = db.query(Usuario).filter(Usuario.id_rol == 3, Usuario.estado == "Activo").first()
+        nom_caja = f"{cajera_suc.nombres} {cajera_suc.apellidos or ''}".strip() if cajera_suc else "Caja"
+    else:
+        nom_caja = "Pendiente de cobro"
     nom_suc = (
         sucursal.nombre_sucursal
         if sucursal else f"Sucursal {orden.id_sucursal}"

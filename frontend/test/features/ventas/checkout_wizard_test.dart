@@ -403,7 +403,7 @@ void main() {
       expect(find.text('2. Datos del Cliente (Micro-CRM)'), findsOneWidget);
       expect(find.byKey(const Key('switch_cliente_anonimo')), findsOneWidget);
 
-      // Activar Switch Consumidor Final -> Abre diálogo de advertencia de 10 segundos
+      // Activar Switch Consumidor Final -> Abre diálogo de advertencia de 3 segundos
       await tester.tap(find.byKey(const Key('switch_cliente_anonimo')));
       await tester.pumpAndSettle();
 
@@ -415,8 +415,8 @@ void main() {
         findsOneWidget,
       );
 
-      // Avanzar temporizador de 10 segundos en virtual time
-      await tester.pump(const Duration(seconds: 10));
+      // Avanzar temporizador de 3 segundos en virtual time
+      await tester.pump(const Duration(seconds: 3));
       await tester.tap(find.byKey(const Key('btn_confirmar_consumidor_final')));
       await tester.pumpAndSettle();
 
@@ -485,12 +485,12 @@ void main() {
       await tester.tap(find.text('Siguiente'));
       await tester.pumpAndSettle();
 
-      // Consumidor Final -> Abre modal y confirma tras 10 segundos
+      // Consumidor Final -> Abre modal y confirma tras 3 segundos
       await tester.tap(find.byKey(const Key('switch_cliente_anonimo')));
       await tester.pumpAndSettle();
 
       expect(find.byType(DialogoAdvertenciaConsumidorFinal), findsOneWidget);
-      await tester.pump(const Duration(seconds: 10));
+      await tester.pump(const Duration(seconds: 3));
       await tester.tap(find.byKey(const Key('btn_confirmar_consumidor_final')));
       await tester.pumpAndSettle();
 
@@ -509,7 +509,7 @@ void main() {
       expect(find.text('CONFIRMAR Y EMITIR ORDEN'), findsOneWidget);
     });
 
-    testWidgets('DialogoAdvertenciaConsumidorFinal bloquea confirmación hasta agotar los 10s y permite cancelar', (tester) async {
+    testWidgets('DialogoAdvertenciaConsumidorFinal bloquea confirmación hasta agotar los 3s y permite cancelar', (tester) async {
       bool? resultado;
       await tester.pumpWidget(
         MaterialApp(
@@ -534,19 +534,19 @@ void main() {
         findsOneWidget,
       );
 
-      // Botón confirmar está deshabilitado con contador inicial (10s)
+      // Botón confirmar está deshabilitado con contador inicial (3s)
       final btnInicial = tester.widget<ElevatedButton>(find.byKey(const Key('btn_confirmar_consumidor_final')));
       expect(btnInicial.onPressed, isNull);
-      expect(find.textContaining('(10s)'), findsOneWidget);
+      expect(find.textContaining('(3s)'), findsOneWidget);
 
-      // Avanzar 5 segundos: debe mostrar (5s) y seguir deshabilitado
-      await tester.pump(const Duration(seconds: 5));
-      expect(find.textContaining('(5s)'), findsOneWidget);
+      // Avanzar 1 segundo: debe mostrar (2s) y seguir deshabilitado
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.textContaining('(2s)'), findsOneWidget);
       final btnMitad = tester.widget<ElevatedButton>(find.byKey(const Key('btn_confirmar_consumidor_final')));
       expect(btnMitad.onPressed, isNull);
 
-      // Avanzar los 5 segundos restantes (total 10s)
-      await tester.pump(const Duration(seconds: 5));
+      // Avanzar los 2 segundos restantes (total 3s)
+      await tester.pump(const Duration(seconds: 2));
       expect(find.text('CONTINUAR COMO CONSUMIDOR FINAL'), findsOneWidget);
       final btnHabilitado = tester.widget<ElevatedButton>(find.byKey(const Key('btn_confirmar_consumidor_final')));
       expect(btnHabilitado.onPressed, isNotNull);
@@ -658,11 +658,11 @@ void main() {
       await tester.tap(find.text('Siguiente'));
       await tester.pumpAndSettle();
 
-      // Consumidor Final -> abre modal y confirma tras 10s
+      // Consumidor Final -> abre modal y confirma tras 3s
       await tester.ensureVisible(find.byKey(const Key('switch_cliente_anonimo')));
       await tester.tap(find.byKey(const Key('switch_cliente_anonimo')));
       await tester.pumpAndSettle();
-      await tester.pump(const Duration(seconds: 10));
+      await tester.pump(const Duration(seconds: 3));
       await tester.tap(find.byKey(const Key('btn_confirmar_consumidor_final')));
       await tester.pumpAndSettle();
 

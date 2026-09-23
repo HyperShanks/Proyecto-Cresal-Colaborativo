@@ -11,6 +11,8 @@ import '../widgets/bandeja_cobros_panel.dart';
 import '../widgets/panel_detalle_cobro.dart';
 import 'historial_caja_screen.dart';
 import '../../../../core/services/silent_polling_manager.dart';
+import '../../../../core/widgets/update_dialog.dart';
+import '../../../../core/services/app_update_service.dart';
 
 /// Contenedor principal de escritorio para el Módulo de Caja (CRES-213 / CRES-214).
 /// Implementa Sidebar Dinámico Colapsable (256px / 80px) y Grid 4/12 + 8/12 Master-Detail.
@@ -71,6 +73,10 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
         }
       },
     )..start();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AppUpdateChecker.check(context, showIfUpToDate: false);
+    });
   }
 
   @override
@@ -376,6 +382,16 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
                     });
                   },
                 ),
+                const SizedBox(height: 6),
+                _buildSidebarItem(
+                  icon: Icons.system_update_alt_rounded,
+                  title: 'Actualizar',
+                  subtitle: 'Buscar Actualizaciones',
+                  isSelected: false,
+                  onTap: () {
+                    AppUpdateChecker.check(context, showIfUpToDate: true);
+                  },
+                ),
               ],
             ),
           ),
@@ -584,6 +600,19 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
               ),
               onPressed: _handleLogout,
             ),
+          ),
+          const SizedBox(height: 10),
+          FutureBuilder<String>(
+            future: AppUpdateService().getCurrentVersion(),
+            builder: (context, snapshot) {
+              return Text(
+                'Cresal App v${snapshot.data ?? "..."}',
+                style: AppTypography.small.copyWith(
+                  color: Colors.white.withValues(alpha: 0.5),
+                  fontSize: 10,
+                ),
+              );
+            },
           ),
         ],
       ),

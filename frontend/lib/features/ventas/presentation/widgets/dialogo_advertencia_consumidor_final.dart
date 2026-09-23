@@ -6,21 +6,21 @@ import '../../../../core/theme/tokens/app_typography.dart';
 /// Diálogo modal de advertencia preventiva al seleccionar "Consumidor Final" (Sin RUT).
 ///
 /// Promueve la cultura de captura de leads y datos de cliente en la empresa,
-/// inhabilitando el botón de confirmación con un temporizador de 10 segundos
+/// inhabilitando el botón de confirmación con un temporizador de 3 segundos
 /// para disuadir la omisión impulsiva de datos del comprador.
 class DialogoAdvertenciaConsumidorFinal extends StatefulWidget {
   final int duracionSegundos;
 
   const DialogoAdvertenciaConsumidorFinal({
     super.key,
-    this.duracionSegundos = 10,
+    this.duracionSegundos = 3,
   });
 
   /// Método estático de conveniencia para mostrar el diálogo.
-  /// Retorna `true` si el vendedor esperó los 10 segundos y confirmó continuar sin datos.
+  /// Retorna `true` si el vendedor esperó los 3 segundos y confirmó continuar sin datos.
   static Future<bool?> mostrar(
     BuildContext context, {
-    int duracionSegundos = 10,
+    int duracionSegundos = 3,
   }) {
     return showDialog<bool>(
       context: context,
@@ -186,7 +186,7 @@ class _DialogoAdvertenciaConsumidorFinalState
             ),
             const SizedBox(height: 14),
 
-            // Banner del contador de seguridad de 10 segundos
+            // Banner del contador de seguridad de 3 segundos
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),

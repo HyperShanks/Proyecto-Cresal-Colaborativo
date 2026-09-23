@@ -922,7 +922,7 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                   crossAxisCount: crossAxisCount,
                   crossAxisSpacing: 20,
                   mainAxisSpacing: 20,
-                  mainAxisExtent: 385, // Proporción balanceada anti-overflow y sin vacío blanco
+                  mainAxisExtent: 420, // Proporción balanceada con espacio para observaciones y anti-overflow
                 ),
                 itemCount: _items.length,
                 itemBuilder: (context, index) {
@@ -1124,6 +1124,40 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                         ],
                       ),
                     ),
+
+                    if (item.observacionEstado != null &&
+                        item.observacionEstado!.trim().isNotEmpty &&
+                        item.observacionEstado!.trim().toLowerCase() != 'null' &&
+                        item.observacionEstado!.trim() != 'Sin observaciones registradas.') ...[
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF3C7).withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFFFDE68A)),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.sticky_note_2_outlined, size: 14, color: Color(0xFFB45309)),
+                            const SizedBox(width: 5),
+                            Expanded(
+                              child: Text(
+                                'Obs: ${item.observacionEstado!.trim()}',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF92400E),
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
 
                     // Spacer elástico para absorber diferencias de 1 vs 2 líneas en el título
                     const Spacer(),
@@ -1612,6 +1646,33 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
                           ),
+                          if (item.observacionEstado != null &&
+                              item.observacionEstado!.trim().isNotEmpty &&
+                              item.observacionEstado!.trim().toLowerCase() != 'null' &&
+                              item.observacionEstado!.trim() != 'Sin observaciones registradas.') ...[
+                            const SizedBox(height: 2),
+                            Tooltip(
+                              message: 'Obs. Bodega: ${item.observacionEstado!.trim()}',
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.sticky_note_2_outlined, size: 12, color: Color(0xFFB45309)),
+                                  const SizedBox(width: 3),
+                                  Expanded(
+                                    child: Text(
+                                      'Obs: ${item.observacionEstado!.trim()}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFFB45309),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -2408,6 +2469,37 @@ class _TasacionDialogState extends State<_TasacionDialog> {
                                       fontWeight: FontWeight.w500,
                                     ),
                                   ),
+                                  if (widget.item.observacionEstado != null &&
+                                      widget.item.observacionEstado!.trim().isNotEmpty &&
+                                      widget.item.observacionEstado!.trim().toLowerCase() != 'null' &&
+                                      widget.item.observacionEstado!.trim() != 'Sin observaciones registradas.') ...[
+                                    const SizedBox(height: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFEF3C7),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(color: const Color(0xFFFDE68A)),
+                                      ),
+                                      child: Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const Icon(Icons.sticky_note_2_outlined, size: 13, color: Color(0xFFB45309)),
+                                          const SizedBox(width: 4),
+                                          Expanded(
+                                            child: Text(
+                                              'Obs. Bodega: ${widget.item.observacionEstado!.trim()}',
+                                              style: const TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w600,
+                                                color: Color(0xFF92400E),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),

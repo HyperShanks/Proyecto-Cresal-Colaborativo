@@ -340,6 +340,7 @@ def buscar_inventario(
                 "transmision": transmision_val,
                 "numero_motor": numero_motor_val,
                 "observacion": getattr(activo, "observacion_estado", "Sin observaciones registradas."),
+                "observacion_estado": getattr(activo, "observacion_estado", None),
                 "version_lock": activo.version_lock or 1,
                 "imagenes": lista_fotos,
                 "precio_referencia": activo.precio_referencia,
@@ -789,6 +790,7 @@ def obtener_pendientes_precio(
             precio_referencia=activo.precio_referencia,
             precio_minimo=activo.precio_minimo,
             precio_maximo=activo.precio_maximo,
+            observacion_estado=activo.observacion_estado,
         )
         respuesta.append(item)
 

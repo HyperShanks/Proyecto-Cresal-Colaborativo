@@ -372,6 +372,33 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                         ],
                       ),
                     ),
+                    if ((orden.abonoRequerido > 0 ||
+                            (orden.montoACobrar > 0 && orden.montoACobrar < orden.totalOperacion)) &&
+                        orden.esPrimerAbono) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF3E8FF),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFFC084FC)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.savings_rounded, size: 14, color: Color(0xFF7E22CE)),
+                            const SizedBox(width: 5),
+                            Text(
+                              'Abono Inicial: ${CobroPendienteCard.formatClp(orden.abonoRequerido > 0 ? orden.abonoRequerido : orden.montoACobrar)}',
+                              style: AppTypography.small.copyWith(
+                                color: const Color(0xFF7E22CE),
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -1671,6 +1698,36 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
             ],
           ),
           const SizedBox(height: 14),
+
+          if ((orden.abonoRequerido > 0 ||
+                  (orden.montoACobrar > 0 && orden.montoACobrar < orden.totalOperacion)) &&
+              orden.esPrimerAbono) ...[
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF3E8FF),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFDDD6FE)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFF7E22CE)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Esta orden fue emitida con un abono acordado de ${CobroPendienteCard.formatClp(orden.abonoRequerido > 0 ? orden.abonoRequerido : orden.montoACobrar)}. Se seleccionó "Abono Personalizado" automáticamente.',
+                      style: AppTypography.small.copyWith(
+                        color: const Color(0xFF6B21A8),
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
 
           // Selector Segmentado: Liquidar Saldo vs Abono Personalizado
           Row(

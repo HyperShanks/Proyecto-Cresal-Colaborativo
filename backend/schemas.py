@@ -970,6 +970,7 @@ class ActivoPendientePrecioResponse(BaseModel):
     precio_referencia: Optional[int] = None
     precio_minimo: Optional[int] = None
     precio_maximo: Optional[int] = None
+    observacion_estado: Optional[str] = None
 
 
 class AsignarPrecioRequest(BaseModel):
