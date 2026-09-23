@@ -141,7 +141,19 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
         _comunaCliente = null;
         _comunaDespacho = null;
         _idSucursalDestino = (_idSucursalActual == 1 ? 2 : 1);
-        _idVendedorAsignado = null;
+        final jefe = _vendedoresDisponibles.cast<VendedorModel?>().firstWhere(
+              (v) => v != null && v.esJefeDeVentas,
+              orElse: () => null,
+            );
+        _idVendedorAsignado = _esVendedorOnline
+            ? (jefe?.idUsuario ??
+                (_vendedoresDisponibles.isNotEmpty
+                    ? _vendedoresDisponibles.first.idUsuario
+                    : null))
+            : null;
+        if (_idVendedorAsignado != null) {
+          _controller.setIdVendedorAsignado(_idVendedorAsignado);
+        }
       });
     }
     _controller.clearAll();
@@ -165,7 +177,32 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
       if (rolId == 7) {
         final vends = await OrdenesService.obtenerVendedores();
         if (mounted) {
-          setState(() => _vendedoresDisponibles = vends);
+          // Filtrar exclusivamente Jefe de Ventas (idRol == 6) y Vendedor Mesón (idRol == 2)
+          final filtrados = vends
+              .where((v) =>
+                  v.idRol == null || v.idRol == 6 || v.idRol == 2)
+              .toList();
+          filtrados.sort((a, b) {
+            if (a.esJefeDeVentas && !b.esJefeDeVentas) return -1;
+            if (!a.esJefeDeVentas && b.esJefeDeVentas) return 1;
+            return a.nombreCompleto.compareTo(b.nombreCompleto);
+          });
+
+          // Predeterminado: Jefe de Ventas de la sucursal (Viña del Mar / Gastón Zamora)
+          final jefe = filtrados.cast<VendedorModel?>().firstWhere(
+                (v) => v != null && v.esJefeDeVentas,
+                orElse: () => null,
+              );
+          final defaultId = jefe?.idUsuario ??
+              (filtrados.isNotEmpty ? filtrados.first.idUsuario : null);
+
+          setState(() {
+            _vendedoresDisponibles = filtrados;
+            if (_idVendedorAsignado == null && defaultId != null) {
+              _idVendedorAsignado = defaultId;
+              _controller.setIdVendedorAsignado(defaultId);
+            }
+          });
         }
       }
     } catch (_) {}
@@ -527,6 +564,20 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
   }
 
   Future<void> _confirmarYEnviarOrden() async {
+    if (_esVendedorOnline &&
+        (_idVendedorAsignado == null || _idVendedorAsignado!.trim().isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Debes asignar un responsable para la entrega (Jefe de Ventas o Vendedor de Mesón) antes de confirmar la orden.',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+          backgroundColor: AppPalette.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     _actualizarDatosDespachoLocal();
 
     final res = await _controller.submitOrder();
@@ -2197,25 +2248,37 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    color: AppPalette.primary.withValues(alpha: 0.1),
+                    color: (_idVendedorAsignado == null ||
+                            _idVendedorAsignado!.trim().isEmpty)
+                        ? AppPalette.error.withValues(alpha: 0.12)
+                        : AppPalette.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: AppPalette.primary.withValues(alpha: 0.3),
+                      color: (_idVendedorAsignado == null ||
+                              _idVendedorAsignado!.trim().isEmpty)
+                          ? AppPalette.error.withValues(alpha: 0.4)
+                          : AppPalette.primary.withValues(alpha: 0.3),
                     ),
                   ),
                   child: Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.badge_outlined,
                         size: 18,
-                        color: AppPalette.primary,
+                        color: (_idVendedorAsignado == null ||
+                                _idVendedorAsignado!.trim().isEmpty)
+                            ? AppPalette.error
+                            : AppPalette.primary,
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'Responsable Entrega: $_nombreResponsableSeleccionado',
                           style: AppTypography.small.copyWith(
-                            color: AppPalette.primary,
+                            color: (_idVendedorAsignado == null ||
+                                    _idVendedorAsignado!.trim().isEmpty)
+                                ? AppPalette.error
+                                : AppPalette.primary,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -2312,12 +2375,52 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
         ),
         const SizedBox(height: 20),
 
+        if (_esVendedorOnline &&
+            (_idVendedorAsignado == null ||
+                _idVendedorAsignado!.trim().isEmpty)) ...[
+          Container(
+            key: const Key('alerta_responsable_requerido'),
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppPalette.error.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: AppPalette.error.withValues(alpha: 0.4),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.error_outline,
+                  color: AppPalette.error,
+                  size: 20,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Debes asignar un responsable para la entrega (Jefe de Ventas o Vendedor de Mesón) antes de confirmar la orden.',
+                    style: AppTypography.small.copyWith(
+                      color: AppPalette.error,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+
         SizedBox(
           width: double.infinity,
           height: 50,
           child: ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppPalette.success,
+              disabledBackgroundColor:
+                  AppPalette.success.withValues(alpha: 0.25),
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
@@ -2336,10 +2439,19 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
             label: Text(
               _controller.isLoading
                   ? 'Emitiendo Orden...'
-                  : 'CONFIRMAR Y EMITIR ORDEN',
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  : (_esVendedorOnline &&
+                          (_idVendedorAsignado == null ||
+                              _idVendedorAsignado!.trim().isEmpty)
+                      ? 'ASIGNA UN RESPONSABLE PARA CONTINUAR'
+                      : 'CONFIRMAR Y EMITIR ORDEN'),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
             ),
-            onPressed: _controller.isLoading ? null : _confirmarYEnviarOrden,
+            onPressed: (_controller.isLoading ||
+                    (_esVendedorOnline &&
+                        (_idVendedorAsignado == null ||
+                            _idVendedorAsignado!.trim().isEmpty)))
+                ? null
+                : _confirmarYEnviarOrden,
           ),
         ),
       ],
@@ -2485,14 +2597,16 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
 
   // ── Helpers Asignación de Responsable en Tienda (Vendedor Online) ───────────
   String get _nombreResponsableSeleccionado {
-    if (_idVendedorAsignado == null) return 'Mesón General (Todos)';
+    if (_idVendedorAsignado == null || _idVendedorAsignado!.trim().isEmpty) {
+      return 'Sin Asignar (Obligatorio)';
+    }
     final v = _vendedoresDisponibles.cast<VendedorModel?>().firstWhere(
           (v) => v?.idUsuario == _idVendedorAsignado,
           orElse: () => null,
         );
     return v != null
-        ? '${v.nombreCompleto} (${v.rut})'
-        : 'Mesón General (Todos)';
+        ? '[${v.etiquetaRol}] ${v.nombreCompleto}'
+        : 'Responsable Asignado';
   }
 
   Widget _buildCardResponsableEntrega() {
@@ -2500,10 +2614,10 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppPalette.surface,
+        color: AppPalette.surface, // Fondo gris oscuro
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: AppPalette.primary.withValues(alpha: 0.35),
+          color: AppPalette.primary.withValues(alpha: 0.4),
           width: 1.2,
         ),
       ),
@@ -2521,7 +2635,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                 child: const Icon(
                   Icons.badge_outlined,
                   size: 20,
-                  color: AppPalette.primary,
+                  color: AppPalette.primary, // Icono celeste
                 ),
               ),
               const SizedBox(width: 10),
@@ -2532,13 +2646,13 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                     Text(
                       'RESPONSABLE DE ENTREGA EN SUCURSAL',
                       style: AppTypography.small.copyWith(
-                        color: AppPalette.primary,
+                        color: AppPalette.primary, // Letras celestes
                         fontWeight: FontWeight.bold,
                         letterSpacing: 0.5,
                       ),
                     ),
                     Text(
-                      'Vendedor de mesón o jefe de ventas que entregará el pedido y mostrará el QR a bodega',
+                      'Designa al Jefe de Ventas o Vendedor de Mesón que entregará el pedido y mostrará el QR a bodega',
                       style: AppTypography.small.copyWith(
                         color: AppPalette.textSecondary,
                         fontSize: 11.5,
@@ -2553,38 +2667,79 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
-              color: AppPalette.background,
+              color: AppPalette.background, // Fondo gris
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.white10),
+              border: Border.all(
+                color: AppPalette.primary.withValues(alpha: 0.5), // Borde celeste
+                width: 1.2,
+              ),
             ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String?>(
                 key: const Key('dropdown_responsable_entrega'),
                 value: _idVendedorAsignado,
-                dropdownColor: AppPalette.surface,
+                dropdownColor: AppPalette.surface, // Fondo gris de opciones
                 isExpanded: true,
                 icon: const Icon(
                   Icons.arrow_drop_down,
-                  color: AppPalette.primary,
+                  color: AppPalette.primary, // Flecha celeste
                 ),
                 items: [
                   const DropdownMenuItem<String?>(
                     value: null,
                     child: Text(
-                      'Mesón General (Todos los vendedores)',
-                      style: TextStyle(color: Colors.white, fontSize: 13.5),
+                      '-- Selecciona Responsable (Obligatorio) --',
+                      style: TextStyle(
+                        color: Color(0xFF94A3B8),
+                        fontSize: 13.5,
+                      ),
                     ),
                   ),
                   ..._vendedoresDisponibles.map(
                     (v) => DropdownMenuItem<String?>(
                       value: v.idUsuario,
-                      child: Text(
-                        '${v.nombreCompleto} (${v.rut})',
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13.5,
-                        ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: v.esJefeDeVentas
+                                  ? AppPalette.primary.withValues(alpha: 0.2)
+                                  : Colors.white.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(
+                                color: v.esJefeDeVentas
+                                    ? AppPalette.primary
+                                    : Colors.white24,
+                              ),
+                            ),
+                            child: Text(
+                              v.etiquetaRol.toUpperCase(),
+                              style: TextStyle(
+                                color: v.esJefeDeVentas
+                                    ? AppPalette.primary
+                                    : Colors.white70,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '${v.nombreCompleto} (${v.rut})',
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppPalette.primary, // Letras celestes
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13.5,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -2609,22 +2764,25 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) {
           return AlertDialog(
-            backgroundColor: AppPalette.surface,
+            backgroundColor: AppPalette.surface, // Fondo gris
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
-              side: BorderSide(color: AppPalette.primary.withValues(alpha: 0.3)),
+              side: BorderSide(color: AppPalette.primary.withValues(alpha: 0.4)),
             ),
             title: Row(
               children: [
                 const Icon(
                   Icons.badge_outlined,
-                  color: AppPalette.primary,
+                  color: AppPalette.primary, // Icono celeste
                   size: 22,
                 ),
                 const SizedBox(width: 8),
                 Text(
                   'Asignar Responsable',
-                  style: AppTypography.title.copyWith(fontSize: 16),
+                  style: AppTypography.title.copyWith(
+                    fontSize: 16,
+                    color: AppPalette.primary, // Letras celestes
+                  ),
                 ),
               ],
             ),
@@ -2633,7 +2791,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Selecciona al vendedor de mesón o jefe de ventas responsable de entregar este pedido en sucursal:',
+                  'Selecciona al Jefe de Ventas o Vendedor de Mesón responsable de entregar este pedido en sucursal:',
                   style: AppTypography.small.copyWith(
                     color: AppPalette.textSecondary,
                   ),
@@ -2642,9 +2800,12 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   decoration: BoxDecoration(
-                    color: AppPalette.background,
+                    color: AppPalette.background, // Fondo gris
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.white12),
+                    border: Border.all(
+                      color: AppPalette.primary.withValues(alpha: 0.5), // Borde celeste
+                      width: 1.2,
+                    ),
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String?>(
@@ -2660,9 +2821,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                         const DropdownMenuItem<String?>(
                           value: null,
                           child: Text(
-                            'Mesón General (Todos)',
+                            '-- Selecciona Responsable (Obligatorio) --',
                             style: TextStyle(
-                              color: Colors.white,
+                              color: Color(0xFF94A3B8),
                               fontSize: 13.5,
                             ),
                           ),
@@ -2670,13 +2831,48 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                         ..._vendedoresDisponibles.map(
                           (v) => DropdownMenuItem<String?>(
                             value: v.idUsuario,
-                            child: Text(
-                              '${v.nombreCompleto} (${v.rut})',
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 13.5,
-                              ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: v.esJefeDeVentas
+                                        ? AppPalette.primary.withValues(alpha: 0.2)
+                                        : Colors.white.withValues(alpha: 0.08),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(
+                                      color: v.esJefeDeVentas
+                                          ? AppPalette.primary
+                                          : Colors.white24,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    v.etiquetaRol.toUpperCase(),
+                                    style: TextStyle(
+                                      color: v.esJefeDeVentas
+                                          ? AppPalette.primary
+                                          : Colors.white70,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    '${v.nombreCompleto} (${v.rut})',
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: AppPalette.primary, // Letras celestes
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13.5,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
@@ -2699,7 +2895,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                 onPressed: () => Navigator.of(context).pop(),
                 child: const Text(
                   'CERRAR',
-                  style: TextStyle(color: AppPalette.textSecondary),
+                  style: TextStyle(color: AppPalette.primary),
                 ),
               ),
             ],

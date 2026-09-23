@@ -638,6 +638,54 @@ void main() {
       expect(find.text('RESPONSABLE DE ENTREGA EN SUCURSAL'), findsOneWidget);
       expect(find.byKey(const Key('dropdown_responsable_entrega')), findsOneWidget);
     });
+
+    testWidgets('CheckoutWizardScreen para Vendedor Online bloquea emisión si no hay responsable asignado y muestra alerta', (tester) async {
+      mockStorage['user_id_rol'] = '7';
+      addTearDown(() => mockStorage.remove('user_id_rol'));
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: CheckoutWizardScreen(
+            initialInventario: [
+              {'id_activo': 'act-1', 'sku': 'SKU-1', 'descripcion': 'Faro', 'precio': 50000}
+            ],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Ir a Paso 1 (Cliente)
+      await tester.tap(find.text('Siguiente'));
+      await tester.pumpAndSettle();
+
+      // Consumidor Final -> abre modal y confirma tras 10s
+      await tester.tap(find.byKey(const Key('switch_cliente_anonimo')));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 10));
+      await tester.tap(find.byKey(const Key('btn_confirmar_consumidor_final')));
+      await tester.pumpAndSettle();
+
+      // Deseleccionar responsable en Paso 2
+      await tester.tap(find.byKey(const Key('dropdown_responsable_entrega')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('-- Selecciona Responsable (Obligatorio) --').last);
+      await tester.pumpAndSettle();
+
+      // Paso 1 -> Paso 2 (Abonos)
+      await tester.tap(find.text('Siguiente'));
+      await tester.pumpAndSettle();
+
+      // Paso 2 -> Paso 3 (Revisión)
+      await tester.tap(find.text('Siguiente'));
+      await tester.pumpAndSettle();
+
+      // Alerta de responsable requerido debe ser visible y botón de emitir bloqueado
+      expect(find.byKey(const Key('alerta_responsable_requerido')), findsOneWidget);
+      expect(find.text('ASIGNA UN RESPONSABLE PARA CONTINUAR'), findsOneWidget);
+
+      final btnConfirmar = tester.widget<ElevatedButton>(find.widgetWithText(ElevatedButton, 'ASIGNA UN RESPONSABLE PARA CONTINUAR'));
+      expect(btnConfirmar.onPressed, isNull);
+    });
   });
 }
 

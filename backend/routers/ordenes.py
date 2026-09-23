@@ -1259,10 +1259,13 @@ def listar_vendedores_sucursal(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    query = db.query(Usuario).filter(Usuario.estado == "Activo")
+    query = db.query(Usuario).filter(
+        Usuario.estado == "Activo",
+        Usuario.id_rol.in_([2, 6]),  # Exclusivamente Vendedor Mesón (2) y Jefe de Ventas (6)
+    )
     if sucursal_id is not None:
         query = query.filter(Usuario.id_sucursal == sucursal_id)
-    usuarios = query.order_by(Usuario.nombres).all()
+    usuarios = query.order_by(Usuario.id_rol.desc(), Usuario.nombres).all()
     return [
         VendedorResumenResponse(
             id_usuario=u.id_usuario,
@@ -1270,6 +1273,8 @@ def listar_vendedores_sucursal(
             rut=u.rut_usuario,
             id_sucursal=u.id_sucursal,
             correo=u.email,
+            id_rol=u.id_rol,
+            rol_nombre="Jefe de Ventas" if u.id_rol == 6 else "Vendedor Mesón",
         )
         for u in usuarios
     ]

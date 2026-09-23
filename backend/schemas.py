@@ -820,6 +820,8 @@ class VendedorResumenResponse(BaseModel):
     rut: str
     id_sucursal: int
     correo: Optional[str] = None
+    id_rol: Optional[int] = None
+    rol_nombre: Optional[str] = None
 
 
 class EntregaConfirmacionResponse(BaseModel):

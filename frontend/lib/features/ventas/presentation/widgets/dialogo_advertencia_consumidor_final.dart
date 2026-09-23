@@ -251,49 +251,80 @@ class _DialogoAdvertenciaConsumidorFinalState
         ),
       ),
       actions: [
-        TextButton(
-          key: const Key('btn_cancelar_consumidor_final'),
-          onPressed: () => Navigator.of(context).pop(false),
-          child: Text(
-            'VOLVER Y PEDIR DATOS',
-            style: AppTypography.button.copyWith(
-              color: AppPalette.primary,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        ElevatedButton.icon(
-          key: const Key('btn_confirmar_consumidor_final'),
-          onPressed: _segundosRestantes == 0
-              ? () => Navigator.of(context).pop(true)
-              : null,
-          icon: Icon(
-            Icons.no_accounts_outlined,
-            size: 18,
-            color: _segundosRestantes == 0 ? Colors.white : Colors.white38,
-          ),
-          label: Text(
-            _segundosRestantes > 0
-                ? 'CONTINUAR SIN DATOS (${_segundosRestantes}s)'
-                : 'CONTINUAR COMO CONSUMIDOR FINAL',
-            style: TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.bold,
-              color: _segundosRestantes == 0 ? Colors.white : Colors.white38,
-            ),
-          ),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFD97706), // Amber 600
-            disabledBackgroundColor: const Color(
-              0xFFD97706,
-            ).withValues(alpha: 0.2),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
+        SizedBox(
+          width: double.infinity,
+          child: Row(
+            children: [
+              Expanded(
+                child: _buildBotonCancelar(),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildBotonConfirmar(),
+              ),
+            ],
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildBotonConfirmar() {
+    return ElevatedButton.icon(
+      key: const Key('btn_confirmar_consumidor_final'),
+      onPressed: _segundosRestantes == 0
+          ? () => Navigator.of(context).pop(true)
+          : null,
+      icon: Icon(
+        Icons.no_accounts_outlined,
+        size: 16,
+        color: _segundosRestantes == 0 ? Colors.white : Colors.white38,
+      ),
+      label: Text(
+        _segundosRestantes > 0
+            ? 'CONTINUAR (${_segundosRestantes}s)'
+            : 'CONTINUAR COMO CONSUMIDOR FINAL',
+        overflow: TextOverflow.ellipsis,
+        maxLines: 1,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+          color: _segundosRestantes == 0 ? Colors.white : Colors.white38,
+        ),
+      ),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFFD97706),
+        disabledBackgroundColor:
+            const Color(0xFFD97706).withValues(alpha: 0.2),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBotonCancelar() {
+    return OutlinedButton(
+      key: const Key('btn_cancelar_consumidor_final'),
+      onPressed: () => Navigator.of(context).pop(false),
+      style: OutlinedButton.styleFrom(
+        side: BorderSide(color: AppPalette.primary.withValues(alpha: 0.5)),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+      child: Text(
+        'VOLVER Y PEDIR DATOS',
+        overflow: TextOverflow.ellipsis,
+        maxLines: 1,
+        style: AppTypography.button.copyWith(
+          color: AppPalette.primary,
+          fontWeight: FontWeight.bold,
+          fontSize: 11.5,
+        ),
+      ),
     );
   }
 

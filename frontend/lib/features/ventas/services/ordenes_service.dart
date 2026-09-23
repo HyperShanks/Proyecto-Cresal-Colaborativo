@@ -1278,6 +1278,8 @@ class VendedorModel {
   final String rut;
   final int idSucursal;
   final String? correo;
+  final int? idRol;
+  final String? rolNombre;
 
   const VendedorModel({
     required this.idUsuario,
@@ -1285,7 +1287,18 @@ class VendedorModel {
     required this.rut,
     required this.idSucursal,
     this.correo,
+    this.idRol,
+    this.rolNombre,
   });
+
+  bool get esJefeDeVentas =>
+      idRol == 6 ||
+      (rolNombre != null && rolNombre!.toLowerCase().contains('jefe')) ||
+      nombreCompleto.toLowerCase().contains('jefe') ||
+      nombreCompleto.toLowerCase().contains('zamora');
+
+  String get etiquetaRol =>
+      esJefeDeVentas ? 'Jefe de Ventas' : 'Vendedor Mesón';
 
   factory VendedorModel.fromJson(Map<String, dynamic> json) {
     return VendedorModel(
@@ -1294,6 +1307,8 @@ class VendedorModel {
       rut: json['rut']?.toString() ?? '',
       idSucursal: json['id_sucursal'] as int? ?? 1,
       correo: json['correo']?.toString(),
+      idRol: json['id_rol'] as int?,
+      rolNombre: json['rol_nombre']?.toString(),
     );
   }
 }
