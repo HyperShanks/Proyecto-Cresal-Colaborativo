@@ -579,6 +579,53 @@ class AuthService {
     }
   }
 
+  /// Comprueba si existe una sesión activa actualmente (token almacenado no nulo ni vacío).
+  static Future<bool> hasActiveSession() async {
+    final token = await getToken();
+    return token != null && token.isNotEmpty;
+  }
+
+  /// Manejador global invocado tras 10 minutos de inactividad de usuario en cualquier vista o rol.
+  /// Cierra la pantalla y navegación actual sin guardar el estado en pantalla ("no parado donde estaba")
+  /// y redirige limpiamente a la pantalla de PIN (/login).
+  static Future<void> bloquearPorInactividad() async {
+    if (kDebugMode) {
+      debugPrint(
+        '[AUTH] ⏰ Inactividad de 10 min detectada -> Redirigiendo a PIN y cerrando vista actual.',
+      );
+    }
+    _currentUserCache = null;
+    ThemeController.reset();
+    await _storage.delete(key: _tokenKey);
+    await _storage.delete(key: _userModelKey);
+
+    BodegaPollingService.instance.reset();
+
+    // Redirigir a login cerrando cualquier subpantalla, modal o diálogo previo
+    final navigator = ApiService.navigatorKey.currentState;
+    if (navigator != null) {
+      navigator.pushNamedAndRemoveUntil('/login', (route) => false);
+    }
+
+    // Mostrar SnackBar explicativo
+    final messenger = ApiService.scaffoldMessengerKey.currentState;
+    if (messenger != null) {
+      messenger.clearSnackBars();
+      messenger.showSnackBar(
+        SnackBar(
+          content: const Text(
+            'Sesión bloqueada por inactividad (10 min). Ingresa tu PIN.',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          ),
+          backgroundColor: AppPalette.secondary,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    }
+  }
+
   /// Extrae e imprime la fecha/hora de expiración del token JWT de forma segura sin exponer credenciales completas.
   static void _loggearExpiracionToken(String token) {
     if (!kDebugMode) return;

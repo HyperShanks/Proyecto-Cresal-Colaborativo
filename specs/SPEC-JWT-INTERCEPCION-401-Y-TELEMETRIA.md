@@ -68,6 +68,8 @@ Todas las emisiones están estrictamente condicionadas a `if (kDebugMode) debugP
 | `frontend/lib/features/ventas/services/ventas_service.dart` | Modificado | • Interceptó 401 en `processCheckoutWizard` llamando a `AuthService.manejarSesionExpirada()`. |
 | `frontend/lib/features/ventas/services/ordenes_service.dart` | Modificado | • Interceptó 401 en `crearOrden`, `obtenerOrdenes`, `anularOrden`, `actualizarInstruccionesBodega` y `pagarOrden`. |
 | `frontend/lib/features/tickets/services/ticket_service.dart` | Modificado | • Interceptó 401 en `obtenerTickets` llamando a `AuthService.manejarSesionExpirada()`. |
+| `frontend/lib/features/ventas/services/carrito_service.dart` | Modificado | • Interceptó 401 en `reservarActivo`, `liberarActivo`, `heartbeat` y `obtenerMisReservas`.<br>• Telemetría `🌐 [CARRITO] HTTP 200/401`. |
+| `frontend/lib/core/services/session_inactivity_service.dart` | Nuevo | • Detector global de inactividad de 10 minutos para todas las vistas y roles.<br>• Destruye pila previa y redirige a PIN sin guardar pantallas paradas. |
 | `frontend/lib/core/services/api_service.dart` | Modificado | • Incorporó telemetría `kDebugMode` en `_checkStatusCode` ante 401. |
 
 ---

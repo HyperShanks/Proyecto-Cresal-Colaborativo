@@ -130,12 +130,19 @@ Para evitar merma, robo hormiga o fraudes nocturnos en el patio de desarme, las 
 
 ---
 
-### 7.3. Política de Inactividad y Segundo Plano (15 Minutos No Destructivo)
+### 7.3. Política Global de Inactividad de Usuario (10 Minutos) y Retorno Seguro a PIN
 
-En terminales de mostrador y PDAs rugerizadas, los operarios con frecuencia minimizan la app para usar la calculadora, revisar un mensaje en WhatsApp o atender una llamada breve:
-* **Comportamiento en segundo plano (< 15 minutos):** La sesión permanece activa. El operario vuelve a la app instantáneamente sin recargas ni solicitud de PIN.
-* **Inactividad prolongada (>= 15 minutos):** `home_screen.dart` detecta `difference.inMinutes >= 15`.
-* **Bloqueo NO destructivo:** **No se ejecuta `AuthService.clearToken()`**. El carrito local y las reservas en la base de datos permanecen intactas. La aplicación redirige limpiamente a `/login` (`PinLoginScreen`). Al digitar su PIN de 4 dígitos en 2 segundos, el usuario retoma exactamente el trabajo donde lo dejó.
+En terminales de mostrador, cajas, mesón de ventas y PDAs rugerizadas de patio, un operario puede abandonar su puesto de trabajo de imprevisto (ej: colación, atención externa o distracción). Para garantizar que terceros no ejecuten acciones bajo la identidad del operario:
+
+* **Monitoreo Global en Todas las Vistas y Roles:** Implementado a nivel de raíz en `MaterialApp.builder` mediante `SessionInactivityWatcher` (`frontend/lib/core/services/session_inactivity_service.dart`), protegiendo a todos los roles (Ventas, Bodega, Caja, Gerencia, Administrador).
+* **Detección Multicanal:** Captura toques de pantalla (`Listener`: `onPointerDown`, `onPointerMove`, `onPointerUp`), pulsaciones físicas o lectores de código de barras (`HardwareKeyboard.instance`) y ciclo de vida de la aplicación (`WidgetsBindingObserver`).
+* **Inactividad Prolongada (>= 10 minutos):** Si transcurren 10 minutos continuos sin interacción física con la pantalla encendida, o si el operario bloquea el terminal / envía la app a segundo plano durante 10 o más minutos:
+* **Bloqueo y Cierre de Vista ("No parado donde estaba"):**
+  1. Invoca `AuthService.bloquearPorInactividad()`.
+  2. Ejecuta `navigator.pushNamedAndRemoveUntil('/login', (route) => false)`. Esto **destruye y desmonta por completo la pila de navegación previa** (cerrando modales, asistentes de checkout, escáneres QR o formularios a medio llenar).
+  3. Limpia el token y caché de sesión de `FlutterSecureStorage` para impedir peticiones no autorizadas sin PIN.
+  4. Muestra un SnackBar informativo: *"Sesión bloqueada por inactividad (10 min). Ingresa tu PIN."*.
+* **Reingreso Limpio:** Al digitar el PIN de 4 dígitos, el sistema valida la credencial y navega a la ruta principal por defecto del rol (`LoginController.handlePostLoginNavigation`), iniciando una vista fresca y limpia.
 
 ---
 
@@ -222,12 +229,14 @@ Las modificaciones fueron verificadas contra la suite de pruebas unitarias y de 
 2. Intentar procesar un cobro presencial (`POST /api/v1/caja/cobros/registrar`) fuera de horario comercial y fuera de los 30 min de gracia.
 3. **Resultado esperado:** La API responde con `403 Forbidden` impidiendo asentar cobros con la sucursal cerrada.
 
-### Prueba 4: Segundo Plano de 15 Minutos en Flutter (Calculadora / Inactividad)
-1. Abrir la app con cualquier usuario y agregar repuestos al carrito.
-2. Minimizar la app o cambiar a la calculadora de Windows/Android durante 2 minutos y volver.
-3. **Resultado esperado:** La app vuelve inmediatamente sin pedir PIN y con el carrito intacto.
-4. Si la app permanece minimizada más de 15 minutos y se reabre:
-5. **Resultado esperado:** Redirige a la pantalla de PIN de cortesía. Al ingresar el PIN de 4 dígitos, la sesión se reanuda conservando intacto el carrito y la sucursal.
+### Prueba 4: Inactividad Global de 10 Minutos (Pantalla Activa o Segundo Plano)
+1. Abrir la app con cualquier usuario y rol (Ventas, Bodega, Caja, etc.) y navegar a cualquier subpantalla o formulario (ej. detalle de orden o asistente de checkout).
+2. Dejar el dispositivo quieto sin tocar la pantalla durante 10 minutos (o apagar la pantalla / enviar la app a segundo plano durante >= 10 minutos).
+3. **Resultado esperado:**
+   - En la consola de depuración se registra: `[AUTH] ⏰ Inactividad detectada (10 min) -> Bloqueando aplicación y redirigiendo a pantalla de PIN sin guardar vista previa.`
+   - La aplicación cierra inmediatamente la vista actual y redirige a la pantalla de PIN (`PinLoginScreen`), destruyendo la pila de navegación previa ("no guardando donde estaba parado").
+   - Se muestra un SnackBar informativo: *"Sesión bloqueada por inactividad (10 min). Ingresa tu PIN."*
+   - Al digitar el PIN de 4 dígitos, el usuario reingresa a la pantalla principal por defecto de su rol de manera limpia.
 
 ### Prueba 5: Límite de 10 Intentos en Pantalla de PIN
 1. En `PinLoginScreen`, ingresar un PIN incorrecto deliberadamente.

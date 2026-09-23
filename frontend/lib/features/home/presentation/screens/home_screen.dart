@@ -49,24 +49,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused) {
-      _pausedTime = DateTime.now();
-    } else if (state == AppLifecycleState.resumed) {
-      if (_pausedTime != null) {
-        final difference = DateTime.now().difference(_pausedTime!);
-        // Si estuvo en segundo plano más de 15 minutos (ej: colación o estación desatendida),
-        // se bloquea la interfaz por PIN de manera NO destructiva (sin clearToken ni vaciar carrito).
-        if (difference.inMinutes >= 15) {
-          _pausedTime = null;
-          BodegaPollingService.instance.reset();
-          Navigator.of(
-            context,
-          ).pushNamedAndRemoveUntil('/login', (route) => false);
-        } else {
-          _pausedTime = null;
-          _cargarConteoTareas();
-        }
-      }
+    if (state == AppLifecycleState.resumed) {
+      _cargarConteoTareas();
     }
   }
 

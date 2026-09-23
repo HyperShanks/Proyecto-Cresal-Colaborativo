@@ -6,6 +6,7 @@ import 'routes/app_routes.dart';
 
 import 'core/theme/theme_controller.dart';
 import 'core/routes/route_observer.dart';
+import 'core/services/session_inactivity_service.dart';
 
 void main() {
   runApp(const MyApp());
@@ -39,6 +40,13 @@ class _MyAppState extends State<MyApp> {
           // Rutas centralizadas y unificadas bajo Single Source of Truth (SSOT)
           routes: AppRoutes.getRoutes(),
           onGenerateRoute: AppRoutes.onGenerateRoute,
+
+          // Detector global de inactividad de 10 min en todas las vistas y roles
+          builder: (context, child) {
+            return SessionInactivityWatcher(
+              child: child ?? const SizedBox.shrink(),
+            );
+          },
         );
       },
     );

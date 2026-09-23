@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../../../core/constants/api_constants.dart';
@@ -54,7 +55,21 @@ class CarritoService {
           .timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200 || response.statusCode == 201) {
+        if (kDebugMode) {
+          debugPrint('🌐 [CARRITO] HTTP ${response.statusCode} OK en reservar');
+        }
         return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+
+      if (response.statusCode == 401) {
+        if (kDebugMode) {
+          debugPrint('🌐 [CARRITO] HTTP 401 Unauthorized en reservar');
+        }
+        await AuthService.manejarSesionExpirada();
+        throw const CarritoException(
+          'Sesión expirada o token inválido.',
+          statusCode: 401,
+        );
       }
 
       if (response.statusCode == 409) {
@@ -125,7 +140,21 @@ class CarritoService {
           )
           .timeout(const Duration(seconds: 8));
 
-      return response.statusCode == 200;
+      if (response.statusCode == 401) {
+        if (kDebugMode) {
+          debugPrint('🌐 [CARRITO] HTTP 401 Unauthorized en liberar');
+        }
+        await AuthService.manejarSesionExpirada();
+        return false;
+      }
+
+      if (response.statusCode == 200) {
+        if (kDebugMode) {
+          debugPrint('🌐 [CARRITO] HTTP 200 OK en liberar');
+        }
+        return true;
+      }
+      return false;
     } catch (_) {
       return false;
     } finally {
@@ -154,7 +183,18 @@ class CarritoService {
           )
           .timeout(const Duration(seconds: 8));
 
+      if (response.statusCode == 401) {
+        if (kDebugMode) {
+          debugPrint('🌐 [CARRITO] HTTP 401 Unauthorized en heartbeat');
+        }
+        await AuthService.manejarSesionExpirada();
+        return null;
+      }
+
       if (response.statusCode == 200) {
+        if (kDebugMode) {
+          debugPrint('🌐 [CARRITO] HTTP 200 OK en heartbeat');
+        }
         return jsonDecode(response.body) as Map<String, dynamic>;
       }
       return null;
@@ -188,7 +228,18 @@ class CarritoService {
           )
           .timeout(const Duration(seconds: 8));
 
+      if (response.statusCode == 401) {
+        if (kDebugMode) {
+          debugPrint('🌐 [CARRITO] HTTP 401 Unauthorized en mis-reservas');
+        }
+        await AuthService.manejarSesionExpirada();
+        return null;
+      }
+
       if (response.statusCode == 200) {
+        if (kDebugMode) {
+          debugPrint('🌐 [CARRITO] HTTP 200 OK en mis-reservas');
+        }
         final List<dynamic> decoded = jsonDecode(response.body);
         return decoded.cast<Map<String, dynamic>>();
       }
