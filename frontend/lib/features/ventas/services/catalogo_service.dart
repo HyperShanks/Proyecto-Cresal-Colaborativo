@@ -1,6 +1,7 @@
 // lib/features/ventas/services/catalogo_service.dart
 
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../../../core/constants/api_constants.dart';
@@ -68,6 +69,10 @@ class CatalogoService {
             onTimeout: () => throw Exception('Tiempo de espera agotado al consultar catálogo'),
           );
 
+      if (kDebugMode) {
+        debugPrint('🌐 [CATALOGO] HTTP ${response.statusCode} ${response.statusCode == 200 ? "OK" : response.statusCode == 401 ? "Unauthorized" : ""}');
+      }
+
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = jsonDecode(
           utf8.decode(response.bodyBytes),
@@ -75,6 +80,7 @@ class CatalogoService {
 
         return PaginatedCatalogoResponse.fromJson(data);
       } else if (response.statusCode == 401) {
+        await AuthService.manejarSesionExpirada();
         throw Exception('Sesión expirada o token inválido');
       } else {
         final body = jsonDecode(utf8.decode(response.bodyBytes));
@@ -117,6 +123,10 @@ class CatalogoService {
             onTimeout: () => throw Exception('Tiempo de espera agotado al consultar opciones de filtro'),
           );
 
+      if (kDebugMode) {
+        debugPrint('🌐 [CATALOGO-FILTROS] HTTP ${response.statusCode} ${response.statusCode == 200 ? "OK" : response.statusCode == 401 ? "Unauthorized" : ""}');
+      }
+
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = jsonDecode(
           utf8.decode(response.bodyBytes),
@@ -129,6 +139,9 @@ class CatalogoService {
           'transmisiones': List<String>.from(data['transmisiones'] ?? []),
         };
       } else {
+        if (response.statusCode == 401) {
+          await AuthService.manejarSesionExpirada();
+        }
         return {
           'marcas': <String>[],
           'anios': <int>[],

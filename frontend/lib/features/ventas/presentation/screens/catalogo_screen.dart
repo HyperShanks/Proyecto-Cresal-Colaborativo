@@ -310,8 +310,12 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
       });
     } catch (e) {
       if (!mounted) return;
+      final msg = e.toString().replaceFirst('Exception: ', '');
+      if (msg.contains('Sesión expirada') || msg.contains('token inválido')) {
+        return;
+      }
       setState(() {
-        _errorMessage = e.toString().replaceFirst('Exception: ', '');
+        _errorMessage = msg;
         _isLoadingInitial = false;
         _isLoadingMore = false;
       });

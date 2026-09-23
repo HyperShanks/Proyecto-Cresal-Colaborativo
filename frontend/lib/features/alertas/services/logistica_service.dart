@@ -163,10 +163,17 @@ class LogisticaService {
         headers: headers,
       );
 
+      if (kDebugMode) {
+        debugPrint('🌐 [LOGISTICA] HTTP ${response.statusCode} ${response.statusCode == 200 ? "OK" : response.statusCode == 401 ? "Unauthorized" : ""} en tareas-pendientes');
+      }
+
       if (response.statusCode == 200) {
         List<dynamic> body = jsonDecode(utf8.decode(response.bodyBytes));
         return body.map((dynamic item) => TareaAlerta.fromJson(item)).toList();
       } else {
+        if (response.statusCode == 401) {
+          await AuthService.manejarSesionExpirada();
+        }
         throw Exception('Error al cargar alertas del servidor: ${response.statusCode}');
       }
     } catch (e) {
@@ -201,11 +208,18 @@ class LogisticaService {
         }),
       );
 
+      if (kDebugMode) {
+        debugPrint('🌐 [LOGISTICA] HTTP ${response.statusCode} ${response.statusCode == 200 ? "OK" : response.statusCode == 401 ? "Unauthorized" : ""} en verificar-qr-salida');
+      }
+
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
         debugPrint('✅ [SERVICE-BODEGA] Inspección de orden exitosa: ${data['folio']}');
         return VerificarQrSalidaResponseModel.fromJson(data);
       } else {
+        if (response.statusCode == 401) {
+          await AuthService.manejarSesionExpirada();
+        }
         final Map<String, dynamic> errorData = jsonDecode(utf8.decode(response.bodyBytes));
         final detail = errorData['detail'] ?? 'Error al verificar QR de salida.';
         debugPrint('⚠️ [SERVICE-BODEGA] Error al verificar QR: $detail');
@@ -249,11 +263,18 @@ class LogisticaService {
         }),
       );
 
+      if (kDebugMode) {
+        debugPrint('🌐 [LOGISTICA] HTTP ${response.statusCode} ${response.statusCode == 200 ? "OK" : response.statusCode == 401 ? "Unauthorized" : ""} en escanear-salida');
+      }
+
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
         debugPrint('✅ [SERVICE-BODEGA] Match exitoso en barrera para orden: ${data['folio']}');
         return EscanearSalidaResponseModel.fromJson(data);
       } else {
+        if (response.statusCode == 401) {
+          await AuthService.manejarSesionExpirada();
+        }
         final Map<String, dynamic> errorData = jsonDecode(utf8.decode(response.bodyBytes));
         final detail = errorData['detail'] ?? 'Error al autorizar salida en barrera.';
         debugPrint('⚠️ [SERVICE-BODEGA] Rechazo en barrera (${response.statusCode}): $detail');
@@ -281,9 +302,16 @@ class LogisticaService {
       final uri = Uri.parse('${ApiConstants.bodegaEndpoint}/tareas/$idDetalle/completar-preentrega');
       final response = await http.patch(uri, headers: headers);
 
+      if (kDebugMode) {
+        debugPrint('🌐 [LOGISTICA] HTTP ${response.statusCode} ${response.statusCode == 200 ? "OK" : response.statusCode == 401 ? "Unauthorized" : ""} en completar-preentrega');
+      }
+
       if (response.statusCode == 200) {
         return true;
       } else {
+        if (response.statusCode == 401) {
+          await AuthService.manejarSesionExpirada();
+        }
         final errorData = jsonDecode(utf8.decode(response.bodyBytes));
         throw Exception(errorData['detail'] ?? 'Error al completar pre-entrega: ${response.statusCode}');
       }
@@ -307,10 +335,17 @@ class LogisticaService {
 
       final response = await httpClient.get(uri, headers: headers);
 
+      if (kDebugMode) {
+        debugPrint('🌐 [LOGISTICA] HTTP ${response.statusCode} ${response.statusCode == 200 ? "OK" : response.statusCode == 401 ? "Unauthorized" : ""} en resumen-alertas');
+      }
+
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = jsonDecode(utf8.decode(response.bodyBytes));
         return ResumenAlertasModel.fromJson(data);
       } else {
+        if (response.statusCode == 401) {
+          await AuthService.manejarSesionExpirada();
+        }
         return ResumenAlertasModel.vacio();
       }
     } catch (_) {

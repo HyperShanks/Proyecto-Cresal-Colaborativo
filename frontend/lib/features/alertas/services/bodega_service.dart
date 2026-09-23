@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../../../core/constants/api_constants.dart';
 import '../../auth/services/auth_service.dart';
@@ -104,6 +105,10 @@ class BodegaService {
         onTimeout: () => throw Exception('Tiempo de espera agotado al consultar reingresos pendientes.'),
       );
 
+      if (kDebugMode) {
+        debugPrint('🌐 [BODEGA] HTTP ${response.statusCode} ${response.statusCode == 200 ? "OK" : response.statusCode == 401 ? "Unauthorized" : ""} en reingresos-pendientes');
+      }
+
       if (response.statusCode == 200) {
         final decoded = jsonDecode(utf8.decode(response.bodyBytes));
         if (decoded is List) {
@@ -111,6 +116,7 @@ class BodegaService {
         }
         return [];
       } else if (response.statusCode == 401) {
+        await AuthService.manejarSesionExpirada();
         throw Exception('Sesión expirada. Por favor vuelve a iniciar sesión.');
       } else if (response.statusCode == 403) {
         throw Exception('Acceso denegado. No tienes permisos para gestionar reingresos.');
@@ -162,6 +168,10 @@ class BodegaService {
             onTimeout: () => throw Exception('Tiempo de espera agotado al confirmar reingreso.'),
           );
 
+      if (kDebugMode) {
+        debugPrint('🌐 [BODEGA] HTTP ${response.statusCode} ${response.statusCode == 200 ? "OK" : response.statusCode == 401 ? "Unauthorized" : ""} en confirmar-reingreso');
+      }
+
       dynamic decodedBody;
       try {
         decodedBody = jsonDecode(utf8.decode(response.bodyBytes));
@@ -182,6 +192,7 @@ class BodegaService {
         final detail = decodedBody is Map ? decodedBody['detail'] : null;
         throw Exception(detail?.toString() ?? 'Error al confirmar reingreso (${response.statusCode}).');
       } else if (response.statusCode == 401) {
+        await AuthService.manejarSesionExpirada();
         throw Exception('Sesión expirada. Por favor vuelve a iniciar sesión.');
       } else {
         final detail = decodedBody is Map ? decodedBody['detail'] : null;

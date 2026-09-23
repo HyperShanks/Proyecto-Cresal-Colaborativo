@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../core/constants/api_constants.dart';
+import '../../auth/services/auth_service.dart';
 import '../models/ticket_model.dart';
 
 // Clave de almacenamiento seguro donde se guarda el JWT (igual que AuthService)
@@ -113,6 +115,10 @@ class TicketService {
             onTimeout: () => throw Exception('Tiempo de espera agotado al consultar tickets'),
           );
 
+      if (kDebugMode) {
+        debugPrint('🌐 [TICKETS] HTTP ${response.statusCode} ${response.statusCode == 200 ? "OK" : response.statusCode == 401 ? "Unauthorized" : ""}');
+      }
+
       if (response.statusCode == 200) {
         final list = jsonDecode(response.body) as List<dynamic>;
         return list
@@ -121,6 +127,7 @@ class TicketService {
       }
 
       if (response.statusCode == 401) {
+        await AuthService.manejarSesionExpirada();
         throw Exception('Sesión expirada. Por favor inicie sesión nuevamente.');
       }
 

@@ -1,6 +1,7 @@
 // lib/features/ventas/services/inventario_service.dart
 
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../../../core/constants/api_constants.dart';
@@ -33,6 +34,10 @@ class InventarioService {
             onTimeout: () => throw Exception('Tiempo de espera agotado al consultar bandeja de precios.'),
           );
 
+      if (kDebugMode) {
+        debugPrint('🌐 [INVENTARIO-VENTAS] HTTP ${response.statusCode} ${response.statusCode == 200 ? "OK" : response.statusCode == 401 ? "Unauthorized" : ""} en pendientes-precio');
+      }
+
       final dynamic decoded = jsonDecode(utf8.decode(response.bodyBytes));
 
       if (response.statusCode == 200) {
@@ -46,6 +51,7 @@ class InventarioService {
         final detail = decoded is Map ? decoded['detail'] : 'Acceso denegado: Se requiere rol de Jefe de Ventas.';
         throw Exception(detail.toString());
       } else if (response.statusCode == 401) {
+        await AuthService.manejarSesionExpirada();
         throw Exception('Sesión expirada o token inválido.');
       } else {
         final detail = decoded is Map ? decoded['detail'] : 'Error al consultar repuestos pendientes.';
@@ -95,10 +101,17 @@ class InventarioService {
             onTimeout: () => throw Exception('Tiempo de espera agotado al asignar precio.'),
           );
 
+      if (kDebugMode) {
+        debugPrint('🌐 [INVENTARIO-VENTAS] HTTP ${response.statusCode} ${response.statusCode == 200 ? "OK" : response.statusCode == 401 ? "Unauthorized" : ""} en asignarPrecio');
+      }
+
       final dynamic decoded = jsonDecode(utf8.decode(response.bodyBytes));
 
       if (response.statusCode == 200) {
         return AsignarPrecioResponseModel.fromJson(decoded as Map<String, dynamic>);
+      } else if (response.statusCode == 401) {
+        await AuthService.manejarSesionExpirada();
+        throw Exception('Sesión expirada o token inválido.');
       } else if (response.statusCode == 403) {
         final detail = decoded is Map ? decoded['detail'] : 'Acceso denegado: Se requiere rol de Jefe de Ventas.';
         throw Exception(detail.toString());

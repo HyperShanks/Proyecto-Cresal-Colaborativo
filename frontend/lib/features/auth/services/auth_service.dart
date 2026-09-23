@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -208,6 +209,7 @@ class AuthService {
           await _storage.write(key: _enrolledUserNameKey, value: nombreCompleto);
         }
 
+        _loggearExpiracionToken(token);
         unawaited(CartController.instance.cargarDesdeAlmacenamiento());
         return AuthResult.ok(userModel);
       }
@@ -326,6 +328,7 @@ class AuthService {
           await _storage.write(key: _enrolledUserNameKey, value: nombreCompleto);
         }
 
+        _loggearExpiracionToken(token);
         unawaited(CartController.instance.cargarDesdeAlmacenamiento());
         return AuthResult.ok(userModel);
       }
@@ -535,6 +538,9 @@ class AuthService {
   /// Invalida las claves de sesión activa sin destruir ni vaciar el carrito del usuario,
   /// permitiendo que al reingresar el PIN en el terminal conserve sus productos intactos.
   static Future<void> manejarSesionExpirada() async {
+    if (kDebugMode) {
+      debugPrint('[AUTH] 401 detectado -> Redirigiendo automáticamente a pantalla de PIN sin vaciar carrito');
+    }
     _currentUserCache = null;
     ThemeController.reset();
     await _storage.delete(key: _tokenKey);
@@ -571,5 +577,24 @@ class AuthService {
         ),
       );
     }
+  }
+
+  /// Extrae e imprime la fecha/hora de expiración del token JWT de forma segura sin exponer credenciales completas.
+  static void _loggearExpiracionToken(String token) {
+    if (!kDebugMode) return;
+    try {
+      final parts = token.split('.');
+      if (parts.length >= 2) {
+        String normalized = base64Url.normalize(parts[1]);
+        final payloadString = utf8.decode(base64Url.decode(normalized));
+        final payload = jsonDecode(payloadString) as Map<String, dynamic>;
+        if (payload.containsKey('exp')) {
+          final expSeconds = payload['exp'] as int;
+          final expDate = DateTime.fromMillisecondsSinceEpoch(expSeconds * 1000).toLocal();
+          final formatted = expDate.toIso8601String().replaceFirst('T', ' ').substring(0, 19);
+          debugPrint('[AUTH] Token válido hasta: $formatted');
+        }
+      }
+    } catch (_) {}
   }
 }

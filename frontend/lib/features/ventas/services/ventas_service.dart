@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../../../core/constants/api_constants.dart';
 import '../../auth/services/auth_service.dart';
@@ -34,6 +35,10 @@ class VentasService {
             onTimeout: () => throw Exception('Tiempo de espera agotado al emitir la orden.'),
           );
 
+      if (kDebugMode) {
+        debugPrint('🌐 [VENTAS] HTTP ${response.statusCode} ${(response.statusCode == 200 || response.statusCode == 201) ? "OK" : response.statusCode == 401 ? "Unauthorized" : ""} en checkout-wizard');
+      }
+
       dynamic decodedBody;
       try {
         decodedBody = jsonDecode(utf8.decode(response.bodyBytes));
@@ -61,6 +66,7 @@ class VentasService {
         final detail = decodedBody is Map ? decodedBody['detail'] : null;
         throw Exception(detail?.toString() ?? 'Error al procesar checkout (${response.statusCode}).');
       } else if (response.statusCode == 401) {
+        await AuthService.manejarSesionExpirada();
         throw Exception('Sesión expirada. Por favor vuelve a iniciar sesión.');
       } else {
         final detail = decodedBody is Map ? decodedBody['detail'] : null;

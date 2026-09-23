@@ -548,6 +548,10 @@ class OrdenesService {
           detail?.toString() ?? 'Datos de la orden inválidos. Revisa el formulario.',
         );
       } else if (response.statusCode == 401) {
+        if (kDebugMode) {
+          debugPrint('🌐 [ORDENES] HTTP 401 Unauthorized en crearOrden');
+        }
+        await AuthService.manejarSesionExpirada();
         throw Exception('Sesión expirada. Por favor vuelve a iniciar sesión.');
       } else if (response.statusCode == 404) {
         final detail = decodedBody is Map ? decodedBody['detail'] : null;
@@ -671,6 +675,10 @@ class OrdenesService {
         }
         return [];
       } else if (response.statusCode == 401) {
+        if (kDebugMode) {
+          debugPrint('🌐 [ORDENES] HTTP 401 Unauthorized en obtenerOrdenes');
+        }
+        await AuthService.manejarSesionExpirada();
         throw Exception('Sesión expirada. Por favor vuelve a iniciar sesión.');
       } else {
         final detail = decodedBody is Map ? decodedBody['detail'] : null;
@@ -835,6 +843,10 @@ class OrdenesService {
       } else if (response.statusCode == 404) {
         throw Exception('La orden especificada no fue encontrada.');
       } else if (response.statusCode == 401) {
+        if (kDebugMode) {
+          debugPrint('🌐 [ORDENES] HTTP 401 Unauthorized en anularOrden');
+        }
+        await AuthService.manejarSesionExpirada();
         throw Exception('Sesión expirada. Por favor vuelve a iniciar sesión.');
       } else {
         final detail = decodedBody is Map ? decodedBody['detail'] : null;
@@ -906,6 +918,10 @@ class OrdenesService {
       } else if (response.statusCode == 404) {
         throw Exception('Orden o detalle no encontrado.');
       } else if (response.statusCode == 401) {
+        if (kDebugMode) {
+          debugPrint('🌐 [ORDENES] HTTP 401 Unauthorized en actualizarInstruccionesBodega');
+        }
+        await AuthService.manejarSesionExpirada();
         throw Exception('Sesión expirada. Por favor vuelve a iniciar sesión.');
       } else {
         final detail = decodedBody is Map ? decodedBody['detail'] : null;
@@ -984,6 +1000,10 @@ class OrdenesService {
       } else if (response.statusCode == 404) {
         throw Exception('La orden especificada no fue encontrada.');
       } else if (response.statusCode == 401) {
+        if (kDebugMode) {
+          debugPrint('🌐 [ORDENES] HTTP 401 Unauthorized en pagarOrden');
+        }
+        await AuthService.manejarSesionExpirada();
         throw Exception('Sesión expirada. Por favor vuelve a iniciar sesión.');
       } else {
         final detail = decodedBody is Map ? decodedBody['detail'] : null;

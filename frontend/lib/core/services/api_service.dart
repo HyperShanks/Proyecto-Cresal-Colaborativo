@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../features/auth/services/auth_service.dart';
@@ -95,6 +96,9 @@ class ApiService {
   /// Verifica si el código de estado es 401 y dispara el flujo de sesión expirada
   static void _checkStatusCode(int statusCode) {
     if (statusCode == 401) {
+      if (kDebugMode) {
+        debugPrint('⚠️ [API-SERVICE] HTTP 401 Unauthorized detectado');
+      }
       if (onUnauthorized != null) {
         onUnauthorized!();
       } else {
