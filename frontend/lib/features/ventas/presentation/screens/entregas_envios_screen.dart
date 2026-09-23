@@ -394,15 +394,15 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                               color: AppPalette.textSecondary,
                             ),
                             filled: true,
-                            fillColor: AppPalette.background,
+                            fillColor: AppPalette.surface,
                             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
-                              borderSide: const BorderSide(color: Colors.white12),
+                              borderSide: const BorderSide(color: Color(0xFF334155)),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
-                              borderSide: const BorderSide(color: Colors.white12),
+                              borderSide: const BorderSide(color: Color(0xFF334155)),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
@@ -439,15 +439,15 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                               color: AppPalette.textSecondary,
                             ),
                             filled: true,
-                            fillColor: AppPalette.background,
+                            fillColor: AppPalette.surface,
                             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
-                              borderSide: const BorderSide(color: Colors.white12),
+                              borderSide: const BorderSide(color: Color(0xFF334155)),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
-                              borderSide: const BorderSide(color: Colors.white12),
+                              borderSide: const BorderSide(color: Color(0xFF334155)),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
@@ -609,10 +609,10 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
           duration: const Duration(milliseconds: 150),
           padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8.0),
           decoration: BoxDecoration(
-            color: isSelected ? selectedColor : AppPalette.background,
+            color: isSelected ? selectedColor : const Color(0xFF1E293B),
             borderRadius: BorderRadius.circular(8.0),
             border: Border.all(
-              color: isSelected ? selectedColor : Colors.transparent,
+              color: isSelected ? selectedColor : const Color(0xFF334155),
               width: 1.0,
             ),
           ),
@@ -623,6 +623,60 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
               fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
               fontSize: 13.5,
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeaderFilterPill({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+    IconData? icon,
+    Color? activeColor,
+    Key? key,
+  }) {
+    final color = activeColor ?? AppPalette.primary;
+    return Material(
+      key: key,
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8.0),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 7.0),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? color.withValues(alpha: 0.22)
+                : const Color(0xFF1E293B),
+            borderRadius: BorderRadius.circular(8.0),
+            border: Border.all(
+              color: isSelected ? color : const Color(0xFF334155),
+              width: 1.2,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null) ...[
+                Icon(
+                  icon,
+                  size: 15,
+                  color: isSelected ? color : const Color(0xFFCBD5E1),
+                ),
+                const SizedBox(width: 5),
+              ],
+              Text(
+                label,
+                style: TextStyle(
+                  color: isSelected ? color : const Color(0xFFCBD5E1),
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                  fontSize: 12,
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -1527,11 +1581,11 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: Colors.white12),
+              borderSide: const BorderSide(color: Color(0xFF334155)),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: const BorderSide(color: Colors.white12),
+              borderSide: const BorderSide(color: Color(0xFF334155)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
@@ -1544,37 +1598,17 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             // Chip Especial: Mis Entregas Asignadas
-            FilterChip(
+            _buildHeaderFilterPill(
               key: const Key('chip_mis_asignadas'),
-              avatar: Icon(
-                Icons.person_pin_circle_rounded,
-                size: 16,
-                color: _soloMisAsignadas ? Colors.white : AppPalette.primary,
-              ),
-              label: Text(
-                'Mis Asignadas ($misAsignadasCount)',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                  color: _soloMisAsignadas ? Colors.white : AppPalette.primary,
-                ),
-              ),
-              selected: _soloMisAsignadas,
-              onSelected: (selected) {
+              label: 'Mis Asignadas ($misAsignadasCount)',
+              icon: Icons.person_pin_circle_rounded,
+              isSelected: _soloMisAsignadas,
+              activeColor: AppPalette.primary,
+              onTap: () {
                 setState(() {
-                  _soloMisAsignadas = selected;
+                  _soloMisAsignadas = !_soloMisAsignadas;
                 });
               },
-              selectedColor: AppPalette.primary,
-              backgroundColor: AppPalette.surface,
-              side: BorderSide(
-                color: _soloMisAsignadas
-                    ? AppPalette.primary
-                    : AppPalette.primary.withValues(alpha: 0.45),
-              ),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              visualDensity: VisualDensity.compact,
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
             const SizedBox(width: 8),
 
@@ -1588,143 +1622,95 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
             const SizedBox(width: 8),
 
             // Chip: Todos
-            ChoiceChip(
-              label: Text('Todas (${validas.length})'),
-              selected: _tipoEntregaFilter == 'todos',
-              onSelected: (selected) {
-                if (selected) setState(() => _tipoEntregaFilter = 'todos');
+            _buildHeaderFilterPill(
+              label: 'Todas (${validas.length})',
+              isSelected: _tipoEntregaFilter == 'todos',
+              activeColor: AppPalette.primary,
+              onTap: () {
+                setState(() => _tipoEntregaFilter = 'todos');
               },
-              backgroundColor: AppPalette.surface,
-              selectedColor: AppPalette.primary.withValues(alpha: 0.22),
-              side: BorderSide(
-                color: _tipoEntregaFilter == 'todos'
-                    ? AppPalette.primary.withValues(alpha: 0.6)
-                    : Colors.white12,
-              ),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              visualDensity: VisualDensity.compact,
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              labelStyle: TextStyle(
-                color: _tipoEntregaFilter == 'todos'
-                    ? AppPalette.primary
-                    : AppPalette.textSecondary,
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-              ),
             ),
             const SizedBox(width: 6),
 
             // Chip: Retiros
-            ChoiceChip(
-              label: Text('Retiros ($retirosCount)'),
-              selected: _tipoEntregaFilter == 'retiro',
-              onSelected: (selected) {
-                if (selected) setState(() => _tipoEntregaFilter = 'retiro');
+            _buildHeaderFilterPill(
+              label: 'Retiros ($retirosCount)',
+              isSelected: _tipoEntregaFilter == 'retiro',
+              activeColor: AppPalette.primary,
+              onTap: () {
+                setState(() => _tipoEntregaFilter = 'retiro');
               },
-              backgroundColor: AppPalette.surface,
-              selectedColor: AppPalette.primary.withValues(alpha: 0.22),
-              side: BorderSide(
-                color: _tipoEntregaFilter == 'retiro'
-                    ? AppPalette.primary.withValues(alpha: 0.6)
-                    : Colors.white12,
-              ),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              visualDensity: VisualDensity.compact,
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              labelStyle: TextStyle(
-                color: _tipoEntregaFilter == 'retiro'
-                    ? AppPalette.primary
-                    : AppPalette.textSecondary,
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-              ),
             ),
             const SizedBox(width: 6),
 
             // Chip: Despachos
-            ChoiceChip(
-              label: Text('Despachos ($despachosCount)'),
-              selected: _tipoEntregaFilter == 'despacho',
-              onSelected: (selected) {
-                if (selected) setState(() => _tipoEntregaFilter = 'despacho');
+            _buildHeaderFilterPill(
+              label: 'Despachos ($despachosCount)',
+              isSelected: _tipoEntregaFilter == 'despacho',
+              activeColor: AppPalette.secondary,
+              onTap: () {
+                setState(() => _tipoEntregaFilter = 'despacho');
               },
-              backgroundColor: AppPalette.surface,
-              selectedColor: AppPalette.secondary.withValues(alpha: 0.22),
-              side: BorderSide(
-                color: _tipoEntregaFilter == 'despacho'
-                    ? AppPalette.secondary.withValues(alpha: 0.6)
-                    : Colors.white12,
-              ),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              visualDensity: VisualDensity.compact,
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              labelStyle: TextStyle(
-                color: _tipoEntregaFilter == 'despacho'
-                    ? AppPalette.secondary
-                    : AppPalette.textSecondary,
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-              ),
             ),
             const SizedBox(width: 6),
 
             // Chip: Traslados (si hay)
             if (trasladosCount > 0 || _tipoEntregaFilter == 'traslado') ...[
-              ChoiceChip(
-                label: Text('Traslados ($trasladosCount)'),
-                selected: _tipoEntregaFilter == 'traslado',
-                onSelected: (selected) {
-                  if (selected) setState(() => _tipoEntregaFilter = 'traslado');
+              _buildHeaderFilterPill(
+                label: 'Traslados ($trasladosCount)',
+                isSelected: _tipoEntregaFilter == 'traslado',
+                activeColor: const Color(0xFFAB47BC),
+                onTap: () {
+                  setState(() => _tipoEntregaFilter = 'traslado');
                 },
-                backgroundColor: AppPalette.surface,
-                selectedColor: const Color(0xFFAB47BC).withValues(alpha: 0.22),
-                side: BorderSide(
-                  color: _tipoEntregaFilter == 'traslado'
-                      ? const Color(0xFFAB47BC).withValues(alpha: 0.6)
-                      : Colors.white12,
-                ),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                visualDensity: VisualDensity.compact,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                labelStyle: TextStyle(
-                  color: _tipoEntregaFilter == 'traslado'
-                      ? const Color(0xFFAB47BC)
-                      : AppPalette.textSecondary,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                ),
               ),
               const SizedBox(width: 6),
             ],
 
-            // Chip rápido de limpiar si hay filtros activos
+            // Botón rápido de limpiar si hay filtros activos
             if (_tieneFiltrosActivos) ...[
-              ActionChip(
-                avatar: const Icon(Icons.clear_all, size: 16, color: AppPalette.warning),
-                label: const Text(
-                  'Limpiar',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: AppPalette.warning,
-                    fontWeight: FontWeight.bold,
+              Material(
+                color: AppPalette.surface,
+                borderRadius: BorderRadius.circular(8.0),
+                child: InkWell(
+                  onTap: () {
+                    setState(() {
+                      _searchController.clear();
+                      _searchQuery = '';
+                      _soloMisAsignadas = false;
+                      _tipoEntregaFilter = 'todos';
+                      _estadoPagoFilter = 'todos';
+                      _clienteFilterController.clear();
+                      _vendedorFilterController.clear();
+                    });
+                  },
+                  borderRadius: BorderRadius.circular(8.0),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 7.0),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8.0),
+                      border: Border.all(
+                        color: AppPalette.error.withValues(alpha: 0.6),
+                        width: 1.2,
+                      ),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.close, size: 14, color: AppPalette.error),
+                        SizedBox(width: 4),
+                        Text(
+                          'Limpiar',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppPalette.error,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                backgroundColor: AppPalette.warning.withValues(alpha: 0.12),
-                side: BorderSide(color: AppPalette.warning.withValues(alpha: 0.35)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                visualDensity: VisualDensity.compact,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                onPressed: () {
-                  setState(() {
-                    _searchController.clear();
-                    _searchQuery = '';
-                    _soloMisAsignadas = false;
-                    _tipoEntregaFilter = 'todos';
-                    _estadoPagoFilter = 'todos';
-                    _clienteFilterController.clear();
-                    _vendedorFilterController.clear();
-                  });
-                },
               ),
             ],
           ],

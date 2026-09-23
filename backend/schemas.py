@@ -661,6 +661,7 @@ class OrdenCreateRequest(BaseModel):
     monto_abono: Optional[int] = Field(None, ge=0, description="Monto abonado al registrar la venta (opcional para abonos parciales)")
     descuento: Optional[int] = Field(0, ge=0, description="Descuento aplicado al total de la orden por vale o saldo a favor")
     id_vendedor_asignado: Optional[UUID] = Field(None, description="ID del vendedor asignado para entregar/despachar la orden (None = Mesón General)")
+    id_vendedor_titular: Optional[UUID] = Field(None, description="ID del vendedor comercial al que se le acredita la venta (solo Jefe de Ventas/Admin)")
 
 
 class OrdenResponse(BaseModel):
@@ -877,6 +878,7 @@ class OrdenAnulacionResponse(BaseModel):
     msg: Optional[str] = None
     activos_liberados: int = 0
     pagos_reversados: int = 0
+    monto_reversado: int = 0
     motivo_anulacion: Optional[str] = None
 
 
@@ -1315,6 +1317,7 @@ class CheckoutWizardRequest(BaseModel):
     tipo_entrega: str = "Retiro"  # 'Retiro', 'Despacho Domicilio', 'Traslado'
     id_sucursal_destino: Optional[int] = None
     id_vendedor_asignado: Optional[UUID] = None
+    id_vendedor_titular: Optional[UUID] = None
     total_venta: int
     monto_pendiente: int
     monto_abono: Optional[int] = 0

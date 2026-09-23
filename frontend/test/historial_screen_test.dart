@@ -796,7 +796,7 @@ void main() {
         ),
       );
 
-      expect(find.text('Mis Órdenes de Venta'), findsOneWidget);
+      expect(find.text('Mis Órdenes'), findsOneWidget);
       expect(find.byIcon(Icons.tune), findsOneWidget);
       expect(find.byIcon(Icons.refresh), findsOneWidget);
 

@@ -686,6 +686,95 @@ void main() {
       final btnConfirmar = tester.widget<ElevatedButton>(find.widgetWithText(ElevatedButton, 'ASIGNA UN RESPONSABLE PARA CONTINUAR'));
       expect(btnConfirmar.onPressed, isNull);
     });
+
+    testWidgets('CheckoutWizardScreen switch de Venta Referida ES visible para rol Jefe de Ventas (id_rol == 6)', (tester) async {
+      mockStorage['user_id_rol'] = '6';
+      mockStorage['enrolled_user_id'] = 'user-jefe-123';
+      addTearDown(() {
+        mockStorage.remove('user_id_rol');
+        mockStorage.remove('enrolled_user_id');
+      });
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: CheckoutWizardScreen(
+            initialInventario: [
+              {'id_activo': 'act-1', 'sku': 'SKU-1', 'descripcion': 'Faro', 'precio': 50000}
+            ],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Ir a Paso 1 (Cliente)
+      await tester.tap(find.text('Siguiente'));
+      await tester.pumpAndSettle();
+
+      // Debe aparecer la tarjeta de VENTA REFERIDA / ATRIBUCIÓN
+      expect(find.text('VENTA REFERIDA / ATRIBUCIÓN'), findsOneWidget);
+      expect(find.byKey(const Key('switch_venta_referida')), findsOneWidget);
+      // NO debe aparecer la tarjeta de asignación obligatoria del online
+      expect(find.byKey(const Key('dropdown_responsable_entrega')), findsNothing);
+    });
+
+    testWidgets('CheckoutWizardScreen switch de Venta Referida NO es visible para rol Vendedor Mesón (id_rol == 2)', (tester) async {
+      mockStorage['user_id_rol'] = '2';
+      addTearDown(() => mockStorage.remove('user_id_rol'));
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: CheckoutWizardScreen(
+            initialInventario: [
+              {'id_activo': 'act-1', 'sku': 'SKU-1', 'descripcion': 'Faro', 'precio': 50000}
+            ],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Ir a Paso 1 (Cliente)
+      await tester.tap(find.text('Siguiente'));
+      await tester.pumpAndSettle();
+
+      // No debe ser visible ni venta referida ni asignación online
+      expect(find.byKey(const Key('switch_venta_referida')), findsNothing);
+      expect(find.byKey(const Key('dropdown_responsable_entrega')), findsNothing);
+    });
+
+    testWidgets('CheckoutWizardScreen Jefe de Ventas activa Venta Referida y muestra selector de titular', (tester) async {
+      mockStorage['user_id_rol'] = '6';
+      mockStorage['enrolled_user_id'] = 'user-jefe-123';
+      addTearDown(() {
+        mockStorage.remove('user_id_rol');
+        mockStorage.remove('enrolled_user_id');
+      });
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: CheckoutWizardScreen(
+            initialInventario: [
+              {'id_activo': 'act-1', 'sku': 'SKU-1', 'descripcion': 'Faro', 'precio': 50000}
+            ],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Ir a Paso 1 (Cliente)
+      await tester.tap(find.text('Siguiente'));
+      await tester.pumpAndSettle();
+
+      // Asegurar visibilidad del switch y activarlo
+      await tester.ensureVisible(find.byKey(const Key('switch_venta_referida')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('switch_venta_referida')));
+      await tester.pumpAndSettle();
+
+      // Dropdown de vendedor titular debe aparecer
+      expect(find.byKey(const Key('dropdown_vendedor_titular')), findsOneWidget);
+      expect(find.textContaining('Tú (Jefe de Ventas) quedarás registrado para entregar físicamente'), findsOneWidget);
+    });
   });
 }
+
 

@@ -22,7 +22,8 @@ class CheckoutWizardController extends ChangeNotifier {
   String _tipoEntrega = 'Retiro'; // 'Retiro', 'Despacho Domicilio', 'Traslado'
   int _idSucursalActual = 1; // 1: Viña del Mar, 2: Limache
   int _idSucursalDestino = 2; // Por defecto sucursal opuesta
-  String? _idVendedorAsignado; // Para vendedor online
+  String? _idVendedorAsignado; // Para vendedor online o responsable en tienda
+  String? _idVendedorTitular; // Para venta referida atribuida a otro vendedor (Jefe de Ventas)
   DespachoModel? _datosDespacho;
 
   // Paso 4: Abonos, Descuentos y Notas
@@ -44,6 +45,7 @@ class CheckoutWizardController extends ChangeNotifier {
   int get idSucursalActual => _idSucursalActual;
   int get idSucursalDestino => _idSucursalDestino;
   String? get idVendedorAsignado => _idVendedorAsignado;
+  String? get idVendedorTitular => _idVendedorTitular;
   DespachoModel? get datosDespacho => _datosDespacho;
   int get descuento => _descuento;
   int get abonoAdicional => _abonoAdicional;
@@ -294,6 +296,11 @@ class CheckoutWizardController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setIdVendedorTitular(String? vendedorId) {
+    _idVendedorTitular = vendedorId;
+    notifyListeners();
+  }
+
   void setDatosDespacho(DespachoModel? despacho) {
     _datosDespacho = despacho;
     if (_errorMessage == 'Complete todos los campos obligatorios para el despacho a domicilio.' && validateStep3()) {
@@ -334,6 +341,7 @@ class CheckoutWizardController extends ChangeNotifier {
     _tipoEntrega = 'Retiro';
     _idSucursalDestino = 1;
     _idVendedorAsignado = null;
+    _idVendedorTitular = null;
     _datosDespacho = null;
     _descuento = 0;
     _abonoAdicional = 0;
@@ -365,6 +373,7 @@ class CheckoutWizardController extends ChangeNotifier {
         tipoEntrega: 'Retiro',
         idSucursalDestino: null,
         idVendedorAsignado: _idVendedorAsignado,
+        idVendedorTitular: _idVendedorTitular,
         totalVenta: totalVenta,
         descuento: _descuento,
         montoPendiente: montoPendiente,

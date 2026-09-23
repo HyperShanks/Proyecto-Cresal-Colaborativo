@@ -232,6 +232,7 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
       folio: _orden.folioDisplay,
       clienteNombre: _orden.cliente?.nombreCompleto,
       totalVenta: _orden.totalVenta,
+      montoPagado: _orden.montoPagado,
       onOrdenAnulada: () {
         widget.onOrderUpdated?.call();
       },
@@ -942,22 +943,28 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                     ),
                   ],
 
-                  // ── Sección 5: Acciones de Gestión (Solo si Reservada) ──
-                  if (_orden.esReservada) ...[
+                  // ── Sección 5: Acciones de Gestión (Reservada o Pagada, antes de entregarse) ──
+                  if (_orden.esAnulable) ...[
                     const SizedBox(height: 20.0),
                     Text(
                       'Acciones de Gestión',
                       style: AppTypography.title.copyWith(fontSize: 15.0),
                     ),
-                    // Botón Editar Instrucciones a Bodega (solo para órdenes con repuestos inventariados o motor/caja)
-                    if (_orden.contieneMotorOCaja || _orden.detalles.any((d) => d.esInventariado)) ...[
+                    const SizedBox(height: 10.0),
+                    // Botón Editar Instrucciones a Bodega (solo para órdenes Reservadas con repuestos inventariados)
+                    if (_orden.esReservada &&
+                        (_orden.contieneMotorOCaja ||
+                            _orden.detalles.any((d) => d.esInventariado))) ...[
                       SizedBox(
                         width: double.infinity,
                         height: 48.0,
                         child: OutlinedButton.icon(
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppPalette.primary,
-                            side: const BorderSide(color: AppPalette.primary, width: 1.2),
+                            side: const BorderSide(
+                              color: AppPalette.primary,
+                              width: 1.2,
+                            ),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10.0),
                             ),
@@ -967,19 +974,22 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                             'Editar Instrucciones a Bodega',
                             style: TextStyle(fontWeight: FontWeight.w600),
                           ),
-                          onPressed: _isLoading ? null : _dialogEditarInstrucciones,
+                          onPressed:
+                              _isLoading ? null : _dialogEditarInstrucciones,
                         ),
                       ),
                       const SizedBox(height: 10.0),
                     ],
 
-                    // Botón Deshacer / Anular Orden
+                    // Botón Deshacer / Anular Orden (Extend)
                     SizedBox(
                       width: double.infinity,
                       height: 48.0,
                       child: ElevatedButton.icon(
+                        key: const Key('btn_anular_orden_detail'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppPalette.error.withValues(alpha: 0.15),
+                          backgroundColor:
+                              AppPalette.error.withValues(alpha: 0.15),
                           foregroundColor: AppPalette.error,
                           elevation: 0,
                           side: BorderSide(
@@ -991,9 +1001,14 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                           ),
                         ),
                         icon: const Icon(Icons.delete_outline, size: 20.0),
-                        label: const Text(
-                          'Deshacer Orden (Liberar Stock)',
-                          style: TextStyle(fontWeight: FontWeight.w600),
+                        label: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            _orden.montoPagado > 0
+                                ? 'Anular Orden (Devolver ${_orden.montoPagadoFormateado})'
+                                : 'Deshacer Orden (Liberar Stock)',
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
                         ),
                         onPressed: _isLoading ? null : _dialogAnularOrden,
                       ),
