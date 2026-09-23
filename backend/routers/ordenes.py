@@ -274,10 +274,10 @@ def crear_orden(
 
         vendedor_comercial = current_user.id_usuario
         if getattr(orden_in, "id_vendedor_titular", None) is not None:
-            if current_user.id_rol not in [1, 5, 6]:
+            if current_user.id_rol not in [1, 2, 5, 6]:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Acceso restringido: Solo el Jefe de Ventas o Administrador puede emitir órdenes a nombre de otro vendedor."
+                    detail="Acceso restringido: Solo el Jefe de Ventas, Vendedor o Administrador puede emitir órdenes a nombre de otro vendedor."
                 )
             v_titular = db.query(Usuario).filter(Usuario.id_usuario == orden_in.id_vendedor_titular, Usuario.estado == "Activo").first()
             if not v_titular:
@@ -2601,10 +2601,10 @@ def checkout_wizard(
 
         vendedor_comercial = current_user.id_usuario
         if getattr(request, "id_vendedor_titular", None) is not None:
-            if current_user.id_rol not in [1, 5, 6]:
+            if current_user.id_rol not in [1, 2, 5, 6]:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Acceso restringido: Solo el Jefe de Ventas o Administrador puede emitir órdenes a nombre de otro vendedor."
+                    detail="Acceso restringido: Solo el Jefe de Ventas, Vendedor o Administrador puede emitir órdenes a nombre de otro vendedor."
                 )
             v_titular = db.query(Usuario).filter(Usuario.id_usuario == request.id_vendedor_titular, Usuario.estado == "Activo").first()
             if not v_titular:
@@ -2618,7 +2618,9 @@ def checkout_wizard(
         if request.id_vendedor_titular is not None and (vendedor_asig is None or not str(vendedor_asig).strip()):
             vendedor_asig = current_user.id_usuario
         elif vendedor_asig is None:
-            vendedor_asig = current_user.id_usuario
+            # Si es Vendedora Online (id_rol == 7), None representa "Mesón General" (visible para toda la sucursal en tienda)
+            if current_user.id_rol != 7:
+                vendedor_asig = current_user.id_usuario
 
         abono_req_val = request.monto_abono or 0
         if abono_req_val == 0 and request.reservas:

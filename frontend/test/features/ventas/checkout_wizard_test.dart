@@ -639,7 +639,7 @@ void main() {
       expect(find.byKey(const Key('dropdown_responsable_entrega')), findsOneWidget);
     });
 
-    testWidgets('CheckoutWizardScreen para Vendedor Online bloquea emisión si no hay responsable asignado y muestra alerta', (tester) async {
+    testWidgets('CheckoutWizardScreen para Vendedor Online incluye opción Mesón General y permite emitir orden', (tester) async {
       mockStorage['user_id_rol'] = '7';
       addTearDown(() => mockStorage.remove('user_id_rol'));
 
@@ -659,16 +659,20 @@ void main() {
       await tester.pumpAndSettle();
 
       // Consumidor Final -> abre modal y confirma tras 10s
+      await tester.ensureVisible(find.byKey(const Key('switch_cliente_anonimo')));
       await tester.tap(find.byKey(const Key('switch_cliente_anonimo')));
       await tester.pumpAndSettle();
       await tester.pump(const Duration(seconds: 10));
       await tester.tap(find.byKey(const Key('btn_confirmar_consumidor_final')));
       await tester.pumpAndSettle();
 
-      // Deseleccionar responsable en Paso 2
+      // Verificar que el dropdown de responsable tiene la opción Mesón General
+      await tester.ensureVisible(find.byKey(const Key('dropdown_responsable_entrega')));
       await tester.tap(find.byKey(const Key('dropdown_responsable_entrega')));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('-- Selecciona Responsable (Obligatorio) --').last);
+      expect(find.text('Mesón General (Todos los vendedores)'), findsWidgets);
+      // Seleccionar Mesón General
+      await tester.tap(find.text('Mesón General (Todos los vendedores)').last);
       await tester.pumpAndSettle();
 
       // Paso 1 -> Paso 2 (Abonos)
@@ -679,15 +683,15 @@ void main() {
       await tester.tap(find.text('Siguiente'));
       await tester.pumpAndSettle();
 
-      // Alerta de responsable requerido debe ser visible y botón de emitir bloqueado
-      expect(find.byKey(const Key('alerta_responsable_requerido')), findsOneWidget);
-      expect(find.text('ASIGNA UN RESPONSABLE PARA CONTINUAR'), findsOneWidget);
+      // En Paso 4 debe mostrar Responsable Entrega: Mesón General y botón habilitado
+      expect(find.textContaining('Responsable Entrega: Mesón General (Todos los vendedores)'), findsOneWidget);
+      expect(find.text('CONFIRMAR Y EMITIR ORDEN'), findsOneWidget);
 
-      final btnConfirmar = tester.widget<ElevatedButton>(find.widgetWithText(ElevatedButton, 'ASIGNA UN RESPONSABLE PARA CONTINUAR'));
-      expect(btnConfirmar.onPressed, isNull);
+      final btnConfirmar = tester.widget<ElevatedButton>(find.widgetWithText(ElevatedButton, 'CONFIRMAR Y EMITIR ORDEN'));
+      expect(btnConfirmar.onPressed, isNotNull);
     });
 
-    testWidgets('CheckoutWizardScreen switch de Venta Referida ES visible para rol Jefe de Ventas (id_rol == 6)', (tester) async {
+    testWidgets('CheckoutWizardScreen switch de Venta Referida ES visible en Paso 1 para rol Jefe de Ventas (id_rol == 6)', (tester) async {
       mockStorage['user_id_rol'] = '6';
       mockStorage['enrolled_user_id'] = 'user-jefe-123';
       addTearDown(() {
@@ -706,44 +710,16 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Ir a Paso 1 (Cliente)
-      await tester.tap(find.text('Siguiente'));
-      await tester.pumpAndSettle();
-
-      // Debe aparecer la tarjeta de VENTA REFERIDA / ATRIBUCIÓN
+      // Debe aparecer la tarjeta de VENTA REFERIDA / ATRIBUCIÓN en el Paso 1 (debajo de Venta en Verde y Venta libre)
       expect(find.text('VENTA REFERIDA / ATRIBUCIÓN'), findsOneWidget);
       expect(find.byKey(const Key('switch_venta_referida')), findsOneWidget);
       // NO debe aparecer la tarjeta de asignación obligatoria del online
       expect(find.byKey(const Key('dropdown_responsable_entrega')), findsNothing);
     });
 
-    testWidgets('CheckoutWizardScreen switch de Venta Referida NO es visible para rol Vendedor Mesón (id_rol == 2)', (tester) async {
+    testWidgets('CheckoutWizardScreen switch de Venta Referida ES visible en Paso 1 para rol Vendedor Mesón (id_rol == 2)', (tester) async {
       mockStorage['user_id_rol'] = '2';
-      addTearDown(() => mockStorage.remove('user_id_rol'));
-
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: CheckoutWizardScreen(
-            initialInventario: [
-              {'id_activo': 'act-1', 'sku': 'SKU-1', 'descripcion': 'Faro', 'precio': 50000}
-            ],
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      // Ir a Paso 1 (Cliente)
-      await tester.tap(find.text('Siguiente'));
-      await tester.pumpAndSettle();
-
-      // No debe ser visible ni venta referida ni asignación online
-      expect(find.byKey(const Key('switch_venta_referida')), findsNothing);
-      expect(find.byKey(const Key('dropdown_responsable_entrega')), findsNothing);
-    });
-
-    testWidgets('CheckoutWizardScreen Jefe de Ventas activa Venta Referida y muestra selector de titular', (tester) async {
-      mockStorage['user_id_rol'] = '6';
-      mockStorage['enrolled_user_id'] = 'user-jefe-123';
+      mockStorage['enrolled_user_id'] = 'user-vendedor-456';
       addTearDown(() {
         mockStorage.remove('user_id_rol');
         mockStorage.remove('enrolled_user_id');
@@ -760,11 +736,55 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Ir a Paso 1 (Cliente)
-      await tester.tap(find.text('Siguiente'));
+      // SÍ debe ser visible en Paso 1 para vendedor de mesón
+      expect(find.text('VENTA REFERIDA / ATRIBUCIÓN'), findsOneWidget);
+      expect(find.byKey(const Key('switch_venta_referida')), findsOneWidget);
+      expect(find.byKey(const Key('dropdown_responsable_entrega')), findsNothing);
+    });
+
+    testWidgets('CheckoutWizardScreen switch de Venta Referida NO es visible para rol Vendedora Online (id_rol == 7)', (tester) async {
+      mockStorage['user_id_rol'] = '7';
+      mockStorage['enrolled_user_id'] = 'user-online-789';
+      addTearDown(() {
+        mockStorage.remove('user_id_rol');
+        mockStorage.remove('enrolled_user_id');
+      });
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: CheckoutWizardScreen(
+            initialInventario: [
+              {'id_activo': 'act-1', 'sku': 'SKU-1', 'descripcion': 'Faro', 'precio': 50000}
+            ],
+          ),
+        ),
+      );
       await tester.pumpAndSettle();
 
-      // Asegurar visibilidad del switch y activarlo
+      // En Paso 1 no debe verse venta referida
+      expect(find.byKey(const Key('switch_venta_referida')), findsNothing);
+    });
+
+    testWidgets('CheckoutWizardScreen Vendedor activa Venta Referida en Paso 1 y muestra selector de titular y texto adecuado', (tester) async {
+      mockStorage['user_id_rol'] = '2';
+      mockStorage['enrolled_user_id'] = 'user-vendedor-456';
+      addTearDown(() {
+        mockStorage.remove('user_id_rol');
+        mockStorage.remove('enrolled_user_id');
+      });
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: CheckoutWizardScreen(
+            initialInventario: [
+              {'id_activo': 'act-1', 'sku': 'SKU-1', 'descripcion': 'Faro', 'precio': 50000}
+            ],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Asegurar visibilidad del switch en Paso 1 y activarlo
       await tester.ensureVisible(find.byKey(const Key('switch_venta_referida')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('switch_venta_referida')));
@@ -772,7 +792,57 @@ void main() {
 
       // Dropdown de vendedor titular debe aparecer
       expect(find.byKey(const Key('dropdown_vendedor_titular')), findsOneWidget);
-      expect(find.textContaining('Tú (Jefe de Ventas) quedarás registrado para entregar físicamente'), findsOneWidget);
+      expect(find.textContaining('Tú (Vendedor) quedarás registrado para entregar físicamente'), findsOneWidget);
+    });
+
+    testWidgets('CheckoutWizardScreen Venta Referida activada muestra banner llamativo en Paso 4', (tester) async {
+      mockStorage['user_id_rol'] = '2';
+      mockStorage['enrolled_user_id'] = 'user-vendedor-456';
+      addTearDown(() {
+        mockStorage.remove('user_id_rol');
+        mockStorage.remove('enrolled_user_id');
+      });
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: CheckoutWizardScreen(
+            initialInventario: [
+              {'id_activo': 'act-1', 'sku': 'SKU-1', 'descripcion': 'Faro', 'precio': 50000}
+            ],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Paso 1: Activar Venta Referida
+      await tester.ensureVisible(find.byKey(const Key('switch_venta_referida')));
+      await tester.tap(find.byKey(const Key('switch_venta_referida')));
+      await tester.pumpAndSettle();
+
+      // Ir a Paso 2 (Cliente)
+      await tester.tap(find.text('Siguiente'));
+      await tester.pumpAndSettle();
+
+      // Activar consumidor final para poder continuar
+      await tester.ensureVisible(find.byKey(const Key('switch_cliente_anonimo')));
+      await tester.tap(find.byKey(const Key('switch_cliente_anonimo')));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 10));
+      await tester.tap(find.byKey(const Key('btn_confirmar_consumidor_final')));
+      await tester.pumpAndSettle();
+
+      // Ir a Paso 3 (Abonos)
+      await tester.tap(find.text('Siguiente'));
+      await tester.pumpAndSettle();
+
+      // Ir a Paso 4 (Confirmación)
+      await tester.tap(find.text('Siguiente'));
+      await tester.pumpAndSettle();
+
+      // Debe mostrar la tarjeta llamativa con VENTA DESIGNADA
+      expect(find.byKey(const Key('resumen_venta_asignada_step4')), findsOneWidget);
+      expect(find.text('VENTA DESIGNADA'), findsOneWidget);
+      expect(find.textContaining('Responsable de Entrega Física: Tú (Vendedor)'), findsOneWidget);
     });
   });
 }

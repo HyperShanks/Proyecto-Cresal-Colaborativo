@@ -661,7 +661,7 @@ class OrdenCreateRequest(BaseModel):
     monto_abono: Optional[int] = Field(None, ge=0, description="Monto abonado al registrar la venta (opcional para abonos parciales)")
     descuento: Optional[int] = Field(0, ge=0, description="Descuento aplicado al total de la orden por vale o saldo a favor")
     id_vendedor_asignado: Optional[UUID] = Field(None, description="ID del vendedor asignado para entregar/despachar la orden (None = Mesón General)")
-    id_vendedor_titular: Optional[UUID] = Field(None, description="ID del vendedor comercial al que se le acredita la venta (solo Jefe de Ventas/Admin)")
+    id_vendedor_titular: Optional[UUID] = Field(None, description="ID del vendedor comercial al que se le acredita la venta (Jefe de Ventas/Vendedor/Admin)")
 
 
 class OrdenResponse(BaseModel):

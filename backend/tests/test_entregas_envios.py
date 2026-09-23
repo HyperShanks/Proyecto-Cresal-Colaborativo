@@ -951,13 +951,19 @@ def test_jefe_ventas_puede_crear_orden_a_nombre_de_online(client):
         db.close()
 
 
-def test_vendedor_normal_no_puede_crear_orden_a_nombre_de_otro(client):
+def test_vendedor_mesón_puede_crear_orden_a_nombre_de_otro(client):
     """
-    Verifica que un Vendedor de mesón común (id_rol == 2) NO pueda atribuir órdenes a otro vendedor,
-    recibiendo un HTTP 403 Forbidden.
+    Verifica que un Vendedor de mesón común (id_rol == 2) SÍ pueda atribuir órdenes a otro vendedor,
+    recibiendo un HTTP 201 Created y fijando adecuadamente id_vendedor (comercial) e id_vendedor_asignado (físico).
     """
     db = TestingSessionLocal()
     try:
+        # Asegurar roles
+        for r_id, r_nom in [(2, "Vendedor"), (7, "Vendedora Online")]:
+            if not db.query(models.Rol).filter_by(id_rol=r_id).first():
+                db.add(models.Rol(id_rol=r_id, nombre_rol=r_nom))
+        db.flush()
+
         vend = models.Usuario(
             id_usuario=uuid.uuid4(),
             rut_usuario="15.678.901-2",
@@ -1016,8 +1022,199 @@ def test_vendedor_normal_no_puede_crear_orden_a_nombre_de_otro(client):
         }
 
         res = client.post("/api/v1/ordenes/checkout-wizard", json=payload, headers=headers_vend)
+        assert res.status_code == 201, f"Se esperaba 201 pero fue {res.status_code}: {res.text}"
+        data = res.json()
+        id_orden = uuid.UUID(data["id_orden"])
+
+        orden_db = db.query(models.Orden_Venta).filter_by(id_orden=id_orden).first()
+        assert orden_db is not None
+        assert orden_db.id_vendedor == online.id_usuario, "La orden debe quedar comercialmente a nombre de Marcela Online"
+        assert orden_db.id_vendedor_asignado == vend.id_usuario, "El Vendedor de mesón debe quedar como responsable físico de entrega"
+
+    finally:
+        db.close()
+
+
+def test_vendedora_online_no_puede_crear_orden_a_nombre_de_otro(client):
+    """
+    Verifica que la Vendedora Online (id_rol == 7) NO pueda atribuir órdenes a otro vendedor,
+    recibiendo un HTTP 403 Forbidden.
+    """
+    db = TestingSessionLocal()
+    try:
+        online = models.Usuario(
+            id_usuario=uuid.uuid4(),
+            rut_usuario="18.901.234-5",
+            nombres="Vendedora",
+            apellidos="OnlineBloqueada",
+            email="online_bloq@cresal.cl",
+            id_rol=7,
+            id_sucursal=1,
+            password_hash="dummy",
+            pin_acceso="9995",
+            estado="Activo",
+        )
+        db.add(online)
+
+        otro_vend = models.Usuario(
+            id_usuario=uuid.uuid4(),
+            rut_usuario="19.012.345-6",
+            nombres="Otro",
+            apellidos="Vendedor",
+            email="otro_vend@cresal.cl",
+            id_rol=2,
+            id_sucursal=1,
+            password_hash="dummy",
+            pin_acceso="9996",
+            estado="Activo",
+        )
+        db.add(otro_vend)
+
+        cli = models.Cliente(
+            id_cliente=uuid.uuid4(),
+            rut_cliente="20.123.456-7",
+            nombres="Cliente",
+            apellidos="OnlineTest",
+            telefono="+56911223377",
+            consentimiento_legal=True,
+        )
+        db.add(cli)
+        db.commit()
+
+        token_online = create_access_token(data={"sub": str(online.id_usuario), "id_rol": 7, "id_sucursal": 1})
+        headers_online = {"Authorization": f"Bearer {token_online}"}
+
+        payload = {
+            "id_cliente": str(cli.id_cliente),
+            "tipo_entrega": "Retiro",
+            "total_venta": 5000,
+            "monto_pendiente": 5000,
+            "items_manuales": [
+                {
+                    "descripcion": "Filtro de Polen",
+                    "cantidad": 1,
+                    "precio_unitario": 5000,
+                }
+            ],
+            "id_vendedor_titular": str(otro_vend.id_usuario),
+        }
+
+        res = client.post("/api/v1/ordenes/checkout-wizard", json=payload, headers=headers_online)
         assert res.status_code == 403, f"Se esperaba 403 pero fue {res.status_code}: {res.text}"
-        assert "Solo el Jefe de Ventas o Administrador puede emitir" in res.json()["detail"]
+        assert "Acceso restringido: Solo el Jefe de Ventas, Vendedor o Administrador" in res.json()["detail"]
+
+    finally:
+        db.close()
+
+
+def test_orden_venta_online_con_responsable_meson_es_visible_para_todos(client):
+    """
+    Verifica que cuando una orden online se emite con responsable 'Mesón General' (id_vendedor_asignado = None):
+    1. La orden se crea exitosamente (201 Created).
+    2. En GET /api/v1/ordenes/entregas-envios, es visible para cualquier vendedor de mesón (id_rol == 2)
+       de la sucursal, incluso si no es el creador ni un asignado particular.
+    3. vendedor_asignado_nombre retorna 'Mesón General (Todos)'.
+    """
+    db = TestingSessionLocal()
+    try:
+        # 1. Crear Vendedora Online y dos Vendedores de mesón distintos
+        online_user = models.Usuario(
+            id_usuario=uuid.uuid4(),
+            rut_usuario="21.111.111-1",
+            nombres="Romina",
+            apellidos="Online",
+            email="romina_online@cresal.cl",
+            id_rol=7,
+            id_sucursal=1,
+            password_hash="dummy",
+            pin_acceso="9997",
+            estado="Activo",
+        )
+        db.add(online_user)
+
+        vend_meson_1 = models.Usuario(
+            id_usuario=uuid.uuid4(),
+            rut_usuario="22.222.333-4",
+            nombres="Claudio",
+            apellidos="Mesonero",
+            email="claudio_meson@cresal.cl",
+            id_rol=2,
+            id_sucursal=1,
+            password_hash="dummy",
+            pin_acceso="9998",
+            estado="Activo",
+        )
+        db.add(vend_meson_1)
+
+        vend_meson_2 = models.Usuario(
+            id_usuario=uuid.uuid4(),
+            rut_usuario="23.333.444-5",
+            nombres="Daniel",
+            apellidos="MesoneroDos",
+            email="daniel_meson@cresal.cl",
+            id_rol=2,
+            id_sucursal=1,
+            password_hash="dummy",
+            pin_acceso="9999",
+            estado="Activo",
+        )
+        db.add(vend_meson_2)
+
+        cli = models.Cliente(
+            id_cliente=uuid.uuid4(),
+            rut_cliente="24.444.555-6",
+            nombres="Cliente",
+            apellidos="MesonGeneral",
+            telefono="+56911223388",
+            consentimiento_legal=True,
+        )
+        db.add(cli)
+        db.commit()
+
+        # 2. Vendedora Online crea orden asignada a Mesón General (id_vendedor_asignado = None)
+        token_online = create_access_token(data={"sub": str(online_user.id_usuario), "id_rol": 7, "id_sucursal": 1})
+        headers_online = {"Authorization": f"Bearer {token_online}"}
+
+        payload = {
+            "id_cliente": str(cli.id_cliente),
+            "tipo_entrega": "Retiro",
+            "total_venta": 35000,
+            "monto_pendiente": 35000,
+            "items_manuales": [
+                {
+                    "descripcion": "Pastillas de Freno Online",
+                    "cantidad": 1,
+                    "precio_unitario": 35000,
+                }
+            ],
+            "id_vendedor_asignado": None,  # Mesón General
+        }
+
+        res_crear = client.post("/api/v1/ordenes/checkout-wizard", json=payload, headers=headers_online)
+        assert res_crear.status_code == 201, res_crear.text
+        id_orden = res_crear.json()["id_orden"]
+
+        # 3. Consultar como Vendedor Mesón 1 (no es creador ni asignado específico)
+        token_v1 = create_access_token(data={"sub": str(vend_meson_1.id_usuario), "id_rol": 2, "id_sucursal": 1})
+        headers_v1 = {"Authorization": f"Bearer {token_v1}"}
+
+        res_entregas_v1 = client.get("/api/v1/ordenes/entregas-envios?sucursal_id=1", headers=headers_v1)
+        assert res_entregas_v1.status_code == 200
+        ordenes_v1 = res_entregas_v1.json()
+        item_v1 = next((o for o in ordenes_v1 if o["id_orden"] == id_orden), None)
+        assert item_v1 is not None, "La orden de Mesón General DEBE ser visible para el Vendedor 1"
+        assert item_v1["vendedor_asignado_nombre"] == "Mesón General (Todos)"
+
+        # 4. Consultar como Vendedor Mesón 2
+        token_v2 = create_access_token(data={"sub": str(vend_meson_2.id_usuario), "id_rol": 2, "id_sucursal": 1})
+        headers_v2 = {"Authorization": f"Bearer {token_v2}"}
+
+        res_entregas_v2 = client.get("/api/v1/ordenes/entregas-envios?sucursal_id=1", headers=headers_v2)
+        assert res_entregas_v2.status_code == 200
+        ordenes_v2 = res_entregas_v2.json()
+        item_v2 = next((o for o in ordenes_v2 if o["id_orden"] == id_orden), None)
+        assert item_v2 is not None, "La orden de Mesón General DEBE ser visible para el Vendedor 2"
+        assert item_v2["vendedor_asignado_nombre"] == "Mesón General (Todos)"
 
     finally:
         db.close()
