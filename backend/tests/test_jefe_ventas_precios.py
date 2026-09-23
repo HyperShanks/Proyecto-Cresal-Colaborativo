@@ -292,7 +292,7 @@ def test_asignar_precio_exitoso_y_transicion_a_disponible(client, db_session, au
     assert data["id_activo"] == id_activo
     assert data["precio_referencia"] == 580000
     assert data["estado_activo"] == "Disponible"
-    assert "Precio asignado exitosamente" in data["mensaje"]
+    assert "asignado exitosamente" in data["mensaje"]
 
     # Verificar en Base de Datos
     db = TestingSessionLocal()

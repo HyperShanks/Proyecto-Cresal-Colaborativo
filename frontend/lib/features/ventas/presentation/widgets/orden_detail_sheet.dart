@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import '../../../../core/theme/app_components.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
@@ -12,11 +13,13 @@ import 'modal_anular_orden.dart';
 class OrdenDetailSheet extends StatefulWidget {
   final OrdenHistorialModel orden;
   final VoidCallback? onOrderUpdated;
+  final http.Client? client;
 
   const OrdenDetailSheet({
     super.key,
     required this.orden,
     this.onOrderUpdated,
+    this.client,
   });
 
   @override
@@ -233,13 +236,17 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
       clienteNombre: _orden.cliente?.nombreCompleto,
       totalVenta: _orden.totalVenta,
       montoPagado: _orden.montoPagado,
+      client: widget.client,
       onOrdenAnulada: () {
         widget.onOrderUpdated?.call();
       },
     );
 
     if (result == true && mounted) {
-      Navigator.of(context).pop(); // Cerrar el bottom sheet tras anulación exitosa
+      setState(() {
+        _orden.estadoOrden = 'Anulada';
+      });
+      Navigator.of(context).pop(true); // Cerrar el bottom sheet tras anulación exitosa y retornar a mis órdenes
     }
   }
 

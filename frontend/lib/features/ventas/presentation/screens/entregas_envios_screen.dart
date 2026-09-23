@@ -5,12 +5,15 @@ import '../../../auth/services/auth_service.dart';
 import '../widgets/qr_ticket_dialog.dart';
 import '../../services/ordenes_service.dart';
 import '../../services/ordenes_sync_notifier.dart';
+import '../../../../core/services/silent_polling_manager.dart';
 
 /// Pantalla colaborativa para el Módulo 'Entregas y Envíos'
 /// Permite gestionar retiros en sucursal y despachos externos con filtros avanzados,
 /// trazabilidad de vendedores, tarjetas limpias y modal de detalle exhaustivo.
 class EntregasEnviosScreen extends StatefulWidget {
-  const EntregasEnviosScreen({super.key});
+  final List<EntregaEnvioModel>? initialEntregas;
+
+  const EntregasEnviosScreen({super.key, this.initialEntregas});
 
   @override
   State<EntregasEnviosScreen> createState() => _EntregasEnviosScreenState();
@@ -25,18 +28,34 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
   bool _soloMisAsignadas = false;
   String? _currentUserId;
   String? _currentUserName;
-  String _estadoPagoFilter = 'todos'; // 'todos', 'pagados', 'pendientes'
+  String _estadoPagoFilter = 'pagados'; // 'pagados' (predeterminado / listas para entrega), 'pendientes', 'todos'
   String _tipoEntregaFilter = 'todos'; // 'todos', 'retiro', 'despacho', 'traslado'
 
   List<EntregaEnvioModel> _todasEntregas = [];
   bool _isLoading = true;
   String? _errorMessage;
+  SilentPollingManager? _pollingManager;
 
   @override
   void initState() {
     super.initState();
     OrdenesSyncNotifier.instance.addListener(_onSyncNotification);
+    _iniciarAutoRefresh();
     _verificarPermisosYCargar();
+  }
+
+  void _iniciarAutoRefresh() {
+    _pollingManager?.dispose();
+    _pollingManager = SilentPollingManager(
+      interval: const Duration(seconds: 15),
+      debugLabel: 'EntregasEnviosPolling',
+      shouldPause: () => _isLoading,
+      onPoll: () async {
+        if (mounted) {
+          await _cargarDatosSilencioso();
+        }
+      },
+    )..start();
   }
 
   void _onSyncNotification() {
@@ -58,7 +77,6 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
         busquedaVendedor: _vendedorFilterController.text.trim().isNotEmpty
             ? _vendedorFilterController.text.trim()
             : null,
-        estadoPago: _estadoPagoFilter != 'todos' ? _estadoPagoFilter : null,
       );
       if (!mounted) return;
       setState(() {
@@ -99,14 +117,21 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
       setState(() {
         _currentUserId = authUser?.idUsuario;
         _currentUserName = nombre ?? authUser?.nombreCompleto;
+        if (widget.initialEntregas != null) {
+          _todasEntregas = List.from(widget.initialEntregas!);
+          _isLoading = false;
+        }
       });
     }
 
-    _cargarDatos();
+    if (widget.initialEntregas == null) {
+      _cargarDatos();
+    }
   }
 
   @override
   void dispose() {
+    _pollingManager?.dispose();
     OrdenesSyncNotifier.instance.removeListener(_onSyncNotification);
     _searchController.dispose();
     _clienteFilterController.dispose();
@@ -119,7 +144,7 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
       _soloMisAsignadas ||
       _clienteFilterController.text.trim().isNotEmpty ||
       _vendedorFilterController.text.trim().isNotEmpty ||
-      _estadoPagoFilter != 'todos' ||
+      _estadoPagoFilter != 'pagados' ||
       _tipoEntregaFilter != 'todos';
 
   Future<void> _cargarDatos() async {
@@ -136,7 +161,6 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
         busquedaVendedor: _vendedorFilterController.text.trim().isNotEmpty
             ? _vendedorFilterController.text.trim()
             : null,
-        estadoPago: _estadoPagoFilter != 'todos' ? _estadoPagoFilter : null,
       );
       if (!mounted) return;
       setState(() {
@@ -281,29 +305,45 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
       }).toList();
     }
 
+    // 5. Filtro adicional por Cliente desde Modal
+    if (_clienteFilterController.text.trim().isNotEmpty) {
+      final cq = _clienteFilterController.text.trim().toLowerCase();
+      final cleanCq = cq.replaceAll('.', '').replaceAll('-', '');
+      lista = lista.where((e) {
+        final nom = e.cliente?.nombreCompleto.toLowerCase() ?? '';
+        final disp = e.clienteDisplay.toLowerCase();
+        final rut = e.cliente?.rutCliente.toLowerCase().replaceAll('.', '').replaceAll('-', '') ?? '';
+        final tel = e.cliente?.telefono?.toLowerCase() ?? '';
+        final recNom = e.despacho?.receptorNombres.toLowerCase() ?? '';
+        final recRut = e.despacho?.receptorRut.toLowerCase().replaceAll('.', '').replaceAll('-', '') ?? '';
+        final recTel = e.despacho?.receptorTelefono.toLowerCase() ?? '';
+        return nom.contains(cq) ||
+            disp.contains(cq) ||
+            rut.contains(cleanCq) ||
+            tel.contains(cq) ||
+            recNom.contains(cq) ||
+            recRut.contains(cleanCq) ||
+            recTel.contains(cq);
+      }).toList();
+    }
+
+    // 6. Filtro adicional por Vendedor desde Modal
+    if (_vendedorFilterController.text.trim().isNotEmpty) {
+      final vq = _vendedorFilterController.text.trim().toLowerCase();
+      lista = lista.where((e) {
+        final vend = e.vendedorNombre?.toLowerCase() ?? '';
+        final asig = e.vendedorAsignadoNombre?.toLowerCase() ?? '';
+        return vend.contains(vq) || asig.contains(vq);
+      }).toList();
+    }
+
     return lista;
   }
 
-  void _limpiarFiltros() {
-    _searchController.clear();
-    _clienteFilterController.clear();
-    _vendedorFilterController.clear();
-    setState(() {
-      _searchQuery = '';
-      _soloMisAsignadas = false;
-      _estadoPagoFilter = 'todos';
-      _tipoEntregaFilter = 'todos';
-    });
-    Navigator.of(context).pop();
-    _cargarDatos();
-  }
-
-  void _aplicarFiltros() {
-    Navigator.of(context).pop();
-    _cargarDatos();
-  }
-
   void _abrirModalFiltros() {
+    String draftEstadoPago = _estadoPagoFilter;
+    String draftTipoEntrega = _tipoEntregaFilter;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -379,6 +419,7 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                         const SizedBox(height: 6),
                         TextField(
                           controller: _clienteFilterController,
+                          onChanged: (_) => setModalState(() {}),
                           style: AppTypography.body.copyWith(fontSize: 14, color: AppPalette.textPrimary),
                           cursorColor: AppPalette.primary,
                           decoration: InputDecoration(
@@ -393,6 +434,15 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                               size: 20,
                               color: AppPalette.textSecondary,
                             ),
+                            suffixIcon: _clienteFilterController.text.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.close_rounded, size: 18, color: AppPalette.textSecondary),
+                                    onPressed: () {
+                                      _clienteFilterController.clear();
+                                      setModalState(() {});
+                                    },
+                                  )
+                                : null,
                             filled: true,
                             fillColor: AppPalette.surface,
                             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
@@ -424,6 +474,7 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                         const SizedBox(height: 6),
                         TextField(
                           controller: _vendedorFilterController,
+                          onChanged: (_) => setModalState(() {}),
                           style: AppTypography.body.copyWith(fontSize: 14, color: AppPalette.textPrimary),
                           cursorColor: AppPalette.primary,
                           decoration: InputDecoration(
@@ -438,6 +489,15 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                               size: 20,
                               color: AppPalette.textSecondary,
                             ),
+                            suffixIcon: _vendedorFilterController.text.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.close_rounded, size: 18, color: AppPalette.textSecondary),
+                                    onPressed: () {
+                                      _vendedorFilterController.clear();
+                                      setModalState(() {});
+                                    },
+                                  )
+                                : null,
                             filled: true,
                             fillColor: AppPalette.surface,
                             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
@@ -473,20 +533,20 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                           children: [
                             _buildModalFilterPill(
                               label: 'Todos',
-                              isSelected: _estadoPagoFilter == 'todos',
-                              onTap: () => setModalState(() => _estadoPagoFilter = 'todos'),
+                              isSelected: draftEstadoPago == 'todos',
+                              onTap: () => setModalState(() => draftEstadoPago = 'todos'),
                             ),
                             _buildModalFilterPill(
                               label: 'Pagados',
-                              isSelected: _estadoPagoFilter == 'pagados',
+                              isSelected: draftEstadoPago == 'pagados',
                               activeColor: AppPalette.success,
-                              onTap: () => setModalState(() => _estadoPagoFilter = 'pagados'),
+                              onTap: () => setModalState(() => draftEstadoPago = 'pagados'),
                             ),
                             _buildModalFilterPill(
                               label: 'Con Saldo Pendiente',
-                              isSelected: _estadoPagoFilter == 'pendientes',
+                              isSelected: draftEstadoPago == 'pendientes',
                               activeColor: AppPalette.warning,
-                              onTap: () => setModalState(() => _estadoPagoFilter = 'pendientes'),
+                              onTap: () => setModalState(() => draftEstadoPago = 'pendientes'),
                             ),
                           ],
                         ),
@@ -508,25 +568,25 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                           children: [
                             _buildModalFilterPill(
                               label: 'Todos',
-                              isSelected: _tipoEntregaFilter == 'todos',
-                              onTap: () => setModalState(() => _tipoEntregaFilter = 'todos'),
+                              isSelected: draftTipoEntrega == 'todos',
+                              onTap: () => setModalState(() => draftTipoEntrega = 'todos'),
                             ),
                             _buildModalFilterPill(
                               label: 'Solo Retiros',
-                              isSelected: _tipoEntregaFilter == 'retiro',
-                              onTap: () => setModalState(() => _tipoEntregaFilter = 'retiro'),
+                              isSelected: draftTipoEntrega == 'retiro',
+                              onTap: () => setModalState(() => draftTipoEntrega = 'retiro'),
                             ),
                             _buildModalFilterPill(
                               label: 'Solo Despachos',
-                              isSelected: _tipoEntregaFilter == 'despacho',
+                              isSelected: draftTipoEntrega == 'despacho',
                               activeColor: AppPalette.secondary,
-                              onTap: () => setModalState(() => _tipoEntregaFilter = 'despacho'),
+                              onTap: () => setModalState(() => draftTipoEntrega = 'despacho'),
                             ),
                             _buildModalFilterPill(
                               label: 'Solo Traslados',
-                              isSelected: _tipoEntregaFilter == 'traslado',
+                              isSelected: draftTipoEntrega == 'traslado',
                               activeColor: const Color(0xFFAB47BC),
-                              onTap: () => setModalState(() => _tipoEntregaFilter = 'traslado'),
+                              onTap: () => setModalState(() => draftTipoEntrega = 'traslado'),
                             ),
                           ],
                         ),
@@ -543,7 +603,19 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                                   padding: const EdgeInsets.symmetric(vertical: 12),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                 ),
-                                onPressed: _limpiarFiltros,
+                                onPressed: () {
+                                  _clienteFilterController.clear();
+                                  _vendedorFilterController.clear();
+                                  _searchController.clear();
+                                  setState(() {
+                                    _searchQuery = '';
+                                    _soloMisAsignadas = false;
+                                    _estadoPagoFilter = 'pagados';
+                                    _tipoEntregaFilter = 'todos';
+                                  });
+                                  Navigator.of(ctx).pop();
+                                  _cargarDatos();
+                                },
                                 child: const FittedBox(
                                   fit: BoxFit.scaleDown,
                                   child: Text(
@@ -562,7 +634,14 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                                   padding: const EdgeInsets.symmetric(vertical: 12),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                 ),
-                                onPressed: _aplicarFiltros,
+                                onPressed: () {
+                                  setState(() {
+                                    _estadoPagoFilter = draftEstadoPago;
+                                    _tipoEntregaFilter = draftTipoEntrega;
+                                  });
+                                  Navigator.of(ctx).pop();
+                                  _cargarDatos();
+                                },
                                 child: const FittedBox(
                                   fit: BoxFit.scaleDown,
                                   child: Text(
@@ -774,6 +853,11 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
       try {
         await OrdenesService.confirmarEntregaTienda(orden.idOrden);
         if (!mounted) return;
+
+        setState(() {
+          _todasEntregas.removeWhere((e) => e.idOrden == orden.idOrden);
+        });
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: AppPalette.surface,
@@ -791,7 +875,9 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
             ),
           ),
         );
-        _cargarDatos();
+
+        OrdenesSyncNotifier.instance.notificarCambio();
+        await _cargarDatosSilencioso();
       } catch (e) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1518,6 +1604,8 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
     }).toList();
 
     final misAsignadasCount = validas.where(_isAsignadaAMi).length;
+    final pagadasCount = validas.where((e) => e.estaPagada).length;
+    final pendientesCount = validas.where((e) => e.tieneSaldoPendiente).length;
     final retirosCount = validas
         .where((e) => e.tipoEntrega.toLowerCase() == 'retiro')
         .length;
@@ -1597,7 +1685,7 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
         final chipsRow = Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Chip Especial: Mis Entregas Asignadas
+            // 1. Chip Especial: Mis Entregas Asignadas
             _buildHeaderFilterPill(
               key: const Key('chip_mis_asignadas'),
               label: 'Mis Asignadas ($misAsignadasCount)',
@@ -1612,7 +1700,7 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
             ),
             const SizedBox(width: 8),
 
-            // Separador vertical sutil en tono oscuro
+            // Separador vertical sutil
             Container(
               height: 20,
               width: 1,
@@ -1621,24 +1709,68 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
             ),
             const SizedBox(width: 8),
 
-            // Chip: Todos
+            // 2. Grupo Estado de Preparación / Pago
+            // Chip: Listas para Entrega (Pagadas) [PREDETERMINADO]
             _buildHeaderFilterPill(
-              label: 'Todas (${validas.length})',
-              isSelected: _tipoEntregaFilter == 'todos',
-              activeColor: AppPalette.primary,
+              key: const Key('chip_filtro_pagadas'),
+              label: 'Listas ($pagadasCount)',
+              icon: Icons.check_circle_outline_rounded,
+              isSelected: _estadoPagoFilter == 'pagados',
+              activeColor: AppPalette.success,
               onTap: () {
-                setState(() => _tipoEntregaFilter = 'todos');
+                setState(() => _estadoPagoFilter = 'pagados');
               },
             ),
             const SizedBox(width: 6),
 
+            // Chip: Con Saldo Pendiente
+            _buildHeaderFilterPill(
+              key: const Key('chip_filtro_pendientes'),
+              label: 'Con Saldo ($pendientesCount)',
+              icon: Icons.monetization_on_outlined,
+              isSelected: _estadoPagoFilter == 'pendientes',
+              activeColor: AppPalette.warning,
+              onTap: () {
+                setState(() => _estadoPagoFilter = 'pendientes');
+              },
+            ),
+            const SizedBox(width: 6),
+
+            // Chip: Todas
+            _buildHeaderFilterPill(
+              key: const Key('chip_filtro_todas'),
+              label: 'Todas (${validas.length})',
+              icon: Icons.layers_outlined,
+              isSelected: _estadoPagoFilter == 'todos' && _tipoEntregaFilter == 'todos',
+              activeColor: AppPalette.primary,
+              onTap: () {
+                setState(() {
+                  _estadoPagoFilter = 'todos';
+                  _tipoEntregaFilter = 'todos';
+                });
+              },
+            ),
+            const SizedBox(width: 8),
+
+            // Separador vertical sutil
+            Container(
+              height: 20,
+              width: 1,
+              color: Colors.white12,
+              margin: const EdgeInsets.symmetric(horizontal: 2),
+            ),
+            const SizedBox(width: 8),
+
+            // 3. Grupo Modalidad de Entrega
             // Chip: Retiros
             _buildHeaderFilterPill(
               label: 'Retiros ($retirosCount)',
               isSelected: _tipoEntregaFilter == 'retiro',
               activeColor: AppPalette.primary,
               onTap: () {
-                setState(() => _tipoEntregaFilter = 'retiro');
+                setState(() {
+                  _tipoEntregaFilter = _tipoEntregaFilter == 'retiro' ? 'todos' : 'retiro';
+                });
               },
             ),
             const SizedBox(width: 6),
@@ -1649,7 +1781,9 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
               isSelected: _tipoEntregaFilter == 'despacho',
               activeColor: AppPalette.secondary,
               onTap: () {
-                setState(() => _tipoEntregaFilter = 'despacho');
+                setState(() {
+                  _tipoEntregaFilter = _tipoEntregaFilter == 'despacho' ? 'todos' : 'despacho';
+                });
               },
             ),
             const SizedBox(width: 6),
@@ -1661,13 +1795,15 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                 isSelected: _tipoEntregaFilter == 'traslado',
                 activeColor: const Color(0xFFAB47BC),
                 onTap: () {
-                  setState(() => _tipoEntregaFilter = 'traslado');
+                  setState(() {
+                    _tipoEntregaFilter = _tipoEntregaFilter == 'traslado' ? 'todos' : 'traslado';
+                  });
                 },
               ),
               const SizedBox(width: 6),
             ],
 
-            // Botón rápido de limpiar si hay filtros activos
+            // Botón rápido de restablecer a predeterminado
             if (_tieneFiltrosActivos) ...[
               Material(
                 color: AppPalette.surface,
@@ -1679,10 +1815,11 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                       _searchQuery = '';
                       _soloMisAsignadas = false;
                       _tipoEntregaFilter = 'todos';
-                      _estadoPagoFilter = 'todos';
+                      _estadoPagoFilter = 'pagados';
                       _clienteFilterController.clear();
                       _vendedorFilterController.clear();
                     });
+                    _cargarDatos();
                   },
                   borderRadius: BorderRadius.circular(8.0),
                   child: Container(

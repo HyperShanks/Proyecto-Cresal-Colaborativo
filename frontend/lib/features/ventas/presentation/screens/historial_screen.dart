@@ -163,6 +163,16 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
       _errorMessage = null;
     });
 
+    // Si se inyectaron órdenes iniciales (en tests o modo local) sin cliente HTTP mocked,
+    // conservamos los datos iniciales y dejamos que _ordenesFiltradas realice el filtrado reactivo.
+    if (widget.initialOrdenes != null && widget.client == null) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = null;
+      });
+      return;
+    }
+
     try {
       final ordenes = await OrdenesService.obtenerMisVentas(
         todas: seccionSolicitada == 'por_asignar' ? true : _verTodas,
@@ -213,8 +223,9 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
     } catch (e) {
       if (!mounted ||
           requestId != _activeRequestId ||
-          _seccionActual != seccionSolicitada)
+          _seccionActual != seccionSolicitada) {
         return;
+      }
       setState(() {
         _errorMessage = e.toString().replaceFirst('Exception: ', '');
         _isLoading = false;
@@ -225,6 +236,7 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
   /// Recarga en segundo plano sin interrumpir la interacción del usuario
   Future<void> _cargarOrdenesSilencioso() async {
     if (!mounted || _isLoading) return;
+    if (widget.initialOrdenes != null && widget.client == null) return;
     final int requestId = ++_activeRequestId;
     final String seccionSolicitada = _seccionActual;
 
@@ -238,8 +250,9 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
 
       if (!mounted ||
           requestId != _activeRequestId ||
-          _seccionActual != seccionSolicitada)
+          _seccionActual != seccionSolicitada) {
         return;
+      }
       _ordenarOrdenes(ordenes);
 
       int conteo = _conteoPorAsignar;
@@ -259,8 +272,9 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
 
       if (!mounted ||
           requestId != _activeRequestId ||
-          _seccionActual != seccionSolicitada)
+          _seccionActual != seccionSolicitada) {
         return;
+      }
 
       setState(() {
         if (seccionSolicitada == 'por_asignar') {
@@ -277,14 +291,31 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
 
   /// Lista filtrada reactivamente según el término de búsqueda ingresado
   List<OrdenHistorialModel> get _ordenesFiltradas {
+    var lista = _ordenes;
+
+    // Regla de Negocio: Las órdenes anuladas salen ocultas por defecto en Mis Órdenes,
+    // salvo que se seleccione explícitamente el filtro de 'Anulada'.
+    if (_filtroEstado != null) {
+      if (_filtroEstado == 'Anulada') {
+        lista = lista.where((orden) => orden.esAnulada).toList();
+      } else {
+        lista = lista
+            .where((orden) =>
+                orden.estadoOrden.toLowerCase() == _filtroEstado!.toLowerCase())
+            .toList();
+      }
+    } else {
+      lista = lista.where((orden) => !orden.esAnulada).toList();
+    }
+
     if (_searchQuery.trim().isEmpty) {
-      return _ordenes;
+      return lista;
     }
 
     final query = _searchQuery.trim().toLowerCase();
     final cleanQuery = query.replaceAll('#', '').trim();
 
-    return _ordenes.where((orden) {
+    return lista.where((orden) {
       // 1. Folio / ID de Orden / Token QR
       final idMatch = orden.idOrden.toLowerCase().contains(cleanQuery);
       final folioMatch =
@@ -545,6 +576,188 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
                 ),
               ),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickFilterChips() {
+    if (_seccionActual != 'normal') return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        child: Row(
+          children: [
+            _buildQuickChip(
+              label: 'Activas',
+              isSelected: _filtroEstado == null,
+              icon: Icons.check_circle_outline,
+              onTap: () {
+                if (_filtroEstado != null) {
+                  setState(() => _filtroEstado = null);
+                  _cargarOrdenes();
+                }
+              },
+            ),
+            const SizedBox(width: 8.0),
+            _buildQuickChip(
+              label: 'Reservadas',
+              isSelected: _filtroEstado == 'Reservada',
+              activeColor: AppPalette.secondary,
+              onTap: () {
+                setState(() {
+                  _filtroEstado = _filtroEstado == 'Reservada' ? null : 'Reservada';
+                });
+                _cargarOrdenes();
+              },
+            ),
+            const SizedBox(width: 8.0),
+            _buildQuickChip(
+              label: 'Pagadas',
+              isSelected: _filtroEstado == 'Pagada',
+              activeColor: AppPalette.success,
+              onTap: () {
+                setState(() {
+                  _filtroEstado = _filtroEstado == 'Pagada' ? null : 'Pagada';
+                });
+                _cargarOrdenes();
+              },
+            ),
+            const SizedBox(width: 8.0),
+            _buildQuickChip(
+              label: 'Completadas',
+              isSelected: _filtroEstado == 'Completada',
+              activeColor: AppPalette.primary,
+              onTap: () {
+                setState(() {
+                  _filtroEstado = _filtroEstado == 'Completada' ? null : 'Completada';
+                });
+                _cargarOrdenes();
+              },
+            ),
+            const SizedBox(width: 8.0),
+            _buildQuickChip(
+              label: 'Solo Anuladas',
+              isSelected: _filtroEstado == 'Anulada',
+              activeColor: AppPalette.error,
+              icon: Icons.cancel_outlined,
+              onTap: () {
+                setState(() {
+                  _filtroEstado = _filtroEstado == 'Anulada' ? null : 'Anulada';
+                });
+                _cargarOrdenes();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickChip({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+    Color? activeColor,
+    IconData? icon,
+  }) {
+    final selectedColor = activeColor ?? AppPalette.primary;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8.0),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
+          decoration: BoxDecoration(
+            color: isSelected ? selectedColor.withValues(alpha: 0.22) : const Color(0xFF1E293B),
+            borderRadius: BorderRadius.circular(8.0),
+            border: Border.all(
+              color: isSelected ? selectedColor : const Color(0xFF334155),
+              width: 1.2,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null) ...[
+                Icon(
+                  icon,
+                  size: 14,
+                  color: isSelected ? selectedColor : const Color(0xFFCBD5E1),
+                ),
+                const SizedBox(width: 5),
+              ],
+              Text(
+                label,
+                style: TextStyle(
+                  color: isSelected ? (activeColor != null ? selectedColor : Colors.white) : const Color(0xFFCBD5E1),
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                  fontSize: 12.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAnuladasBanner() {
+    if (_seccionActual != 'normal' || _filtroEstado != 'Anulada') {
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+        decoration: BoxDecoration(
+          color: AppPalette.error.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(8.0),
+          border: Border.all(color: AppPalette.error.withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.cancel_outlined, color: AppPalette.error, size: 18),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Visualizando únicamente órdenes anuladas (${_verTodas ? "Historial Completo" : "Hoy"}).',
+                style: const TextStyle(
+                  color: AppPalette.error,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            InkWell(
+              onTap: () {
+                setState(() {
+                  _filtroEstado = null;
+                  _tempFiltroEstado = null;
+                });
+                _cargarOrdenes();
+              },
+              borderRadius: BorderRadius.circular(4),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                child: Text(
+                  'Ver Activas',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -1115,6 +1328,8 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
         children: [
           _buildSearchBar(),
           _buildSeccionTabs(),
+          _buildQuickFilterChips(),
+          _buildAnuladasBanner(),
           Expanded(
             child: _isLoading
                 ? const Center(

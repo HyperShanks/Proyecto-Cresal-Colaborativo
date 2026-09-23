@@ -563,5 +563,31 @@ void main() {
       expect(find.text('Retiro y Envíos'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets('Filtros predeterminados en Entregas y Envíos renderizan chips de Listas (Pagadas), Con Saldo y Todas', (tester) async {
+      await const FlutterSecureStorage().write(key: 'user_id_rol', value: '6');
+      await const FlutterSecureStorage().write(key: 'user_rol', value: 'Jefe de Ventas');
+
+      final ordenDespacho = EntregaEnvioModel.fromJson(mockEntregasJson[1]);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: EntregasEnviosScreen(
+            initialEntregas: [ordenDespacho],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('chip_filtro_pagadas')), findsOneWidget);
+      expect(find.byKey(const Key('chip_filtro_pendientes')), findsOneWidget);
+      expect(find.byKey(const Key('chip_filtro_todas')), findsOneWidget);
+      expect(find.byKey(const Key('chip_mis_asignadas')), findsOneWidget);
+
+      // Al pulsar 'Todas', el chip responde sin errores
+      await tester.tap(find.byKey(const Key('chip_filtro_todas')));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    });
   });
 }

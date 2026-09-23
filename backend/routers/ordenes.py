@@ -800,6 +800,7 @@ def obtener_mis_ventas(
     fecha: Optional[str] = None,
     todas: bool = False,
     estado: Optional[str] = None,
+    incluir_anuladas: bool = Query(True, description="Si es False y estado no es 'Anulada', oculta órdenes anuladas"),
     seccion: Optional[str] = Query("normal", description="Sección: 'normal' u 'por_asignar'"),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
@@ -817,10 +818,7 @@ def obtener_mis_ventas(
     if seccion == "por_asignar":
         # Apartado exclusivo: Ventas en verde pagadas que están pendientes de asignación física de activo
         query = db.query(Orden_Venta).filter(
-            or_(
-                Orden_Venta.id_vendedor == current_user.id_usuario,
-                Orden_Venta.id_vendedor_asignado == current_user.id_usuario,
-            ),
+            Orden_Venta.id_vendedor == current_user.id_usuario,
             Orden_Venta.monto_pendiente == 0,
             Orden_Venta.qr_transaccional_salida.is_(None),
             Orden_Venta.id_orden.in_(subquery_por_asignar),
@@ -846,10 +844,7 @@ def obtener_mis_ventas(
     else:
         # Apartado normal: Excluir estrictamente órdenes pendientes de asignación para evitar duplicidad o botones Ver QR inválidos
         query = db.query(Orden_Venta).filter(
-            or_(
-                Orden_Venta.id_vendedor == current_user.id_usuario,
-                Orden_Venta.id_vendedor_asignado == current_user.id_usuario,
-            ),
+            Orden_Venta.id_vendedor == current_user.id_usuario,
             ~and_(
                 Orden_Venta.monto_pendiente == 0,
                 Orden_Venta.qr_transaccional_salida.is_(None),
@@ -890,6 +885,8 @@ def obtener_mis_ventas(
 
         if estado and estado.strip():
             query = query.filter(Orden_Venta.estado_orden == estado.strip())
+        elif not incluir_anuladas:
+            query = query.filter(func.lower(Orden_Venta.estado_orden) != "anulada")
 
     ordenes = query.order_by(
         case(
@@ -1957,10 +1954,10 @@ def pagar_orden(
         detalles = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == orden.id_orden).all()
         tiene_activo_fisico = any(d.id_activo is not None for d in detalles)
 
-        despacho_pendiente = db.query(Despacho).filter(
-            Despacho.id_orden == orden.id_orden,
-            Despacho.estado_despacho == "Por Enviar"
+        despacho_asociado = db.query(Despacho).filter(
+            Despacho.id_orden == orden.id_orden
         ).first()
+        despacho_pendiente = despacho_asociado if (despacho_asociado and despacho_asociado.estado_despacho == "Por Enviar") else None
 
         if nuevo_saldo == 0:
             if tiene_activo_fisico:
