@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     # Variables obligatorias que deben estar en tu archivo .env
     DATABASE_URL: str
     JWT_SECRET_KEY: str
-    TOKEN_EXPIRE_MINUTES: int = 1  # 24 horas para cubrir jornadas y turnos continuos
+    TOKEN_EXPIRE_MINUTES: int = 1440  # 24 horas para cubrir jornadas y turnos continuos
     ALGORITHM: str = "HS256"
     SUPABASE_URL: str
     SUPABASE_KEY: str
