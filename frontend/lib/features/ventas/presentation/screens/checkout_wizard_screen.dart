@@ -65,9 +65,14 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
   int _idSucursalActual = 1; // 1: Viña del Mar, 2: Limache
   int _idSucursalDestino = 2; // Por defecto a la otra sucursal
   int? _userRolId;
+  String? _currentUserId;
   bool get _esVendedorOnline => _userRolId == 7;
+  bool get _esJefeDeVentas =>
+      _userRolId == 6 || _userRolId == 1 || _userRolId == 5;
   List<VendedorModel> _vendedoresDisponibles = [];
   String? _idVendedorAsignado;
+  bool _esVentaReferida = false;
+  String? _idVendedorTitular;
 
   // Controladores Paso 4 (Comercial / Abonos / Descuentos)
   final _montoAbonoController = TextEditingController();
@@ -141,6 +146,8 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
         _comunaCliente = null;
         _comunaDespacho = null;
         _idSucursalDestino = (_idSucursalActual == 1 ? 2 : 1);
+        _esVentaReferida = false;
+        _idVendedorTitular = null;
         final jefe = _vendedoresDisponibles.cast<VendedorModel?>().firstWhere(
               (v) => v != null && v.esJefeDeVentas,
               orElse: () => null,
@@ -163,9 +170,11 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     try {
       final rolId = await AuthService.getIdRol();
       final sucursalId = await AuthService.getSucursalId();
+      final currentUserId = await AuthService.getEnrolledUserId();
       if (mounted) {
         setState(() {
           _userRolId = rolId;
+          _currentUserId = currentUserId;
           if (sucursalId != null && (sucursalId == 1 || sucursalId == 2)) {
             _idSucursalActual = sucursalId;
             _idSucursalDestino = (_idSucursalActual == 1) ? 2 : 1;
@@ -174,35 +183,50 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
           }
         });
       }
-      if (rolId == 7) {
+      if (rolId == 7 || rolId == 6 || rolId == 1 || rolId == 5) {
         final vends = await OrdenesService.obtenerVendedores();
         if (mounted) {
-          // Filtrar exclusivamente Jefe de Ventas (idRol == 6) y Vendedor Mesón (idRol == 2)
-          final filtrados = vends
-              .where((v) =>
-                  v.idRol == null || v.idRol == 6 || v.idRol == 2)
-              .toList();
+          // Filtrar roles: Para Vendedora Online solo 6 (Jefe) y 2 (Mesón).
+          // Para Jefe de Ventas: 7 (Online), 6 (Jefe) y 2 (Mesón).
+          final filtrados = vends.where((v) {
+            if (rolId == 7) {
+              return v.idRol == null || v.idRol == 6 || v.idRol == 2;
+            }
+            return v.idRol == null ||
+                v.idRol == 6 ||
+                v.idRol == 2 ||
+                v.idRol == 7;
+          }).toList();
+
           filtrados.sort((a, b) {
             if (a.esJefeDeVentas && !b.esJefeDeVentas) return -1;
             if (!a.esJefeDeVentas && b.esJefeDeVentas) return 1;
+            if (a.esVendedoraOnline && !b.esVendedoraOnline) return -1;
+            if (!a.esVendedoraOnline && b.esVendedoraOnline) return 1;
             return a.nombreCompleto.compareTo(b.nombreCompleto);
           });
 
-          // Predeterminado: Jefe de Ventas de la sucursal (Viña del Mar / Gastón Zamora)
-          final jefe = filtrados.cast<VendedorModel?>().firstWhere(
-                (v) => v != null && v.esJefeDeVentas,
-                orElse: () => null,
-              );
-          final defaultId = jefe?.idUsuario ??
-              (filtrados.isNotEmpty ? filtrados.first.idUsuario : null);
+          if (rolId == 7) {
+            // Predeterminado: Jefe de Ventas de la sucursal (Viña del Mar / Gastón Zamora)
+            final jefe = filtrados.cast<VendedorModel?>().firstWhere(
+                  (v) => v != null && v.esJefeDeVentas,
+                  orElse: () => null,
+                );
+            final defaultId = jefe?.idUsuario ??
+                (filtrados.isNotEmpty ? filtrados.first.idUsuario : null);
 
-          setState(() {
-            _vendedoresDisponibles = filtrados;
-            if (_idVendedorAsignado == null && defaultId != null) {
-              _idVendedorAsignado = defaultId;
-              _controller.setIdVendedorAsignado(defaultId);
-            }
-          });
+            setState(() {
+              _vendedoresDisponibles = filtrados;
+              if (_idVendedorAsignado == null && defaultId != null) {
+                _idVendedorAsignado = defaultId;
+                _controller.setIdVendedorAsignado(defaultId);
+              }
+            });
+          } else {
+            setState(() {
+              _vendedoresDisponibles = filtrados;
+            });
+          }
         }
       }
     } catch (_) {}
@@ -535,6 +559,11 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
 
     if (_esVendedorOnline) {
       _controller.setIdVendedorAsignado(_idVendedorAsignado);
+    } else if (_esJefeDeVentas && _esVentaReferida) {
+      _controller.setIdVendedorTitular(_idVendedorTitular);
+      _controller.setIdVendedorAsignado(_currentUserId);
+    } else {
+      _controller.setIdVendedorTitular(null);
     }
   }
 
@@ -570,6 +599,22 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
         const SnackBar(
           content: Text(
             'Debes asignar un responsable para la entrega (Jefe de Ventas o Vendedor de Mesón) antes de confirmar la orden.',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+          backgroundColor: AppPalette.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    if (_esJefeDeVentas &&
+        _esVentaReferida &&
+        (_idVendedorTitular == null || _idVendedorTitular!.trim().isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Debes seleccionar al vendedor al cual se atribuirá la venta antes de confirmar la orden.',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
           ),
           backgroundColor: AppPalette.error,
@@ -1950,6 +1995,10 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
           const SizedBox(height: 16),
           _buildCardResponsableEntrega(),
         ],
+        if (_esJefeDeVentas) ...[
+          const SizedBox(height: 16),
+          _buildCardVentaReferida(),
+        ],
       ],
     );
   }
@@ -2313,6 +2362,86 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                   ),
                 ),
               ],
+              if (_esJefeDeVentas && _esVentaReferida) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: (_idVendedorTitular == null ||
+                            _idVendedorTitular!.trim().isEmpty)
+                        ? AppPalette.error.withValues(alpha: 0.12)
+                        : Colors.purple.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: (_idVendedorTitular == null ||
+                              _idVendedorTitular!.trim().isEmpty)
+                          ? AppPalette.error.withValues(alpha: 0.4)
+                          : Colors.purpleAccent.withValues(alpha: 0.4),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.person_pin_outlined,
+                        size: 18,
+                        color: (_idVendedorTitular == null ||
+                                _idVendedorTitular!.trim().isEmpty)
+                            ? AppPalette.error
+                            : Colors.purpleAccent,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Venta Atribuida a: $_nombreVendedorTitularSeleccionado',
+                          style: AppTypography.small.copyWith(
+                            color: (_idVendedorTitular == null ||
+                                    _idVendedorTitular!.trim().isEmpty)
+                                ? AppPalette.error
+                                : Colors.purpleAccent,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppPalette.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: AppPalette.primary.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.storefront_outlined,
+                        size: 18,
+                        color: AppPalette.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Responsable de Entrega Física: Tú (Jefe de Ventas)',
+                          style: AppTypography.small.copyWith(
+                            color: AppPalette.primary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const Divider(color: Colors.white24, height: 20),
 
               Text(
@@ -2413,6 +2542,45 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
           const SizedBox(height: 12),
         ],
 
+        if (_esJefeDeVentas &&
+            _esVentaReferida &&
+            (_idVendedorTitular == null ||
+                _idVendedorTitular!.trim().isEmpty)) ...[
+          Container(
+            key: const Key('alerta_titular_requerido'),
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppPalette.error.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: AppPalette.error.withValues(alpha: 0.4),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.error_outline,
+                  color: AppPalette.error,
+                  size: 20,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Debes seleccionar al vendedor titular para atribuir la venta antes de confirmar la orden.',
+                    style: AppTypography.small.copyWith(
+                      color: AppPalette.error,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+
         SizedBox(
           width: double.infinity,
           height: 50,
@@ -2443,13 +2611,22 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                           (_idVendedorAsignado == null ||
                               _idVendedorAsignado!.trim().isEmpty)
                       ? 'ASIGNA UN RESPONSABLE PARA CONTINUAR'
-                      : 'CONFIRMAR Y EMITIR ORDEN'),
+                      : (_esJefeDeVentas &&
+                              _esVentaReferida &&
+                              (_idVendedorTitular == null ||
+                                  _idVendedorTitular!.trim().isEmpty)
+                          ? 'SELECCIONA VENDEDOR TITULAR PARA CONTINUAR'
+                          : 'CONFIRMAR Y EMITIR ORDEN')),
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
             ),
             onPressed: (_controller.isLoading ||
                     (_esVendedorOnline &&
                         (_idVendedorAsignado == null ||
-                            _idVendedorAsignado!.trim().isEmpty)))
+                            _idVendedorAsignado!.trim().isEmpty)) ||
+                    (_esJefeDeVentas &&
+                        _esVentaReferida &&
+                        (_idVendedorTitular == null ||
+                            _idVendedorTitular!.trim().isEmpty)))
                 ? null
                 : _confirmarYEnviarOrden,
           ),
@@ -2607,6 +2784,247 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     return v != null
         ? '[${v.etiquetaRol}] ${v.nombreCompleto}'
         : 'Responsable Asignado';
+  }
+
+  // ── Helpers Atribución de Venta (Jefe de Ventas) ───────────────────────────
+  String get _nombreVendedorTitularSeleccionado {
+    if (_idVendedorTitular == null || _idVendedorTitular!.trim().isEmpty) {
+      return 'Sin Seleccionar (Obligatorio)';
+    }
+    final v = _vendedoresDisponibles.cast<VendedorModel?>().firstWhere(
+          (v) => v?.idUsuario == _idVendedorTitular,
+          orElse: () => null,
+        );
+    return v != null
+        ? '[${v.etiquetaRol}] ${v.nombreCompleto}'
+        : 'Vendedor Titular Seleccionado';
+  }
+
+  Widget _buildCardVentaReferida() {
+    return Container(
+      key: const Key('card_venta_referida'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppPalette.surface, // Fondo gris oscuro
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: _esVentaReferida
+              ? AppPalette.primary.withValues(alpha: 0.6)
+              : Colors.white12,
+          width: 1.2,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: AppPalette.primary.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.person_pin_outlined,
+                  size: 20,
+                  color: AppPalette.primary, // Icono celeste
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'VENTA REFERIDA / ATRIBUCIÓN',
+                      style: AppTypography.small.copyWith(
+                        color: AppPalette.primary, // Letras celestes
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    Text(
+                      '¿Esta venta corresponde a una cotización de la Vendedora Online u otro vendedor?',
+                      style: AppTypography.small.copyWith(
+                        color: AppPalette.textSecondary,
+                        fontSize: 11.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                key: const Key('switch_venta_referida'),
+                value: _esVentaReferida,
+                activeThumbColor: AppPalette.primary,
+                activeTrackColor: AppPalette.primary.withValues(alpha: 0.3),
+                inactiveThumbColor: Colors.white54,
+                inactiveTrackColor: Colors.white12,
+                onChanged: (val) {
+                  setState(() {
+                    _esVentaReferida = val;
+                    if (val) {
+                      // Predeterminar a la Vendedora Online si existe en la lista
+                      final online = _vendedoresDisponibles
+                          .cast<VendedorModel?>()
+                          .firstWhere(
+                            (v) => v != null && v.esVendedoraOnline,
+                            orElse: () => null,
+                          );
+                      final titularId = online?.idUsuario ??
+                          (_vendedoresDisponibles.isNotEmpty
+                              ? _vendedoresDisponibles.first.idUsuario
+                              : null);
+                      _idVendedorTitular = titularId;
+                      _controller.setIdVendedorTitular(titularId);
+                      if (_currentUserId != null) {
+                        _idVendedorAsignado = _currentUserId;
+                        _controller.setIdVendedorAsignado(_currentUserId);
+                      }
+                    } else {
+                      _idVendedorTitular = null;
+                      _controller.setIdVendedorTitular(null);
+                    }
+                  });
+                },
+              ),
+            ],
+          ),
+          if (_esVentaReferida) ...[
+            const SizedBox(height: 14),
+            Text(
+              'Asignar comisión y métricas de venta a:',
+              style: AppTypography.small.copyWith(
+                color: AppPalette.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: AppPalette.background, // Fondo gris
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: AppPalette.primary.withValues(alpha: 0.5), // Borde celeste
+                  width: 1.2,
+                ),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String?>(
+                  key: const Key('dropdown_vendedor_titular'),
+                  value: _idVendedorTitular,
+                  dropdownColor: AppPalette.surface,
+                  isExpanded: true,
+                  icon: const Icon(
+                    Icons.arrow_drop_down,
+                    color: AppPalette.primary,
+                  ),
+                  items: [
+                    const DropdownMenuItem<String?>(
+                      value: null,
+                      child: Text(
+                        '-- Selecciona Vendedor Titular --',
+                        style: TextStyle(
+                          color: Color(0xFF94A3B8),
+                          fontSize: 13.5,
+                        ),
+                      ),
+                    ),
+                    ..._vendedoresDisponibles.map(
+                      (v) => DropdownMenuItem<String?>(
+                        value: v.idUsuario,
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: v.esVendedoraOnline
+                                    ? Colors.purple.withValues(alpha: 0.25)
+                                    : (v.esJefeDeVentas
+                                        ? AppPalette.primary.withValues(alpha: 0.2)
+                                        : Colors.white.withValues(alpha: 0.08)),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(
+                                  color: v.esVendedoraOnline
+                                      ? Colors.purpleAccent
+                                      : (v.esJefeDeVentas
+                                          ? AppPalette.primary
+                                          : Colors.white24),
+                                ),
+                              ),
+                              child: Text(
+                                v.etiquetaRol.toUpperCase(),
+                                style: TextStyle(
+                                  color: v.esVendedoraOnline
+                                      ? Colors.purpleAccent
+                                      : (v.esJefeDeVentas
+                                          ? AppPalette.primary
+                                          : Colors.white70),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                '${v.nombreCompleto} (${v.rut})',
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: AppPalette.primary,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13.5,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                  onChanged: (val) {
+                    setState(() {
+                      _idVendedorTitular = val;
+                    });
+                    _controller.setIdVendedorTitular(val);
+                    if (_currentUserId != null) {
+                      _idVendedorAsignado = _currentUserId;
+                      _controller.setIdVendedorAsignado(_currentUserId);
+                    }
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(
+                  Icons.info_outline,
+                  size: 14,
+                  color: AppPalette.textSecondary,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Tú (Jefe de Ventas) quedarás registrado para entregar físicamente los repuestos en sucursal.',
+                    style: AppTypography.small.copyWith(
+                      color: AppPalette.textSecondary,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   Widget _buildCardResponsableEntrega() {

@@ -211,6 +211,7 @@ class CheckoutWizardRequestModel {
   final String tipoEntrega; // 'Retiro', 'Despacho Domicilio', 'Traslado'
   final int? idSucursalDestino;
   final String? idVendedorAsignado;
+  final String? idVendedorTitular;
   final int totalVenta;
   final int montoPendiente;
   final int? montoAbono;
@@ -227,6 +228,7 @@ class CheckoutWizardRequestModel {
     this.tipoEntrega = 'Retiro',
     this.idSucursalDestino,
     this.idVendedorAsignado,
+    this.idVendedorTitular,
     required this.totalVenta,
     required this.montoPendiente,
     this.montoAbono,
@@ -244,6 +246,7 @@ class CheckoutWizardRequestModel {
     'tipo_entrega': tipoEntrega,
     if (idSucursalDestino != null) 'id_sucursal_destino': idSucursalDestino,
     if (idVendedorAsignado != null) 'id_vendedor_asignado': idVendedorAsignado,
+    if (idVendedorTitular != null) 'id_vendedor_titular': idVendedorTitular,
     'total_venta': totalVenta,
     'monto_pendiente': montoPendiente,
     if (montoAbono != null) 'monto_abono': montoAbono,

@@ -841,4 +841,165 @@ def test_venta_libre_online_permanece_pagada_hasta_entrega(client, auth_headers)
         db.close()
 
 
+def test_jefe_ventas_puede_crear_orden_a_nombre_de_online(client):
+    """
+    Verifica que el Jefe de Ventas (id_rol == 6) pueda crear una orden a nombre de la Vendedora Online (id_rol == 7)
+    mediante el checkout wizard:
+    - id_vendedor queda fijado a la vendedora online (comisiones/métricas para ella)
+    - id_vendedor_asignado queda fijado al Jefe de Ventas (responsable físico de entrega en tienda)
+    """
+    db = TestingSessionLocal()
+    try:
+        # 1. Asegurar roles
+        for r_id, r_nom in [(6, "Jefe de Ventas"), (7, "Vendedora Online")]:
+            if not db.query(models.Rol).filter_by(id_rol=r_id).first():
+                db.add(models.Rol(id_rol=r_id, nombre_rol=r_nom))
+        db.flush()
+
+        # 2. Jefe de Ventas y Vendedora Online
+        jefe = models.Usuario(
+            id_usuario=uuid.uuid4(),
+            rut_usuario="12.345.678-9",
+            nombres="Gaston",
+            apellidos="Jefe",
+            email="jefe_test@cresal.cl",
+            id_rol=6,
+            id_sucursal=1,
+            password_hash="dummy",
+            pin_acceso="9991",
+            estado="Activo",
+        )
+        db.add(jefe)
+
+        online = models.Usuario(
+            id_usuario=uuid.uuid4(),
+            rut_usuario="13.456.789-0",
+            nombres="Marcela",
+            apellidos="Online",
+            email="marcela_test@cresal.cl",
+            id_rol=7,
+            id_sucursal=1,
+            password_hash="dummy",
+            pin_acceso="9992",
+            estado="Activo",
+        )
+        db.add(online)
+
+        cli = models.Cliente(
+            id_cliente=uuid.uuid4(),
+            rut_cliente="14.567.890-1",
+            nombres="Cliente",
+            apellidos="Referido",
+            telefono="+56911223355",
+            consentimiento_legal=True,
+        )
+        db.add(cli)
+        db.commit()
+
+        token_jefe = create_access_token(data={"sub": str(jefe.id_usuario), "id_rol": 6, "id_sucursal": 1})
+        headers_jefe = {"Authorization": f"Bearer {token_jefe}"}
+
+        # 3. Payload checkout wizard con id_vendedor_titular = online.id_usuario
+        payload = {
+            "id_cliente": str(cli.id_cliente),
+            "tipo_entrega": "Retiro",
+            "total_venta": 15000,
+            "monto_pendiente": 15000,
+            "items_manuales": [
+                {
+                    "descripcion": "Filtro de Aceite Test",
+                    "cantidad": 1,
+                    "precio_unitario": 15000,
+                }
+            ],
+            "id_vendedor_titular": str(online.id_usuario),
+        }
+
+        res = client.post("/api/v1/ordenes/checkout-wizard", json=payload, headers=headers_jefe)
+        assert res.status_code == 201, res.text
+        data = res.json()
+        id_orden = uuid.UUID(data["id_orden"])
+
+        orden_db = db.query(models.Orden_Venta).filter_by(id_orden=id_orden).first()
+        assert orden_db is not None
+        assert orden_db.id_vendedor == online.id_usuario, "La orden debe estar atribuida comercialmente a Marcela Online"
+        assert orden_db.id_vendedor_asignado == jefe.id_usuario, "El Jefe de Ventas debe quedar como responsable físico de entrega"
+
+    finally:
+        db.close()
+
+
+def test_vendedor_normal_no_puede_crear_orden_a_nombre_de_otro(client):
+    """
+    Verifica que un Vendedor de mesón común (id_rol == 2) NO pueda atribuir órdenes a otro vendedor,
+    recibiendo un HTTP 403 Forbidden.
+    """
+    db = TestingSessionLocal()
+    try:
+        vend = models.Usuario(
+            id_usuario=uuid.uuid4(),
+            rut_usuario="15.678.901-2",
+            nombres="Vendedor",
+            apellidos="Comun",
+            email="vend_comun@cresal.cl",
+            id_rol=2,
+            id_sucursal=1,
+            password_hash="dummy",
+            pin_acceso="9993",
+            estado="Activo",
+        )
+        db.add(vend)
+
+        online = models.Usuario(
+            id_usuario=uuid.uuid4(),
+            rut_usuario="16.789.012-3",
+            nombres="Marcela",
+            apellidos="Online2",
+            email="marcela2_test@cresal.cl",
+            id_rol=7,
+            id_sucursal=1,
+            password_hash="dummy",
+            pin_acceso="9994",
+            estado="Activo",
+        )
+        db.add(online)
+
+        cli = models.Cliente(
+            id_cliente=uuid.uuid4(),
+            rut_cliente="17.890.123-4",
+            nombres="Cliente",
+            apellidos="Test2",
+            telefono="+56911223366",
+            consentimiento_legal=True,
+        )
+        db.add(cli)
+        db.commit()
+
+        token_vend = create_access_token(data={"sub": str(vend.id_usuario), "id_rol": 2, "id_sucursal": 1})
+        headers_vend = {"Authorization": f"Bearer {token_vend}"}
+
+        payload = {
+            "id_cliente": str(cli.id_cliente),
+            "tipo_entrega": "Retiro",
+            "total_venta": 5000,
+            "monto_pendiente": 5000,
+            "items_manuales": [
+                {
+                    "descripcion": "Ampolleta H4",
+                    "cantidad": 1,
+                    "precio_unitario": 5000,
+                }
+            ],
+            "id_vendedor_titular": str(online.id_usuario),
+        }
+
+        res = client.post("/api/v1/ordenes/checkout-wizard", json=payload, headers=headers_vend)
+        assert res.status_code == 403, f"Se esperaba 403 pero fue {res.status_code}: {res.text}"
+        assert "Solo el Jefe de Ventas o Administrador puede emitir" in res.json()["detail"]
+
+    finally:
+        db.close()
+
+
+
 

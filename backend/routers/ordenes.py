@@ -272,10 +272,29 @@ def crear_orden(
         if monto_abono_val > total_con_descuento:
             monto_abono_val = total_con_descuento
 
+        vendedor_comercial = current_user.id_usuario
+        if getattr(orden_in, "id_vendedor_titular", None) is not None:
+            if current_user.id_rol not in [1, 5, 6]:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Acceso restringido: Solo el Jefe de Ventas o Administrador puede emitir órdenes a nombre de otro vendedor."
+                )
+            v_titular = db.query(Usuario).filter(Usuario.id_usuario == orden_in.id_vendedor_titular, Usuario.estado == "Activo").first()
+            if not v_titular:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="El vendedor titular seleccionado no existe o no está activo."
+                )
+            vendedor_comercial = v_titular.id_usuario
+
+        vendedor_asignado_final = orden_in.id_vendedor_asignado
+        if orden_in.id_vendedor_titular is not None and vendedor_asignado_final is None:
+            vendedor_asignado_final = current_user.id_usuario
+
         nueva_orden = Orden_Venta(
             id_cliente=cliente.id_cliente,
-            id_vendedor=current_user.id_usuario,
-            id_vendedor_asignado=orden_in.id_vendedor_asignado,
+            id_vendedor=vendedor_comercial,
+            id_vendedor_asignado=vendedor_asignado_final,
             id_sucursal=id_sucursal_orden,
             estado_orden="Reservada",
             qr_transaccional_salida=None,
@@ -1256,12 +1275,14 @@ def asignar_activo_backorder(
 )
 def listar_vendedores_sucursal(
     sucursal_id: Optional[int] = Query(None, description="ID de la sucursal activa (opcional)"),
+    incluir_online: bool = Query(True, description="Incluir también rol 7 (Vendedor Online) para atribución de ventas"),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
+    roles = [2, 6, 7] if incluir_online else [2, 6]
     query = db.query(Usuario).filter(
         Usuario.estado == "Activo",
-        Usuario.id_rol.in_([2, 6]),  # Exclusivamente Vendedor Mesón (2) y Jefe de Ventas (6)
+        Usuario.id_rol.in_(roles),
     )
     if sucursal_id is not None:
         query = query.filter(Usuario.id_sucursal == sucursal_id)
@@ -1274,7 +1295,7 @@ def listar_vendedores_sucursal(
             id_sucursal=u.id_sucursal,
             correo=u.email,
             id_rol=u.id_rol,
-            rol_nombre="Jefe de Ventas" if u.id_rol == 6 else "Vendedor Mesón",
+            rol_nombre="Jefe de Ventas" if u.id_rol == 6 else ("Vendedora Online" if u.id_rol == 7 else "Vendedor Mesón"),
         )
         for u in usuarios
     ]
@@ -2576,7 +2597,27 @@ def checkout_wizard(
     try:
         # A. Crear Cabecera de Orden de Venta
         id_orden = uuid.uuid4()
-        vendedor_asig = request.id_vendedor_asignado or current_user.id_usuario
+
+        vendedor_comercial = current_user.id_usuario
+        if getattr(request, "id_vendedor_titular", None) is not None:
+            if current_user.id_rol not in [1, 5, 6]:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Acceso restringido: Solo el Jefe de Ventas o Administrador puede emitir órdenes a nombre de otro vendedor."
+                )
+            v_titular = db.query(Usuario).filter(Usuario.id_usuario == request.id_vendedor_titular, Usuario.estado == "Activo").first()
+            if not v_titular:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="El vendedor titular seleccionado no existe o no está activo."
+                )
+            vendedor_comercial = v_titular.id_usuario
+
+        vendedor_asig = request.id_vendedor_asignado
+        if request.id_vendedor_titular is not None and (vendedor_asig is None or not str(vendedor_asig).strip()):
+            vendedor_asig = current_user.id_usuario
+        elif vendedor_asig is None:
+            vendedor_asig = current_user.id_usuario
 
         abono_req_val = request.monto_abono or 0
         if abono_req_val == 0 and request.reservas:
@@ -2586,7 +2627,7 @@ def checkout_wizard(
         orden = Orden_Venta(
             id_orden=id_orden,
             id_cliente=cliente.id_cliente,
-            id_vendedor=current_user.id_usuario,
+            id_vendedor=vendedor_comercial,
             id_vendedor_asignado=vendedor_asig,
             id_sucursal=sucursal_id,
             estado_orden="Reservada",

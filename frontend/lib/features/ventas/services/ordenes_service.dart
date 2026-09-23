@@ -1317,8 +1317,16 @@ class VendedorModel {
       nombreCompleto.toLowerCase().contains('jefe') ||
       nombreCompleto.toLowerCase().contains('zamora');
 
-  String get etiquetaRol =>
-      esJefeDeVentas ? 'Jefe de Ventas' : 'Vendedor Mesón';
+  bool get esVendedoraOnline =>
+      idRol == 7 ||
+      (rolNombre != null && rolNombre!.toLowerCase().contains('online')) ||
+      nombreCompleto.toLowerCase().contains('online');
+
+  String get etiquetaRol {
+    if (esJefeDeVentas) return 'Jefe de Ventas';
+    if (esVendedoraOnline) return 'Vendedora Online';
+    return 'Vendedor Mesón';
+  }
 
   factory VendedorModel.fromJson(Map<String, dynamic> json) {
     return VendedorModel(
