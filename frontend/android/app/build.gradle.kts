@@ -31,6 +31,8 @@ android {
             keyPassword = "android"
             storeFile = file("cresal-keystore.jks")
             storePassword = "android"
+            enableV1Signing = true
+            enableV2Signing = true
         }
     }
 
