@@ -70,10 +70,12 @@ class _UpdateDialogState extends State<UpdateDialog> {
         });
 
         final success = await _updateService.installUpdate(file);
-        if (!success && mounted) {
+        if (mounted) {
           setState(() {
             _isDownloading = false;
-            _errorMessage = 'No se pudo iniciar el instalador automáticamente. Verifica los permisos de instalación.';
+            if (!success) {
+              _errorMessage = 'No se pudo iniciar el instalador automáticamente. Verifica los permisos de instalación.';
+            }
           });
         }
       } else {
