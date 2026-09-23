@@ -23,17 +23,27 @@ if not defined ISCC_EXE (
     if not errorlevel 1 set "ISCC_EXE=iscc"
 )
 
-if defined ISCC_EXE (
-    "%ISCC_EXE%" "%~dp0windows\installer\cresal_setup.iss"
-) else (
+if not defined ISCC_EXE goto :no_iscc
+
+"%ISCC_EXE%" "%~dp0windows\installer\cresal_setup.iss"
+if %errorlevel% neq 0 (
     echo.
-    echo [ADVERTENCIA] No se pudo encontrar el compilador de Inno Setup (iscc.exe).
-    echo Si aun no has instalado Inno Setup 6, descargalo gratis en:
-    echo https://jrsoftware.org/isdl.php
-    echo O abre windows\installer\cresal_setup.iss directamente desde Inno Setup GUI.
+    echo [ERROR] Fallo la creacion del instalador con Inno Setup.
     pause
-    exit /b 1
+    exit /b %errorlevel%
 )
+goto :success
+
+:no_iscc
+echo.
+echo [ADVERTENCIA] No se pudo encontrar el compilador de Inno Setup (iscc.exe).
+echo Si aun no has instalado Inno Setup 6, descargalo gratis en:
+echo https://jrsoftware.org/isdl.php
+echo O abre windows\installer\cresal_setup.iss directamente desde Inno Setup GUI.
+pause
+exit /b 1
+
+:success
 
 echo.
 echo =======================================================

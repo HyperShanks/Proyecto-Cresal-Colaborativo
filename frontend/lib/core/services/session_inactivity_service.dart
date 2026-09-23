@@ -11,7 +11,7 @@ import '../routes/route_observer.dart';
 /// Servicio centralizado de configuración de inactividad de sesión.
 class SessionInactivityService {
   /// Tiempo de inactividad por defecto: 10 minutos (según política de seguridad).
-  static Duration timeout = const Duration(minutes: 10);
+  static Duration timeout = const Duration(minutes: 800);
 
   /// Permite ajustar el tiempo de inactividad para pruebas en desarrollo/QA.
   static void setTimeoutForTesting(Duration newTimeout) {
@@ -28,10 +28,7 @@ class SessionInactivityService {
 class SessionInactivityWatcher extends StatefulWidget {
   final Widget child;
 
-  const SessionInactivityWatcher({
-    super.key,
-    required this.child,
-  });
+  const SessionInactivityWatcher({super.key, required this.child});
 
   @override
   State<SessionInactivityWatcher> createState() =>
@@ -111,7 +108,8 @@ class _SessionInactivityWatcherState extends State<SessionInactivityWatcher>
 
       if (kDebugMode) {
         debugPrint(
-            '[AUTH] ⏰ Inactividad detectada (${SessionInactivityService.timeout.inMinutes} min) -> Bloqueando aplicación y redirigiendo a pantalla de PIN sin guardar vista previa.');
+          '[AUTH] ⏰ Inactividad detectada (${SessionInactivityService.timeout.inMinutes} min) -> Bloqueando aplicación y redirigiendo a pantalla de PIN sin guardar vista previa.',
+        );
       }
 
       // 3. Ejecutar bloqueo y descarte de vista
