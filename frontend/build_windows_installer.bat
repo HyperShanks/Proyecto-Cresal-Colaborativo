@@ -15,15 +15,12 @@ echo =======================================================
 echo  2/2: Generando Instalador Cresal_Setup.exe con Inno Setup...
 echo =======================================================
 set "ISCC_EXE="
-if exist "%LocalAppData%\Programs\Inno Setup 6\iscc.exe" (
-    set "ISCC_EXE=%LocalAppData%\Programs\Inno Setup 6\iscc.exe"
-) else if exist "%ProgramFiles(x86)%\Inno Setup 6\iscc.exe" (
-    set "ISCC_EXE=%ProgramFiles(x86)%\Inno Setup 6\iscc.exe"
-) else if exist "%ProgramFiles%\Inno Setup 6\iscc.exe" (
-    set "ISCC_EXE=%ProgramFiles%\Inno Setup 6\iscc.exe"
-) else (
-    where iscc >nul 2>nul
-    if %errorlevel% equ 0 set "ISCC_EXE=iscc"
+if exist "%LocalAppData%\Programs\Inno Setup 6\iscc.exe" set "ISCC_EXE=%LocalAppData%\Programs\Inno Setup 6\iscc.exe"
+if not defined ISCC_EXE if exist "%ProgramFiles(x86)%\Inno Setup 6\iscc.exe" set "ISCC_EXE=%ProgramFiles(x86)%\Inno Setup 6\iscc.exe"
+if not defined ISCC_EXE if exist "%ProgramFiles%\Inno Setup 6\iscc.exe" set "ISCC_EXE=%ProgramFiles%\Inno Setup 6\iscc.exe"
+if not defined ISCC_EXE (
+    where iscc >nul 2>&1
+    if not errorlevel 1 set "ISCC_EXE=iscc"
 )
 
 if defined ISCC_EXE (
