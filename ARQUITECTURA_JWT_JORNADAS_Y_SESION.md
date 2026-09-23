@@ -258,3 +258,160 @@ Para erradicar ambos problemas y lograr una experiencia fluida con cero parpadeo
 - **Persistencia Segura de Email:** Se agregó la clave `_userEmailKey = 'user_email'` en `FlutterSecureStorage` junto al método público `AuthService.getEmailUsuario()`.
 - **Renderizado Inmediato (0 ms):** Al navegar hacia las vistas (`DashboardGerenciaView`, `CajaMainScreen`, `HomeScreen`, `VentasMainScreen`), los estados leen inmediatamente la caché síncrona en memoria. Si el storage asíncrono experimenta latencia, se recurre a un **fallback neutro basado en el rol** (`'Gerencia'`, `'Operario de Caja'`, `'Operador'`), garantizando que jamás se muestren datos falsos ni textos toscos de carga.
 
+---
+
+## 12. Protocolo de Pruebas Exhaustivas End-to-End (JWT, Inactividad y Políticas de Turno)
+
+Este protocolo permite validar exhaustivamente cada arista del sistema de autenticación, control de inactividad y políticas horarias antes del pase a producción. Para cada caso se describe la **situación real de operación** y el **método acelerado para testearlo en menos de 2 minutos**.
+
+> [!IMPORTANT]
+> **¿Por qué cambiar `TOKEN_EXPIRE_MINUTES` en Render no afectó tu sesión de inmediato?**  
+> El token JWT es un artefacto criptográfico autocontenido. Cuando un usuario inicia sesión, el backend calcula la fecha exacta de expiración (`exp = now + TOKEN_EXPIRE_MINUTES`) y la firma con su clave secreta.  
+> El backend **no lee la variable de entorno en cada petición HTTP**, solo verifica si la fecha estampada dentro del token ya caducó (`exp < now`).  
+> Por lo tanto, si cambias la variable en Render a `1`, **los tokens que ya estaban emitidos en los teléfonos siguen durando 24 horas**. Para que el token de 1 minuto surja efecto, debes **cerrar sesión o reingresar el PIN** para que el backend te entregue un **nuevo JWT** con la nueva vigencia corta.
+
+---
+
+### Caso 1: Expiración Criptográfica JWT (HTTP 401) y Preservación de Carrito
+* **Objetivo:** Verificar que cuando el token caduca en el backend, la app móvil intercepta el `401 Unauthorized`, no muestra pantallas rojas ni bucles de reintento, preserva los repuestos del carrito en memoria y envía suavemente al PIN.
+* **Dispositivo a probar:** Teléfono Móvil o Emulador (Rol: Vendedor de Mesón).
+
+#### A. Situación Real (Producción)
+1. El vendedor ingresa su PIN al comenzar la jornada (08:30 AM).
+2. El token permanece activo durante 24 horas continuas (`TOKEN_EXPIRE_MINUTES = 1440`).
+3. Al día siguiente, el token vence; al intentar consultar el catálogo o realizar una venta, el backend retorna `401 Unauthorized`.
+4. La app redirige al PIN sin vaciar el carrito y sin romper la experiencia del usuario.
+
+#### B. Cómo Probarlo en Menos de 2 Minutos (Modo Acelerado)
+1. En el panel de **Render** (servicio de backend), asegura la variable `TOKEN_EXPIRE_MINUTES = 1` y espera 45 segundos a que Render termine de desplegar.
+2. Abre la app en tu teléfono con la Debug Console activa (`flutter run`).
+3. **Paso Clave:** Cierra sesión o ingresa tu PIN nuevamente para que el backend te entregue un token nuevo de 1 minuto.
+4. Confirma en la Debug Console el registro de emisión:
+   ```text
+   [AUTH] Token válido hasta: YYYY-MM-DD HH:MM:SS (expira en 0h 1m)
+   ```
+5. Agrega un repuesto al carrito de compras.
+6. Espera **65 segundos** sin realizar peticiones.
+7. Toca cualquier elemento que consulte al backend (ej: cambia a la pestaña *Catálogo* o *Tasación*).
+8. **Resultado Esperado:**
+   - La Debug Console imprime:
+     ```text
+     🌐 [CATALOGO] HTTP 401 Unauthorized
+     [AUTH] 401 detectado -> Redirigiendo automáticamente a pantalla de PIN sin vaciar carrito
+     ```
+   - La app abre limpiamente la pantalla de PIN (`PinLoginScreen`) sin pantallazos rojos.
+   - Digitas tu PIN de 4 dígitos.
+   - Vuelves a la app, abres el carrito y **tu repuesto sigue ahí intacto**.
+
+---
+
+### Caso 2: Bloqueo por Inactividad de Pantalla (10 Minutos) sin Guardar Vista Previa
+* **Objetivo:** Verificar que si el operario abandona el terminal durante 10 minutos (con pantalla encendida o minimizado), la app destruye las vistas/modales previos y redirige al PIN por seguridad física.
+* **Dispositivo a probar:** Cualquier rol en Celular o PC.
+
+#### A. Situación Real (Producción)
+1. El operario abre una orden o un asistente de venta y deja el dispositivo en el mostrador.
+2. Tras 10 minutos sin toques táctiles ni teclado, `SessionInactivityWatcher` destruye la pila de navegación con `pushNamedAndRemoveUntil('/login')`.
+3. Al volver y desbloquear con PIN, aterriza en la vista inicial limpia de su rol, sin formularios a medio llenar de terceros.
+
+#### B. Cómo Probarlo en 30 Segundos (Modo Acelerado)
+1. En `frontend/lib/core/services/session_inactivity_service.dart`, cambia temporalmente la línea 14:
+   ```dart
+   static Duration timeout = const Duration(seconds: 30);
+   ```
+2. Guarda el archivo (Hot Reload).
+3. Inicia sesión con cualquier usuario y entra a un modal o formulario (ej. detalle de orden o checkout).
+4. No toques la pantalla durante **30 segundos**.
+5. **Resultado Esperado:**
+   - En consola:
+     ```text
+     [AUTH] ⏰ Inactividad detectada (0 min) -> Bloqueando aplicación y redirigiendo a pantalla de PIN sin guardar vista previa.
+     ```
+   - La pantalla y el modal previo se cierran de golpe y aparece la pantalla de PIN con el SnackBar flotante:
+     *"Sesión bloqueada por inactividad (10 min). Ingresa tu PIN."*
+   - Al digitar tu PIN, vuelves a la pantalla principal limpia de tu rol.
+6. *(Restaurar a `const Duration(minutes: 10)` al finalizar).*
+
+---
+
+### Caso 3: Barrera Digital de Bodega Fuera de Turno (Rol 1 - Bodeguero)
+* **Objetivo:** Garantizar que el personal de patio no pueda liberar físicamente repuestos de noche o domingos (`validar_horario_operativo_bodega`).
+* **Dispositivo a probar:** Teléfono / PDA rugerizada (Rol: Bodeguero `bodega@cresal.cl` / PIN: `1001`).
+
+#### A. Situación Real (Producción)
+1. De lunes a viernes entre 08:30 y 18:30 (o sábado hasta las 14:00): el bodeguero escanea salidas QR normalmente (`HTTP 200 OK`).
+2. Fuera de turno (o domingos): cualquier intento de escanear salida física es bloqueado con `HTTP 403 Forbidden`.
+
+#### B. Cómo Probarlo de Inmediato
+1. Como la hora actual de Chile continental en este momento supera las 19:00 hrs (noche):
+2. Inicia sesión con el Bodeguero (`bodega@cresal.cl` / PIN: `1001`).
+3. Ve a la sección de escaneo de salida de bodega e intenta registrar una salida.
+4. **Resultado Esperado:**
+   - La API retorna código **`HTTP 403 Forbidden`**.
+   - Mensaje al usuario: *"Operación de bodega rechazada: Fuera de horario comercial (Atención: Lunes a Viernes 08:30 a 18:30). No está permitida la liberación física ni salida de repuestos fuera del horario operativo."*
+   - La app muestra alerta visual amigable y no libera la pieza.
+5. **Bypass de Emergencia:** Cierra sesión e ingresa como Administrador (`admin@cresal.cl` / PIN: `5005`). Realiza la misma operación y confirma que el Administrador **sí tiene autorización 24/7** para resolver emergencias nocturnas.
+
+---
+
+### Caso 4: Bloqueo de Cobros en Caja Fuera de Turno (Rol 3 - Cajera)
+* **Objetivo:** Verificar que no se asienten pagos presenciales fuera de turno ni fuera de los 30 min de gracia (`validar_horario_operativo_caja`).
+* **Dispositivo a probar:** PC / Laptop (Desktop) en módulo `/caja`.
+
+#### A. Situación Real (Producción)
+1. Durante el día comercial: La cajera procesa pagos en efectivo, débito o transferencias normalmente.
+2. A las 18:30 se activa el periodo de gracia de 30 minutos (hasta las 19:00) para cuadre y clientes rezagados.
+3. Pasadas las 19:00 (o domingos): Cualquier intento de cobro en mostrador es denegado con `HTTP 403 Forbidden`.
+
+#### B. Cómo Probarlo de Inmediato
+1. Inicia sesión con la Cajera (`lorena.valenzuela@cresal.cl` / PIN: `3003`).
+2. Selecciona una orden pendiente de cobro y presiona *Procesar Cobro*.
+3. **Resultado Esperado:**
+   - La API retorna **`HTTP 403 Forbidden`**.
+   - Mensaje al usuario: *"Operación de caja rechazada: Fuera de horario comercial. No se pueden registrar cobros presenciales con la sucursal cerrada."*
+   - No se genera transacción contable ni se asienta el pago.
+
+---
+
+### Caso 5: Exención 24/7 de Roles Comerciales y Ejecutivos (Roles 2, 4, 5, 6, 7)
+* **Objetivo:** Demostrar que los vendedores, jefes y gerentes pueden cotizar, crear ventas y supervisar a deshora sin ser bloqueados por políticas horarias.
+* **Dispositivo a probar:** Celular (Vendedor / Jefe de Ventas) o PC (Gerencia).
+
+#### Cómo Probarlo de Inmediato (De Noche o en Domingo)
+1. Inicia sesión como Vendedor de Mesón (`carlos.mendoza@cresal.cl` / PIN: `2002`) o Jefe de Ventas (`jefe.ventas@cresal.cl` / PIN: `6006`).
+2. Crea una venta en el catálogo o mediante *Venta Libre* en el Checkout Wizard.
+3. Presiona *Confirmar Orden*.
+4. **Resultado Esperado:**
+   - La API responde **`HTTP 201 Created`**.
+   - La orden se registra en base de datos sin ningún bloqueo horario, pues el rol comercial está exento de restricciones presenciales.
+5. Inicia sesión como Gerente (`gerente@cresal.cl` / PIN: `4004`).
+6. Navega por el visor de órdenes, balance de caja y KPIs.
+7. **Resultado Esperado:** Todas las consultas devuelven `HTTP 200 OK` demostrando operatividad 24/7 para control gerencial.
+
+---
+
+### Caso 6: Protección contra Fuerza Bruta en Pantalla de PIN (Límite 10 Intentos)
+* **Objetivo:** Verificar la resiliencia ante intentos de adivinación de PIN y la tolerancia a microcortes de red.
+* **Dispositivo a probar:** Cualquier terminal móvil en `PinLoginScreen`.
+
+#### Cómo Probarlo
+1. En la pantalla de PIN, ingresa un PIN incorrecto (ej. `0000`).
+2. Verifica la animación de sacudida (*shake*) y el mensaje flotante: *(Intento 1 de 10)*.
+3. Desconecta el Wi-Fi / datos móviles del teléfono e ingresa otro PIN.
+4. **Resultado Esperado:** La app notifica error de red, pero **el contador no se incrementa a 2** (tolerancia a fallas de enlace).
+5. Vuelve a conectar la red e ingresa PINs incorrectos sucesivamente hasta llegar al intento 10.
+6. **Resultado Esperado:** La app despliega un diálogo irreversible de bloqueo de seguridad que impide seguir digitando, exigiendo la intervención del administrador.
+
+---
+
+### Resumen de Códigos HTTP Esperados por Escenario
+
+| Escenario | Endpoint Consultado | Código HTTP Esperado | Acción en la App |
+| :--- | :--- | :---: | :--- |
+| **Token caducado (> 24h o > 1 min en prueba)** | Cualquier endpoint autenticado | `401 Unauthorized` | Redirección suave a PIN sin pantalla roja; conserva el carrito intacto. |
+| **Bodeguero fuera de turno** | `POST /api/v1/bodega/escanear-salida` | `403 Forbidden` | Bloquea liberación física de repuesto con alerta amigable. |
+| **Cajera fuera de turno** | `POST /api/v1/caja/cobros/registrar` | `403 Forbidden` | Impide asentar cobros con sucursal cerrada. |
+| **Venta comercial fuera de turno** | `POST /api/v1/ordenes` | `201 Created` | Permite venta continua 24/7 (roles 2, 6, 7). |
+| **Inactividad de pantalla (10 min)** | Local UI (`SessionInactivityWatcher`) | N/A (Evento Local) | Destruye la vista previa y regresa a pantalla de PIN limpia. |
+| **PIN correcto tras expiración o inactividad** | `POST /api/auth/login-pin` | `200 OK` | Emite nuevo JWT y abre la pantalla principal de su rol. |
+
