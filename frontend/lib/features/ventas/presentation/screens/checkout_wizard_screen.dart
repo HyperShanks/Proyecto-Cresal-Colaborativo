@@ -16,6 +16,7 @@ import '../widgets/cart_item_tile.dart';
 import '../widgets/venta_libre_dialog.dart';
 import '../../../../core/constants/chile_geografia.dart';
 import 'catalogo_screen.dart';
+import '../widgets/dialogo_advertencia_consumidor_final.dart';
 
 /// Pantalla Principal del Checkout Wizard por 5 Pasos Secuenciales (SPEC-HU-05)
 /// Integra Carrito Híbrido, Micro-CRM con Consumidor Final, Logística (Retiro/Despacho/Traslado) y Abonos.
@@ -60,7 +61,6 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
   final _empresaTransporteController = TextEditingController(
     text: 'Chilexpress',
   );
-  String? _regionDespacho;
   String? _comunaDespacho;
   int _idSucursalActual = 1; // 1: Viña del Mar, 2: Limache
   int _idSucursalDestino = 2; // Por defecto a la otra sucursal
@@ -139,7 +139,6 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
         _esClienteAnonimo = false;
         _regionCliente = null;
         _comunaCliente = null;
-        _regionDespacho = null;
         _comunaDespacho = null;
         _idSucursalDestino = (_idSucursalActual == 1 ? 2 : 1);
         _idVendedorAsignado = null;
@@ -410,7 +409,16 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     }
   }
 
-  void _toggleClienteAnonimo(bool valor) {
+  Future<void> _toggleClienteAnonimo(bool valor) async {
+    if (valor) {
+      final bool? confirmado =
+          await DialogoAdvertenciaConsumidorFinal.mostrar(context);
+      if (confirmado != true) {
+        return;
+      }
+    }
+
+    if (!mounted) return;
     setState(() {
       _esClienteAnonimo = valor;
       if (valor) {
@@ -488,7 +496,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
       _controller.setDatosDespacho(null);
     }
 
-    if (_esVendedorOnline && _idVendedorAsignado != null) {
+    if (_esVendedorOnline) {
       _controller.setIdVendedorAsignado(_idVendedorAsignado);
     }
   }
@@ -511,7 +519,6 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
           cli.comuna!.isNotEmpty) {
         final reg = ChileGeografia.obtenerRegionDeComuna(cli.comuna!);
         if (reg != null) {
-          _regionDespacho = reg;
           _comunaDespacho = cli.comuna;
         }
       }
@@ -1888,6 +1895,10 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
             },
           ),
         ],
+        if (_esVendedorOnline) ...[
+          const SizedBox(height: 16),
+          _buildCardResponsableEntrega(),
+        ],
       ],
     );
   }
@@ -2178,6 +2189,67 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                   color: AppPalette.textSecondary,
                 ),
               ),
+              if (_esVendedorOnline) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppPalette.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: AppPalette.primary.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.badge_outlined,
+                        size: 18,
+                        color: AppPalette.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Responsable Entrega: $_nombreResponsableSeleccionado',
+                          style: AppTypography.small.copyWith(
+                            color: AppPalette.primary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      InkWell(
+                        key: const Key('btn_cambiar_responsable_resumen'),
+                        onTap: () => _mostrarDialogoCambioResponsable(),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppPalette.surface,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: AppPalette.primary.withValues(alpha: 0.4),
+                            ),
+                          ),
+                          child: Text(
+                            'Cambiar',
+                            style: AppTypography.small.copyWith(
+                              color: AppPalette.primary,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 11.5,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const Divider(color: Colors.white24, height: 20),
 
               Text(
@@ -2407,6 +2479,232 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  // ── Helpers Asignación de Responsable en Tienda (Vendedor Online) ───────────
+  String get _nombreResponsableSeleccionado {
+    if (_idVendedorAsignado == null) return 'Mesón General (Todos)';
+    final v = _vendedoresDisponibles.cast<VendedorModel?>().firstWhere(
+          (v) => v?.idUsuario == _idVendedorAsignado,
+          orElse: () => null,
+        );
+    return v != null
+        ? '${v.nombreCompleto} (${v.rut})'
+        : 'Mesón General (Todos)';
+  }
+
+  Widget _buildCardResponsableEntrega() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppPalette.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppPalette.primary.withValues(alpha: 0.35),
+          width: 1.2,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: AppPalette.primary.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.badge_outlined,
+                  size: 20,
+                  color: AppPalette.primary,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'RESPONSABLE DE ENTREGA EN SUCURSAL',
+                      style: AppTypography.small.copyWith(
+                        color: AppPalette.primary,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    Text(
+                      'Vendedor de mesón o jefe de ventas que entregará el pedido y mostrará el QR a bodega',
+                      style: AppTypography.small.copyWith(
+                        color: AppPalette.textSecondary,
+                        fontSize: 11.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: AppPalette.background,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.white10),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String?>(
+                key: const Key('dropdown_responsable_entrega'),
+                value: _idVendedorAsignado,
+                dropdownColor: AppPalette.surface,
+                isExpanded: true,
+                icon: const Icon(
+                  Icons.arrow_drop_down,
+                  color: AppPalette.primary,
+                ),
+                items: [
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text(
+                      'Mesón General (Todos los vendedores)',
+                      style: TextStyle(color: Colors.white, fontSize: 13.5),
+                    ),
+                  ),
+                  ..._vendedoresDisponibles.map(
+                    (v) => DropdownMenuItem<String?>(
+                      value: v.idUsuario,
+                      child: Text(
+                        '${v.nombreCompleto} (${v.rut})',
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+                onChanged: (val) {
+                  setState(() {
+                    _idVendedorAsignado = val;
+                  });
+                  _controller.setIdVendedorAsignado(val);
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _mostrarDialogoCambioResponsable() {
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return AlertDialog(
+            backgroundColor: AppPalette.surface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+              side: BorderSide(color: AppPalette.primary.withValues(alpha: 0.3)),
+            ),
+            title: Row(
+              children: [
+                const Icon(
+                  Icons.badge_outlined,
+                  color: AppPalette.primary,
+                  size: 22,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Asignar Responsable',
+                  style: AppTypography.title.copyWith(fontSize: 16),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Selecciona al vendedor de mesón o jefe de ventas responsable de entregar este pedido en sucursal:',
+                  style: AppTypography.small.copyWith(
+                    color: AppPalette.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: AppPalette.background,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.white12),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String?>(
+                      key: const Key('dropdown_responsable_dialog'),
+                      value: _idVendedorAsignado,
+                      dropdownColor: AppPalette.surface,
+                      isExpanded: true,
+                      icon: const Icon(
+                        Icons.arrow_drop_down,
+                        color: AppPalette.primary,
+                      ),
+                      items: [
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text(
+                            'Mesón General (Todos)',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 13.5,
+                            ),
+                          ),
+                        ),
+                        ..._vendedoresDisponibles.map(
+                          (v) => DropdownMenuItem<String?>(
+                            value: v.idUsuario,
+                            child: Text(
+                              '${v.nombreCompleto} (${v.rut})',
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13.5,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                      onChanged: (val) {
+                        setModalState(() {});
+                        setState(() {
+                          _idVendedorAsignado = val;
+                        });
+                        _controller.setIdVendedorAsignado(val);
+                        Navigator.of(context).pop();
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text(
+                  'CERRAR',
+                  style: TextStyle(color: AppPalette.textSecondary),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

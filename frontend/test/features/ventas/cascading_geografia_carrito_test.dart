@@ -155,6 +155,7 @@ void main() {
 
       // Seleccionar Región "Valparaíso"
       final regionDropdown = find.widgetWithText(DropdownButtonFormField<String>, 'Seleccione Región...').first;
+      await tester.ensureVisible(regionDropdown);
       await tester.tap(regionDropdown);
       await tester.pumpAndSettle();
 
@@ -167,6 +168,7 @@ void main() {
 
       // Abrir Comuna dropdown
       final comunaDropdown = find.widgetWithText(DropdownButtonFormField<String>, 'Seleccione Comuna...').first;
+      await tester.ensureVisible(comunaDropdown);
       await tester.tap(comunaDropdown);
       await tester.pumpAndSettle();
 
