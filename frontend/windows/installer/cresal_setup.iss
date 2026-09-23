@@ -13,7 +13,7 @@
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "Cresal Automotriz SpA"
 #define MyAppURL "https://cresal.cl"
-#define MyAppExeName "frontend.exe"
+#define MyAppExeName "Cresal.exe"
 
 [Setup]
 ; Identificador único de aplicación (GUID) para reconocer instalaciones previas

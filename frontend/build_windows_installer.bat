@@ -14,21 +14,28 @@ echo.
 echo =======================================================
 echo  2/2: Generando Instalador Cresal_Setup.exe con Inno Setup...
 echo =======================================================
-set ISCC_PATH="C:\Program Files (x86)\Inno Setup 6\iscc.exe"
-if exist %ISCC_PATH% (
-    %ISCC_PATH% "%~dp0windows\installer\cresal_setup.iss"
+set "ISCC_EXE="
+if exist "%LocalAppData%\Programs\Inno Setup 6\iscc.exe" (
+    set "ISCC_EXE=%LocalAppData%\Programs\Inno Setup 6\iscc.exe"
+) else if exist "%ProgramFiles(x86)%\Inno Setup 6\iscc.exe" (
+    set "ISCC_EXE=%ProgramFiles(x86)%\Inno Setup 6\iscc.exe"
+) else if exist "%ProgramFiles%\Inno Setup 6\iscc.exe" (
+    set "ISCC_EXE=%ProgramFiles%\Inno Setup 6\iscc.exe"
 ) else (
-    iscc "%~dp0windows\installer\cresal_setup.iss"
+    where iscc >nul 2>nul
+    if %errorlevel% equ 0 set "ISCC_EXE=iscc"
 )
 
-if %errorlevel% neq 0 (
+if defined ISCC_EXE (
+    "%ISCC_EXE%" "%~dp0windows\installer\cresal_setup.iss"
+) else (
     echo.
-    echo [ADVERTENCIA] No se pudo ejecutar el compilador de Inno Setup automaticamente.
+    echo [ADVERTENCIA] No se pudo encontrar el compilador de Inno Setup (iscc.exe).
     echo Si aun no has instalado Inno Setup 6, descargalo gratis en:
     echo https://jrsoftware.org/isdl.php
     echo O abre windows\installer\cresal_setup.iss directamente desde Inno Setup GUI.
     pause
-    exit /b %errorlevel%
+    exit /b 1
 )
 
 echo.
