@@ -6,7 +6,10 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 import 'package:frontend/features/ventas/services/ventas_service.dart';
+import 'package:frontend/features/ventas/services/ordenes_service.dart';
 import 'package:frontend/features/ventas/presentation/widgets/modal_anular_orden.dart';
+import 'package:frontend/features/ventas/presentation/widgets/dialogo_devolucion_dinero.dart';
+import 'package:frontend/features/ventas/presentation/widgets/orden_detail_sheet.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -74,7 +77,7 @@ void main() {
   });
 
   group('ModalAnularOrden - Widget Tests', () {
-    testWidgets('Renderiza elementos de advertencia, folio y campos', (tester) async {
+    testWidgets('Renderiza elementos de advertencia, folio y campos para orden sin pago (\$0)', (tester) async {
       tester.view.physicalSize = const Size(800, 1200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -91,6 +94,7 @@ void main() {
                       idOrden: 'ord-abc-123',
                       folio: 'ORD-ABC12345',
                       clienteNombre: 'Juan Pérez',
+                      montoPagado: 0,
                     );
                   },
                   child: const Text('Abrir Modal'),
@@ -109,6 +113,107 @@ void main() {
       expect(find.text('Cliente: Juan Pérez'), findsOneWidget);
       expect(find.text('Confirmar Anulación'), findsOneWidget);
       expect(find.text('Volver'), findsOneWidget);
+      // No debe mostrar la alerta de peligro
+      expect(find.byKey(const Key('alerta_peligro_cliente_pago')), findsNothing);
+    });
+
+    testWidgets('Muestra alerta de PELIGRO destacada cuando la orden tiene pagos o abonos (montoPagado > 0)', (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) {
+                return ElevatedButton(
+                  onPressed: () {
+                    ModalAnularOrden.mostrar(
+                      context,
+                      idOrden: 'ord-paid-456',
+                      folio: 'ORD-PAID456',
+                      clienteNombre: 'Carlos Santana',
+                      totalVenta: 120000,
+                      montoPagado: 60000,
+                    );
+                  },
+                  child: const Text('Abrir Modal Pagada'),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Abrir Modal Pagada'));
+      await tester.pumpAndSettle();
+
+      // Debe mostrar el título de PELIGRO
+      expect(find.text('⚠️ PELIGRO: CLIENTE YA PAGÓ'), findsOneWidget);
+      // Debe contener la tarjeta de alerta de peligro con el monto formateado
+      expect(find.byKey(const Key('alerta_peligro_cliente_pago')), findsOneWidget);
+      expect(find.textContaining('60.000'), findsOneWidget);
+      expect(find.textContaining('OBLIGATORIO DEVOLVERLE ESTE DINERO'), findsOneWidget);
+    });
+
+    testWidgets('DialogoDevolucionDinero bloquea botón aceptar por 5 segundos y muestra cuenta regresiva', (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) {
+                return ElevatedButton(
+                  onPressed: () {
+                    DialogoDevolucionDinero.mostrar(
+                      context,
+                      folio: 'ORD-DEV123',
+                      montoADevolver: 85000,
+                      clienteNombre: 'Marcela Soto',
+                    );
+                  },
+                  child: const Text('Abrir Devolución'),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Abrir Devolución'));
+      await tester.pump(); // Inicia el diálogo
+
+      expect(find.byType(DialogoDevolucionDinero), findsOneWidget);
+      expect(find.text('DEVOLUCIÓN DE DINERO'), findsOneWidget);
+      expect(find.textContaining('85.000'), findsOneWidget);
+      expect(find.textContaining('Cliente: Marcela Soto'), findsOneWidget);
+
+      // Botón inicialmente deshabilitado mostrando (5s)
+      final btnInicial = tester.widget<ElevatedButton>(find.byKey(const Key('btn_confirmar_devolucion_dinero')));
+      expect(btnInicial.onPressed, isNull);
+      expect(find.textContaining('(5s)'), findsOneWidget);
+
+      // Avanzar 2 segundos: debe mostrar (3s) y seguir bloqueado
+      await tester.pump(const Duration(seconds: 2));
+      expect(find.textContaining('(3s)'), findsOneWidget);
+      final btnMitad = tester.widget<ElevatedButton>(find.byKey(const Key('btn_confirmar_devolucion_dinero')));
+      expect(btnMitad.onPressed, isNull);
+
+      // Avanzar los 3 segundos restantes (total 5s)
+      await tester.pump(const Duration(seconds: 3));
+      expect(find.text('ENTENDIDO, DINERO DEVUELTO'), findsOneWidget);
+      final btnHabilitado = tester.widget<ElevatedButton>(find.byKey(const Key('btn_confirmar_devolucion_dinero')));
+      expect(btnHabilitado.onPressed, isNotNull);
+
+      // Presionar el botón para cerrar el diálogo
+      await tester.tap(find.byKey(const Key('btn_confirmar_devolucion_dinero')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(DialogoDevolucionDinero), findsNothing);
     });
 
     testWidgets('Permite cerrar el modal con botón Volver', (tester) async {
@@ -144,6 +249,226 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('¿Deshacer esta Orden?'), findsNothing);
+    });
+
+    testWidgets('Flujo encadenado: Confirmar anulación con dinero pagado abre DialogoDevolucionDinero', (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final mockClient = MockClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'id_orden': 'ord-chain-789',
+            'estado_orden': 'Anulada',
+            'mensaje': 'Orden anulada, pagos reversados y tareas de reingreso generadas',
+            'activos_liberados': 1,
+            'pagos_reversados': 1,
+            'monto_reversado': 50000,
+          }),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      });
+
+      bool ordenAnuladaCallbackLlamado = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) {
+                return ElevatedButton(
+                  onPressed: () {
+                    ModalAnularOrden.mostrar(
+                      context,
+                      idOrden: 'ord-chain-789',
+                      folio: 'ORD-CHAIN789',
+                      clienteNombre: 'Roberto Gómez',
+                      montoPagado: 50000,
+                      client: mockClient,
+                      onOrdenAnulada: () {
+                        ordenAnuladaCallbackLlamado = true;
+                      },
+                    );
+                  },
+                  child: const Text('Abrir Modal Chained'),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Abrir Modal Chained'));
+      await tester.pumpAndSettle();
+
+      // Debe mostrar la advertencia de peligro
+      expect(find.text('⚠️ PELIGRO: CLIENTE YA PAGÓ'), findsOneWidget);
+      expect(find.textContaining('50.000'), findsOneWidget);
+
+      // Confirmar la anulación
+      await tester.tap(find.byKey(const Key('btn_confirmar_anulacion_orden')));
+      await tester.pump(); // Inicia la petición
+      await tester.pump(const Duration(milliseconds: 100)); // Completa la petición y muestra DialogoDevolucionDinero
+
+      expect(ordenAnuladaCallbackLlamado, isTrue);
+
+      // El modal de confirmación ya cerró y ahora está en pantalla el DialogoDevolucionDinero
+      expect(find.byType(DialogoDevolucionDinero), findsOneWidget);
+      expect(find.text('DEVOLUCIÓN DE DINERO'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(DialogoDevolucionDinero),
+          matching: find.textContaining('50.000'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(DialogoDevolucionDinero),
+          matching: find.textContaining('Roberto Gómez'),
+        ),
+        findsOneWidget,
+      );
+
+      // Botón debe estar bloqueado inicialmente con contador
+      final btnDevolucion = tester.widget<ElevatedButton>(find.byKey(const Key('btn_confirmar_devolucion_dinero')));
+      expect(btnDevolucion.onPressed, isNull);
+      expect(find.textContaining('(5s)'), findsOneWidget);
+
+      // Avanzar los 5 segundos
+      await tester.pump(const Duration(seconds: 5));
+      expect(find.text('ENTENDIDO, DINERO DEVUELTO'), findsOneWidget);
+
+      // Presionar para cerrar el diálogo
+      await tester.tap(find.byKey(const Key('btn_confirmar_devolucion_dinero')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(DialogoDevolucionDinero), findsNothing);
+    });
+
+    testWidgets('Garantía Responsive (Extend): No hay pixel overflow en pantalla móvil estrecha (320px)', (tester) async {
+      tester.view.physicalSize = const Size(320, 568);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) {
+                return ElevatedButton(
+                  onPressed: () {
+                    ModalAnularOrden.mostrar(
+                      context,
+                      idOrden: 'ord-narrow-123',
+                      folio: 'ORD-NARROW-999',
+                      clienteNombre: 'Cliente Con Nombre Muy Largo Para Probar Desbordes',
+                      montoPagado: 999999,
+                    );
+                  },
+                  child: const Text('Abrir Estrecho'),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Abrir Estrecho'));
+      await tester.pumpAndSettle();
+
+      // Verificar que no se lanzó ninguna excepción de RenderFlex overflow
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const Key('btn_confirmar_anulacion_orden')), findsOneWidget);
+      expect(find.text('Volver'), findsOneWidget);
+    });
+  });
+
+  group('OrdenDetailSheet - Anulación en Mis Órdenes Tests', () {
+    testWidgets('Muestra botón anular con monto formateado para orden Pagada (montoPagado > 0)', (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final ordenPagada = OrdenHistorialModel(
+        idOrden: 'ord-pagada-100',
+        estadoOrden: 'Pagada',
+        totalVenta: 120000,
+        montoPendiente: 0,
+        totalItems: 1,
+        fechaCreacion: '2026-09-22T10:00:00Z',
+        detalles: [
+          DetalleOrdenItemModel(
+            idDetalle: 'det-1',
+            idCategoria: 1,
+            nombreCategoria: 'Repuestos',
+            titulo: 'Alternador',
+            cantidad: 1,
+            precioFinal: 120000,
+            subtotal: 120000,
+            esInventariado: true,
+          ),
+        ],
+      );
+
+      expect(ordenPagada.esAnulable, isTrue);
+      expect(ordenPagada.montoPagado, 120000);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: OrdenDetailSheet(
+              orden: ordenPagada,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('btn_anular_orden_detail')), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('btn_anular_orden_detail')),
+          matching: find.textContaining('120.000'),
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('No muestra botón anular para orden Completada', (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final ordenCompletada = OrdenHistorialModel(
+        idOrden: 'ord-comp-200',
+        estadoOrden: 'Completada',
+        totalVenta: 75000,
+        montoPendiente: 0,
+        totalItems: 1,
+        fechaCreacion: '2026-09-22T09:00:00Z',
+        detalles: [],
+      );
+
+      expect(ordenCompletada.esAnulable, isFalse);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: OrdenDetailSheet(
+              orden: ordenCompletada,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('btn_anular_orden_detail')), findsNothing);
+      expect(find.text('Orden Entregada / Completada'), findsOneWidget);
     });
   });
 }

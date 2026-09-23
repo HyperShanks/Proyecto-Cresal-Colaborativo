@@ -878,6 +878,7 @@ class OrdenAnulacionResponse(BaseModel):
     msg: Optional[str] = None
     activos_liberados: int = 0
     pagos_reversados: int = 0
+    monto_reversado: int = 0
     motivo_anulacion: Optional[str] = None
 
 

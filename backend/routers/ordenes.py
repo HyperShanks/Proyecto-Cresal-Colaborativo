@@ -2117,9 +2117,12 @@ def anular_orden_post(
         # Paso B: Reversar pagos asociados
         pagos = db.query(Transaccion_Pago).filter(Transaccion_Pago.id_orden == id_orden).all()
         pagos_reversados = 0
+        monto_reversado = 0
         for pago in pagos:
-            pago.estado_pago = "Anulado"
-            pagos_reversados += 1
+            if pago.estado_pago != "Anulado":
+                monto_reversado += int(pago.monto or 0)
+                pago.estado_pago = "Anulado"
+                pagos_reversados += 1
 
         # Paso C: Obtener activos físicos de la orden para cola de reingreso
         detalles = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == id_orden).all()
@@ -2152,6 +2155,7 @@ def anular_orden_post(
             msg=mensaje,
             activos_liberados=activos_afectados,
             pagos_reversados=pagos_reversados,
+            monto_reversado=monto_reversado,
             motivo_anulacion=payload.motivo_anulacion if payload else None,
         )
 

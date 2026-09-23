@@ -407,6 +407,14 @@ class OrdenHistorialModel {
   String get totalVentaFormateado => OrdenResponseModel._formatearMonto(totalVenta);
   String get descuentoFormateado => OrdenResponseModel._formatearMonto(descuento);
   String get montoPendienteFormateado => OrdenResponseModel._formatearMonto(montoPendiente);
+  String get montoPagadoFormateado => OrdenResponseModel._formatearMonto(montoPagado);
+
+  bool get esAnulable => (esReservada || esPagada) && !esCompletada && !esAnulada;
+  int get montoPagado {
+    final pagado = totalVenta - montoPendiente;
+    return pagado < 0 ? 0 : pagado;
+  }
+  bool get tienePagosRegistrados => montoPagado > 0;
 
   String get folioDisplay {
     if (folio != null && folio!.isNotEmpty && !folio!.startsWith('TX-QR-')) {
