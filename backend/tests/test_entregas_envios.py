@@ -925,6 +925,28 @@ def test_jefe_ventas_puede_crear_orden_a_nombre_de_online(client):
         assert orden_db.id_vendedor == online.id_usuario, "La orden debe estar atribuida comercialmente a Marcela Online"
         assert orden_db.id_vendedor_asignado == jefe.id_usuario, "El Jefe de Ventas debe quedar como responsable físico de entrega"
 
+        # 4. Verificar aislamiento en /mis-ventas
+        token_online = create_access_token(data={"sub": str(online.id_usuario), "id_rol": 7, "id_sucursal": 1})
+        headers_online = {"Authorization": f"Bearer {token_online}"}
+
+        # Marcela Online SÍ debe verla en su historial de ventas
+        res_mis_ventas_online = client.get("/api/v1/ordenes/mis-ventas?todas=true", headers=headers_online)
+        assert res_mis_ventas_online.status_code == 200
+        ordenes_online_ids = [o["id_orden"] for o in res_mis_ventas_online.json()]
+        assert str(id_orden) in ordenes_online_ids, "Marcela Online debe tener la orden en Mis Órdenes"
+
+        # El Jefe de Ventas NO debe verla en su historial de ventas (es de Marcela)
+        res_mis_ventas_jefe = client.get("/api/v1/ordenes/mis-ventas?todas=true", headers=headers_jefe)
+        assert res_mis_ventas_jefe.status_code == 200
+        ordenes_jefe_ids = [o["id_orden"] for o in res_mis_ventas_jefe.json()]
+        assert str(id_orden) not in ordenes_jefe_ids, "El Jefe de Ventas NO debe ver la venta en sus órdenes personales"
+
+        # El Jefe de Ventas SÍ debe verla en /entregas-envios como responsable físico
+        res_entregas_jefe = client.get("/api/v1/ordenes/entregas-envios", headers=headers_jefe)
+        assert res_entregas_jefe.status_code == 200
+        entregas_ids = [e["id_orden"] for e in res_entregas_jefe.json()]
+        assert str(id_orden) in entregas_ids, "El Jefe de Ventas debe ver la orden en Entregas y Envíos"
+
     finally:
         db.close()
 

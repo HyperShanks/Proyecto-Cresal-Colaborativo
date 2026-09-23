@@ -470,5 +470,85 @@ void main() {
       expect(find.byKey(const Key('btn_anular_orden_detail')), findsNothing);
       expect(find.text('Orden Entregada / Completada'), findsOneWidget);
     });
+
+    testWidgets('Al anular orden desde OrdenDetailSheet, se cierra el bottom sheet y vuelve a la vista anterior', (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final mockClient = MockClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'id_orden': 'ord-auto-close-1',
+            'estado_orden': 'Anulada',
+            'mensaje': 'Orden anulada exitosamente',
+            'activos_liberados': 1,
+            'pagos_reversados': 0,
+          }),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      });
+
+      final ordenReservada = OrdenHistorialModel(
+        idOrden: 'ord-auto-close-1',
+        estadoOrden: 'Reservada',
+        totalVenta: 50000,
+        montoPendiente: 50000,
+        totalItems: 1,
+        fechaCreacion: '2026-09-22T11:00:00Z',
+        detalles: [],
+      );
+
+      bool bottomSheetCerrado = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) {
+                return ElevatedButton(
+                  onPressed: () async {
+                    final res = await showModalBottomSheet(
+                      context: context,
+                      builder: (ctx) => OrdenDetailSheet(
+                        orden: ordenReservada,
+                        client: mockClient,
+                      ),
+                    );
+                    if (res == true) {
+                      bottomSheetCerrado = true;
+                    }
+                  },
+                  child: const Text('Abrir Sheet'),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Abrir Sheet'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(OrdenDetailSheet), findsOneWidget);
+
+      // Tocar botón anular en el sheet
+      await tester.tap(find.byKey(const Key('btn_anular_orden_detail')));
+      await tester.pumpAndSettle();
+
+      // Modal de anulación abierto
+      expect(find.byType(ModalAnularOrden), findsOneWidget);
+
+      // Confirmar anulación (montoPagado es 0, no abre DialogoDevolucionDinero)
+      await tester.tap(find.byKey(const Key('btn_confirmar_anulacion_orden')));
+      await tester.pump();
+      await tester.pumpAndSettle();
+
+      // Debe haber cerrado tanto el modal como el bottom sheet
+      expect(find.byType(ModalAnularOrden), findsNothing);
+      expect(find.byType(OrdenDetailSheet), findsNothing);
+      expect(bottomSheetCerrado, isTrue);
+    });
   });
 }

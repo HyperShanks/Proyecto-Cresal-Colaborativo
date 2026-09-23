@@ -4,6 +4,7 @@ import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../services/ventas_service.dart';
+import '../../services/ordenes_sync_notifier.dart';
 import 'dialogo_devolucion_dinero.dart';
 
 /// Modal dialog interactivo para anulación de órdenes en Mesón de Ventas (SPEC-HU-TAREA-4)
@@ -89,10 +90,8 @@ class _ModalAnularOrdenState extends State<ModalAnularOrden> {
 
       widget.onOrdenAnulada?.call();
 
-      // Cerrar modal de confirmación
-      navigator.pop(true);
-
       // Si el cliente ya había pagado o abonado dinero, lanzar el modal de devolución persistente con 5s de timeout
+      // ANTES de cerrar el diálogo para mantener el contexto montado y el orden correcto del stack de navegación.
       if (widget.montoPagado > 0) {
         await DialogoDevolucionDinero.mostrar(
           context,
@@ -116,6 +115,13 @@ class _ModalAnularOrdenState extends State<ModalAnularOrden> {
             behavior: SnackBarBehavior.floating,
           ),
         );
+      }
+
+      OrdenesSyncNotifier.instance.notificarCambio();
+
+      // Cerrar modal de confirmación tras haber completado todo el flujo
+      if (mounted) {
+        navigator.pop(true);
       }
     } catch (e) {
       if (!mounted) return;

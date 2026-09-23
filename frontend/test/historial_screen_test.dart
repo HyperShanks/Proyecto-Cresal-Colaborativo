@@ -748,17 +748,31 @@ void main() {
         ),
       );
 
+      // 1. Por defecto, las órdenes activas son visibles y las anuladas permanecen ocultas
       expect(find.text('ORD-COMP-001'), findsOneWidget);
       expect(find.text('ORD-RES-002'), findsOneWidget);
-      expect(find.text('ORD-ANU-003'), findsOneWidget);
+      expect(find.text('ORD-ANU-003'), findsNothing);
 
       final topReservada = tester.getTopLeft(find.text('ORD-RES-002')).dy;
       final topCompletada = tester.getTopLeft(find.text('ORD-COMP-001')).dy;
-      final topAnulada = tester.getTopLeft(find.text('ORD-ANU-003')).dy;
-
-      // Activa (Reservada) antes que Completada, y Completada antes que Anulada (Anulada al final absoluto)
       expect(topReservada, lessThan(topCompletada));
-      expect(topCompletada, lessThan(topAnulada));
+
+      // 2. Al seleccionar el filtro 'Solo Anuladas', se muestran únicamente las anuladas
+      await tester.tap(find.text('Solo Anuladas'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('ORD-ANU-003'), findsOneWidget);
+      expect(find.text('ORD-COMP-001'), findsNothing);
+      expect(find.text('ORD-RES-002'), findsNothing);
+      expect(find.textContaining('Visualizando únicamente órdenes anuladas'), findsOneWidget);
+
+      // 3. Al volver a activas, las anuladas se vuelven a ocultar
+      await tester.tap(find.text('Ver Activas'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('ORD-ANU-003'), findsNothing);
+      expect(find.text('ORD-COMP-001'), findsOneWidget);
+      expect(find.text('ORD-RES-002'), findsOneWidget);
     });
     final orden1 = ordenMock; // Carlos González, 18.765.432-1, Motor - Toyota Yaris 2018, ORD-TEST-001
     final orden2 = OrdenHistorialModel(

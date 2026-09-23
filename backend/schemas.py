@@ -976,7 +976,7 @@ class AsignarPrecioRequest(BaseModel):
     """Payload para fijar o actualizar el rango de precio (mínimo y máximo) de un activo."""
     precio_minimo: Optional[int] = Field(None, gt=0, description="Precio mínimo piso de negociación en pesos chilenos")
     precio_maximo: Optional[int] = Field(None, gt=0, description="Precio máximo sugerido/de lista en pesos chilenos")
-    precio_referencia: Optional[int] = Field(None, description="Precio de referencia / sugerido")
+    precio_referencia: Optional[int] = Field(None, gt=0, description="Precio de referencia / sugerido")
 
     @model_validator(mode="after")
     def validar_rango(self):

@@ -634,6 +634,7 @@ class OrdenesService {
     String? fecha,
     bool todas = false,
     String? estado,
+    bool incluirAnuladas = false,
     String seccion = 'normal',
     http.Client? client,
   }) async {
@@ -644,6 +645,7 @@ class OrdenesService {
         if (todas) 'todas': 'true',
         if (fecha != null && fecha.isNotEmpty) 'fecha': fecha,
         if (estado != null && estado.isNotEmpty) 'estado': estado,
+        if (estado == null && !incluirAnuladas) 'incluir_anuladas': 'false',
         if (seccion.isNotEmpty) 'seccion': seccion,
       };
 

@@ -494,5 +494,6 @@ def test_checkout_wizard_con_descuento_por_vale_a_favor(client, wizard_db, auth_
     pendientes = res_caja.json()["items"]
     orden_en_caja = next((p for p in pendientes if p["id_referencia"] == id_orden), None)
     assert orden_en_caja is not None
-    assert orden_en_caja["total_operacion"] == 70000
+    assert orden_en_caja["total_operacion"] == 100000  # Total bruto antes del descuento
     assert orden_en_caja["descuento"] == 30000
+    assert orden_en_caja["monto_a_cobrar"] == 70000  # Saldo neto a cobrar en caja
