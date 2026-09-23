@@ -62,7 +62,6 @@ class FiltrosDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // El catálogo de ventas en mesón utiliza la paleta oscura de alto contraste
-    const isDark = true;
     const drawerBg = AppPalette.background;
     const surfaceColor = AppPalette.surface;
     const textPrimaryColor = AppPalette.textPrimary;
@@ -470,7 +469,7 @@ class FiltrosDrawer extends StatelessWidget {
                   ),
                   style: TextButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14.0),
-                    backgroundColor: isDark ? surfaceColor : AppPalette.errorBg,
+                    backgroundColor: surfaceColor,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8.0),
                       side: BorderSide(color: AppPalette.error.withValues(alpha: 0.5)),

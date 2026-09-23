@@ -13,16 +13,33 @@ import 'package:frontend/features/ventas/controllers/checkout_wizard_controller.
 import 'package:frontend/features/ventas/services/ventas_service.dart';
 import 'package:frontend/features/ventas/presentation/screens/checkout_wizard_screen.dart';
 import 'package:frontend/features/ventas/presentation/widgets/modal_backorder_form.dart';
+import 'package:frontend/features/ventas/presentation/widgets/dialogo_advertencia_consumidor_final.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  final Map<String, String> mockStorage = {};
+
   setUpAll(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
       const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
       (MethodCall methodCall) async {
         if (methodCall.method == 'read') {
-          return 'fake-test-jwt-token';
+          final key = (methodCall.arguments as Map?)?['key'] as String?;
+          if (key != null && mockStorage.containsKey(key)) {
+            return mockStorage[key];
+          }
+          if (key == 'access_token') return 'fake-test-jwt-token';
+          return null;
+        }
+        if (methodCall.method == 'write') {
+          final key = (methodCall.arguments as Map?)?['key'] as String?;
+          final value = (methodCall.arguments as Map?)?['value'] as String?;
+          if (key != null && value != null) {
+            mockStorage[key] = value;
+          }
+          return null;
         }
         return null;
       },
@@ -386,8 +403,21 @@ void main() {
       expect(find.text('2. Datos del Cliente (Micro-CRM)'), findsOneWidget);
       expect(find.byKey(const Key('switch_cliente_anonimo')), findsOneWidget);
 
-      // Activar Switch Consumidor Final
+      // Activar Switch Consumidor Final -> Abre diálogo de advertencia de 10 segundos
       await tester.tap(find.byKey(const Key('switch_cliente_anonimo')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(DialogoAdvertenciaConsumidorFinal), findsOneWidget);
+      expect(
+        find.text(
+          'Es vital para la empresa los datos del cliente, ¿estás seguro que quieres continuar?',
+        ),
+        findsOneWidget,
+      );
+
+      // Avanzar temporizador de 10 segundos en virtual time
+      await tester.pump(const Duration(seconds: 10));
+      await tester.tap(find.byKey(const Key('btn_confirmar_consumidor_final')));
       await tester.pumpAndSettle();
 
       expect(find.textContaining('RUT 6.666.666-6'), findsOneWidget);
@@ -455,8 +485,13 @@ void main() {
       await tester.tap(find.text('Siguiente'));
       await tester.pumpAndSettle();
 
-      // Consumidor Final
+      // Consumidor Final -> Abre modal y confirma tras 10 segundos
       await tester.tap(find.byKey(const Key('switch_cliente_anonimo')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(DialogoAdvertenciaConsumidorFinal), findsOneWidget);
+      await tester.pump(const Duration(seconds: 10));
+      await tester.tap(find.byKey(const Key('btn_confirmar_consumidor_final')));
       await tester.pumpAndSettle();
 
       // Paso 1 -> Paso 2 (Abonos)
@@ -472,6 +507,184 @@ void main() {
       expect(find.text('4. Revisión Final y Emisión de Orden'), findsOneWidget);
       expect(find.text('Modalidad: Retiro en Mesón / Bodega'), findsOneWidget);
       expect(find.text('CONFIRMAR Y EMITIR ORDEN'), findsOneWidget);
+    });
+
+    testWidgets('DialogoAdvertenciaConsumidorFinal bloquea confirmación hasta agotar los 10s y permite cancelar', (tester) async {
+      bool? resultado;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => ElevatedButton(
+              onPressed: () async {
+                resultado = await DialogoAdvertenciaConsumidorFinal.mostrar(context);
+              },
+              child: const Text('ABRIR'),
+            ),
+          ),
+        ),
+      );
+
+      // Abrir diálogo
+      await tester.tap(find.text('ABRIR'));
+      await tester.pump(); // Inicia diálogo
+
+      expect(find.byType(DialogoAdvertenciaConsumidorFinal), findsOneWidget);
+      expect(
+        find.text('Es vital para la empresa los datos del cliente, ¿estás seguro que quieres continuar?'),
+        findsOneWidget,
+      );
+
+      // Botón confirmar está deshabilitado con contador inicial (10s)
+      final btnInicial = tester.widget<ElevatedButton>(find.byKey(const Key('btn_confirmar_consumidor_final')));
+      expect(btnInicial.onPressed, isNull);
+      expect(find.textContaining('(10s)'), findsOneWidget);
+
+      // Avanzar 5 segundos: debe mostrar (5s) y seguir deshabilitado
+      await tester.pump(const Duration(seconds: 5));
+      expect(find.textContaining('(5s)'), findsOneWidget);
+      final btnMitad = tester.widget<ElevatedButton>(find.byKey(const Key('btn_confirmar_consumidor_final')));
+      expect(btnMitad.onPressed, isNull);
+
+      // Avanzar los 5 segundos restantes (total 10s)
+      await tester.pump(const Duration(seconds: 5));
+      expect(find.text('CONTINUAR COMO CONSUMIDOR FINAL'), findsOneWidget);
+      final btnHabilitado = tester.widget<ElevatedButton>(find.byKey(const Key('btn_confirmar_consumidor_final')));
+      expect(btnHabilitado.onPressed, isNotNull);
+
+      // Presionar confirmar
+      await tester.tap(find.byKey(const Key('btn_confirmar_consumidor_final')));
+      await tester.pumpAndSettle();
+
+      expect(resultado, isTrue);
+    });
+
+    testWidgets('DialogoAdvertenciaConsumidorFinal botón Volver y pedir datos cierra con false de inmediato', (tester) async {
+      bool? resultado;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => ElevatedButton(
+              onPressed: () async {
+                resultado = await DialogoAdvertenciaConsumidorFinal.mostrar(context);
+              },
+              child: const Text('ABRIR'),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('ABRIR'));
+      await tester.pump();
+
+      // Cancelar inmediatamente sin esperar los 10 segundos
+      await tester.tap(find.byKey(const Key('btn_cancelar_consumidor_final')));
+      await tester.pumpAndSettle();
+
+      expect(resultado, isFalse);
+      expect(find.byType(DialogoAdvertenciaConsumidorFinal), findsNothing);
+    });
+
+    testWidgets('CheckoutWizardScreen cancelar modal de Consumidor Final NO activa switch', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: CheckoutWizardScreen(
+            initialInventario: [
+              {'id_activo': 'act-1', 'sku': 'SKU-1', 'descripcion': 'Faro', 'precio': 50000}
+            ],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Ir a Paso 1 (Cliente)
+      await tester.tap(find.text('Siguiente'));
+      await tester.pumpAndSettle();
+
+      // Tocar switch
+      await tester.tap(find.byKey(const Key('switch_cliente_anonimo')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(DialogoAdvertenciaConsumidorFinal), findsOneWidget);
+
+      // Cancelar en el diálogo
+      await tester.tap(find.byKey(const Key('btn_cancelar_consumidor_final')));
+      await tester.pumpAndSettle();
+
+      // Diálogo cerrado y campos vacíos sin RUT 6.666.666-6
+      expect(find.byType(DialogoAdvertenciaConsumidorFinal), findsNothing);
+      expect(find.textContaining('RUT 6.666.666-6'), findsNothing);
+    });
+
+    testWidgets('CheckoutWizardScreen selector de Responsable ES visible para rol Vendedor Online (id_rol == 7)', (tester) async {
+      mockStorage['user_id_rol'] = '7';
+      addTearDown(() => mockStorage.remove('user_id_rol'));
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: CheckoutWizardScreen(
+            initialInventario: [
+              {'id_activo': 'act-1', 'sku': 'SKU-1', 'descripcion': 'Faro', 'precio': 50000}
+            ],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Ir a Paso 1 (Cliente)
+      await tester.tap(find.text('Siguiente'));
+      await tester.pumpAndSettle();
+
+      // Debe aparecer la tarjeta de RESPONSABLE DE ENTREGA EN SUCURSAL
+      expect(find.text('RESPONSABLE DE ENTREGA EN SUCURSAL'), findsOneWidget);
+      expect(find.byKey(const Key('dropdown_responsable_entrega')), findsOneWidget);
+    });
+
+    testWidgets('CheckoutWizardScreen para Vendedor Online bloquea emisión si no hay responsable asignado y muestra alerta', (tester) async {
+      mockStorage['user_id_rol'] = '7';
+      addTearDown(() => mockStorage.remove('user_id_rol'));
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: CheckoutWizardScreen(
+            initialInventario: [
+              {'id_activo': 'act-1', 'sku': 'SKU-1', 'descripcion': 'Faro', 'precio': 50000}
+            ],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Ir a Paso 1 (Cliente)
+      await tester.tap(find.text('Siguiente'));
+      await tester.pumpAndSettle();
+
+      // Consumidor Final -> abre modal y confirma tras 10s
+      await tester.tap(find.byKey(const Key('switch_cliente_anonimo')));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 10));
+      await tester.tap(find.byKey(const Key('btn_confirmar_consumidor_final')));
+      await tester.pumpAndSettle();
+
+      // Deseleccionar responsable en Paso 2
+      await tester.tap(find.byKey(const Key('dropdown_responsable_entrega')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('-- Selecciona Responsable (Obligatorio) --').last);
+      await tester.pumpAndSettle();
+
+      // Paso 1 -> Paso 2 (Abonos)
+      await tester.tap(find.text('Siguiente'));
+      await tester.pumpAndSettle();
+
+      // Paso 2 -> Paso 3 (Revisión)
+      await tester.tap(find.text('Siguiente'));
+      await tester.pumpAndSettle();
+
+      // Alerta de responsable requerido debe ser visible y botón de emitir bloqueado
+      expect(find.byKey(const Key('alerta_responsable_requerido')), findsOneWidget);
+      expect(find.text('ASIGNA UN RESPONSABLE PARA CONTINUAR'), findsOneWidget);
+
+      final btnConfirmar = tester.widget<ElevatedButton>(find.widgetWithText(ElevatedButton, 'ASIGNA UN RESPONSABLE PARA CONTINUAR'));
+      expect(btnConfirmar.onPressed, isNull);
     });
   });
 }
