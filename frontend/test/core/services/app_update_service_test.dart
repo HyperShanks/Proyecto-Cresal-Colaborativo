@@ -42,6 +42,28 @@ void main() {
       expect(info.downloadUrl, isNull);
     });
 
+    test('UpdateInfo.fromJson ignora actualización si la versión remota no es mayor que la actual', () {
+      final json = {
+        'update_available': true,
+        'latest_version': '1.0.4',
+      };
+      // Misma versión: no debe indicar updateAvailable
+      final infoMisma = UpdateInfo.fromJson(json, '1.0.4+5');
+      expect(infoMisma.updateAvailable, isFalse);
+
+      // Versión menor: no debe indicar updateAvailable
+      final infoMenor = UpdateInfo.fromJson(json, '1.0.5');
+      expect(infoMenor.updateAvailable, isFalse);
+    });
+
+    test('AppUpdateService.compareVersions ordena semver correctamente', () {
+      expect(AppUpdateService.compareVersions('1.0.4+5', '1.0.3+4'), 1);
+      expect(AppUpdateService.compareVersions('1.0.3+4', '1.0.4+5'), -1);
+      expect(AppUpdateService.compareVersions('1.0.4+5', '1.0.4+5'), 0);
+      expect(AppUpdateService.compareVersions('1.0.5', '1.0.4+5'), 1);
+      expect(AppUpdateService.compareVersions('v1.0.4', '1.0.4'), 0);
+    });
+
     test('AppUpdateService singleton instancia única', () {
       final s1 = AppUpdateService();
       final s2 = AppUpdateService();

@@ -29,9 +29,13 @@ class UpdateInfo {
   });
 
   factory UpdateInfo.fromJson(Map<String, dynamic> json, String currentVersion) {
+    final latest = json['latest_version']?.toString() ?? currentVersion;
+    final isActuallyNewer = AppUpdateService.compareVersions(latest, currentVersion) > 0;
+    final rawAvailable = json['update_available'] == true;
+
     return UpdateInfo(
-      updateAvailable: json['update_available'] == true,
-      latestVersion: json['latest_version'] ?? currentVersion,
+      updateAvailable: rawAvailable && isActuallyNewer,
+      latestVersion: latest,
       currentVersion: currentVersion,
       releaseName: json['release_name'] ?? 'Actualización disponible',
       releaseNotes: json['release_notes'] ?? 'Mejoras de estabilidad y rendimiento.',
@@ -49,14 +53,54 @@ class AppUpdateService {
   factory AppUpdateService() => _instance;
   AppUpdateService._internal();
 
-  /// Obtiene la versión actual de la aplicación (ej: "1.0.0+1")
+  /// Versión actual declarada en el código fuente Dart (fuente de verdad)
+  static const String appVersion = '1.0.4';
+  static const String appBuildNumber = '5';
+  static const String appFullVersion = '1.0.4+5';
+
+  /// Convierte '1.0.2+3' o 'v1.0.2' en [major, minor, patch, build]
+  static List<int> parseVersion(String vStr) {
+    if (vStr.isEmpty) return [0, 0, 0, 0];
+    final clean = vStr.replaceAll(RegExp(r'^[vV]'), '');
+    final parts = clean.split('+');
+    final semver = parts[0]
+        .split('.')
+        .map((p) => int.tryParse(p) ?? 0)
+        .toList();
+    while (semver.length < 3) {
+      semver.add(0);
+    }
+    final buildNum = parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0;
+    return [...semver.take(3), buildNum];
+  }
+
+  /// Compara dos versiones semánticas (retorna 1 si v1 > v2, -1 si v1 < v2, 0 si iguales)
+  static int compareVersions(String v1, String v2) {
+    final t1 = parseVersion(v1);
+    final t2 = parseVersion(v2);
+    for (int i = 0; i < 4; i++) {
+      if (t1[i] > t2[i]) return 1;
+      if (t1[i] < t2[i]) return -1;
+    }
+    return 0;
+  }
+
+  /// Obtiene la versión actual de la aplicación (ej: "1.0.3+4")
   Future<String> getCurrentVersion() async {
     try {
       final info = await PackageInfo.fromPlatform();
-      return '${info.version}+${info.buildNumber}';
+      final platVersion = '${info.version}+${info.buildNumber}';
+
+      // Si la versión nativa del binario es inferior a la del código Dart en ejecución
+      // (por ejemplo si CMake en Windows no recompiló el .exe al empaquetar),
+      // se prioriza la versión más alta entre la nativa y la del código fuente Dart.
+      if (compareVersions(appFullVersion, platVersion) > 0) {
+        return appFullVersion;
+      }
+      return platVersion;
     } catch (e) {
       debugPrint('[AppUpdateService] Error al obtener PackageInfo: $e');
-      return '1.0.0+1';
+      return appFullVersion;
     }
   }
 
