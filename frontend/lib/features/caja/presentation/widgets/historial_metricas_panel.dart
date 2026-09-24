@@ -9,10 +9,7 @@ import 'cobro_pendiente_card.dart';
 class HistorialMetricasPanel extends StatelessWidget {
   final ResumenCuadreCajaModel resumen;
 
-  const HistorialMetricasPanel({
-    super.key,
-    required this.resumen,
-  });
+  const HistorialMetricasPanel({super.key, required this.resumen});
 
   @override
   Widget build(BuildContext context) {
@@ -30,10 +27,10 @@ class HistorialMetricasPanel extends StatelessWidget {
             ),
             const SizedBox(width: 14),
 
-            // 2. Efectivo en Gaveta
+            // 2. Total Efectivo
             _buildMetricCard(
               icon: Icons.payments_rounded,
-              title: 'Efectivo en Gaveta',
+              title: 'Total Efectivo',
               value: CobroPendienteCard.formatClp(resumen.totalEfectivo),
               subtitle: 'Arqueo físico disponible',
               color: AppPalette.success,
@@ -115,7 +112,7 @@ class HistorialMetricasPanel extends StatelessWidget {
                     style: AppTypography.cardTitle.copyWith(
                       color: AppPalette.textSecondaryLight,
                       fontWeight: FontWeight.w700,
-                      fontSize: 13,
+                      fontSize: 16,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -132,14 +129,18 @@ class HistorialMetricasPanel extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: AppTypography.small.copyWith(
-                      color: AppPalette.textSecondaryLight,
-                      fontSize: 12,
+                  Tooltip(
+                    message: subtitle,
+                    child: Text(
+                      subtitle,
+                      style: AppTypography.small.copyWith(
+                        color: AppPalette.textSecondaryLight,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),

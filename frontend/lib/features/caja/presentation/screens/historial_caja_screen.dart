@@ -15,17 +15,14 @@ class HistorialCajaScreen extends StatefulWidget {
   final HistorialCajaProvider? provider;
   final int? sucursalId;
 
-  const HistorialCajaScreen({
-    super.key,
-    this.provider,
-    this.sucursalId,
-  });
+  const HistorialCajaScreen({super.key, this.provider, this.sucursalId});
 
   @override
   State<HistorialCajaScreen> createState() => HistorialCajaScreenState();
 }
 
-class HistorialCajaScreenState extends State<HistorialCajaScreen> with RouteAware {
+class HistorialCajaScreenState extends State<HistorialCajaScreen>
+    with RouteAware {
   late final HistorialCajaProvider _provider;
   bool _providerInterno = false;
   bool _isModalAbierto = false;
@@ -131,7 +128,10 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen> with RouteAwar
               // ── 2. ÁREA DE CONTENIDO (Métricas, Filtros y Tabla de Órdenes) ──
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 20,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -141,13 +141,13 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen> with RouteAwar
 
                       // ── 2.2 PANEL DE MÉTRICAS DE ARQUEO / CUADRE ──
                       if (state.data != null)
-                        HistorialMetricasPanel(resumen: state.data!.resumenCuadre),
+                        HistorialMetricasPanel(
+                          resumen: state.data!.resumenCuadre,
+                        ),
                       const SizedBox(height: 16),
 
                       // ── 2.3 CONTENIDO PRINCIPAL (TABLA / LOADING / ERROR / ZERO STATE) ──
-                      Expanded(
-                        child: _buildCuerpoPrincipal(state),
-                      ),
+                      Expanded(child: _buildCuerpoPrincipal(state)),
                     ],
                   ),
                 ),
@@ -245,7 +245,8 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen> with RouteAwar
           ),
           const SizedBox(width: 4),
           _buildPeriodoPill(
-            label: state.periodo == PeriodoHistorial.rango &&
+            label:
+                state.periodo == PeriodoHistorial.rango &&
                     state.fechaDesde != null &&
                     state.fechaHasta != null
                 ? '${state.fechaDesde} a ${state.fechaHasta}'
@@ -274,9 +275,7 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen> with RouteAwar
         decoration: BoxDecoration(
           color: isSelected ? Colors.white : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
-          border: isSelected
-              ? Border.all(color: AppPalette.borderLight)
-              : null,
+          border: isSelected ? Border.all(color: AppPalette.borderLight) : null,
           boxShadow: isSelected
               ? [
                   BoxShadow(
@@ -323,9 +322,7 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen> with RouteAwar
       decoration: BoxDecoration(
         color: AppPalette.surfaceLight,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppPalette.neutral.withValues(alpha: 0.18),
-        ),
+        border: Border.all(color: AppPalette.neutral.withValues(alpha: 0.18)),
       ),
       child: Row(
         children: [
@@ -343,7 +340,7 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen> with RouteAwar
                 hintText: 'Buscar por Folio (ORD-), RUT, Cliente, Vendedor...',
                 hintStyle: AppTypography.small.copyWith(
                   color: AppPalette.textSecondaryLight,
-                  fontSize: 12,
+                  fontSize: 15,
                 ),
                 prefixIcon: const Icon(
                   Icons.search_rounded,
@@ -398,7 +395,7 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen> with RouteAwar
               items: [
                 _buildDropdownItem('TODOS', 'Todos los Estados'),
                 _buildDropdownItem('Pagada', 'Pagada'),
-                _buildDropdownItem('Despachada', 'Despachada'),
+                _buildDropdownItem('Completada', 'Completada'),
                 _buildDropdownItem('Anulada', 'Anulada'),
               ],
               onChanged: (val) {
@@ -478,9 +475,7 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen> with RouteAwar
       decoration: BoxDecoration(
         color: AppPalette.surfaceLight,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: AppPalette.neutral.withValues(alpha: 0.25),
-        ),
+        border: Border.all(color: AppPalette.neutral.withValues(alpha: 0.25)),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<T>(
@@ -508,9 +503,7 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen> with RouteAwar
   Widget _buildCuerpoPrincipal(HistorialCajaState state) {
     if (state.isLoading) {
       return const Center(
-        child: CircularProgressIndicator(
-          color: AppPalette.primary,
-        ),
+        child: CircularProgressIndicator(color: AppPalette.primary),
       );
     }
 
@@ -575,9 +568,7 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen> with RouteAwar
         decoration: BoxDecoration(
           color: AppPalette.surfaceLight,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: AppPalette.neutral.withValues(alpha: 0.18),
-          ),
+          border: Border.all(color: AppPalette.neutral.withValues(alpha: 0.18)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,

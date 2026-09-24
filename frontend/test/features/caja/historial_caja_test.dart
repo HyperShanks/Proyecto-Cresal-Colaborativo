@@ -354,7 +354,7 @@ void main() {
       expect(find.text('\$1.250.000'), findsOneWidget);
       expect(find.text('2 órdenes pagadas'), findsOneWidget);
 
-      expect(find.text('Efectivo en Gaveta'), findsOneWidget);
+      expect(find.text('Total Efectivo'), findsOneWidget);
       expect(find.text('\$650.000'), findsOneWidget);
 
       expect(find.text('Total Tarjetas POS'), findsOneWidget);

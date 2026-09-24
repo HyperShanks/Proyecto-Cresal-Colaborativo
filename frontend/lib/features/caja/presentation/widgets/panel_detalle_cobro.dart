@@ -14,17 +14,15 @@ import 'resultado_cobro_dialog.dart';
 class PanelDetalleCobro extends StatefulWidget {
   final CajaProvider provider;
 
-  const PanelDetalleCobro({
-    super.key,
-    required this.provider,
-  });
+  const PanelDetalleCobro({super.key, required this.provider});
 
   @override
   State<PanelDetalleCobro> createState() => _PanelDetalleCobroState();
 }
 
 class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
-  final TextEditingController _montoAbonoPersonalizadoController = TextEditingController();
+  final TextEditingController _montoAbonoPersonalizadoController =
+      TextEditingController();
   final List<TextEditingController> _montoControllers = [];
   String? _lastIdReferencia;
   int? _lastPagosCount;
@@ -76,26 +74,35 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
 
       for (int i = 0; i < pagos.length; i++) {
         final ctrl = TextEditingController(
-          text: pagos[i].monto > 0 ? CurrencyFormatter.formatNumber(pagos[i].monto) : '',
+          text: pagos[i].monto > 0
+              ? CurrencyFormatter.formatNumber(pagos[i].monto)
+              : '',
         );
         _montoControllers.add(ctrl);
       }
     } else {
       // Actualizar valores de controladores si difieren del provider
       for (int i = 0; i < pagos.length && i < _montoControllers.length; i++) {
-        final currentTextVal = CurrencyFormatter.parse(_montoControllers[i].text);
+        final currentTextVal = CurrencyFormatter.parse(
+          _montoControllers[i].text,
+        );
         if (currentTextVal != pagos[i].monto) {
-          _montoControllers[i].text =
-              pagos[i].monto > 0 ? CurrencyFormatter.formatNumber(pagos[i].monto) : '';
+          _montoControllers[i].text = pagos[i].monto > 0
+              ? CurrencyFormatter.formatNumber(pagos[i].monto)
+              : '';
         }
       }
     }
 
     // Sincronizar campo de abono personalizado con montoDeclarado
-    final currentCustomVal = CurrencyFormatter.parse(_montoAbonoPersonalizadoController.text);
+    final currentCustomVal = CurrencyFormatter.parse(
+      _montoAbonoPersonalizadoController.text,
+    );
     if (currentCustomVal != widget.provider.montoDeclarado) {
       _montoAbonoPersonalizadoController.text =
-          widget.provider.montoDeclarado > 0 ? CurrencyFormatter.formatNumber(widget.provider.montoDeclarado) : '';
+          widget.provider.montoDeclarado > 0
+          ? CurrencyFormatter.formatNumber(widget.provider.montoDeclarado)
+          : '';
     }
   }
 
@@ -138,10 +145,16 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
         SnackBar(
           backgroundColor: AppPalette.error,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
           content: Row(
             children: [
-              const Icon(Icons.error_outline_rounded, color: Colors.white, size: 24),
+              const Icon(
+                Icons.error_outline_rounded,
+                color: Colors.white,
+                size: 24,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
@@ -342,29 +355,44 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
-                        color: (isVenta ? AppPalette.secondary : AppPalette.tertiary)
-                            .withValues(alpha: 0.12),
+                        color:
+                            (isVenta
+                                    ? AppPalette.secondary
+                                    : AppPalette.tertiary)
+                                .withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(6),
                         border: Border.all(
-                          color: (isVenta ? AppPalette.secondary : AppPalette.tertiary)
-                              .withValues(alpha: 0.4),
+                          color:
+                              (isVenta
+                                      ? AppPalette.secondary
+                                      : AppPalette.tertiary)
+                                  .withValues(alpha: 0.4),
                         ),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            isVenta ? Icons.storefront_rounded : Icons.directions_boat_filled_outlined,
+                            isVenta
+                                ? Icons.storefront_rounded
+                                : Icons.directions_boat_filled_outlined,
                             size: 14,
-                            color: isVenta ? AppPalette.warningText : AppPalette.tertiary,
+                            color: isVenta
+                                ? AppPalette.warningText
+                                : AppPalette.tertiary,
                           ),
                           const SizedBox(width: 5),
                           Text(
                             isVenta ? 'Venta en Tienda' : 'Ventas en Verde',
                             style: AppTypography.small.copyWith(
-                              color: isVenta ? AppPalette.warningText : AppPalette.tertiary,
+                              color: isVenta
+                                  ? AppPalette.warningText
+                                  : AppPalette.tertiary,
                               fontWeight: FontWeight.w700,
                               fontSize: 12,
                             ),
@@ -373,10 +401,14 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                       ),
                     ),
                     if ((orden.abonoRequerido > 0 ||
-                            (orden.montoACobrar > 0 && orden.montoACobrar < orden.totalOperacion)) &&
+                            (orden.montoACobrar > 0 &&
+                                orden.montoACobrar < orden.totalOperacion)) &&
                         orden.esPrimerAbono) ...[
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFFF3E8FF),
                           borderRadius: BorderRadius.circular(6),
@@ -385,7 +417,11 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.savings_rounded, size: 14, color: Color(0xFF7E22CE)),
+                            const Icon(
+                              Icons.savings_rounded,
+                              size: 14,
+                              color: Color(0xFF7E22CE),
+                            ),
                             const SizedBox(width: 5),
                             Text(
                               'Abono Inicial: ${CobroPendienteCard.formatClp(orden.abonoRequerido > 0 ? orden.abonoRequerido : orden.montoACobrar)}',
@@ -416,7 +452,11 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
           const SizedBox(height: 10),
           Row(
             children: [
-              const Icon(Icons.person_rounded, size: 18, color: AppPalette.textSecondaryLight),
+              const Icon(
+                Icons.person_rounded,
+                size: 18,
+                color: AppPalette.textSecondaryLight,
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -424,7 +464,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                   style: AppTypography.body.copyWith(
                     fontWeight: FontWeight.w600,
                     color: AppPalette.textPrimaryLight,
-                    fontSize: 14,
+                    fontSize: 16,
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -434,14 +474,18 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
           const SizedBox(height: 4),
           Row(
             children: [
-              const Icon(Icons.badge_rounded, size: 18, color: AppPalette.textSecondaryLight),
+              const Icon(
+                Icons.badge_rounded,
+                size: 18,
+                color: AppPalette.textSecondaryLight,
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   'Vendedor: ${orden.vendedorNombre}  •  Emitida el ${orden.fechaEmisionFormateada} a las ${orden.horaEmisionFormateada}',
                   style: AppTypography.small.copyWith(
                     color: AppPalette.textSecondaryLight,
-                    fontSize: 12,
+                    fontSize: 16,
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -483,7 +527,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                           : (orden.esVenta ? 'TOTAL VENTA' : 'PRECIO ACORDADO'),
                       style: AppTypography.small.copyWith(
                         color: Colors.white.withValues(alpha: 0.75),
-                        fontSize: 11,
+                        fontSize: 13,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.5,
                       ),
@@ -516,7 +560,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                           'DESCUENTO',
                           style: AppTypography.small.copyWith(
                             color: const Color(0xFFFFCDD2),
-                            fontSize: 11,
+                            fontSize: 13,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 0.5,
                           ),
@@ -553,7 +597,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                             : 'ABONOS PREVIOS',
                         style: AppTypography.small.copyWith(
                           color: Colors.white.withValues(alpha: 0.75),
-                          fontSize: 11,
+                          fontSize: 13,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.5,
                         ),
@@ -562,7 +606,9 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                       Text(
                         CobroPendienteCard.formatClp(orden.abonoPrevio),
                         style: AppTypography.title.copyWith(
-                          color: orden.abonoPrevio > 0 ? AppPalette.secondary : Colors.white,
+                          color: orden.abonoPrevio > 0
+                              ? AppPalette.secondary
+                              : Colors.white,
                           fontWeight: FontWeight.w900,
                           fontSize: 18,
                         ),
@@ -587,7 +633,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                         'SALDO PENDIENTE',
                         style: AppTypography.small.copyWith(
                           color: Colors.white.withValues(alpha: 0.75),
-                          fontSize: 11,
+                          fontSize: 13,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.5,
                         ),
@@ -595,7 +641,9 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                       const SizedBox(height: 4),
                       Text(
                         CobroPendienteCard.formatClp(
-                          orden.saldoPendiente > 0 ? orden.saldoPendiente : orden.totalOperacion,
+                          orden.saldoPendiente > 0
+                              ? orden.saldoPendiente
+                              : orden.totalOperacion,
                         ),
                         style: AppTypography.title.copyWith(
                           color: Colors.white,
@@ -655,7 +703,11 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
               const SizedBox(height: 16),
               Row(
                 children: [
-                  const Icon(Icons.widgets_outlined, size: 16, color: AppPalette.primary),
+                  const Icon(
+                    Icons.widgets_outlined,
+                    size: 16,
+                    color: AppPalette.primary,
+                  ),
                   const SizedBox(width: 6),
                   Text(
                     'ARTÍCULOS Y REPUESTOS DE LA ORDEN',
@@ -679,7 +731,11 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.confirmation_num_outlined, size: 16, color: Colors.red.shade400),
+                    Icon(
+                      Icons.confirmation_num_outlined,
+                      size: 16,
+                      color: Colors.red.shade400,
+                    ),
                     const SizedBox(width: 6),
                     Text(
                       'Descuento a Favor:',
@@ -719,10 +775,8 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: articulos.length,
-      separatorBuilder: (context, index) => Divider(
-        color: AppPalette.borderLight,
-        height: 14,
-      ),
+      separatorBuilder: (context, index) =>
+          Divider(color: AppPalette.borderLight, height: 14),
       itemBuilder: (context, idx) {
         final art = articulos[idx];
         final tieneSku = art.sku != null && art.sku!.isNotEmpty;
@@ -758,7 +812,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                     style: AppTypography.body.copyWith(
                       fontWeight: FontWeight.w600,
                       color: AppPalette.textPrimaryLight,
-                      fontSize: 13,
+                      fontSize: 16,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -768,12 +822,15 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                       style: AppTypography.small.copyWith(
                         color: AppPalette.textSecondaryLight,
                         fontWeight: FontWeight.w600,
-                        fontSize: 11,
+                        fontSize: 13,
                       ),
                     )
                   else
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 1.5,
+                      ),
                       decoration: BoxDecoration(
                         color: art.tipo == 'RESERVA'
                             ? AppPalette.warning.withValues(alpha: 0.12)
@@ -800,7 +857,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
               style: AppTypography.body.copyWith(
                 fontWeight: FontWeight.w800,
                 color: AppPalette.textPrimaryLight,
-                fontSize: 14,
+                fontSize: 16,
               ),
             ),
           ],
@@ -842,14 +899,18 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
             Expanded(
               child: _buildSpecTile(
                 'Cilindrada',
-                bo.cilindrada != null && bo.cilindrada!.isNotEmpty ? bo.cilindrada! : 'No especificada',
+                bo.cilindrada != null && bo.cilindrada!.isNotEmpty
+                    ? bo.cilindrada!
+                    : 'No especificada',
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: _buildSpecTile(
                 'Combustible',
-                bo.combustible != null && bo.combustible!.isNotEmpty ? bo.combustible! : 'No especificado',
+                bo.combustible != null && bo.combustible!.isNotEmpty
+                    ? bo.combustible!
+                    : 'No especificado',
               ),
             ),
           ],
@@ -893,7 +954,6 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
     );
   }
 
-
   Widget _buildMetodosPagoSection() {
     final modalidadPago = widget.provider.modalidadPago;
     final isUnico = modalidadPago == 'UNICO';
@@ -914,7 +974,11 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.payment_rounded, size: 18, color: AppPalette.primary),
+                  const Icon(
+                    Icons.payment_rounded,
+                    size: 18,
+                    color: AppPalette.primary,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     'MÉTODOS DE PAGO',
@@ -935,11 +999,16 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                 },
                 borderRadius: BorderRadius.circular(6),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   child: Row(
                     children: [
                       Icon(
-                        isUnico ? Icons.call_split_rounded : Icons.check_circle_outline_rounded,
+                        isUnico
+                            ? Icons.call_split_rounded
+                            : Icons.check_circle_outline_rounded,
                         size: 16,
                         color: AppPalette.primary,
                       ),
@@ -947,7 +1016,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                       Text(
                         isUnico ? 'Dividir Pago' : 'Pago Único (100%)',
                         style: AppTypography.small.copyWith(
-                          fontSize: 12,
+                          fontSize: 15,
                           fontWeight: FontWeight.w700,
                           color: AppPalette.primary,
                         ),
@@ -964,7 +1033,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
           Text(
             'SELECCIONA EL MÉTODO',
             style: AppTypography.small.copyWith(
-              fontSize: 11,
+              fontSize: 13,
               fontWeight: FontWeight.w800,
               color: AppPalette.textSecondaryLight,
               letterSpacing: 0.6,
@@ -988,11 +1057,31 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
 
   Widget _buildMetodosGrid() {
     const metodosConfig = [
-      {'nombre': 'Efectivo', 'label': 'EFECTIVO', 'icon': Icons.payments_rounded},
-      {'nombre': 'Debito', 'label': 'DÉBITO', 'icon': Icons.credit_card_rounded},
-      {'nombre': 'Credito', 'label': 'CRÉDITO', 'icon': Icons.credit_card_rounded},
-      {'nombre': 'Transferencia', 'label': 'TRANSFERENCIA', 'icon': Icons.swap_horiz_rounded},
-      {'nombre': 'Cheque', 'label': 'CHEQUE', 'icon': Symbols.checkbook_rounded},
+      {
+        'nombre': 'Efectivo',
+        'label': 'EFECTIVO',
+        'icon': Icons.payments_rounded,
+      },
+      {
+        'nombre': 'Debito',
+        'label': 'DÉBITO',
+        'icon': Icons.credit_card_rounded,
+      },
+      {
+        'nombre': 'Credito',
+        'label': 'CRÉDITO',
+        'icon': Icons.credit_card_rounded,
+      },
+      {
+        'nombre': 'Transferencia',
+        'label': 'TRANSFERENCIA',
+        'icon': Icons.swap_horiz_rounded,
+      },
+      {
+        'nombre': 'Cheque',
+        'label': 'CHEQUE',
+        'icon': Symbols.checkbook_rounded,
+      },
     ];
 
     return Row(
@@ -1012,12 +1101,19 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
               },
               borderRadius: BorderRadius.circular(10),
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 2),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 14,
+                  horizontal: 2,
+                ),
                 decoration: BoxDecoration(
-                  color: isActive ? AppPalette.tertiary : AppPalette.surfaceLight,
+                  color: isActive
+                      ? AppPalette.tertiary
+                      : AppPalette.surfaceLight,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                    color: isActive ? AppPalette.tertiary : AppPalette.borderLight,
+                    color: isActive
+                        ? AppPalette.tertiary
+                        : AppPalette.borderLight,
                     width: 1.5,
                   ),
                   boxShadow: isActive
@@ -1036,13 +1132,17 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                     Icon(
                       icon,
                       size: 20,
-                      color: isActive ? Colors.white : AppPalette.textSecondaryLight,
+                      color: isActive
+                          ? Colors.white
+                          : AppPalette.textSecondaryLight,
                     ),
                     const SizedBox(height: 6),
                     Text(
                       label,
                       style: AppTypography.small.copyWith(
-                        color: isActive ? Colors.white : AppPalette.textPrimaryLight,
+                        color: isActive
+                            ? Colors.white
+                            : AppPalette.textPrimaryLight,
                         fontWeight: FontWeight.w700,
                         fontSize: 11,
                         letterSpacing: 0.4,
@@ -1096,7 +1196,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                     'Canal Activo: $metodoNombre',
                     style: AppTypography.body.copyWith(
                       fontWeight: FontWeight.w800,
-                      fontSize: 13,
+                      fontSize: 14,
                       color: AppPalette.textPrimaryLight,
                     ),
                   ),
@@ -1104,7 +1204,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                   Text(
                     'Cubre el 100% del monto acordado',
                     style: AppTypography.small.copyWith(
-                      fontSize: 11,
+                      fontSize: 13,
                       color: AppPalette.textSecondaryLight,
                     ),
                   ),
@@ -1156,7 +1256,11 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                   },
                   child: Row(
                     children: [
-                      const Icon(Icons.auto_fix_high_rounded, size: 14, color: AppPalette.tertiary),
+                      const Icon(
+                        Icons.auto_fix_high_rounded,
+                        size: 14,
+                        color: AppPalette.tertiary,
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         'Auto-rellenar restante',
@@ -1181,7 +1285,9 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
             separatorBuilder: (context, index) => const SizedBox(height: 10),
             itemBuilder: (context, idx) {
               final pago = pagos[idx];
-              final ctrl = idx < _montoControllers.length ? _montoControllers[idx] : null;
+              final ctrl = idx < _montoControllers.length
+                  ? _montoControllers[idx]
+                  : null;
 
               return Container(
                 padding: const EdgeInsets.all(12),
@@ -1195,7 +1301,10 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                     // Badge del método con ancho uniforme (140px) para alinear todos los inputs
                     Container(
                       width: 140,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         color: AppPalette.tertiary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
@@ -1203,7 +1312,11 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(_getIconoMetodo(pago.metodo), size: 16, color: AppPalette.tertiary),
+                          Icon(
+                            _getIconoMetodo(pago.metodo),
+                            size: 16,
+                            color: AppPalette.tertiary,
+                          ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -1242,20 +1355,30 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                           ),
                           hintText: '0',
                           hintStyle: AppTypography.body.copyWith(
-                            color: AppPalette.textSecondaryLight.withValues(alpha: 0.6),
+                            color: AppPalette.textSecondaryLight.withValues(
+                              alpha: 0.6,
+                            ),
                             fontSize: 14,
                           ),
                           isDense: true,
                           filled: true,
                           fillColor: AppPalette.backgroundLight,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
-                            borderSide: const BorderSide(color: AppPalette.borderLight),
+                            borderSide: const BorderSide(
+                              color: AppPalette.borderLight,
+                            ),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
-                            borderSide: const BorderSide(color: AppPalette.tertiary, width: 2),
+                            borderSide: const BorderSide(
+                              color: AppPalette.tertiary,
+                              width: 2,
+                            ),
                           ),
                         ),
                         onChanged: (val) {
@@ -1273,8 +1396,12 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                         icon: const Icon(Icons.auto_fix_high_rounded, size: 18),
                         color: AppPalette.tertiary,
                         style: IconButton.styleFrom(
-                          backgroundColor: AppPalette.tertiary.withValues(alpha: 0.1),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          backgroundColor: AppPalette.tertiary.withValues(
+                            alpha: 0.1,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                           padding: const EdgeInsets.all(8),
                         ),
                         onPressed: () {
@@ -1290,11 +1417,18 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                       Tooltip(
                         message: 'Eliminar método',
                         child: IconButton(
-                          icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                          icon: const Icon(
+                            Icons.delete_outline_rounded,
+                            size: 18,
+                          ),
                           color: AppPalette.error,
                           style: IconButton.styleFrom(
-                            backgroundColor: AppPalette.error.withValues(alpha: 0.08),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            backgroundColor: AppPalette.error.withValues(
+                              alpha: 0.08,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                             padding: const EdgeInsets.all(8),
                           ),
                           onPressed: () {
@@ -1314,12 +1448,15 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
     );
   }
 
-  Widget _buildCuadraturaYAccion(BuildContext context, CobroPendienteModel orden) {
+  Widget _buildCuadraturaYAccion(
+    BuildContext context,
+    CobroPendienteModel orden,
+  ) {
     final montoDeclarado = widget.provider.montoDeclarado;
     final diferencia = widget.provider.diferenciaCuadratura;
     final esValida = widget.provider.esCuadraturaValida;
     final isProcesando = widget.provider.isProcesandoCobro;
-    
+
     final bool montoExcedido = widget.provider.esMontoExcedido;
     final bool montoInvalido = widget.provider.errorMontoAbono != null;
     final esLiquidacionTotal = widget.provider.esLiquidacionCompleta;
@@ -1333,12 +1470,15 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
         color: AppPalette.surfaceLight,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: operacionValida ? AppPalette.successBorder : AppPalette.errorBorder,
+          color: operacionValida
+              ? AppPalette.successBorder
+              : AppPalette.errorBorder,
           width: 1.5,
         ),
         boxShadow: [
           BoxShadow(
-            color: (operacionValida ? AppPalette.success : AppPalette.error).withValues(alpha: 0.05),
+            color: (operacionValida ? AppPalette.success : AppPalette.error)
+                .withValues(alpha: 0.05),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -1363,7 +1503,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                     Text(
                       'Subtotal Bruto:',
                       style: AppTypography.small.copyWith(
-                        fontSize: 12,
+                        fontSize: 16,
                         fontWeight: FontWeight.w600,
                         color: AppPalette.textSecondaryLight,
                       ),
@@ -1371,7 +1511,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                     Text(
                       CobroPendienteCard.formatClp(orden.totalOperacion),
                       style: AppTypography.small.copyWith(
-                        fontSize: 12,
+                        fontSize: 16,
                         fontWeight: FontWeight.w700,
                         color: AppPalette.textPrimaryLight,
                       ),
@@ -1433,9 +1573,11 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      esLiquidacionTotal ? 'TOTAL NETO A COBRAR:' : 'ABONO A PROCESAR AHORA:',
+                      esLiquidacionTotal
+                          ? 'TOTAL NETO A COBRAR:'
+                          : 'ABONO A PROCESAR AHORA:',
                       style: AppTypography.small.copyWith(
-                        fontSize: 12,
+                        fontSize: 14,
                         fontWeight: FontWeight.w800,
                         color: AppPalette.textPrimaryLight,
                         letterSpacing: 0.5,
@@ -1460,15 +1602,21 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              color: operacionValida ? AppPalette.successBg : AppPalette.errorBg,
+              color: operacionValida
+                  ? AppPalette.successBg
+                  : AppPalette.errorBg,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
               children: [
                 Icon(
-                  operacionValida ? Icons.check_circle_rounded : Icons.info_outline_rounded,
+                  operacionValida
+                      ? Icons.check_circle_rounded
+                      : Icons.info_outline_rounded,
                   size: 16,
-                  color: operacionValida ? AppPalette.successText : AppPalette.errorText,
+                  color: operacionValida
+                      ? AppPalette.successText
+                      : AppPalette.errorText,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -1476,22 +1624,25 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                     isProcesando
                         ? 'Registrando el cobro en el sistema...'
                         : montoExcedido
-                            ? 'El monto a cobrar supera el saldo pendiente de la orden.'
-                            : montoInvalido
-                                ? (widget.provider.errorMontoAbono ?? 'Monto de abono inválido.')
-                                : esValida
-                                    ? (orden.esBackorder && esLiquidacionTotal
-                                        ? 'Cuadratura perfecta. Salda el 100% de la venta en verde (el vendedor asignará el activo físico).'
-                                        : (esLiquidacionTotal
-                                            ? 'Cuadratura perfecta. Este cobro salda el 100% de la orden.'
-                                            : 'Cuadratura perfecta para registrar este abono parcial.'))
-                                    : (diferencia > 0
-                                        ? 'Faltan ${CobroPendienteCard.formatClp(diferencia)} para cubrir el monto a cobrar.'
-                                        : 'Se han ingresado ${CobroPendienteCard.formatClp(diferencia.abs())} de más.'),
+                        ? 'El monto a cobrar supera el saldo pendiente de la orden.'
+                        : montoInvalido
+                        ? (widget.provider.errorMontoAbono ??
+                              'Monto de abono inválido.')
+                        : esValida
+                        ? (orden.esBackorder && esLiquidacionTotal
+                              ? 'Cuadratura perfecta. Salda el 100% de la venta en verde (el vendedor asignará el activo físico).'
+                              : (esLiquidacionTotal
+                                    ? 'Cuadratura perfecta. Este cobro salda el 100% de la orden.'
+                                    : 'Cuadratura perfecta para registrar este abono parcial.'))
+                        : (diferencia > 0
+                              ? 'Faltan ${CobroPendienteCard.formatClp(diferencia)} para cubrir el monto a cobrar.'
+                              : 'Se han ingresado ${CobroPendienteCard.formatClp(diferencia.abs())} de más.'),
                     style: AppTypography.small.copyWith(
-                      color: operacionValida ? AppPalette.successText : AppPalette.errorText,
+                      color: operacionValida
+                          ? AppPalette.successText
+                          : AppPalette.errorText,
                       fontWeight: FontWeight.w700,
-                      fontSize: 12,
+                      fontSize: 14,
                     ),
                   ),
                 ),
@@ -1507,8 +1658,12 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
             height: 52,
             child: ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: operacionValida ? AppPalette.success : AppPalette.disabled,
-                foregroundColor: operacionValida ? AppPalette.textPrimary : AppPalette.disabledText,
+                backgroundColor: operacionValida
+                    ? AppPalette.success
+                    : AppPalette.disabled,
+                foregroundColor: operacionValida
+                    ? AppPalette.textPrimary
+                    : AppPalette.disabledText,
                 disabledBackgroundColor: AppPalette.disabled,
                 disabledForegroundColor: AppPalette.disabledText,
                 elevation: operacionValida ? 2 : 0,
@@ -1526,21 +1681,24 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                       ),
                     )
                   : Icon(
-                      operacionValida ? Icons.check_circle_rounded : Icons.lock_rounded,
+                      operacionValida
+                          ? Icons.check_circle_rounded
+                          : Icons.lock_rounded,
                       size: 22,
                     ),
               label: Text(
                 isProcesando
                     ? 'PROCESANDO PAGO...'
                     : montoExcedido
-                        ? 'MONTO SUPERA EL SALDO PENDIENTE'
-                        : montoInvalido
-                            ? (widget.provider.errorMontoAbono?.toUpperCase() ?? 'MONTO DE ABONO INVÁLIDO')
-                            : !esValida
-                                ? 'PAGO BLOQUEADO (DESCUADRE)'
-                                : !esLiquidacionTotal
-                                    ? 'REGISTRAR ABONO PARCIAL'
-                                    : 'CONFIRMAR Y PROCESAR COBRO',
+                    ? 'MONTO SUPERA EL SALDO PENDIENTE'
+                    : montoInvalido
+                    ? (widget.provider.errorMontoAbono?.toUpperCase() ??
+                          'MONTO DE ABONO INVÁLIDO')
+                    : !esValida
+                    ? 'PAGO BLOQUEADO (DESCUADRE)'
+                    : !esLiquidacionTotal
+                    ? 'REGISTRAR ABONO PARCIAL'
+                    : 'CONFIRMAR Y PROCESAR COBRO',
                 style: AppTypography.button.copyWith(
                   fontWeight: FontWeight.w900,
                   fontSize: 14,
@@ -1575,7 +1733,11 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.history_rounded, size: 18, color: AppPalette.primary),
+                  const Icon(
+                    Icons.history_rounded,
+                    size: 18,
+                    color: AppPalette.primary,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     'HISTORIAL DE ABONOS REGISTRADOS (${orden.historialAbonos.length})',
@@ -1614,7 +1776,10 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
               return Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: AppPalette.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(6),
@@ -1629,7 +1794,11 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                     ),
                   ),
                   const SizedBox(width: 10),
-                  Icon(_getIconoMetodo(abono.metodoPago), size: 16, color: AppPalette.textSecondaryLight),
+                  Icon(
+                    _getIconoMetodo(abono.metodoPago),
+                    size: 16,
+                    color: AppPalette.textSecondaryLight,
+                  ),
                   const SizedBox(width: 6),
                   Text(
                     abono.metodoPago,
@@ -1676,7 +1845,9 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
         color: AppPalette.surfaceLight,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: error != null ? AppPalette.errorBorder : AppPalette.borderLight,
+          color: error != null
+              ? AppPalette.errorBorder
+              : AppPalette.borderLight,
         ),
       ),
       child: Column(
@@ -1684,7 +1855,11 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
         children: [
           Row(
             children: [
-              const Icon(Icons.tune_rounded, size: 18, color: AppPalette.primary),
+              const Icon(
+                Icons.tune_rounded,
+                size: 18,
+                color: AppPalette.primary,
+              ),
               const SizedBox(width: 8),
               Text(
                 'MODALIDAD DE COBRO',
@@ -1700,7 +1875,8 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
           const SizedBox(height: 14),
 
           if ((orden.abonoRequerido > 0 ||
-                  (orden.montoACobrar > 0 && orden.montoACobrar < orden.totalOperacion)) &&
+                  (orden.montoACobrar > 0 &&
+                      orden.montoACobrar < orden.totalOperacion)) &&
               orden.esPrimerAbono) ...[
             Container(
               margin: const EdgeInsets.only(bottom: 12),
@@ -1712,7 +1888,11 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFF7E22CE)),
+                  const Icon(
+                    Icons.info_outline_rounded,
+                    size: 16,
+                    color: Color(0xFF7E22CE),
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -1740,12 +1920,19 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                   },
                   borderRadius: BorderRadius.circular(10),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 14,
+                      horizontal: 10,
+                    ),
                     decoration: BoxDecoration(
-                      color: isLiquidacion ? AppPalette.primary : AppPalette.backgroundLight,
+                      color: isLiquidacion
+                          ? AppPalette.primary
+                          : AppPalette.backgroundLight,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                        color: isLiquidacion ? AppPalette.primary : AppPalette.borderLight,
+                        color: isLiquidacion
+                            ? AppPalette.primary
+                            : AppPalette.borderLight,
                         width: 1.5,
                       ),
                     ),
@@ -1755,7 +1942,9 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                         Icon(
                           Icons.check_circle_rounded,
                           size: 16,
-                          color: isLiquidacion ? Colors.white : AppPalette.textSecondaryLight,
+                          color: isLiquidacion
+                              ? Colors.white
+                              : AppPalette.textSecondaryLight,
                         ),
                         const SizedBox(width: 6),
                         Flexible(
@@ -1763,8 +1952,10 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                             'Liquidación Total',
                             style: AppTypography.body.copyWith(
                               fontWeight: FontWeight.w800,
-                              fontSize: 12,
-                              color: isLiquidacion ? Colors.white : AppPalette.textPrimaryLight,
+                              fontSize: 16,
+                              color: isLiquidacion
+                                  ? Colors.white
+                                  : AppPalette.textPrimaryLight,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -1783,12 +1974,19 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                   },
                   borderRadius: BorderRadius.circular(10),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 14,
+                      horizontal: 10,
+                    ),
                     decoration: BoxDecoration(
-                      color: !isLiquidacion ? AppPalette.tertiary : AppPalette.backgroundLight,
+                      color: !isLiquidacion
+                          ? AppPalette.tertiary
+                          : AppPalette.backgroundLight,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                        color: !isLiquidacion ? AppPalette.tertiary : AppPalette.borderLight,
+                        color: !isLiquidacion
+                            ? AppPalette.tertiary
+                            : AppPalette.borderLight,
                         width: 1.5,
                       ),
                     ),
@@ -1798,7 +1996,9 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                         Icon(
                           Icons.savings_rounded,
                           size: 16,
-                          color: !isLiquidacion ? Colors.white : AppPalette.textSecondaryLight,
+                          color: !isLiquidacion
+                              ? Colors.white
+                              : AppPalette.textSecondaryLight,
                         ),
                         const SizedBox(width: 6),
                         Flexible(
@@ -1806,8 +2006,10 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                             'Abono Personalizado',
                             style: AppTypography.body.copyWith(
                               fontWeight: FontWeight.w800,
-                              fontSize: 12,
-                              color: !isLiquidacion ? Colors.white : AppPalette.textPrimaryLight,
+                              fontSize: 16,
+                              color: !isLiquidacion
+                                  ? Colors.white
+                                  : AppPalette.textPrimaryLight,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -1841,36 +2043,49 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                     keyboardType: TextInputType.number,
                     inputFormatters: [MilesTextInputFormatter()],
                     style: AppTypography.title.copyWith(
-                      color: error != null ? AppPalette.error : AppPalette.textPrimaryLight,
+                      color: error != null
+                          ? AppPalette.error
+                          : AppPalette.textPrimaryLight,
                       fontWeight: FontWeight.w800,
                       fontSize: 18,
                     ),
                     decoration: InputDecoration(
                       prefixText: '\$ ',
                       prefixStyle: AppTypography.title.copyWith(
-                        color: error != null ? AppPalette.error : AppPalette.textPrimaryLight,
+                        color: error != null
+                            ? AppPalette.error
+                            : AppPalette.textPrimaryLight,
                         fontWeight: FontWeight.w800,
                         fontSize: 18,
                       ),
                       hintText: 'Ej: 50.000',
                       hintStyle: AppTypography.title.copyWith(
-                        color: AppPalette.textSecondaryLight.withValues(alpha: 0.5),
+                        color: AppPalette.textSecondaryLight.withValues(
+                          alpha: 0.5,
+                        ),
                         fontWeight: FontWeight.w600,
                         fontSize: 16,
                       ),
                       filled: true,
                       fillColor: AppPalette.backgroundLight,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                         borderSide: BorderSide(
-                          color: error != null ? AppPalette.errorBorder : AppPalette.borderLight,
+                          color: error != null
+                              ? AppPalette.errorBorder
+                              : AppPalette.borderLight,
                         ),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                         borderSide: BorderSide(
-                          color: error != null ? AppPalette.error : AppPalette.tertiary,
+                          color: error != null
+                              ? AppPalette.error
+                              : AppPalette.tertiary,
                           width: 2,
                         ),
                       ),
@@ -1888,7 +2103,11 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  const Icon(Icons.error_outline_rounded, size: 14, color: AppPalette.error),
+                  const Icon(
+                    Icons.error_outline_rounded,
+                    size: 14,
+                    color: AppPalette.error,
+                  ),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
@@ -1906,7 +2125,11 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  const Icon(Icons.info_outline_rounded, size: 14, color: AppPalette.tertiary),
+                  const Icon(
+                    Icons.info_outline_rounded,
+                    size: 14,
+                    color: AppPalette.tertiary,
+                  ),
                   const SizedBox(width: 6),
                   Text(
                     'Piso comercial acordado para primer abono: ${CobroPendienteCard.formatClp(orden.pisoPrimerAbono)}',
@@ -1925,4 +2148,3 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
     );
   }
 }
-

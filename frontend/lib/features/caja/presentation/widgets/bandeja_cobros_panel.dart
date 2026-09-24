@@ -9,10 +9,7 @@ import 'cobro_pendiente_card.dart';
 class BandejaCobrosPanel extends StatefulWidget {
   final CajaProvider provider;
 
-  const BandejaCobrosPanel({
-    super.key,
-    required this.provider,
-  });
+  const BandejaCobrosPanel({super.key, required this.provider});
 
   @override
   State<BandejaCobrosPanel> createState() => _BandejaCobrosPanelState();
@@ -54,9 +51,7 @@ class _BandejaCobrosPanelState extends State<BandejaCobrosPanel> {
           _buildPillFilters(provider),
           _buildSearchBar(provider),
           const SizedBox(height: 4),
-          Expanded(
-            child: _buildListContent(provider),
-          ),
+          Expanded(child: _buildListContent(provider)),
         ],
       ),
     );
@@ -87,7 +82,10 @@ class _BandejaCobrosPanelState extends State<BandejaCobrosPanel> {
               children: [
                 // Tag superior "CAJA" en gris
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: AppPalette.backgroundLight,
                     borderRadius: BorderRadius.circular(4),
@@ -172,9 +170,7 @@ class _BandejaCobrosPanelState extends State<BandejaCobrosPanel> {
       decoration: BoxDecoration(
         color: AppPalette.backgroundLight,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: AppPalette.neutral.withValues(alpha: 0.15),
-        ),
+        border: Border.all(color: AppPalette.neutral.withValues(alpha: 0.15)),
       ),
       child: Row(
         children: [
@@ -206,7 +202,9 @@ class _BandejaCobrosPanelState extends State<BandejaCobrosPanel> {
     required VoidCallback onTap,
   }) {
     final bgColor = isSelected ? AppPalette.surfaceLight : Colors.transparent;
-    final textColor = isSelected ? AppPalette.primary : AppPalette.textSecondaryLight;
+    final textColor = isSelected
+        ? AppPalette.primary
+        : AppPalette.textSecondaryLight;
 
     return Expanded(
       child: InkWell(
@@ -233,7 +231,7 @@ class _BandejaCobrosPanelState extends State<BandejaCobrosPanel> {
             style: AppTypography.small.copyWith(
               color: textColor,
               fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-              fontSize: 11,
+              fontSize: 13,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -260,7 +258,7 @@ class _BandejaCobrosPanelState extends State<BandejaCobrosPanel> {
           hintText: 'Buscar por Folio, RUT, Cliente o Vendedor...',
           hintStyle: AppTypography.small.copyWith(
             color: AppPalette.textSecondaryLight,
-            fontSize: 12,
+            fontSize: 14,
           ),
           prefixIcon: const Icon(
             Icons.search_rounded,
@@ -301,10 +299,7 @@ class _BandejaCobrosPanelState extends State<BandejaCobrosPanel> {
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(
-              color: AppPalette.primary,
-              width: 1.5,
-            ),
+            borderSide: const BorderSide(color: AppPalette.primary, width: 1.5),
           ),
         ),
       ),
@@ -314,9 +309,7 @@ class _BandejaCobrosPanelState extends State<BandejaCobrosPanel> {
   Widget _buildListContent(CajaProvider provider) {
     if (provider.isLoading) {
       return const Center(
-        child: CircularProgressIndicator(
-          color: AppPalette.primary,
-        ),
+        child: CircularProgressIndicator(color: AppPalette.primary),
       );
     }
 
@@ -343,8 +336,13 @@ class _BandejaCobrosPanelState extends State<BandejaCobrosPanel> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppPalette.primary,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
                 icon: const Icon(Icons.refresh_rounded, size: 16),
                 label: const Text('Reintentar'),
@@ -378,8 +376,8 @@ class _BandejaCobrosPanelState extends State<BandejaCobrosPanel> {
   }
 
   Widget _buildZeroState(CajaProvider provider) {
-    final tieneFiltros = provider.terminoBusqueda.isNotEmpty ||
-        provider.filtroTipo != 'TODOS';
+    final tieneFiltros =
+        provider.terminoBusqueda.isNotEmpty || provider.filtroTipo != 'TODOS';
 
     return Center(
       child: Padding(

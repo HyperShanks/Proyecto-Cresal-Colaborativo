@@ -18,10 +18,7 @@ class CobroPendienteCard extends StatelessWidget {
   });
 
   static String formatClp(int valor) {
-    return '\$${valor.toString().replaceAllMapped(
-          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-          (Match m) => '${m[1]}.',
-        )}';
+    return '\$${valor.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.')}';
   }
 
   String _calcTiempoRelativo(DateTime fecha) {
@@ -42,11 +39,14 @@ class CobroPendienteCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isVenta = orden.esVenta;
-    final bool tieneAbonoInicial = (orden.abonoRequerido > 0 ||
-            (orden.montoACobrar > 0 && orden.montoACobrar < orden.totalOperacion)) &&
+    final bool tieneAbonoInicial =
+        (orden.abonoRequerido > 0 ||
+            (orden.montoACobrar > 0 &&
+                orden.montoACobrar < orden.totalOperacion)) &&
         orden.esPrimerAbono;
-    final int montoAbonoInicial =
-        orden.abonoRequerido > 0 ? orden.abonoRequerido : orden.montoACobrar;
+    final int montoAbonoInicial = orden.abonoRequerido > 0
+        ? orden.abonoRequerido
+        : orden.montoACobrar;
 
     final badgeBg = isVenta
         ? AppPalette.secondary.withValues(alpha: 0.15)
@@ -76,10 +76,7 @@ class CobroPendienteCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: borderColor,
-          width: isSelected ? 2 : 1,
-        ),
+        border: Border.all(color: borderColor, width: isSelected ? 2 : 1),
         boxShadow: [
           BoxShadow(
             color: isSelected
@@ -156,12 +153,19 @@ class CobroPendienteCard extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: const Color(0xFFF3E8FF),
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: const Color(0xFFC084FC), width: 1),
+                      border: Border.all(
+                        color: const Color(0xFFC084FC),
+                        width: 1,
+                      ),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.savings_rounded, size: 12, color: Color(0xFF7E22CE)),
+                        const Icon(
+                          Icons.savings_rounded,
+                          size: 12,
+                          color: Color(0xFF7E22CE),
+                        ),
                         const SizedBox(width: 4),
                         Text(
                           'ABONO INICIAL: ${formatClp(montoAbonoInicial)}',
@@ -183,7 +187,7 @@ class CobroPendienteCard extends StatelessWidget {
                   orden.clienteNombre,
                   style: AppTypography.body.copyWith(
                     fontWeight: FontWeight.w700,
-                    fontSize: 14,
+                    fontSize: 16,
                     color: AppPalette.textPrimaryLight,
                   ),
                   maxLines: 1,
@@ -197,7 +201,7 @@ class CobroPendienteCard extends StatelessWidget {
                         'RUT: ${orden.clienteRut}',
                         style: AppTypography.small.copyWith(
                           color: AppPalette.textSecondaryLight,
-                          fontSize: 12,
+                          fontSize: 14,
                         ),
                       ),
                       Text(
@@ -243,7 +247,7 @@ class CobroPendienteCard extends StatelessWidget {
                               '${orden.fechaEmisionFormateada} • ${orden.horaEmisionFormateada}',
                               style: AppTypography.small.copyWith(
                                 color: AppPalette.textSecondaryLight,
-                                fontSize: 11,
+                                fontSize: 13,
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -270,7 +274,7 @@ class CobroPendienteCard extends StatelessWidget {
                         children: [
                           const Icon(
                             Icons.schedule_rounded,
-                            size: 13,
+                            size: 15,
                             color: AppPalette.primary,
                           ),
                           const SizedBox(width: 4),
@@ -278,7 +282,7 @@ class CobroPendienteCard extends StatelessWidget {
                             relativeTime,
                             style: AppTypography.small.copyWith(
                               color: AppPalette.textPrimaryLight,
-                              fontSize: 11,
+                              fontSize: 13,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -302,13 +306,15 @@ class CobroPendienteCard extends StatelessWidget {
                             tieneAbonoInicial
                                 ? 'Abono Inicial Acordado:'
                                 : (orden.abonoPrevio > 0
-                                    ? 'Saldo Pendiente:'
-                                    : (!isVenta ? 'Total Reserva:' : 'Total a Pagar:')),
+                                      ? 'Saldo Pendiente:'
+                                      : (!isVenta
+                                            ? 'Total Reserva:'
+                                            : 'Total a Pagar:')),
                             style: AppTypography.small.copyWith(
                               color: tieneAbonoInicial
                                   ? const Color(0xFF7E22CE)
                                   : AppPalette.textSecondaryLight,
-                              fontSize: 12,
+                              fontSize: 16,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -344,15 +350,21 @@ class CobroPendienteCard extends StatelessWidget {
                         tieneAbonoInicial
                             ? montoAbonoInicial
                             : (orden.abonoPrevio > 0
-                                ? (orden.saldoPendiente > 0 ? orden.saldoPendiente : orden.montoACobrar)
-                                : (orden.saldoPendiente > 0 ? orden.saldoPendiente : orden.totalOperacion)),
+                                  ? (orden.saldoPendiente > 0
+                                        ? orden.saldoPendiente
+                                        : orden.montoACobrar)
+                                  : (orden.saldoPendiente > 0
+                                        ? orden.saldoPendiente
+                                        : orden.totalOperacion)),
                       ),
                       style: AppTypography.title.copyWith(
                         fontSize: 18,
                         fontWeight: FontWeight.w900,
                         color: tieneAbonoInicial
                             ? const Color(0xFF7E22CE)
-                            : (isVenta ? AppPalette.success : const Color(0xFF4F46E5)),
+                            : (isVenta
+                                  ? AppPalette.success
+                                  : const Color(0xFF4F46E5)),
                       ),
                     ),
                   ],

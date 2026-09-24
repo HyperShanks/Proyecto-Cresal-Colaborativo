@@ -1223,7 +1223,7 @@ class HistorialMovimientoDTO(BaseModel):
 
 class ResumenCuadreCajaDTO(BaseModel):
     total_recaudado: int = Field(default=0, description="Suma total de pagos en el rango y filtros aplicados")
-    total_ordenes_pagadas: int = Field(default=0, description="Cantidad total de órdenes en estado Pagada/Despachada")
+    total_ordenes_pagadas: int = Field(default=0, description="Cantidad total de órdenes en estado Pagada/Completada/Despachada")
     total_efectivo: int = Field(default=0, description="Arqueo físico de gaveta (Billetes y monedas)")
     total_pos: int = Field(default=0, description="Total tarjetas voucher Transbank (Débito + Crédito)")
     total_debito: int = Field(default=0)
