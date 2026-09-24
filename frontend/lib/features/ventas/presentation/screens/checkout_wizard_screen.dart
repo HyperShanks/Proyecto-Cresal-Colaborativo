@@ -781,21 +781,41 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               ),
 
             Expanded(
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-                      child: _buildCurrentStepContent(),
-                    ),
-                  ),
-                  Positioned(
-                    left: 16,
-                    right: 16,
-                    bottom: 16,
-                    child: _buildBottomNavigationButtons(),
-                  ),
-                ],
+              child: Builder(
+                builder: (context) {
+                  final bottomPadding = MediaQuery.paddingOf(context).bottom;
+                  final hasBottomNavBar = widget.onOpenMenuDrawer != null;
+
+                  // Altura de la barra de navegación flotante inferior (FloatingGlassNavBar) más márgenes y safe area:
+                  final navBarHeight = hasBottomNavBar
+                      ? (70.0 + 14.0 + (bottomPadding > 0 ? bottomPadding + 4.0 : 0.0))
+                      : 0.0;
+
+                  // Ubicamos los botones de siguiente/anterior flotando limpiamente por encima del navbar:
+                  final buttonsBottom = hasBottomNavBar
+                      ? (navBarHeight + 12.0)
+                      : (16.0 + (bottomPadding > 0 ? bottomPadding : 0.0));
+
+                  // Padding inferior dinámico para que el contenido no quede tapado tras los botones:
+                  final scrollBottomPadding = buttonsBottom + 52.0 + 16.0;
+
+                  return Stack(
+                    children: [
+                      Positioned.fill(
+                        child: SingleChildScrollView(
+                          padding: EdgeInsets.fromLTRB(16, 16, 16, scrollBottomPadding),
+                          child: _buildCurrentStepContent(),
+                        ),
+                      ),
+                      Positioned(
+                        left: 16,
+                        right: 16,
+                        bottom: buttonsBottom,
+                        child: _buildBottomNavigationButtons(),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           ],
