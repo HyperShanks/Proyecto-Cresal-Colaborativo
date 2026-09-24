@@ -145,7 +145,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Avanzar al Paso 2 (Micro-CRM)
-      await tester.tap(find.text('Siguiente'));
+      await tester.tap(find.byKey(const Key('btn_siguiente_wizard')));
       await tester.pumpAndSettle();
 
       expect(find.text('2. Datos del Cliente (Micro-CRM)'), findsOneWidget);

@@ -780,13 +780,23 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               ),
 
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: _buildCurrentStepContent(),
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+                      child: _buildCurrentStepContent(),
+                    ),
+                  ),
+                  Positioned(
+                    left: 16,
+                    right: 16,
+                    bottom: 16,
+                    child: _buildBottomNavigationButtons(),
+                  ),
+                ],
               ),
             ),
-
-            _buildBottomNavigationButtons(),
           ],
         ),
       ),
@@ -2675,77 +2685,162 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
       puedeAvanzar = true;
     }
 
-    return Container(
-      color: AppPalette.surface,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          if (_controller.currentStep > 0)
-            Expanded(
-              child: OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppPalette.textSecondary,
-                  side: const BorderSide(color: Colors.white24),
-                ),
-                icon: const Icon(Icons.arrow_back, size: 16),
-                label: const Text('Anterior', overflow: TextOverflow.ellipsis),
-                onPressed: _controller.isLoading
-                    ? null
-                    : _controller.previousStep,
+    final int step = _controller.currentStep;
+
+    // Paso 1 (Ítems): Botón "Siguiente" con flecha ocupando los últimos 2/5 del lado derecho
+    if (step == 0) {
+      return Align(
+        alignment: Alignment.centerRight,
+        child: FractionallySizedBox(
+          widthFactor: 0.4,
+          child: ElevatedButton(
+            key: const Key('btn_siguiente_wizard'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppPalette.primary,
+              foregroundColor: AppPalette.textPrimary,
+              disabledBackgroundColor:
+                  AppPalette.surface.withValues(alpha: 0.6),
+              disabledForegroundColor:
+                  AppPalette.textSecondary.withValues(alpha: 0.6),
+              elevation: puedeAvanzar ? 6 : 0,
+              shadowColor: Colors.black.withValues(alpha: 0.5),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
               ),
-            )
-          else
-            const Spacer(),
-
-          const SizedBox(width: 12),
-
-          if (_controller.currentStep < 3)
-            Expanded(
-              child: ElevatedButton.icon(
-                key: const Key('btn_siguiente_wizard'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppPalette.primary,
-                  foregroundColor: AppPalette.textPrimary,
-                  disabledBackgroundColor: AppPalette.surface,
-                  disabledForegroundColor: AppPalette.textSecondary,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+            ),
+            onPressed: puedeAvanzar ? _ejecutarAvanzarPaso : null,
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    'Siguiente',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                icon: const Icon(Icons.arrow_forward, size: 16),
-                label: const Text('Siguiente', overflow: TextOverflow.ellipsis),
-                onPressed: puedeAvanzar
-                    ? () {
-                        if (_controller.currentStep == 1) {
-                          if (_esClienteAnonimo) {
-                            _controller.setCliente(
-                              const ClienteWizardModel(
-                                idCliente: 'cli-cf',
-                                rut: '6.666.666-6',
-                                nombres: 'Consumidor',
-                                apellidos: 'Final',
-                                comuna: 'Viña del Mar',
-                                consentimientoLegal: true,
-                                estado: 'Activo',
-                              ),
-                            );
-                          } else {
-                            _actualizarClienteLocal();
-                          }
-                          _prellenarDatosDespachoSiAplica();
-                        } else if (_controller.currentStep == 2) {
-                          _actualizarDatosDespachoLocal();
-                        }
-                        _controller.nextStep();
-                      }
-                    : null,
-              ),
+                SizedBox(width: 6),
+                Icon(Icons.arrow_forward, size: 18),
+              ],
             ),
+          ),
+        ),
+      );
+    }
+
+    // Pasos 2 y 3 (Cliente y Abonos): Ambos botones son solo flechas en extremos opuestos
+    if (step == 1 || step == 2) {
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          SizedBox(
+            width: 52,
+            height: 52,
+            child: ElevatedButton(
+              key: const Key('btn_anterior_wizard'),
+              style: ElevatedButton.styleFrom(
+                shape: const CircleBorder(),
+                padding: EdgeInsets.zero,
+                backgroundColor: AppPalette.surface,
+                foregroundColor: AppPalette.textPrimary,
+                elevation: 6,
+                shadowColor: Colors.black.withValues(alpha: 0.5),
+                side: const BorderSide(color: Colors.white24, width: 1.2),
+              ),
+              onPressed: _controller.isLoading
+                  ? null
+                  : _controller.previousStep,
+              child: const Icon(Icons.arrow_back, size: 24),
+            ),
+          ),
+          SizedBox(
+            width: 52,
+            height: 52,
+            child: ElevatedButton(
+              key: const Key('btn_siguiente_wizard'),
+              style: ElevatedButton.styleFrom(
+                shape: const CircleBorder(),
+                padding: EdgeInsets.zero,
+                backgroundColor: AppPalette.primary,
+                foregroundColor: AppPalette.textPrimary,
+                disabledBackgroundColor:
+                    AppPalette.surface.withValues(alpha: 0.6),
+                disabledForegroundColor:
+                    AppPalette.textSecondary.withValues(alpha: 0.6),
+                elevation: puedeAvanzar ? 6 : 0,
+                shadowColor: Colors.black.withValues(alpha: 0.5),
+              ),
+              onPressed: puedeAvanzar ? _ejecutarAvanzarPaso : null,
+              child: const Icon(Icons.arrow_forward, size: 24),
+            ),
+          ),
         ],
+      );
+    }
+
+    // Paso 4 (Confirmar): Botón "Anterior" con flecha ocupando los primeros 2/5 del lado izquierdo
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: FractionallySizedBox(
+        widthFactor: 0.4,
+        child: ElevatedButton(
+          key: const Key('btn_anterior_wizard'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppPalette.surface,
+            foregroundColor: AppPalette.textPrimary,
+            elevation: 6,
+            shadowColor: Colors.black.withValues(alpha: 0.5),
+            side: const BorderSide(color: Colors.white24, width: 1.2),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+          ),
+          onPressed: _controller.isLoading ? null : _controller.previousStep,
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.arrow_back, size: 18),
+              SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  'Anterior',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
+  }
+
+  void _ejecutarAvanzarPaso() {
+    if (_controller.currentStep == 1) {
+      if (_esClienteAnonimo) {
+        _controller.setCliente(
+          const ClienteWizardModel(
+            idCliente: 'cli-cf',
+            rut: '6.666.666-6',
+            nombres: 'Consumidor',
+            apellidos: 'Final',
+            comuna: 'Viña del Mar',
+            consentimientoLegal: true,
+            estado: 'Activo',
+          ),
+        );
+      } else {
+        _actualizarClienteLocal();
+      }
+      _prellenarDatosDespachoSiAplica();
+    } else if (_controller.currentStep == 2) {
+      _actualizarDatosDespachoLocal();
+    }
+    _controller.nextStep();
   }
 
   // ── Helpers Asignación de Responsable en Tienda (Vendedor Online) ───────────
@@ -2810,25 +2905,13 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'VENTA REFERIDA / ATRIBUCIÓN',
-                      style: AppTypography.small.copyWith(
-                        color: AppPalette.primary, // Letras celestes
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    Text(
-                      '¿Esta venta corresponde a una cotización de la Vendedora Online u otro vendedor?',
-                      style: AppTypography.small.copyWith(
-                        color: AppPalette.textSecondary,
-                        fontSize: 11.5,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  'VENTA REFERIDA / ATRIBUCIÓN',
+                  style: AppTypography.small.copyWith(
+                    color: AppPalette.primary, // Letras celestes
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5,
+                  ),
                 ),
               ),
               Switch(

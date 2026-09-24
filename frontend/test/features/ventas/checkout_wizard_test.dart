@@ -381,7 +381,7 @@ void main() {
       expect(find.text('Confirmar'), findsOneWidget);
       expect(find.text('Venta en Verde'), findsOneWidget);
       expect(find.text('Venta libre'), findsOneWidget);
-      expect(find.text('Siguiente'), findsNothing);
+      expect(find.byKey(const Key('btn_siguiente_wizard')), findsNothing);
     });
 
     testWidgets('CheckoutWizardScreen permite activar Consumidor Final y avanzar de paso a Abonos', (tester) async {
@@ -397,7 +397,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Avanzar de Paso 0 a Paso 1 (Cliente CRM)
-      await tester.tap(find.text('Siguiente'));
+      await tester.tap(find.byKey(const Key('btn_siguiente_wizard')));
       await tester.pumpAndSettle();
 
       expect(find.text('2. Datos del Cliente (Micro-CRM)'), findsOneWidget);
@@ -423,7 +423,7 @@ void main() {
       expect(find.textContaining('RUT 6.666.666-6'), findsOneWidget);
 
       // Avanzar a Paso 2 (Abonos)
-      await tester.tap(find.text('Siguiente'));
+      await tester.tap(find.byKey(const Key('btn_siguiente_wizard')));
       await tester.pumpAndSettle();
 
       expect(find.text('3. Condiciones Comerciales y Abonos'), findsOneWidget);
@@ -482,7 +482,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Paso 0 -> Paso 1 (Cliente)
-      await tester.tap(find.text('Siguiente'));
+      await tester.tap(find.byKey(const Key('btn_siguiente_wizard')));
       await tester.pumpAndSettle();
 
       // Consumidor Final -> Abre modal y confirma tras 3 segundos
@@ -495,13 +495,13 @@ void main() {
       await tester.pumpAndSettle();
 
       // Paso 1 -> Paso 2 (Abonos)
-      await tester.tap(find.text('Siguiente'));
+      await tester.tap(find.byKey(const Key('btn_siguiente_wizard')));
       await tester.pumpAndSettle();
 
       expect(find.text('3. Condiciones Comerciales y Abonos'), findsOneWidget);
 
       // Paso 2 -> Paso 3 (Confirmar)
-      await tester.tap(find.text('Siguiente'));
+      await tester.tap(find.byKey(const Key('btn_siguiente_wizard')));
       await tester.pumpAndSettle();
 
       expect(find.text('4. Revisión Final y Emisión de Orden'), findsOneWidget);
@@ -597,7 +597,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Ir a Paso 1 (Cliente)
-      await tester.tap(find.text('Siguiente'));
+      await tester.tap(find.byKey(const Key('btn_siguiente_wizard')));
       await tester.pumpAndSettle();
 
       // Tocar switch
@@ -631,7 +631,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Ir a Paso 1 (Cliente)
-      await tester.tap(find.text('Siguiente'));
+      await tester.tap(find.byKey(const Key('btn_siguiente_wizard')));
       await tester.pumpAndSettle();
 
       // Debe aparecer la tarjeta de RESPONSABLE DE ENTREGA EN SUCURSAL
@@ -655,7 +655,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Ir a Paso 1 (Cliente)
-      await tester.tap(find.text('Siguiente'));
+      await tester.tap(find.byKey(const Key('btn_siguiente_wizard')));
       await tester.pumpAndSettle();
 
       // Consumidor Final -> abre modal y confirma tras 3s
@@ -676,11 +676,11 @@ void main() {
       await tester.pumpAndSettle();
 
       // Paso 1 -> Paso 2 (Abonos)
-      await tester.tap(find.text('Siguiente'));
+      await tester.tap(find.byKey(const Key('btn_siguiente_wizard')));
       await tester.pumpAndSettle();
 
       // Paso 2 -> Paso 3 (Revisión)
-      await tester.tap(find.text('Siguiente'));
+      await tester.tap(find.byKey(const Key('btn_siguiente_wizard')));
       await tester.pumpAndSettle();
 
       // En Paso 4 debe mostrar Responsable Entrega: Mesón General y botón habilitado
@@ -820,7 +820,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Ir a Paso 2 (Cliente)
-      await tester.tap(find.text('Siguiente'));
+      await tester.tap(find.byKey(const Key('btn_siguiente_wizard')));
       await tester.pumpAndSettle();
 
       // Activar consumidor final para poder continuar
@@ -832,11 +832,11 @@ void main() {
       await tester.pumpAndSettle();
 
       // Ir a Paso 3 (Abonos)
-      await tester.tap(find.text('Siguiente'));
+      await tester.tap(find.byKey(const Key('btn_siguiente_wizard')));
       await tester.pumpAndSettle();
 
       // Ir a Paso 4 (Confirmación)
-      await tester.tap(find.text('Siguiente'));
+      await tester.tap(find.byKey(const Key('btn_siguiente_wizard')));
       await tester.pumpAndSettle();
 
       // Debe mostrar la tarjeta llamativa con VENTA DESIGNADA
