@@ -294,9 +294,11 @@ class BandejaPreciosScreenState extends State<BandejaPreciosScreen> with RouteAw
                       backgroundColor: AppPalette.surface,
                       child: ListView.builder(
                         physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16.0,
-                          vertical: 12.0,
+                        padding: const EdgeInsets.fromLTRB(
+                          16.0,
+                          12.0,
+                          16.0,
+                          100.0,
                         ),
                         itemCount: _pendientes.length,
                         itemBuilder: (context, index) {

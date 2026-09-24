@@ -64,7 +64,6 @@ class ModalAnularOrden extends StatefulWidget {
 }
 
 class _ModalAnularOrdenState extends State<ModalAnularOrden> {
-  final TextEditingController _motivoController = TextEditingController();
   bool _isLoading = false;
   String? _errorMessage;
 
@@ -103,7 +102,6 @@ class _ModalAnularOrdenState extends State<ModalAnularOrden> {
   @override
   void dispose() {
     _timer?.cancel();
-    _motivoController.dispose();
     super.dispose();
   }
 
@@ -115,12 +113,11 @@ class _ModalAnularOrdenState extends State<ModalAnularOrden> {
 
     final navigator = Navigator.of(context);
     final scaffoldMessenger = ScaffoldMessenger.of(context);
-    final motivo = _motivoController.text.trim();
 
     try {
       await VentasService.anularOrden(
         widget.idOrden,
-        motivoAnulacion: motivo.isNotEmpty ? motivo : null,
+        motivoAnulacion: null,
         client: widget.client,
       );
 
@@ -384,78 +381,6 @@ class _ModalAnularOrdenState extends State<ModalAnularOrden> {
               ),
               const SizedBox(height: 8),
             ],
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppPalette.background,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.white10),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Impacto de la anulación en el sistema:',
-                    style: AppTypography.small.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: AppPalette.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '• La orden pasará inmediatamente a estado "Anulada".\n'
-                    '• Los pagos asociados serán reversados en caja.\n'
-                    '• Se generarán tareas de reingreso para que bodega reubique los repuestos vía PDA.',
-                    style: AppTypography.small.copyWith(
-                      color: AppPalette.textSecondary,
-                      height: 1.3,
-                      fontSize: 11.5,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-            Text(
-              'Motivo de anulación (opcional):',
-              style: AppTypography.small.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 6),
-            TextField(
-              controller: _motivoController,
-              maxLines: 2,
-              enabled: !_isLoading,
-              style: AppTypography.body.copyWith(fontSize: 13),
-              decoration: InputDecoration(
-                hintText:
-                    'Ej: Cliente desistió de la compra, cambio de repuesto...',
-                hintStyle: AppTypography.small.copyWith(
-                  color: AppPalette.textSecondary,
-                  fontSize: 12,
-                ),
-                filled: true,
-                fillColor: AppPalette.background,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 10,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Colors.white24),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(
-                    color: AppPalette.primary,
-                    width: 1.5,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 14),
             // Casilla de verificación obligatoria (He leído...)
             InkWell(
               key: const Key('check_confirmar_anulacion_tap'),

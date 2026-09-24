@@ -1234,7 +1234,7 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Mis Órdenes', style: AppTypography.title),
+            const Text('Mis Órdenes de Venta', style: AppTypography.title),
             Text(
               _seccionActual == 'por_asignar'
                   ? 'Ventas en verde pagadas pendientes de activo'
@@ -1373,9 +1373,11 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
                     backgroundColor: AppPalette.surface,
                     child: ListView.builder(
                       physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16.0,
-                        vertical: 8.0,
+                      padding: const EdgeInsets.fromLTRB(
+                        16.0,
+                        8.0,
+                        16.0,
+                        100.0,
                       ),
                       itemCount: ordenesMostradas.length,
                       itemBuilder: (context, index) {

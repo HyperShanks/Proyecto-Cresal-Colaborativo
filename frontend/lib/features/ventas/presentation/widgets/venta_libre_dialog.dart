@@ -5,6 +5,7 @@ import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../controllers/cart_controller.dart';
+import '../../../../core/widgets/glass_snackbar.dart';
 
 /// Modal Bottom Sheet para registrar un artículo de Venta Libre / Misceláneo (HU-3.3).
 /// Permite inyectar al Carrito Híbrido repuestos o servicios no catalogados en base de datos.
@@ -105,25 +106,11 @@ class _VentaLibreDialogState extends State<VentaLibreDialog> {
 
     Navigator.of(context).pop();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: AppPalette.surface,
-        duration: const Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
-        content: Row(
-          children: [
-            const Icon(Icons.check_circle, color: AppPalette.primary, size: 20),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                '${_descController.text.trim()} agregado al carrito',
-                style: AppTypography.small.copyWith(color: AppPalette.textPrimary),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-      ),
+    GlassSnackbar.mostrar(
+      context,
+      mensaje: '${_descController.text.trim()} agregado al carrito',
+      icono: Icons.check_circle_outline_rounded,
+      colorIcono: AppPalette.primary,
     );
   }
 

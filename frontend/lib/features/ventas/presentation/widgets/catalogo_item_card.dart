@@ -6,6 +6,7 @@ import '../../../../core/theme/tokens/app_typography.dart';
 import '../../models/catalogo_model.dart';
 import '../screens/detalle_activo_screen.dart';
 import 'visor_imagen_completa_dialog.dart';
+import 'cart_fly_animation.dart';
 
 /// Tarjeta de repuesto en Flat Design para Mesón de Ventas / Catálogo (HU-3.2).
 /// Contenido simplificado y tipografía aumentada para lectura rápida en tablets.
@@ -65,23 +66,7 @@ class CatalogoItemCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── 1. Fila Superior: Badge Sucursal Completo + Chip Estado ───
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: _buildSucursalBadge(),
-                      ),
-                    ),
-                    const SizedBox(width: 8.0),
-                    _buildDisponibilidadChip(),
-                  ],
-                ),
-                const SizedBox(height: 12),
-
-                // ── 2. Cuerpo Principal: Miniatura + Título Simplificado ────
+                // ── 1. Fila Superior: Miniatura + Título del Activo ──────────
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -225,6 +210,17 @@ class CatalogoItemCard extends StatelessWidget {
                     ),
                   ],
                 ),
+                const SizedBox(height: 12),
+
+                // ── 2. Fila Intermedia: Badge Sucursal + Chip Estado Disponible ──
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  children: [
+                    _buildSucursalBadge(),
+                    const SizedBox(width: 8.0),
+                    _buildDisponibilidadChip(),
+                  ],
+                ),
                 const SizedBox(height: 14),
 
                 // ── 3. Fila Inferior: Precio Destacado + Botón de Carrito ──
@@ -312,9 +308,22 @@ class CatalogoItemCard extends StatelessWidget {
     );
   }
 
+  /// Formatea el nombre de la sucursal de manera concisa: 'Viña' o 'Limache'.
+  String _formatearNombreSucursal(String nombre) {
+    final lower = nombre.toLowerCase();
+    if (lower.contains('viña') || lower.contains('vina')) {
+      return 'Viña';
+    }
+    if (lower.contains('limache')) {
+      return 'Limache';
+    }
+    return nombre.isNotEmpty ? nombre : 'Sucursal';
+  }
+
   /// Distintivo de Sucursal con visibilidad completa y limpia
   Widget _buildSucursalBadge() {
-    final nombreSuc = item.nombreSucursal.isNotEmpty ? item.nombreSucursal : 'Sucursal';
+    final nombreBase = item.nombreSucursal.isNotEmpty ? item.nombreSucursal : 'Sucursal';
+    final nombreSuc = _formatearNombreSucursal(nombreBase);
 
     if (_esMismaSucursal) {
       return Container(
@@ -333,17 +342,15 @@ class CatalogoItemCard extends StatelessWidget {
               color: AppPalette.primary,
             ),
             const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                '📍 $nombreSuc (Tu sucursal)',
-                style: AppTypography.small.copyWith(
-                  fontSize: 12,
-                  color: AppPalette.primary,
-                  fontWeight: FontWeight.bold,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+            Text(
+              nombreSuc,
+              style: AppTypography.small.copyWith(
+                fontSize: 12,
+                color: AppPalette.primary,
+                fontWeight: FontWeight.bold,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
@@ -366,17 +373,15 @@ class CatalogoItemCard extends StatelessWidget {
             color: AppPalette.neutral,
           ),
           const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              '📍 $nombreSuc',
-              style: AppTypography.small.copyWith(
-                fontSize: 12,
-                color: AppPalette.textPrimary,
-                fontWeight: FontWeight.w600,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+          Text(
+            nombreSuc,
+            style: AppTypography.small.copyWith(
+              fontSize: 12,
+              color: AppPalette.textPrimary,
+              fontWeight: FontWeight.w600,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
@@ -388,33 +393,44 @@ class CatalogoItemCard extends StatelessWidget {
   Widget _buildCartButton() {
     final bool bloqueado = item.esReservado;
 
-    return Tooltip(
-      message: bloqueado
-          ? 'Repuesto reservado temporalmente'
-          : 'Agregar al carrito',
-      child: SizedBox(
-        width: 48.0,
-        height: 48.0,
-        child: Material(
-          color: bloqueado
-              ? AppPalette.neutral.withValues(alpha: 0.25)
-              : AppPalette.primary,
-          borderRadius: BorderRadius.circular(10.0),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(10.0),
-            onTap: bloqueado ? null : onAddToCart,
-            child: Center(
-              child: Icon(
-                bloqueado ? Icons.lock_clock_outlined : Icons.add_shopping_cart,
-                color: bloqueado
-                    ? AppPalette.textSecondary
-                    : AppPalette.textPrimary,
-                size: 22,
+    return Builder(
+      builder: (btnContext) {
+        return Tooltip(
+          message: bloqueado
+              ? 'Repuesto reservado temporalmente'
+              : 'Agregar al carrito',
+          child: SizedBox(
+            width: 48.0,
+            height: 48.0,
+            child: Material(
+              color: bloqueado
+                  ? AppPalette.neutral.withValues(alpha: 0.25)
+                  : AppPalette.primary,
+              borderRadius: BorderRadius.circular(10.0),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(10.0),
+                onTap: bloqueado
+                    ? null
+                    : () {
+                        CartFlyAnimation.run(context: btnContext);
+                        onAddToCart?.call();
+                      },
+                child: Center(
+                  child: Icon(
+                    bloqueado
+                        ? Icons.lock_clock_outlined
+                        : Icons.add_shopping_cart,
+                    color: bloqueado
+                        ? AppPalette.textSecondary
+                        : AppPalette.textPrimary,
+                    size: 22,
+                  ),
+                ),
               ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

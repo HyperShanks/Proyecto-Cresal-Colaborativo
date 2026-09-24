@@ -6,6 +6,8 @@ import '../../../../core/theme/tokens/app_typography.dart';
 import '../../controllers/cart_controller.dart';
 import '../../models/catalogo_model.dart';
 import '../widgets/visor_imagen_completa_dialog.dart';
+import '../widgets/cart_fly_animation.dart';
+import '../../../../core/widgets/glass_snackbar.dart';
 
 /// Pantalla Completa de Detalle del Repuesto (HU-3.2 / Fase 3 Mesón de Ventas).
 /// Incluye carrusel de imágenes en gran formato con indicador interactivo,
@@ -54,32 +56,13 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
     }
 
     final agregado = CartController.instance.agregarInventariado(widget.item);
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: AppPalette.surface,
-        duration: const Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
-        content: Row(
-          children: [
-            Icon(
-              agregado ? Icons.check_circle : Icons.info_outline,
-              color: agregado ? AppPalette.primary : AppPalette.secondary,
-              size: 20,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                agregado
-                    ? '${widget.item.tituloRepuesto} agregado al carrito'
-                    : 'Este activo ya está en el carrito',
-                style: AppTypography.small.copyWith(color: AppPalette.textPrimary),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-      ),
+    GlassSnackbar.mostrar(
+      context,
+      mensaje: agregado
+          ? '${widget.item.tituloRepuesto} agregado al carrito'
+          : 'Este activo ya está en el carrito',
+      icono: agregado ? Icons.check_circle_outline_rounded : Icons.info_outline,
+      colorIcono: agregado ? AppPalette.primary : AppPalette.secondary,
     );
 
     if (agregado && mounted) {
@@ -773,30 +756,37 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
           const SizedBox(width: 16),
 
           // Botón Agregar
-          SizedBox(
-            height: 42,
-            child: ElevatedButton.icon(
-              key: const Key('btn_agregar_carrito_detalle'),
-              onPressed: _onAddToCart,
-              icon: const Icon(Icons.add_shopping_cart, size: 18),
-              label: const Text(
-                'Agregar',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.5,
+          Builder(
+            builder: (btnContext) {
+              return SizedBox(
+                height: 42,
+                child: ElevatedButton.icon(
+                  key: const Key('btn_agregar_carrito_detalle'),
+                  onPressed: () {
+                    CartFlyAnimation.run(context: btnContext);
+                    _onAddToCart();
+                  },
+                  icon: const Icon(Icons.add_shopping_cart, size: 18),
+                  label: const Text(
+                    'Agregar',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppPalette.primary,
+                    foregroundColor: AppPalette.textPrimary,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 18.0),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8.0),
+                    ),
+                  ),
                 ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppPalette.primary,
-                foregroundColor: AppPalette.textPrimary,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 18.0),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8.0),
-                ),
-              ),
-            ),
+              );
+            },
           ),
         ],
       ),

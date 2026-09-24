@@ -7,6 +7,7 @@ import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../../../core/routes/route_observer.dart';
 import '../../../../core/services/silent_polling_manager.dart';
+import '../../../../core/widgets/glass_snackbar.dart';
 import '../../../auth/services/auth_service.dart';
 import '../../controllers/cart_controller.dart';
 import '../../models/catalogo_model.dart';
@@ -366,31 +367,11 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
     }
 
     if (CartController.instance.estaEnCarrito(item.idActivo)) {
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: AppPalette.surface,
-          duration: const Duration(seconds: 2),
-          content: Row(
-            children: [
-              const Icon(
-                Icons.info_outline,
-                color: AppPalette.secondary,
-                size: 20,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Este activo ya está en el carrito',
-                  style: AppTypography.small.copyWith(
-                    color: AppPalette.textPrimary,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-        ),
+      GlassSnackbar.mostrar(
+        context,
+        mensaje: 'Este activo ya está en el carrito',
+        icono: Icons.info_outline,
+        colorIcono: AppPalette.secondary,
       );
       return;
     }
@@ -424,33 +405,15 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: AppPalette.surface,
-          duration: const Duration(seconds: 2),
-          content: Row(
-            children: [
-              Icon(
-                agregado ? Icons.check_circle : Icons.info_outline,
-                color: agregado ? AppPalette.primary : AppPalette.secondary,
-                size: 20,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  agregado
-                      ? '${item.tituloRepuesto} agregado al carrito'
-                      : 'Este activo ya está en el carrito',
-                  style: AppTypography.small.copyWith(
-                    color: AppPalette.textPrimary,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-        ),
+      GlassSnackbar.mostrar(
+        context,
+        mensaje: agregado
+            ? '${item.tituloRepuesto} agregado al carrito'
+            : 'Este activo ya está en el carrito',
+        icono: agregado
+            ? Icons.check_circle_outline_rounded
+            : Icons.info_outline,
+        colorIcono: agregado ? AppPalette.primary : AppPalette.secondary,
       );
     } on CarritoException catch (e) {
       if (!mounted) return;
@@ -822,38 +785,21 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
   }) {
     return Container(
       margin: const EdgeInsets.only(right: 6.0),
-      child: Material(
-        color: AppPalette.surface,
-        borderRadius: BorderRadius.circular(8.0),
-        child: InkWell(
-          onTap: onDeleted,
-          borderRadius: BorderRadius.circular(8.0),
-          child: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 10.0,
-              vertical: 7.0,
-            ),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8.0),
-              border: Border.all(color: AppPalette.primary, width: 1.2),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    color: AppPalette.primary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(width: 6.0),
-                const Icon(Icons.close, size: 15, color: AppPalette.primary),
-              ],
-            ),
+      child: Chip(
+        label: Text(
+          label,
+          style: const TextStyle(
+            color: AppPalette.primary,
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
           ),
         ),
+        deleteIcon: const Icon(Icons.close, size: 15, color: AppPalette.primary),
+        onDeleted: onDeleted,
+        backgroundColor: AppPalette.surface,
+        side: const BorderSide(color: AppPalette.primary, width: 1.2),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
     );
   }
@@ -1051,8 +997,8 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
           16.0,
           4.0,
           16.0,
-          80.0,
-        ), // Margen inferior para el FAB
+          100.0,
+        ),
         itemCount: _items.length + (_isLoadingMore ? 1 : 0),
         itemBuilder: (context, index) {
           if (index == _items.length) {

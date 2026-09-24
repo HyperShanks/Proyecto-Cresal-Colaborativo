@@ -58,8 +58,6 @@ class DialogoReasignarVendedor extends StatefulWidget {
 }
 
 class _DialogoReasignarVendedorState extends State<DialogoReasignarVendedor> {
-  final TextEditingController _motivoController = TextEditingController();
-
   List<VendedorModel> _vendedores = [];
   VendedorModel? _vendedorSeleccionado;
   bool _cargandoVendedores = true;
@@ -102,7 +100,6 @@ class _DialogoReasignarVendedorState extends State<DialogoReasignarVendedor> {
   @override
   void dispose() {
     _timer?.cancel();
-    _motivoController.dispose();
     super.dispose();
   }
 
@@ -156,7 +153,7 @@ class _DialogoReasignarVendedorState extends State<DialogoReasignarVendedor> {
       final res = await OrdenesService.reasignarVendedor(
         idOrden: widget.idOrden,
         idNuevoVendedor: _vendedorSeleccionado!.idUsuario,
-        motivo: _motivoController.text.trim(),
+        motivo: null,
         client: widget.client,
       );
 
@@ -413,46 +410,6 @@ class _DialogoReasignarVendedorState extends State<DialogoReasignarVendedor> {
                 ),
               ),
 
-            const SizedBox(height: 14),
-            Text(
-              'Motivo de reasignación (opcional):',
-              style: AppTypography.small.copyWith(
-                fontWeight: FontWeight.w600,
-                fontSize: 12.5,
-              ),
-            ),
-            const SizedBox(height: 6),
-            TextField(
-              key: const Key('textfield_motivo_reasignacion'),
-              controller: _motivoController,
-              maxLines: 2,
-              enabled: !_enviando,
-              style: AppTypography.body.copyWith(fontSize: 13),
-              decoration: InputDecoration(
-                hintText: 'Ej: Venta compartida, digitación de apoyo en mesón...',
-                hintStyle: AppTypography.small.copyWith(
-                  color: AppPalette.textSecondary.withValues(alpha: 0.6),
-                  fontSize: 12,
-                ),
-                filled: true,
-                fillColor: AppPalette.background,
-                contentPadding: const EdgeInsets.all(12),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: Colors.white24),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: Colors.white24),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AppPalette.secondary),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 14),
             // Casilla de verificación obligatoria (He leído...)
             InkWell(
               key: const Key('check_confirmar_reasignacion_tap'),

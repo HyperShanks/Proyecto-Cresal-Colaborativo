@@ -7,6 +7,7 @@ import '../../../../core/utils/currency_formatter.dart';
 import '../../controllers/cart_controller.dart';
 import '../../models/cart_item_model.dart';
 import '../screens/catalogo_screen.dart';
+import '../../../../core/widgets/glass_snackbar.dart';
 
 /// Tarjeta de ítem individual dentro del Carrito Híbrido (HU-3.3).
 /// Diseñada en Flat Design estricto (sin sombras).
@@ -220,16 +221,11 @@ class _CartItemTileState extends State<CartItemTile> {
                     onPressed: () {
                       CartController.instance.eliminarItem(widget.item.id);
                       CatalogoScreen.refreshNotifier.value++;
-                      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          backgroundColor: AppPalette.surface,
-                          duration: const Duration(seconds: 2),
-                          content: Text(
-                            '${widget.item.titulo} eliminado del carrito',
-                            style: AppTypography.small.copyWith(color: AppPalette.textPrimary),
-                          ),
-                        ),
+                      GlassSnackbar.mostrar(
+                        context,
+                        mensaje: '${widget.item.titulo} eliminado del carrito',
+                        icono: Icons.delete_outline_rounded,
+                        colorIcono: AppPalette.error,
                       );
                     },
                     tooltip: 'Eliminar del carrito',

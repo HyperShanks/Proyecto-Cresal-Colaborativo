@@ -11,6 +11,7 @@ import 'historial_screen.dart';
 import 'bandeja_precios_screen.dart';
 import '../../../../core/widgets/update_dialog.dart';
 import '../../../../core/services/app_update_service.dart';
+import '../../../../core/widgets/floating_glass_nav_bar.dart';
 
 /// Contenedor Principal para el Mesón de Ventas.
 /// Implementa un BottomNavigationBar con IndexedStack dinámico según el rol:
@@ -394,63 +395,37 @@ class _VentasMainScreenState extends State<VentasMainScreen>
     return tabs;
   }
 
-  List<BottomNavigationBarItem> _buildNavItems(int totalItems) {
-    final items = <BottomNavigationBarItem>[
-      const BottomNavigationBarItem(
-        icon: Icon(Icons.storefront_outlined),
-        activeIcon: Icon(Icons.storefront),
+  List<FloatingGlassNavItem> _buildNavItems(int totalItems) {
+    final items = <FloatingGlassNavItem>[
+      const FloatingGlassNavItem(
+        icon: Icons.storefront_outlined,
+        activeIcon: Icons.storefront,
         label: 'Catálogo',
       ),
-      const BottomNavigationBarItem(
-        icon: Icon(Icons.receipt_long_outlined),
-        activeIcon: Icon(Icons.receipt_long),
+      const FloatingGlassNavItem(
+        icon: Icons.receipt_long_outlined,
+        activeIcon: Icons.receipt_long,
         label: 'Mis Órdenes',
       ),
     ];
 
     if (_esJefeVentas) {
       items.add(
-        BottomNavigationBarItem(
-          icon: _pendientesTasacionCount > 0
-              ? Badge.count(
-                  count: _pendientesTasacionCount,
-                  backgroundColor: AppPalette.secondary,
-                  textColor: AppPalette.background,
-                  child: const Icon(Icons.price_change_outlined),
-                )
-              : const Icon(Icons.price_change_outlined),
-          activeIcon: _pendientesTasacionCount > 0
-              ? Badge.count(
-                  count: _pendientesTasacionCount,
-                  backgroundColor: AppPalette.secondary,
-                  textColor: AppPalette.background,
-                  child: const Icon(Icons.price_change),
-                )
-              : const Icon(Icons.price_change),
+        FloatingGlassNavItem(
+          icon: Icons.price_change_outlined,
+          activeIcon: Icons.price_change,
           label: 'Tasación',
+          badgeCount: _pendientesTasacionCount,
         ),
       );
     }
 
     items.add(
-      BottomNavigationBarItem(
-        icon: totalItems > 0
-            ? Badge.count(
-                count: totalItems,
-                backgroundColor: AppPalette.secondary,
-                textColor: AppPalette.background,
-                child: const Icon(Icons.shopping_cart_outlined),
-              )
-            : const Icon(Icons.shopping_cart_outlined),
-        activeIcon: totalItems > 0
-            ? Badge.count(
-                count: totalItems,
-                backgroundColor: AppPalette.secondary,
-                textColor: AppPalette.background,
-                child: const Icon(Icons.shopping_cart),
-              )
-            : const Icon(Icons.shopping_cart),
+      FloatingGlassNavItem(
+        icon: Icons.shopping_cart_outlined,
+        activeIcon: Icons.shopping_cart,
         label: 'Carrito',
+        badgeCount: totalItems,
       ),
     );
 
@@ -476,55 +451,47 @@ class _VentasMainScreenState extends State<VentasMainScreen>
         key: _scaffoldKey,
         backgroundColor: AppPalette.background,
         drawer: _buildDrawer(context),
-        body: IndexedStack(index: safeIndex, children: tabs),
-        bottomNavigationBar: ListenableBuilder(
-          listenable: CartController.instance,
-          builder: (context, _) {
-            final totalItems = CartController.instance.totalItems;
-            final navItems = _buildNavItems(totalItems);
+        body: Stack(
+          children: [
+            Positioned.fill(
+              child: IndexedStack(index: safeIndex, children: tabs),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: ListenableBuilder(
+                listenable: CartController.instance,
+                builder: (context, _) {
+                  final totalItems = CartController.instance.totalItems;
+                  final navItems = _buildNavItems(totalItems);
 
-            return Container(
-              decoration: const BoxDecoration(
-                color: AppPalette.surface,
-                border: Border(
-                  top: BorderSide(color: Colors.white10, width: 1.0),
-                ),
-              ),
-              child: BottomNavigationBar(
-                currentIndex: safeIndex,
-                onTap: (index) {
-                  setState(() {
-                    _currentIndex = index;
-                  });
-                  _actualizarPendientesTasacion();
-                  if (index == 0) {
-                    _catalogoKey.currentState?.refrescarCatalogoSilencioso();
-                  } else if (index == 1) {
-                    _historialKey.currentState?.refrescarSilencioso();
-                  } else if (_esJefeVentas && index == 2) {
-                    _bandejaPreciosKey.currentState?.refrescarSilencioso();
-                  } else if (index == tabs.length - 1) {
-                    CartController.instance.reconciliarConBackend();
-                  }
+                  return FloatingGlassNavBar(
+                    currentIndex: safeIndex,
+                    items: navItems,
+                    onTap: (index) {
+                      setState(() {
+                        _currentIndex = index;
+                      });
+                      _actualizarPendientesTasacion();
+                      if (index == 0) {
+                        _catalogoKey.currentState?.refrescarCatalogoSilencioso();
+                      } else if (index == 1) {
+                        _historialKey.currentState?.refrescarSilencioso();
+                      } else if (_esJefeVentas && index == 2) {
+                        _bandejaPreciosKey.currentState?.refrescarSilencioso();
+                      } else if (index == tabs.length - 1) {
+                        CartController.instance.reconciliarConBackend();
+                      }
+                    },
+                  );
                 },
-                backgroundColor: AppPalette.surface,
-                selectedItemColor: AppPalette.primary,
-                unselectedItemColor: AppPalette.neutral,
-                selectedLabelStyle: AppTypography.small.copyWith(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                ),
-                unselectedLabelStyle: AppTypography.small.copyWith(
-                  fontSize: 11,
-                ),
-                type: BottomNavigationBarType.fixed,
-                elevation: 0,
-                items: navItems,
               ),
-            );
-          },
+            ),
+          ],
         ),
       ),
     );
   }
+
 }

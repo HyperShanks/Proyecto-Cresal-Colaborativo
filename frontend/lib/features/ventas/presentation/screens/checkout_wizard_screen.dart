@@ -17,6 +17,7 @@ import '../widgets/venta_libre_dialog.dart';
 import '../../../../core/constants/chile_geografia.dart';
 import 'catalogo_screen.dart';
 import '../widgets/dialogo_advertencia_consumidor_final.dart';
+import '../../../../core/widgets/glass_snackbar.dart';
 
 /// Pantalla Principal del Checkout Wizard por 5 Pasos Secuenciales (SPEC-HU-05)
 /// Integra Carrito Híbrido, Micro-CRM con Consumidor Final, Logística (Retiro/Despacho/Traslado) y Abonos.
@@ -985,6 +986,14 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                       montoAbonado: reserva.montoAbonado,
                       notas: reserva.notasPreparacion,
                     );
+                    if (mounted) {
+                      GlassSnackbar.mostrar(
+                        context,
+                        mensaje: 'Venta en verde agregada al carrito',
+                        icono: Icons.check_circle_outline_rounded,
+                        colorIcono: AppPalette.primary,
+                      );
+                    }
                   }
                 },
               ),
@@ -1174,6 +1183,14 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                           CartController.instance.items[cartIdx].id,
                         );
                       }
+                      if (context.mounted) {
+                        GlassSnackbar.mostrar(
+                          context,
+                          mensaje: '${r.marcaRequerida} ${r.modeloRequerido} eliminado del carrito',
+                          icono: Icons.delete_outline_rounded,
+                          colorIcono: AppPalette.error,
+                        );
+                      }
                     },
                   ),
                 ),
@@ -1249,6 +1266,14 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                           if (cartIdx != -1) {
                             CartController.instance.eliminarItem(
                               CartController.instance.items[cartIdx].id,
+                            );
+                          }
+                          if (context.mounted) {
+                            GlassSnackbar.mostrar(
+                              context,
+                              mensaje: '${m.descripcion} eliminado del carrito',
+                              icono: Icons.delete_outline_rounded,
+                              colorIcono: AppPalette.error,
                             );
                           }
                         },
@@ -1370,6 +1395,12 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                   _controller.removeItemInventariado(idActivo);
                   CartController.instance.eliminarItem(idActivo);
                   CatalogoScreen.refreshNotifier.value++;
+                  GlassSnackbar.mostrar(
+                    context,
+                    mensaje: '${item['descripcion'] ?? 'Repuesto'} eliminado del carrito',
+                    icono: Icons.delete_outline_rounded,
+                    colorIcono: AppPalette.error,
+                  );
                 },
               ),
             ],
@@ -2685,135 +2716,149 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
       puedeAvanzar = true;
     }
 
-    final int step = _controller.currentStep;
+    final bool mostrarAnterior = _controller.currentStep > 0;
+    final bool mostrarSiguiente = _controller.currentStep < 3;
 
-    // Paso 1 (Ítems): Botón "Siguiente" con flecha ocupando los últimos 2/5 del lado derecho
-    if (step == 0) {
-      return Align(
-        alignment: Alignment.centerRight,
-        child: FractionallySizedBox(
-          widthFactor: 0.4,
-          child: ElevatedButton(
-            key: const Key('btn_siguiente_wizard'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppPalette.primary,
-              foregroundColor: AppPalette.textPrimary,
-              disabledBackgroundColor:
-                  AppPalette.surface.withValues(alpha: 0.6),
-              disabledForegroundColor:
-                  AppPalette.textSecondary.withValues(alpha: 0.6),
-              elevation: puedeAvanzar ? 6 : 0,
-              shadowColor: Colors.black.withValues(alpha: 0.5),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
-            ),
-            onPressed: puedeAvanzar ? _ejecutarAvanzarPaso : null,
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Flexible(
-                  child: Text(
-                    'Siguiente',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                SizedBox(width: 6),
-                Icon(Icons.arrow_forward, size: 18),
-              ],
-            ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double availableWidth = constraints.maxWidth;
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            if (mostrarAnterior)
+              _buildBotonAnteriorAnimado(availableWidth)
+            else
+              const SizedBox.shrink(),
+
+            if (mostrarSiguiente)
+              _buildBotonSiguienteAnimado(availableWidth, puedeAvanzar)
+            else
+              const SizedBox.shrink(),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildBotonAnteriorAnimado(double availableWidth) {
+    final bool isExpanded = (_controller.currentStep == 3);
+    final double targetWidth = isExpanded ? (availableWidth * 0.4) : 52.0;
+    final double targetRadius = isExpanded ? 12.0 : 26.0;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOutCubic,
+      width: targetWidth,
+      height: 52,
+      child: ElevatedButton(
+        key: const Key('btn_anterior_wizard'),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppPalette.surface,
+          foregroundColor: AppPalette.textPrimary,
+          elevation: 6,
+          shadowColor: Colors.black.withValues(alpha: 0.5),
+          side: const BorderSide(color: Colors.white24, width: 1.2),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(targetRadius),
           ),
+          padding: EdgeInsets.zero,
         ),
-      );
-    }
-
-    // Pasos 2 y 3 (Cliente y Abonos): Ambos botones son solo flechas en extremos opuestos
-    if (step == 1 || step == 2) {
-      return Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          SizedBox(
-            width: 52,
-            height: 52,
-            child: ElevatedButton(
-              key: const Key('btn_anterior_wizard'),
-              style: ElevatedButton.styleFrom(
-                shape: const CircleBorder(),
-                padding: EdgeInsets.zero,
-                backgroundColor: AppPalette.surface,
-                foregroundColor: AppPalette.textPrimary,
-                elevation: 6,
-                shadowColor: Colors.black.withValues(alpha: 0.5),
-                side: const BorderSide(color: Colors.white24, width: 1.2),
-              ),
-              onPressed: _controller.isLoading
-                  ? null
-                  : _controller.previousStep,
-              child: const Icon(Icons.arrow_back, size: 24),
-            ),
+        onPressed: _controller.isLoading ? null : _controller.previousStep,
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 250),
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: child,
           ),
-          SizedBox(
-            width: 52,
-            height: 52,
-            child: ElevatedButton(
-              key: const Key('btn_siguiente_wizard'),
-              style: ElevatedButton.styleFrom(
-                shape: const CircleBorder(),
-                padding: EdgeInsets.zero,
-                backgroundColor: AppPalette.primary,
-                foregroundColor: AppPalette.textPrimary,
-                disabledBackgroundColor:
-                    AppPalette.surface.withValues(alpha: 0.6),
-                disabledForegroundColor:
-                    AppPalette.textSecondary.withValues(alpha: 0.6),
-                elevation: puedeAvanzar ? 6 : 0,
-                shadowColor: Colors.black.withValues(alpha: 0.5),
-              ),
-              onPressed: puedeAvanzar ? _ejecutarAvanzarPaso : null,
-              child: const Icon(Icons.arrow_forward, size: 24),
-            ),
-          ),
-        ],
-      );
-    }
-
-    // Paso 4 (Confirmar): Botón "Anterior" con flecha ocupando los primeros 2/5 del lado izquierdo
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: FractionallySizedBox(
-        widthFactor: 0.4,
-        child: ElevatedButton(
-          key: const Key('btn_anterior_wizard'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppPalette.surface,
-            foregroundColor: AppPalette.textPrimary,
-            elevation: 6,
-            shadowColor: Colors.black.withValues(alpha: 0.5),
-            side: const BorderSide(color: Colors.white24, width: 1.2),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
-          ),
-          onPressed: _controller.isLoading ? null : _controller.previousStep,
-          child: const Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.arrow_back, size: 18),
-              SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  'Anterior',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                  overflow: TextOverflow.ellipsis,
+          child: isExpanded
+              ? const SingleChildScrollView(
+                  key: ValueKey('expanded_anterior'),
+                  scrollDirection: Axis.horizontal,
+                  physics: NeverScrollableScrollPhysics(),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.arrow_back, size: 18),
+                      SizedBox(width: 6),
+                      Text(
+                        'Anterior',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : const Icon(
+                  key: ValueKey('collapsed_anterior'),
+                  Icons.arrow_back,
+                  size: 24,
                 ),
-              ),
-            ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBotonSiguienteAnimado(double availableWidth, bool puedeAvanzar) {
+    final bool isExpanded = (_controller.currentStep == 0);
+    final double targetWidth = isExpanded ? (availableWidth * 0.4) : 52.0;
+    final double targetRadius = isExpanded ? 12.0 : 26.0;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOutCubic,
+      width: targetWidth,
+      height: 52,
+      child: ElevatedButton(
+        key: const Key('btn_siguiente_wizard'),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppPalette.primary,
+          foregroundColor: AppPalette.textPrimary,
+          disabledBackgroundColor: AppPalette.surface.withValues(alpha: 0.6),
+          disabledForegroundColor:
+              AppPalette.textSecondary.withValues(alpha: 0.6),
+          elevation: puedeAvanzar ? 6 : 0,
+          shadowColor: Colors.black.withValues(alpha: 0.5),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(targetRadius),
           ),
+          padding: EdgeInsets.zero,
+        ),
+        onPressed: puedeAvanzar ? _ejecutarAvanzarPaso : null,
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 250),
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: child,
+          ),
+          child: isExpanded
+              ? const SingleChildScrollView(
+                  key: ValueKey('expanded_siguiente'),
+                  scrollDirection: Axis.horizontal,
+                  physics: NeverScrollableScrollPhysics(),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Siguiente',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                      SizedBox(width: 6),
+                      Icon(Icons.arrow_forward, size: 18),
+                    ],
+                  ),
+                )
+              : const Icon(
+                  key: ValueKey('collapsed_siguiente'),
+                  Icons.arrow_forward,
+                  size: 24,
+                ),
         ),
       ),
     );

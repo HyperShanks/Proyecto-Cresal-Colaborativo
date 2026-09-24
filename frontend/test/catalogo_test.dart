@@ -78,8 +78,8 @@ void main() {
         ),
       );
 
-      // Debe mostrar el texto del radar local legible con emoji de pin
-      expect(find.text('📍 Casa Matriz - Santiago (Tu sucursal)'), findsOneWidget);
+      // Debe mostrar el texto de la sucursal legible sin emoji ni 'Tu sucursal'
+      expect(find.text('Casa Matriz - Santiago'), findsOneWidget);
       expect(find.byIcon(Icons.my_location), findsOneWidget);
       expect(find.text('Motor - Toyota Corolla 2020'), findsOneWidget);
       expect(find.text('\$600.000'), findsOneWidget);
@@ -99,9 +99,32 @@ void main() {
         ),
       );
 
-      // Debe mostrar sucursal neutra legible
-      expect(find.text('📍 Casa Matriz - Santiago'), findsOneWidget);
+      // Debe mostrar sucursal neutra legible sin emoji
+      expect(find.text('Casa Matriz - Santiago'), findsOneWidget);
       expect(find.byIcon(Icons.location_on_outlined), findsOneWidget);
+    });
+
+    testWidgets('Radar Badge muestra Viña para sucursal Viña del Mar y Limache para Limache', (tester) async {
+      final itemVina = mockItem.copyWith(nombreSucursal: 'Viña del Mar');
+      final itemLimache = mockItem.copyWith(nombreSucursal: 'Limache');
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                CatalogoItemCard(item: itemVina, vendedorSucursalId: 1),
+                CatalogoItemCard(item: itemLimache, vendedorSucursalId: 1),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Viña'), findsOneWidget);
+      expect(find.text('Limache'), findsOneWidget);
+      expect(find.textContaining('Tu sucursal'), findsNothing);
+      expect(find.textContaining('📍'), findsNothing);
     });
 
     testWidgets('Botón de carrito tiene tamaño mínimo interactivo de 48x48', (tester) async {
