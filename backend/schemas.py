@@ -1242,6 +1242,7 @@ class HistorialOrdenItemResponse(BaseModel):
     fecha_iso: str = Field(description="YYYY-MM-DD en hora local America/Santiago")
     hora: str = Field(description="HH:mm en hora local")
     fecha_hora_formateada: str = Field(description="HH:mm - DD/MM/YYYY")
+    fecha_creacion_formateada: Optional[str] = Field(default=None, description="DD/MM/YYYY HH:mm hrs de emisión")
 
     # Datos de Cliente y Personal Responsable
     cliente_nombre: str

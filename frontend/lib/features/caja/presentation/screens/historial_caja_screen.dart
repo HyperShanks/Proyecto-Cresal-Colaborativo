@@ -396,6 +396,7 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen>
                 _buildDropdownItem('TODOS', 'Todos los Estados'),
                 _buildDropdownItem('Pagada', 'Pagada'),
                 _buildDropdownItem('Completada', 'Completada'),
+                _buildDropdownItem('Reservada', 'Reservada (Abonada)'),
                 _buildDropdownItem('Anulada', 'Anulada'),
               ],
               onChanged: (val) {

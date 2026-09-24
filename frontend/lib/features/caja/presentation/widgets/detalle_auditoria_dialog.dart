@@ -202,7 +202,7 @@ class DetalleAuditoriaDialog extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Emitida el ${orden.fechaHoraFormateada}',
+                        'Emitida el ${orden.fechaCreacionFormateada ?? orden.fechaHoraFormateada}',
                         style: AppTypography.small.copyWith(
                           color: AppPalette.textSecondaryLight,
                           fontSize: 12,
@@ -582,14 +582,28 @@ class DetalleAuditoriaDialog extends StatelessWidget {
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: Text(
-                          pago.idTransaccion != null
-                              ? 'TX: ${(pago.idTransaccion!.length > 8 ? pago.idTransaccion!.substring(0, 8) : pago.idTransaccion!).toUpperCase()}'
-                              : 'Transacción Directa',
-                          style: AppTypography.small.copyWith(
-                            color: AppPalette.textSecondaryLight,
-                            fontSize: 11,
-                          ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              pago.idTransaccion != null
+                                  ? 'TX: ${(pago.idTransaccion!.length > 8 ? pago.idTransaccion!.substring(0, 8) : pago.idTransaccion!).toUpperCase()}'
+                                  : 'Transacción Directa',
+                              style: AppTypography.small.copyWith(
+                                color: AppPalette.textPrimaryLight,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12,
+                              ),
+                            ),
+                            if (pago.fechaPago != null)
+                              Text(
+                                '${pago.fechaPago!.day.toString().padLeft(2, '0')}/${pago.fechaPago!.month.toString().padLeft(2, '0')}/${pago.fechaPago!.year} a las ${pago.fechaPago!.hour.toString().padLeft(2, '0')}:${pago.fechaPago!.minute.toString().padLeft(2, '0')} hrs',
+                                style: AppTypography.small.copyWith(
+                                  color: AppPalette.textSecondaryLight,
+                                  fontSize: 11,
+                                ),
+                              ),
+                          ],
                         ),
                       ),
                       Text(

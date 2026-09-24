@@ -199,6 +199,7 @@ class HistorialOrdenItemModel {
   final String fechaIso;
   final String hora;
   final String fechaHoraFormateada;
+  final String? fechaCreacionFormateada;
   final String clienteNombre;
   final String? clienteRut;
   final String vendedorNombre;
@@ -239,6 +240,7 @@ class HistorialOrdenItemModel {
     this.montoPendiente = 0,
     this.idSucursal,
     this.sucursalNombre = '',
+    this.fechaCreacionFormateada,
     required this.desglosePagos,
     required this.articulos,
     required this.historialMovimientos,
@@ -277,6 +279,7 @@ class HistorialOrdenItemModel {
         fechaIso: json['fecha_iso'] as String? ?? '',
         hora: json['hora'] as String? ?? '',
         fechaHoraFormateada: json['fecha_hora_formateada'] as String? ?? '',
+        fechaCreacionFormateada: json['fecha_creacion_formateada'] as String?,
         clienteNombre: json['cliente_nombre'] as String? ?? 'Cliente Mostrador',
         clienteRut: json['cliente_rut'] as String?,
         vendedorNombre: json['vendedor_nombre'] as String? ?? '',
@@ -316,6 +319,7 @@ class HistorialOrdenItemModel {
         'fecha_iso': fechaIso,
         'hora': hora,
         'fecha_hora_formateada': fechaHoraFormateada,
+        'fecha_creacion_formateada': fechaCreacionFormateada,
         'cliente_nombre': clienteNombre,
         'cliente_rut': clienteRut,
         'vendedor_nombre': vendedorNombre,
