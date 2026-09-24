@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../../../../core/theme/tokens/app_palette.dart';
@@ -16,6 +17,7 @@ class ModalAnularOrden extends StatefulWidget {
   final int montoPagado;
   final VoidCallback? onOrdenAnulada;
   final http.Client? client;
+  final int duracionSegundos;
 
   const ModalAnularOrden({
     super.key,
@@ -26,6 +28,7 @@ class ModalAnularOrden extends StatefulWidget {
     this.montoPagado = 0,
     this.onOrdenAnulada,
     this.client,
+    this.duracionSegundos = 5,
   });
 
   /// Helper estático para abrir el diálogo fácilmente
@@ -38,6 +41,7 @@ class ModalAnularOrden extends StatefulWidget {
     int montoPagado = 0,
     VoidCallback? onOrdenAnulada,
     http.Client? client,
+    int duracionSegundos = 5,
   }) {
     return showDialog<bool>(
       context: context,
@@ -50,6 +54,7 @@ class ModalAnularOrden extends StatefulWidget {
         montoPagado: montoPagado,
         onOrdenAnulada: onOrdenAnulada,
         client: client,
+        duracionSegundos: duracionSegundos,
       ),
     );
   }
@@ -63,8 +68,41 @@ class _ModalAnularOrdenState extends State<ModalAnularOrden> {
   bool _isLoading = false;
   String? _errorMessage;
 
+  late int _segundosRestantes;
+  Timer? _timer;
+  bool _heLeidoConfirmacion = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _segundosRestantes = widget.duracionSegundos;
+    if (_segundosRestantes > 0) {
+      _iniciarTemporizador();
+    }
+  }
+
+  void _iniciarTemporizador() {
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_segundosRestantes > 1) {
+        setState(() {
+          _segundosRestantes--;
+        });
+      } else {
+        setState(() {
+          _segundosRestantes = 0;
+        });
+        timer.cancel();
+      }
+    });
+  }
+
   @override
   void dispose() {
+    _timer?.cancel();
     _motivoController.dispose();
     super.dispose();
   }
@@ -280,6 +318,57 @@ class _ModalAnularOrdenState extends State<ModalAnularOrden> {
                 ),
               ),
               const SizedBox(height: 12),
+            ] else ...[
+              // Advertencia preventiva para órdenes sin pago
+              Container(
+                key: const Key('alerta_advertencia_anular_sin_pago'),
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: const Color(0xFFF59E0B).withValues(alpha: 0.5),
+                    width: 1.2,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.warning_amber_rounded,
+                          color: Color(0xFFF59E0B),
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'ADVERTENCIA: ANULACIÓN IRREVERSIBLE',
+                            style: AppTypography.small.copyWith(
+                              color: const Color(0xFFF59E0B),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Esta acción cancelará la orden de inmediato. Todo el stock reservado se liberará al catálogo general y quedará registrada la baja en auditoría.',
+                      style: AppTypography.small.copyWith(
+                        color: const Color(0xFFFDE68A),
+                        fontSize: 12,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
             ],
 
             if (widget.clienteNombre != null &&
@@ -366,6 +455,74 @@ class _ModalAnularOrdenState extends State<ModalAnularOrden> {
                 ),
               ),
             ),
+            const SizedBox(height: 14),
+            // Casilla de verificación obligatoria (He leído...)
+            InkWell(
+              key: const Key('check_confirmar_anulacion_tap'),
+              onTap: _isLoading
+                  ? null
+                  : () {
+                      setState(() {
+                        _heLeidoConfirmacion = !_heLeidoConfirmacion;
+                      });
+                    },
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppPalette.background,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: _heLeidoConfirmacion
+                        ? (tieneDineroPagado ? AppPalette.warning : AppPalette.error)
+                        : Colors.white24,
+                    width: 1.2,
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: Checkbox(
+                        key: const Key('check_confirmar_anulacion'),
+                        value: _heLeidoConfirmacion,
+                        activeColor: tieneDineroPagado
+                            ? AppPalette.warning
+                            : AppPalette.error,
+                        checkColor: Colors.black,
+                        side: const BorderSide(color: Colors.white54, width: 1.5),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        onChanged: _isLoading
+                            ? null
+                            : (val) {
+                                setState(() {
+                                  _heLeidoConfirmacion = val ?? false;
+                                });
+                              },
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        tieneDineroPagado
+                            ? 'He leído y comprendo que se anulará la orden y es obligatorio devolver el dinero al cliente.'
+                            : 'He leído y comprendo las consecuencias de la anulación irreversible de esta orden.',
+                        style: AppTypography.small.copyWith(
+                          color: AppPalette.textPrimary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
             if (_errorMessage != null) ...[
               const SizedBox(height: 12),
               Container(
@@ -404,37 +561,66 @@ class _ModalAnularOrdenState extends State<ModalAnularOrden> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SizedBox(
-              width: double.infinity,
-              height: 46,
-              child: ElevatedButton.icon(
-                key: const Key('btn_confirmar_anulacion_orden'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppPalette.error,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8.0),
+            Builder(
+              builder: (context) {
+                final bool tiempoCumplido = _segundosRestantes == 0;
+                final bool puedeConfirmar =
+                    !_isLoading && tiempoCumplido && _heLeidoConfirmacion;
+
+                String textoBoton;
+                if (_isLoading) {
+                  textoBoton = 'Anulando...';
+                } else if (!tiempoCumplido) {
+                  textoBoton = 'Confirmar Anulación (${_segundosRestantes}s)';
+                } else {
+                  textoBoton = 'Confirmar Anulación';
+                }
+
+                return SizedBox(
+                  width: double.infinity,
+                  height: 46,
+                  child: ElevatedButton.icon(
+                    key: const Key('btn_confirmar_anulacion_orden'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppPalette.error,
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: Colors.white12,
+                      disabledForegroundColor: Colors.white38,
+                      elevation: puedeConfirmar ? 2 : 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8.0),
+                      ),
+                    ),
+                    icon: _isLoading
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : (!tiempoCumplido
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppPalette.error,
+                                ),
+                              )
+                            : const Icon(Icons.delete_forever, size: 18)),
+                    label: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        textoBoton,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    onPressed: puedeConfirmar ? _ejecutarAnulacion : null,
                   ),
-                ),
-                icon: _isLoading
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Icon(Icons.delete_forever, size: 18),
-                label: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    _isLoading ? 'Anulando...' : 'Confirmar Anulación',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-                onPressed: _isLoading ? null : _ejecutarAnulacion,
-              ),
+                );
+              },
             ),
             const SizedBox(height: 8),
             SizedBox(

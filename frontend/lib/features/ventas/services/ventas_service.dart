@@ -95,4 +95,19 @@ class VentasService {
       client: client,
     );
   }
+
+  /// Reasigna la titularidad comercial de una orden a otro vendedor activo.
+  static Future<Map<String, dynamic>> reasignarVendedor({
+    required String idOrden,
+    required String idNuevoVendedor,
+    String? motivo,
+    http.Client? client,
+  }) async {
+    return OrdenesService.reasignarVendedor(
+      idOrden: idOrden,
+      idNuevoVendedor: idNuevoVendedor,
+      motivo: motivo,
+      client: client,
+    );
+  }
 }

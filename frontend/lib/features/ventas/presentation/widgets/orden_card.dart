@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../services/ordenes_service.dart';
+import 'dialogo_reasignar_vendedor.dart';
+import 'modal_anular_orden.dart';
 import 'qr_ticket_dialog.dart';
 
 /// Tarjeta de orden de venta en Flat Design estricto (HU-3.5).
@@ -10,12 +13,16 @@ class OrdenCard extends StatelessWidget {
   final OrdenHistorialModel orden;
   final VoidCallback? onTap;
   final VoidCallback? onEstadoDespachoCambiado;
+  final VoidCallback? onOrdenActualizada;
+  final http.Client? client;
 
   const OrdenCard({
     super.key,
     required this.orden,
     this.onTap,
     this.onEstadoDespachoCambiado,
+    this.onOrdenActualizada,
+    this.client,
   });
 
   Widget _buildStatusBadge() {
@@ -82,6 +89,143 @@ class OrdenCard extends StatelessWidget {
     );
   }
 
+  Widget _buildActionsMenu(BuildContext context) {
+    final bool puedeVerQr = orden.qrTransaccionalSalida != null &&
+        orden.qrTransaccionalSalida!.isNotEmpty &&
+        (orden.esPagada || orden.esCompletada);
+    final bool puedeReasignar = !orden.esAnulada;
+    final bool puedeAnular = !orden.esAnulada && !orden.esCompletada;
+
+    if (!puedeVerQr && !puedeReasignar && !puedeAnular) {
+      return const SizedBox.shrink();
+    }
+
+    return Theme(
+      data: Theme.of(context).copyWith(
+        popupMenuTheme: PopupMenuThemeData(
+          color: AppPalette.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10.0),
+            side: BorderSide(
+              color: Colors.white.withValues(alpha: 0.12),
+              width: 1.0,
+            ),
+          ),
+          elevation: 8,
+        ),
+      ),
+      child: PopupMenuButton<String>(
+        key: Key('btn_opciones_orden_${orden.idOrden}'),
+        icon: const Icon(
+          Icons.more_vert,
+          color: AppPalette.textSecondary,
+          size: 20.0,
+        ),
+        tooltip: 'Opciones de orden',
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(minWidth: 160),
+        onSelected: (value) async {
+          if (value == 'qr') {
+            QrTicketDialog.mostrar(context, orden);
+          } else if (value == 'reasignar') {
+            final res = await DialogoReasignarVendedor.mostrar(
+              context,
+              idOrden: orden.idOrden,
+              folio: orden.folioDisplay,
+              client: client,
+              onReasignadoExitoso: onOrdenActualizada,
+            );
+            if (res == true) {
+              onOrdenActualizada?.call();
+            }
+          } else if (value == 'anular') {
+            final res = await ModalAnularOrden.mostrar(
+              context,
+              idOrden: orden.idOrden,
+              folio: orden.folioDisplay,
+              clienteNombre: orden.cliente?.nombreCompleto,
+              totalVenta: orden.totalVenta,
+              montoPagado: orden.montoPagado,
+              client: client,
+              onOrdenAnulada: onOrdenActualizada,
+            );
+            if (res == true) {
+              onOrdenActualizada?.call();
+            }
+          }
+        },
+        itemBuilder: (ctx) => [
+          if (puedeVerQr)
+            PopupMenuItem<String>(
+              key: const Key('menu_item_ver_qr'),
+              value: 'qr',
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.qr_code_2_rounded,
+                    color: AppPalette.primary,
+                    size: 18.0,
+                  ),
+                  const SizedBox(width: 10.0),
+                  Text(
+                    'Ver Ticket QR',
+                    style: AppTypography.small.copyWith(
+                      color: AppPalette.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (puedeReasignar)
+            PopupMenuItem<String>(
+              key: const Key('menu_item_reasignar_venta'),
+              value: 'reasignar',
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.swap_horiz_rounded,
+                    color: AppPalette.secondary,
+                    size: 18.0,
+                  ),
+                  const SizedBox(width: 10.0),
+                  Text(
+                    'Reasignar Venta',
+                    style: AppTypography.small.copyWith(
+                      color: AppPalette.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (puedeAnular)
+            PopupMenuItem<String>(
+              key: const Key('menu_item_anular_orden'),
+              value: 'anular',
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.cancel_outlined,
+                    color: AppPalette.error,
+                    size: 18.0,
+                  ),
+                  const SizedBox(width: 10.0),
+                  Text(
+                    'Anular Orden',
+                    style: AppTypography.small.copyWith(
+                      color: AppPalette.error,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -143,6 +287,8 @@ class OrdenCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 8.0),
                     _buildStatusBadge(),
+                    const SizedBox(width: 4.0),
+                    _buildActionsMenu(context),
                   ],
                 ),
 

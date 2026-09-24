@@ -888,6 +888,25 @@ class AnularOrdenRequest(BaseModel):
     motivo_anulacion: Optional[str] = None
 
 
+class ReasignarVendedorRequest(BaseModel):
+    """Payload para reasignar la titularidad comercial de una orden a otro vendedor."""
+    model_config = ConfigDict(from_attributes=True)
+    id_nuevo_vendedor: UUID
+    motivo: Optional[str] = None
+
+
+class ReasignarVendedorResponse(BaseModel):
+    """DTO de respuesta tras reasignar exitosamente una orden de venta."""
+    model_config = ConfigDict(from_attributes=True)
+    id_orden: UUID
+    folio: str
+    id_vendedor_anterior: UUID
+    nombre_vendedor_anterior: str
+    id_nuevo_vendedor: UUID
+    nombre_nuevo_vendedor: str
+    mensaje: str
+
+
 class ConfirmarReingresoRequest(BaseModel):
     """Payload para confirmar reingreso y paletizado de pieza por PDA."""
     model_config = ConfigDict(from_attributes=True)

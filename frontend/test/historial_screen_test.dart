@@ -12,6 +12,7 @@ import 'package:frontend/features/ventas/presentation/widgets/orden_card.dart';
 import 'package:frontend/features/ventas/presentation/widgets/orden_detail_sheet.dart';
 import 'package:frontend/features/ventas/presentation/widgets/historial_filtros_drawer.dart';
 import 'package:frontend/features/ventas/presentation/widgets/asignar_activo_vendedor_dialog.dart';
+import 'package:frontend/features/ventas/presentation/widgets/dialogo_reasignar_vendedor.dart';
 import 'package:frontend/features/ventas/presentation/screens/historial_screen.dart';
 
 void main() {
@@ -254,10 +255,43 @@ void main() {
 
       expect(result['notas_preparacion'], 'Nueva nota técnica');
     });
+
+    test('reasignarVendedor envía PATCH con id_nuevo_vendedor y motivo, procesando respuesta 200', () async {
+      final mockClient = MockClient((request) async {
+        expect(request.method, 'PATCH');
+        expect(request.url.path, contains('/reasignar-vendedor'));
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        expect(body['id_nuevo_vendedor'], 'vend-2');
+        expect(body['motivo'], 'Venta compartida');
+
+        return http.Response(
+          jsonEncode({
+            'id_orden': 'ord-1',
+            'folio': 'ORD-0001',
+            'id_vendedor_anterior': 'vend-1',
+            'nombre_vendedor_anterior': 'Carlos González',
+            'id_nuevo_vendedor': 'vend-2',
+            'nombre_nuevo_vendedor': 'María Soto',
+            'mensaje': 'Orden ORD-0001 reasignada exitosamente a María Soto.',
+          }),
+          200,
+        );
+      });
+
+      final result = await OrdenesService.reasignarVendedor(
+        idOrden: 'ord-1',
+        idNuevoVendedor: 'vend-2',
+        motivo: 'Venta compartida',
+        client: mockClient,
+      );
+
+      expect(result['mensaje'], contains('María Soto'));
+      expect(result['nombre_nuevo_vendedor'], 'María Soto');
+    });
   });
 
   group('OrdenCard Widget Tests', () {
-    testWidgets('Renderiza Folio, Badge Reservada, Cliente, Ítems y Total', (tester) async {
+    testWidgets('Renderiza Folio, Badge Reservada, Cliente, Ítems, Total y Menú de 3 Puntos', (tester) async {
       bool cardTapped = false;
 
       await tester.pumpWidget(
@@ -280,10 +314,19 @@ void main() {
       expect(find.text('Despacho: Av. Libertad 1234, Depto 402'), findsOneWidget);
       expect(find.text('\$520.000'), findsOneWidget);
       expect(find.text('Ver detalle'), findsOneWidget);
+      expect(find.byIcon(Icons.more_vert), findsOneWidget);
 
+      // Tap en card para ver detalle
       await tester.tap(find.text('ORD-TEST-001'));
       await tester.pump();
       expect(cardTapped, isTrue);
+
+      // Desplegar menú de 3 puntos
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Reasignar Venta'), findsOneWidget);
+      expect(find.text('Anular Orden'), findsOneWidget);
     });
 
     testWidgets('OrdenCard muestra información completa de despacho y detalle resumido (máx 3 artículos truncados a 20 chars)', (tester) async {
@@ -998,6 +1041,131 @@ void main() {
 
       // Debe detectar que es Motor y preseleccionar MOT-
       expect(find.text('MOT-'), findsOneWidget);
+    });
+  });
+
+  group('DialogoReasignarVendedor Widget Tests', () {
+    testWidgets('Muestra banner de advertencia, carga vendedores y permite reasignar', (tester) async {
+      bool reasignadoExitoso = false;
+
+      final mockClient = MockClient((request) async {
+        if (request.url.path.contains('/vendedores')) {
+          return http.Response(
+            jsonEncode([
+              {
+                'id_usuario': 'vend-actual',
+                'nombre_completo': 'Carlos González',
+                'rut': '18.765.432-1',
+                'id_sucursal': 1,
+                'id_rol': 2,
+                'rol_nombre': 'Vendedor Mesón',
+              },
+              {
+                'id_usuario': 'vend-nuevo',
+                'nombre_completo': 'María Soto',
+                'rut': '15.432.198-7',
+                'id_sucursal': 1,
+                'id_rol': 2,
+                'rol_nombre': 'Vendedor Mesón',
+              },
+            ]),
+            200,
+            headers: {'content-type': 'application/json; charset=utf-8'},
+          );
+        } else if (request.url.path.contains('/reasignar-vendedor')) {
+          return http.Response(
+            jsonEncode({
+              'id_orden': 'ord-test-123',
+              'folio': 'ORD-TEST-123',
+              'id_vendedor_anterior': 'vend-actual',
+              'nombre_vendedor_anterior': 'Carlos González',
+              'id_nuevo_vendedor': 'vend-nuevo',
+              'nombre_nuevo_vendedor': 'María Soto',
+              'mensaje': 'Orden ORD-TEST-123 reasignada exitosamente a María Soto.',
+            }),
+            200,
+            headers: {'content-type': 'application/json; charset=utf-8'},
+          );
+        }
+        return http.Response('Not Found', 404);
+      });
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (ctx) => ElevatedButton(
+                onPressed: () {
+                  DialogoReasignarVendedor.mostrar(
+                    ctx,
+                    idOrden: 'ord-test-123',
+                    folio: 'ORD-TEST-123',
+                    idVendedorActual: 'vend-actual',
+                    nombreVendedorActual: 'Carlos González',
+                    client: mockClient,
+                    onReasignadoExitoso: () {
+                      reasignadoExitoso = true;
+                    },
+                  );
+                },
+                child: const Text('Abrir Reasignar'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Abrir Reasignar'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      // 1. Elementos visuales principales y banner de advertencia
+      expect(find.text('Reasignar Venta'), findsOneWidget);
+      expect(find.text('Orden: ORD-TEST-123'), findsOneWidget);
+      expect(find.textContaining('Al transferir esta orden, la titularidad y comisiones pasarán'), findsOneWidget);
+      expect(find.text('Vendedor actual: Carlos González'), findsOneWidget);
+      expect(find.byKey(const Key('dropdown_reasignar_vendedor')), findsOneWidget);
+      expect(find.byKey(const Key('check_confirmar_reasignacion')), findsOneWidget);
+
+      // Botón inicialmente bloqueado por temporizador de 5 segundos
+      final btnInicial = tester.widget<ElevatedButton>(find.byKey(const Key('btn_confirmar_reasignacion')));
+      expect(btnInicial.onPressed, isNull);
+      expect(find.textContaining('(5s)'), findsOneWidget);
+
+      // Avanzar 2 segundos: muestra (3s) y sigue bloqueado
+      await tester.pump(const Duration(seconds: 2));
+      expect(find.textContaining('(3s)'), findsOneWidget);
+
+      // Avanzar 3 segundos más (total 5s transcurridos)
+      await tester.pump(const Duration(seconds: 3));
+
+      // 2. Abrir dropdown y seleccionar María Soto (vend-actual está excluido)
+      await tester.tap(find.byKey(const Key('dropdown_reasignar_vendedor')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('María Soto'), findsOneWidget);
+      await tester.tap(find.text('María Soto').last);
+      await tester.pumpAndSettle();
+
+      // Botón todavía deshabilitado porque falta marcar la casilla obligatoria "He leído..."
+      final btnSinCheck = tester.widget<ElevatedButton>(find.byKey(const Key('btn_confirmar_reasignacion')));
+      expect(btnSinCheck.onPressed, isNull);
+
+      // Marcar casilla obligatoria
+      await tester.tap(find.byKey(const Key('check_confirmar_reasignacion_tap')));
+      await tester.pumpAndSettle();
+
+      // Ahora el botón debe estar habilitado
+      final btnHabilitado = tester.widget<ElevatedButton>(find.byKey(const Key('btn_confirmar_reasignacion')));
+      expect(btnHabilitado.onPressed, isNotNull);
+      expect(find.text('CONFIRMAR REASIGNACIÓN'), findsOneWidget);
+
+      // 3. Confirmar reasignación
+      await tester.tap(find.byKey(const Key('btn_confirmar_reasignacion')));
+      await tester.pumpAndSettle();
+
+      expect(reasignadoExitoso, isTrue);
+      expect(find.text('Reasignar Venta'), findsNothing);
     });
   });
 }

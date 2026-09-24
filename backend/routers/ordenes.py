@@ -23,7 +23,8 @@ from schemas import (
     OrdenCreateRequest, OrdenResponse,
     ClienteOrdenResumen, DespachoOrdenResumen,
     DetalleOrdenItemResponse, OrdenHistorialItemResponse,
-    OrdenAnulacionResponse, AnularOrdenRequest, InstruccionesUpdateRequest,
+    OrdenAnulacionResponse, AnularOrdenRequest, ReasignarVendedorRequest,
+    ReasignarVendedorResponse, InstruccionesUpdateRequest,
     InstruccionesUpdateResponse, OrdenPagoRequest,
     OrdenPagoResponse, EntregaEnvioItemResponse,
     EntregaConfirmacionResponse, DespachoEnvioResponse,
@@ -2258,6 +2259,84 @@ def anular_orden_patch(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error transaccional al anular la orden: {str(e)}"
         )
+
+
+@router.patch(
+    "/{id_orden}/reasignar-vendedor",
+    response_model=ReasignarVendedorResponse,
+    summary="Reasignar Titularidad Comercial de una Orden a otro Vendedor",
+    description="Permite que el vendedor titular actual (o un Administrador / Jefe de Ventas) "
+                "transfiera la titularidad comercial de una orden a otro vendedor activo de la empresa.",
+)
+def reasignar_vendedor_orden(
+    id_orden: uuid.UUID,
+    payload: ReasignarVendedorRequest,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    orden = db.query(Orden_Venta).filter(Orden_Venta.id_orden == id_orden).first()
+    if not orden:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Orden con ID '{id_orden}' no encontrada."
+        )
+
+    if orden.estado_orden and orden.estado_orden.lower() == "anulada":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No es posible reasignar una orden que se encuentra Anulada."
+        )
+
+    # Validar permisos: Propietario de la venta O rol jerárquico (Admin: 1, Gerente: 5, Jefe Ventas: 6)
+    rol_nombre = (current_user.nombre_rol or "").lower()
+    es_propietario = str(orden.id_vendedor) == str(current_user.id_usuario)
+    es_jefatura = current_user.id_rol in [1, 5, 6] or ("admin" in rol_nombre or "jefe" in rol_nombre or "gerente" in rol_nombre)
+
+    if not (es_propietario or es_jefatura):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permisos para reasignar esta orden. Solo el vendedor titular o una jefatura puede transferirla."
+        )
+
+    if str(orden.id_vendedor) == str(payload.id_nuevo_vendedor):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La orden ya está asignada a este vendedor."
+        )
+
+    # Validar que el nuevo vendedor exista, esté activo y pertenezca a un rol comercial (2: Mesón, 6: Jefe Ventas, 7: Online, 1: Admin, 5: Gerente)
+    nuevo_vendedor = db.query(Usuario).filter(Usuario.id_usuario == payload.id_nuevo_vendedor).first()
+    if not nuevo_vendedor or nuevo_vendedor.estado != "Activo":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El vendedor seleccionado no existe o no se encuentra activo."
+        )
+
+    vendedor_anterior = db.query(Usuario).filter(Usuario.id_usuario == orden.id_vendedor).first()
+    nombre_anterior = f"{vendedor_anterior.nombres} {vendedor_anterior.apellidos or ''}".strip() if vendedor_anterior else "Desconocido"
+    nombre_nuevo = f"{nuevo_vendedor.nombres} {nuevo_vendedor.apellidos or ''}".strip()
+
+    id_anterior = orden.id_vendedor
+    orden.id_vendedor = nuevo_vendedor.id_usuario
+    orden.fecha_actualizacion = datetime.now(timezone.utc)
+
+    db.commit()
+    db.refresh(orden)
+
+    print(
+        f"🔄 [REASIGNACIÓN] Orden {orden.folio} reasignada de '{nombre_anterior}' a '{nombre_nuevo}' "
+        f"por usuario {current_user.nombres} ({current_user.email}). Motivo: {payload.motivo or 'Sin motivo'}"
+    )
+
+    return ReasignarVendedorResponse(
+        id_orden=orden.id_orden,
+        folio=orden.folio,
+        id_vendedor_anterior=id_anterior,
+        nombre_vendedor_anterior=nombre_anterior,
+        id_nuevo_vendedor=nuevo_vendedor.id_usuario,
+        nombre_nuevo_vendedor=nombre_nuevo,
+        mensaje=f"Orden {orden.folio} reasignada exitosamente a {nombre_nuevo}."
+    )
 
 
 @router.patch(

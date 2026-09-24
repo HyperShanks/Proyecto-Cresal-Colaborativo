@@ -947,6 +947,79 @@ class OrdenesService {
     }
   }
 
+  /// Reasigna la titularidad comercial de una orden a otro vendedor activo.
+  static Future<Map<String, dynamic>> reasignarVendedor({
+    required String idOrden,
+    required String idNuevoVendedor,
+    String? motivo,
+    http.Client? client,
+  }) async {
+    final httpClient = client ?? http.Client();
+
+    try {
+      final uri = Uri.parse('${ApiConstants.ordenesEndpoint}/$idOrden/reasignar-vendedor');
+      final token = await AuthService.getToken();
+
+      final headers = {
+        'Content-Type': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
+      final payload = {
+        'id_nuevo_vendedor': idNuevoVendedor,
+        if (motivo != null && motivo.trim().isNotEmpty) 'motivo': motivo.trim(),
+      };
+
+      final response = await httpClient
+          .patch(
+            uri,
+            headers: headers,
+            body: jsonEncode(payload),
+          )
+          .timeout(
+            const Duration(seconds: 15),
+            onTimeout: () => throw Exception('Tiempo de espera agotado al reasignar la orden.'),
+          );
+
+      dynamic decodedBody;
+      try {
+        decodedBody = jsonDecode(utf8.decode(response.bodyBytes));
+      } catch (_) {
+        try {
+          decodedBody = jsonDecode(response.body);
+        } catch (_) {
+          decodedBody = null;
+        }
+      }
+
+      if (response.statusCode == 200) {
+        if (decodedBody is Map<String, dynamic>) {
+          return decodedBody;
+        }
+        return {'mensaje': 'Orden reasignada exitosamente.'};
+      } else if (response.statusCode == 400 || response.statusCode == 403 || response.statusCode == 404) {
+        final detail = decodedBody is Map ? decodedBody['detail'] : null;
+        throw Exception(detail?.toString() ?? 'Error al reasignar la orden (${response.statusCode}).');
+      } else if (response.statusCode == 401) {
+        if (kDebugMode) {
+          debugPrint('🌐 [ORDENES] HTTP 401 Unauthorized en reasignarVendedor');
+        }
+        await AuthService.manejarSesionExpirada();
+        throw Exception('Sesión expirada. Por favor vuelve a iniciar sesión.');
+      } else {
+        final detail = decodedBody is Map ? decodedBody['detail'] : null;
+        throw Exception(detail?.toString() ?? 'Error al reasignar orden (${response.statusCode}).');
+      }
+    } catch (e) {
+      if (e is Exception) rethrow;
+      throw Exception('Error inesperado al reasignar orden: $e');
+    } finally {
+      if (client == null) {
+        httpClient.close();
+      }
+    }
+  }
+
   /// [DEPRECATED] Endpoint legado de demostración (HU-3.6).
   /// En el flujo operativo oficial, los pagos deben procesarse exclusivamente a través de [CajaService.registrarCobro].
   @Deprecated('Los pagos deben ser registrados exclusivamente por el módulo de Caja a través de CajaService.registrarCobro')
@@ -1052,8 +1125,13 @@ class OrdenesService {
           );
 
       if (response.statusCode == 200) {
-        final List<dynamic> body =
-            jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
+        dynamic decoded;
+        try {
+          decoded = jsonDecode(utf8.decode(response.bodyBytes));
+        } catch (_) {
+          decoded = jsonDecode(response.body);
+        }
+        final List<dynamic> body = decoded as List<dynamic>;
         return body
             .map((v) => VendedorModel.fromJson(v as Map<String, dynamic>))
             .toList();

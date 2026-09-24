@@ -1387,6 +1387,11 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
                           orden: orden,
                           onTap: () => _abrirDetalleOrden(orden),
                           onEstadoDespachoCambiado: _cargarOrdenes,
+                          onOrdenActualizada: () {
+                            _cargarOrdenes();
+                            widget.onRefreshCatalogo?.call();
+                          },
+                          client: widget.client,
                         );
                       },
                     ),

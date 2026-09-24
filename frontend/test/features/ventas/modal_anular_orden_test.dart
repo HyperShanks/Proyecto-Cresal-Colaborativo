@@ -113,7 +113,10 @@ void main() {
       expect(find.text('Cliente: Juan Pérez'), findsOneWidget);
       expect(find.text('Confirmar Anulación'), findsOneWidget);
       expect(find.text('Volver'), findsOneWidget);
-      // No debe mostrar la alerta de peligro
+      // Debe mostrar la alerta de advertencia preventiva para órdenes sin pago
+      expect(find.byKey(const Key('alerta_advertencia_anular_sin_pago')), findsOneWidget);
+      expect(find.text('ADVERTENCIA: ANULACIÓN IRREVERSIBLE'), findsOneWidget);
+      // No debe mostrar la alerta de peligro de dinero
       expect(find.byKey(const Key('alerta_peligro_cliente_pago')), findsNothing);
     });
 
@@ -216,6 +219,74 @@ void main() {
       expect(find.byType(DialogoDevolucionDinero), findsNothing);
     });
 
+    testWidgets('ModalAnularOrden bloquea el botón por 5 segundos y exige marcar casilla He leído para confirmar', (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) {
+                return ElevatedButton(
+                  onPressed: () {
+                    ModalAnularOrden.mostrar(
+                      context,
+                      idOrden: 'ord-timer-test',
+                      folio: 'ORD-TIMER-001',
+                      montoPagado: 0,
+                    );
+                  },
+                  child: const Text('Abrir Modal Timer'),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Abrir Modal Timer'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(find.byType(ModalAnularOrden), findsOneWidget);
+      expect(find.byKey(const Key('check_confirmar_anulacion')), findsOneWidget);
+
+      // 1. Inicialmente deshabilitado con contador (5s)
+      final btnInicial = tester.widget<ElevatedButton>(find.byKey(const Key('btn_confirmar_anulacion_orden')));
+      expect(btnInicial.onPressed, isNull);
+      expect(find.textContaining('(5s)'), findsOneWidget);
+
+      // 2. Avanzar 2 segundos: muestra (3s) y sigue bloqueado
+      await tester.pump(const Duration(seconds: 2));
+      expect(find.textContaining('(3s)'), findsOneWidget);
+      final btnMitad = tester.widget<ElevatedButton>(find.byKey(const Key('btn_confirmar_anulacion_orden')));
+      expect(btnMitad.onPressed, isNull);
+
+      // 3. Avanzar 3 segundos más (5s total completados)
+      await tester.pump(const Duration(seconds: 3));
+      expect(find.text('Confirmar Anulación'), findsOneWidget);
+
+      // Sigue bloqueado porque falta marcar la casilla He leído
+      final btnSinCheck = tester.widget<ElevatedButton>(find.byKey(const Key('btn_confirmar_anulacion_orden')));
+      expect(btnSinCheck.onPressed, isNull);
+
+      // 4. Marcar casilla obligatoria
+      await tester.tap(find.byKey(const Key('check_confirmar_anulacion_tap')));
+      await tester.pump();
+
+      // 5. Ahora sí está habilitado
+      final btnHabilitado = tester.widget<ElevatedButton>(find.byKey(const Key('btn_confirmar_anulacion_orden')));
+      expect(btnHabilitado.onPressed, isNotNull);
+
+      // 6. Si desmarcamos la casilla, se vuelve a inhabilitar
+      await tester.tap(find.byKey(const Key('check_confirmar_anulacion_tap')));
+      await tester.pump();
+      final btnDesmarcado = tester.widget<ElevatedButton>(find.byKey(const Key('btn_confirmar_anulacion_orden')));
+      expect(btnDesmarcado.onPressed, isNull);
+    });
+
     testWidgets('Permite cerrar el modal con botón Volver', (tester) async {
       tester.view.physicalSize = const Size(800, 1200);
       tester.view.devicePixelRatio = 1.0;
@@ -306,6 +377,10 @@ void main() {
       // Debe mostrar la advertencia de peligro
       expect(find.text('⚠️ PELIGRO: CLIENTE YA PAGÓ'), findsOneWidget);
       expect(find.textContaining('50.000'), findsOneWidget);
+
+      // Marcar casilla obligatoria y avanzar el temporizador de 5 segundos
+      await tester.tap(find.byKey(const Key('check_confirmar_anulacion_tap')));
+      await tester.pump(const Duration(seconds: 5));
 
       // Confirmar la anulación
       await tester.tap(find.byKey(const Key('btn_confirmar_anulacion_orden')));
@@ -539,6 +614,10 @@ void main() {
 
       // Modal de anulación abierto
       expect(find.byType(ModalAnularOrden), findsOneWidget);
+
+      // Marcar casilla obligatoria y avanzar el temporizador de 5 segundos
+      await tester.tap(find.byKey(const Key('check_confirmar_anulacion_tap')));
+      await tester.pump(const Duration(seconds: 5));
 
       // Confirmar anulación (montoPagado es 0, no abre DialogoDevolucionDinero)
       await tester.tap(find.byKey(const Key('btn_confirmar_anulacion_orden')));
