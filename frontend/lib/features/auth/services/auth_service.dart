@@ -401,13 +401,47 @@ class AuthService {
     return rLower == 'administrador' || rLower == 'admin';
   }
 
-  /// Verifica si el usuario actual posee rol Gerente (id_rol == 4).
+  /// Verifica si el usuario actual posee rol Gerente (id_rol == 4) o Auditor / Gerente Auditor (id_rol == 8).
   static Future<bool> esGerente() async {
     final idRol = await getIdRol();
-    if (idRol != null) return idRol == 4;
+    if (idRol != null) return idRol == 4 || idRol == 8;
     final rol = await getRol();
     final rLower = rol?.toLowerCase() ?? '';
-    return rLower == 'gerente';
+    return rLower == 'gerente' || rLower == 'auditor';
+  }
+
+  /// Verifica si el usuario actual posee rol Auditor / Gerente Solo Lectura (id_rol == 8).
+  static Future<bool> esAuditor() async {
+    final idRol = await getIdRol();
+    if (idRol != null) return idRol == 8;
+    final rol = await getRol();
+    final rLower = rol?.toLowerCase() ?? '';
+    return rLower == 'auditor';
+  }
+
+  /// Verifica si el usuario actual tiene permisos para tasar o fijar precios.
+  /// Solo disponible para Gerencia General (4), Administrador (5) y Jefe de Ventas (6).
+  /// Excluye al Auditor / Gerente Solo Lectura (8).
+  static Future<bool> puedeTasar() async {
+    final idRol = await getIdRol();
+    if (idRol != null) return idRol == 4 || idRol == 5 || idRol == 6;
+    final rol = await getRol();
+    final rLower = rol?.toLowerCase() ?? '';
+    return rLower == 'gerente' || rLower == 'administrador' || rLower == 'admin' || rLower == 'jefe de ventas';
+  }
+
+  /// Retorna el nombre de rol visible para la interfaz.
+  /// Si idRol == 8 y el correo es 'ricardocrovetto@cresal.cl', devuelve 'Gerente'.
+  static Future<String> getRolVisible() async {
+    final idRol = await getIdRol();
+    final email = (await getEmailUsuario())?.toLowerCase().trim() ?? '';
+    if (idRol == 8) {
+      if (email == 'ricardocrovetto@cresal.cl') {
+        return 'Gerente';
+      }
+      return 'Auditor';
+    }
+    return (await getRol()) ?? '';
   }
 
   /// Verifica si el usuario actual pertenece al módulo de ventas (Vendedor [2], Jefe de Ventas [6], Vendedor Online [7]).

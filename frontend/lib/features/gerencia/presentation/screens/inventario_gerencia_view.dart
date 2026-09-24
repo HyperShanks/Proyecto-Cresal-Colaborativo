@@ -10,6 +10,7 @@ import '../../../../core/services/api_service.dart';
 import '../../../../core/utils/currency_formatter.dart';
 import '../../../ventas/models/catalogo_model.dart';
 import '../../../inventario/services/inventario_service.dart';
+import '../../../auth/services/auth_service.dart';
 import '../../services/gerencia_service.dart';
 import '../../../ventas/presentation/widgets/visor_imagen_completa_dialog.dart';
 import '../../../../core/constants/especificaciones_vehiculo.dart';
@@ -154,6 +155,7 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
   List<CatalogoItem> _items = [];
   int _totalCount = 0;
   int _pendientesTasacionCount = 0;
+  bool _puedeTasar = true;
 
   @override
   void initState() {
@@ -161,8 +163,16 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
     _idSucursal = widget.idSucursalInicial;
     _soloSinTasar = widget.filtroSinTasarInicial;
     _busquedaController = TextEditingController();
+    _verificarPermisoTasacion();
     _cargarOpcionesUbicacion();
     _cargarInventario();
+  }
+
+  Future<void> _verificarPermisoTasacion() async {
+    final puede = await AuthService.puedeTasar();
+    if (mounted) {
+      setState(() => _puedeTasar = puede);
+    }
   }
 
   Future<void> _cargarOpcionesUbicacion() async {
@@ -1242,6 +1252,8 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                                     ],
                                   ),
                                 )
+                              else if (!_puedeTasar)
+                                const SizedBox.shrink()
                               else
                                 ElevatedButton.icon(
                                   onPressed: () => _abrirModalTasacion(item),
@@ -1788,8 +1800,10 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
             Expanded(
               flex: 2,
               child: Center(
-                child: esBloqueado
-                    ? Container(
+                child: !_puedeTasar
+                    ? const SizedBox.shrink()
+                    : esBloqueado
+                        ? Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: const Color(0xFFF1F5F9),
@@ -1936,6 +1950,7 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
   // 5. MODAL DE TASACIÓN GERENCIAL (FIJAR PRECIO COMERCIAL)
   // =========================================================================
   void _abrirModalTasacion(CatalogoItem item) {
+    if (!_puedeTasar) return;
     final estLower = (item.estadoActivo ?? '').toLowerCase().trim();
     if (estLower != 'disponible' && estLower != 'paletizado') {
       ScaffoldMessenger.of(context).showSnackBar(

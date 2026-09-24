@@ -80,7 +80,7 @@ class AppRoutes {
 
   /// Retorna la ruta inicial o panel principal correspondiente a un rol (SSOT).
   static String getHomeRouteForRole(int? idRol) {
-    if (idRol == 4) return gerencia;
+    if (idRol == 4 || idRol == 8) return gerencia;
     if (idRol == 3) return caja;
     if (idRol == 2 || idRol == 6 || idRol == 7) return ventasMain;
     return home;
@@ -98,8 +98,8 @@ class AppRoutes {
       return false;
     }
 
-    // Administrador (5) y Gerente (4): Acceso irrestricto
-    if (idRol == 4 || idRol == 5) {
+    // Administrador (5), Gerente (4) y Auditor / Gerente Auditor (8): Acceso a vistas gerenciales
+    if (idRol == 4 || idRol == 5 || idRol == 8) {
       return true;
     }
 

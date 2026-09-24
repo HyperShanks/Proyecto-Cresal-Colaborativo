@@ -21,6 +21,19 @@ class AuthUserModel {
 
   String get nombreCompleto => '$nombres $apellidos'.trim();
 
+  /// Retorna el rol visible en pantalla.
+  /// Si idRol == 8 y el correo es 'ricardocrovetto@cresal.cl', muestra 'Gerente'.
+  String get rolVisible {
+    if (idRol == 8) {
+      final emailLower = email.toLowerCase().trim();
+      if (emailLower == 'ricardocrovetto@cresal.cl') {
+        return 'Gerente';
+      }
+      return 'Auditor';
+    }
+    return nombreRol;
+  }
+
   factory AuthUserModel.fromJson(Map<String, dynamic> json) {
     return AuthUserModel(
       idUsuario: (json['id_usuario'] ?? json['idUsuario'] ?? '').toString(),

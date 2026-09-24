@@ -18,6 +18,7 @@ Este documento detalla los usuarios activos cargados y sincronizados en la base 
 | **5** | **Administrador** | Admin Sistema Cresal | `11.111.111-1` | `admin@cresal.cl` | `Password123!` | `5005` | Viña del Mar (1) | Desktop / Laptop Técnica | **Light Mode** (`ThemeMode.light`) |
 | **6** | **Jefe de Ventas** | Gastón Marcelo Zamora Herrera | `21.337.385-4` | `gastonzamoracc@gmail.com` | `Password123!` | `6006` | Viña del Mar (1) | Laptop / Monitor de Ventas | **Light Mode** (`ThemeMode.light`) |
 | **7** | **Vendedor Online** | Marcela Online Soto | `12.345.678-9` | `marcela.online@cresal.cl` | `Password123!` | `7007` | Viña del Mar (1) | Desktop Omnicanal | **Light Mode** (`ThemeMode.light`) |
+| **8** | **Auditor** *(Gerente Solo Lectura)* | Carlos Gerente Auditor | `13.456.789-0` | `gerenteauditor@cresal.cl`<br>*(Alias Prod: `ricardocrovetto@cresal.cl`)* | `Password123!` | `8008` | Viña del Mar (1) | Desktop / Monitor Ejecutivo | **Light Mode** (`ThemeMode.light`) |
 
 ---
 
@@ -29,7 +30,7 @@ En la industria de software logístico y retail automotriz, la asignación de te
    - Los operarios usan terminales móviles PDA rugerizados (Sunmi L3, Zebra TC series) con pantallas OLED.
    - Operan en ambientes mixtos (patios exteriores de desarme y pasillos de galpón con iluminación tenue).
    - El **Modo Oscuro** reduce el deslumbramiento, incrementa drásticamente la legibilidad de códigos QR/barras bajo contraste y extiende la autonomía de la batería durante turnos de 8 a 10 horas.
-2. **Mesón, Caja y Oficinas (Roles 2, 3, 4, 5, 6, 7 - Light Mode Obligatorio)**:
+2. **Mesón, Caja y Oficinas (Roles 2, 3, 4, 5, 6, 7, 8 - Light Mode Obligatorio)**:
    - Se ejecutan en mostradores de venta, cajas y escritorios gerenciales con iluminación ambiental estándar o fluorescente.
    - El **Modo Claro** optimiza la velocidad de lectura de tablas de órdenes densas, SKUs, facturación y estados financieros sin fatiga visual.
 3. **Módulos Compartidos Multi-Rol (Ej: Tickets de Soporte `/tickets`)**:
@@ -128,6 +129,26 @@ En la industria de software logístico y retail automotriz, la asignación de te
   - `/ventas_main`: Ventas digitales y catálogo omnicanal.
   - `/entregas-envios`: Coordinación de envíos a regiones (Starken, Chilexpress, Blue Express).
   - `/checkout_crm`: Creación de ventas con dirección de despacho.
+
+---
+
+### 8. Auditor / Gerente Solo Lectura (`id_rol = 8`)
+- **Usuario**: `gerenteauditor@cresal.cl` *(Alias Producción: `ricardocrovetto@cresal.cl`)*
+- **PIN**: `8008`
+- **UUID (`id_usuario`)**: `8f41e0a1-7b82-4912-9c13-a41b89ef4128`
+- **Ruta Principal**: `/gerencia` (Dashboard Ejecutivo)
+- **Tema Visual**: Light Mode (`ThemeMode.light`)
+- **Nombre en Perfil/Interfaz**: Mostrado dinámicamente como **"Gerente"** exclusivamente cuando el correo es `ricardocrovetto@cresal.cl`.
+- **Módulos y Rutas Habilitadas (Solo Lectura)**:
+  - `/gerencia`: Panel Ejecutivo y Analítica en Tiempo Real (HU-5.1).
+  - Pestaña **Dashboard**: Supervisión de KPIs de facturación, márgenes comerciales, métodos de pago y flujo de despachos.
+  - Pestaña **Órdenes**: Visor histórico centralizado y auditoría forense 360° de ventas (HU-5.2).
+  - Pestaña **Inventario**: Consulta multi-sucursal y filtros del maestro de repuestos y activos (HU-5.3).
+  - Pestaña **Backorders**: Supervisión de compras por encargo, abonos y saldos pendientes (HU-5.4).
+- **Restricciones Explícitas de Seguridad (Zero Trust)**:
+  - ❌ **Sin permisos de tasación**: No puede fijar ni actualizar precios comerciales de repuestos (`verificar_rol_tasacion` emite `403 Forbidden`). En la interfaz se ocultan automáticamente los botones de "Tasar" y "Precio".
+  - ❌ **Sin anulación de ventas ni emisiones**: No puede anular órdenes de venta ni registrar transacciones operativas.
+  - ❌ **Sin operaciones de bodega ni caja**: No puede liberar repuestos ni registrar cobros físicos.
 
 ---
 

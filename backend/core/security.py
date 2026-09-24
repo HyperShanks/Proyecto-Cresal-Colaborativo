@@ -145,6 +145,22 @@ def verificar_rol_tasacion(
     return current_user
 
 
+def require_inventario_maestro_read(
+    current_user: Usuario = Depends(get_current_user)
+) -> Usuario:
+    """
+    Valida que el usuario autenticado posea rol de Gerencia (id_rol == 4),
+    Administrador (id_rol == 5), Jefe de Ventas (id_rol == 6) o Auditor (id_rol == 8)
+    para consultar el catálogo maestro de inventario multi-sucursal (HU-5.3).
+    """
+    if current_user.id_rol not in [4, 5, 6, 8]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso restringido: Se requieren privilegios de Gerencia, Administración, Jefatura de Ventas o Auditoría."
+        )
+    return current_user
+
+
 def require_caja_role(
     current_user: Usuario = Depends(get_current_user)
 ) -> Usuario:
@@ -179,13 +195,14 @@ def require_gerencia_role(
     current_user: Usuario = Depends(get_current_user)
 ) -> Usuario:
     """
-    Valido que el usuario autenticado posea rol de Gerencia (id_rol == 4) o Administrador (id_rol == 5).
+    Valido que el usuario autenticado posea rol de Gerencia (id_rol == 4), Administrador (id_rol == 5)
+    o Auditor / Gerente Auditor (id_rol == 8).
     Lanzo 403 Forbidden si el rol no está autorizado para acceder al panel gerencial (HU-5.1).
     """
-    if current_user.id_rol not in [4, 5]:
+    if current_user.id_rol not in [4, 5, 8]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Acceso restringido: Se requieren privilegios gerenciales o de Administrador."
+            detail="Acceso restringido: Se requieren privilegios gerenciales o de Auditoría."
         )
     return current_user
 
@@ -195,11 +212,11 @@ def require_auditoria_or_caja_role(
 ) -> Usuario:
     """
     Valido que el usuario autenticado posea rol de Caja (id_rol == 3),
-    Gerencia General (id_rol == 4) o Administrador (id_rol == 5) para
+    Gerencia General (id_rol == 4), Administrador (id_rol == 5) o Auditor (id_rol == 8) para
     acceder al historial y visor de auditoría de órdenes (HU-5.2).
     Lanzo 403 Forbidden si el rol no está autorizado.
     """
-    if current_user.id_rol not in [3, 4, 5]:
+    if current_user.id_rol not in [3, 4, 5, 8]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=(
@@ -208,4 +225,5 @@ def require_auditoria_or_caja_role(
             )
         )
     return current_user
+
 

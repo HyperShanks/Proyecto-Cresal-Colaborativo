@@ -13,7 +13,7 @@ class ThemeController {
   static void actualizarPorRol(int? idRol) {
     if (idRol == 1) {
       themeMode.value = ThemeMode.dark;
-    } else if (idRol != null && [2, 3, 4, 5, 6, 7].contains(idRol)) {
+    } else if (idRol != null && [2, 3, 4, 5, 6, 7, 8].contains(idRol)) {
       themeMode.value = ThemeMode.light;
     } else {
       themeMode.value = ThemeMode.dark;

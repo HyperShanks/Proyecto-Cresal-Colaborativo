@@ -24,6 +24,7 @@ from core.security import (
     get_current_user,
     verificar_rol_jefe_ventas,
     verificar_rol_tasacion,
+    require_inventario_maestro_read,
     require_bodeguero_or_admin,
 )
 from schemas import (
@@ -837,7 +838,7 @@ def obtener_maestro_inventario(
     limit: int = Query(15, ge=1, le=100, description="Límite por página"),
     offset: int = Query(0, ge=0, description="Desplazamiento para paginación"),
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(verificar_rol_tasacion),
+    current_user: Usuario = Depends(require_inventario_maestro_read),
 ):
     limpiar_reservas_expiradas(db)
     query = (
