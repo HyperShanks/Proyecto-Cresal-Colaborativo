@@ -10,7 +10,7 @@
 ; ==============================================================================
 
 #define MyAppName "Cresal"
-#define MyAppVersion "1.0.4"
+#define MyAppVersion "1.0.5"
 #define MyAppPublisher "Cresal Automotriz SpA"
 #define MyAppURL "https://cresal.cl"
 #define MyAppExeName "Cresal.exe"
