@@ -18,7 +18,7 @@ Este documento detalla los usuarios activos cargados y sincronizados en la base 
 | **5** | **Administrador** | Admin Sistema Cresal | `11.111.111-1` | `admin@cresal.cl` | `Password123!` | `5005` | Viña del Mar (1) | Desktop / Laptop Técnica | **Light Mode** (`ThemeMode.light`) |
 | **6** | **Jefe de Ventas** | Gastón Marcelo Zamora Herrera | `21.337.385-4` | `gastonzamoracc@gmail.com` | `Password123!` | `6006` | Viña del Mar (1) | Laptop / Monitor de Ventas | **Light Mode** (`ThemeMode.light`) |
 | **7** | **Vendedor Online** | Marcela Online Soto | `12.345.678-9` | `marcela.online@cresal.cl` | `Password123!` | `7007` | Viña del Mar (1) | Desktop Omnicanal | **Light Mode** (`ThemeMode.light`) |
-| **8** | **Auditor** *(Gerente Solo Lectura)* | Carlos Gerente Auditor | `13.456.789-0` | `gerenteauditor@cresal.cl`<br>*(Alias Prod: `ricardocrovetto@cresal.cl`)* | `Password123!` | `8008` | Viña del Mar (1) | Desktop / Monitor Ejecutivo | **Light Mode** (`ThemeMode.light`) |
+| **8** | **Auditor** *(Gerente Solo Lectura)* | Carlos Gerente Auditor | `13.456.789-0` | `gerenteauditor@cresal.cl` | `Password123!` | `8008` | Viña del Mar (1) | Desktop / Monitor Ejecutivo | **Light Mode** (`ThemeMode.light`) |
 
 ---
 
@@ -133,12 +133,11 @@ En la industria de software logístico y retail automotriz, la asignación de te
 ---
 
 ### 8. Auditor / Gerente Solo Lectura (`id_rol = 8`)
-- **Usuario**: `gerenteauditor@cresal.cl` *(Alias Producción: `ricardocrovetto@cresal.cl`)*
+- **Usuario**: `gerenteauditor@cresal.cl`
 - **PIN**: `8008`
 - **UUID (`id_usuario`)**: `8f41e0a1-7b82-4912-9c13-a41b89ef4128`
 - **Ruta Principal**: `/gerencia` (Dashboard Ejecutivo)
 - **Tema Visual**: Light Mode (`ThemeMode.light`)
-- **Nombre en Perfil/Interfaz**: Mostrado dinámicamente como **"Gerente"** exclusivamente cuando el correo es `ricardocrovetto@cresal.cl`.
 - **Módulos y Rutas Habilitadas (Solo Lectura)**:
   - `/gerencia`: Panel Ejecutivo y Analítica en Tiempo Real (HU-5.1).
   - Pestaña **Dashboard**: Supervisión de KPIs de facturación, márgenes comerciales, métodos de pago y flujo de despachos.

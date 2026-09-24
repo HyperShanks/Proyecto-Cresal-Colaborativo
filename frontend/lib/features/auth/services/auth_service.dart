@@ -430,20 +430,6 @@ class AuthService {
     return rLower == 'gerente' || rLower == 'administrador' || rLower == 'admin' || rLower == 'jefe de ventas';
   }
 
-  /// Retorna el nombre de rol visible para la interfaz.
-  /// Si idRol == 8 y el correo es 'ricardocrovetto@cresal.cl', devuelve 'Gerente'.
-  static Future<String> getRolVisible() async {
-    final idRol = await getIdRol();
-    final email = (await getEmailUsuario())?.toLowerCase().trim() ?? '';
-    if (idRol == 8) {
-      if (email == 'ricardocrovetto@cresal.cl') {
-        return 'Gerente';
-      }
-      return 'Auditor';
-    }
-    return (await getRol()) ?? '';
-  }
-
   /// Verifica si el usuario actual pertenece al módulo de ventas (Vendedor [2], Jefe de Ventas [6], Vendedor Online [7]).
   static Future<bool> esModuloVentas() async {
     final idRol = await getIdRol();

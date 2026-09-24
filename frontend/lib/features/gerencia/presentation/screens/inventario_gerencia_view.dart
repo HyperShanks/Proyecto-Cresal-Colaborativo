@@ -155,7 +155,7 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
   List<CatalogoItem> _items = [];
   int _totalCount = 0;
   int _pendientesTasacionCount = 0;
-  bool _puedeTasar = true;
+  bool _puedeTasar = false;
 
   @override
   void initState() {
@@ -1228,7 +1228,9 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                           ),
 
                               // Botón de Acción
-                              if (esBloqueado)
+                              if (!_puedeTasar)
+                                const SizedBox.shrink()
+                              else if (esBloqueado)
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                   decoration: BoxDecoration(
@@ -1252,8 +1254,6 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                                     ],
                                   ),
                                 )
-                              else if (!_puedeTasar)
-                                const SizedBox.shrink()
                               else
                                 ElevatedButton.icon(
                                   onPressed: () => _abrirModalTasacion(item),
@@ -1470,7 +1470,8 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
           _buildHeaderCell('SUCURSAL', flex: 2),
           _buildHeaderCell('ESTADO FÍSICO', flex: 2, alignment: Alignment.center),
           _buildHeaderCell('PRECIO TASACIÓN', flex: 2, alignment: Alignment.centerRight),
-          _buildHeaderCell('ACCIÓN', flex: 2, alignment: Alignment.center),
+          if (_puedeTasar)
+            _buildHeaderCell('ACCIÓN', flex: 2, alignment: Alignment.center),
         ],
       ),
     );
@@ -1797,55 +1798,54 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
             ),
 
             // 7. Acción
-            Expanded(
-              flex: 2,
-              child: Center(
-                child: !_puedeTasar
-                    ? const SizedBox.shrink()
-                    : esBloqueado
-                        ? Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: AppPalette.borderLight),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.lock, size: 11, color: Color(0xFF94A3B8)),
-                            const SizedBox(width: 4),
-                            Text(
-                              estadoNombre,
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF94A3B8),
+            if (_puedeTasar)
+              Expanded(
+                flex: 2,
+                child: Center(
+                  child: esBloqueado
+                      ? Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: AppPalette.borderLight),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.lock, size: 11, color: Color(0xFF94A3B8)),
+                              const SizedBox(width: 4),
+                              Text(
+                                estadoNombre,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF94A3B8),
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
+                        )
+                      : ElevatedButton.icon(
+                          onPressed: () => _abrirModalTasacion(item),
+                          icon: Icon(
+                            !tienePrecio || esPaletizado ? Icons.sell : Icons.edit,
+                            size: 13,
+                          ),
+                          label: Text(!tienePrecio || esPaletizado ? 'Tasar' : 'Precio'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: !tienePrecio || esPaletizado
+                                ? const Color(0xFFEA580C)
+                                : AppPalette.tertiary,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                          ),
                         ),
-                      )
-                    : ElevatedButton.icon(
-                        onPressed: () => _abrirModalTasacion(item),
-                        icon: Icon(
-                          !tienePrecio || esPaletizado ? Icons.sell : Icons.edit,
-                          size: 13,
-                        ),
-                        label: Text(!tienePrecio || esPaletizado ? 'Tasar' : 'Precio'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: !tienePrecio || esPaletizado
-                              ? const Color(0xFFEA580C)
-                              : AppPalette.tertiary,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-                        ),
-                      ),
+                ),
               ),
-            ),
           ],
         ),
       ),
