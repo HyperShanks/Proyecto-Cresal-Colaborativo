@@ -1046,6 +1046,10 @@ void main() {
 
   group('DialogoReasignarVendedor Widget Tests', () {
     testWidgets('Muestra banner de advertencia, carga vendedores y permite reasignar', (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
       bool reasignadoExitoso = false;
 
       final mockClient = MockClient((request) async {
@@ -1166,6 +1170,60 @@ void main() {
 
       expect(reasignadoExitoso, isTrue);
       expect(find.text('Reasignar Venta'), findsNothing);
+    });
+
+    testWidgets('DialogoReasignarVendedor - Garantía Responsive (Extend): No hay pixel overflow en pantalla móvil estrecha (320px)', (tester) async {
+      tester.view.physicalSize = const Size(320, 600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final mockClient = MockClient((request) async {
+        return http.Response(
+          jsonEncode([
+            {
+              'id_usuario': 'v-1',
+              'nombre_completo': 'Juan Pérez González',
+              'rut': '12.345.678-9',
+              'id_sucursal': 1,
+              'id_rol': 2,
+              'rol_nombre': 'Vendedor Mesón',
+            },
+          ]),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      });
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (ctx) => ElevatedButton(
+                onPressed: () {
+                  DialogoReasignarVendedor.mostrar(
+                    ctx,
+                    idOrden: 'ord-320',
+                    folio: 'ORD-RESPONSIVE-320',
+                    idVendedorActual: 'vend-old',
+                    nombreVendedorActual: 'Vendedor Anterior Largo Nombre',
+                    client: mockClient,
+                  );
+                },
+                child: const Text('Abrir Reasignar 320'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Abrir Reasignar 320'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(find.byType(DialogoReasignarVendedor), findsOneWidget);
+      expect(find.text('Reasignar Venta'), findsOneWidget);
+      expect(find.byKey(const Key('btn_confirmar_reasignacion')), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
   });
 }

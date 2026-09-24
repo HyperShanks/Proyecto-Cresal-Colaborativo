@@ -549,72 +549,101 @@ class _DialogoReasignarVendedorState extends State<DialogoReasignarVendedor> {
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: _enviando ? null : () => Navigator.of(context).pop(false),
-          child: Text(
-            'CANCELAR',
-            style: AppTypography.button.copyWith(
-              color: AppPalette.textSecondary,
+        // Botones en columna con ancho completo (Extend) para evitar overflow de píxeles en móviles estrechos (320px)
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Builder(
+              builder: (context) {
+                final bool tiempoCumplido = _segundosRestantes == 0;
+                final bool puedeConfirmar = !_enviando &&
+                    !_cargandoVendedores &&
+                    tiempoCumplido &&
+                    _heLeidoConfirmacion &&
+                    _vendedorSeleccionado != null;
+
+                String textoBoton;
+                if (_enviando) {
+                  textoBoton = 'REASIGNANDO...';
+                } else if (!tiempoCumplido) {
+                  textoBoton = 'CONFIRMAR (${_segundosRestantes}s)';
+                } else {
+                  textoBoton = 'CONFIRMAR REASIGNACIÓN';
+                }
+
+                return SizedBox(
+                  width: double.infinity,
+                  height: 46,
+                  child: ElevatedButton.icon(
+                    key: const Key('btn_confirmar_reasignacion'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppPalette.secondary,
+                      foregroundColor: Colors.black,
+                      disabledBackgroundColor: Colors.white12,
+                      disabledForegroundColor: Colors.white38,
+                      elevation: puedeConfirmar ? 2 : 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    icon: _enviando
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(Colors.black),
+                            ),
+                          )
+                        : (!tiempoCumplido
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppPalette.secondary,
+                                ),
+                              )
+                            : const Icon(Icons.check, size: 18)),
+                    label: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        textoBoton,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                    onPressed: puedeConfirmar ? _ejecutarReasignacion : null,
+                  ),
+                );
+              },
             ),
-          ),
-        ),
-        Builder(
-          builder: (context) {
-            final bool tiempoCumplido = _segundosRestantes == 0;
-            final bool puedeConfirmar = !_enviando &&
-                !_cargandoVendedores &&
-                tiempoCumplido &&
-                _heLeidoConfirmacion &&
-                _vendedorSeleccionado != null;
-
-            String textoBoton;
-            if (_enviando) {
-              textoBoton = 'REASIGNANDO...';
-            } else if (!tiempoCumplido) {
-              textoBoton = 'CONFIRMAR (${_segundosRestantes}s)';
-            } else {
-              textoBoton = 'CONFIRMAR REASIGNACIÓN';
-            }
-
-            return ElevatedButton.icon(
-              key: const Key('btn_confirmar_reasignacion'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppPalette.secondary,
-                foregroundColor: Colors.black,
-                disabledBackgroundColor: Colors.white12,
-                disabledForegroundColor: Colors.white38,
-                elevation: puedeConfirmar ? 2 : 0,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              height: 42,
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppPalette.textSecondary,
+                  side: const BorderSide(color: Colors.white24),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8.0),
+                  ),
+                ),
+                onPressed: _enviando
+                    ? null
+                    : () => Navigator.of(context).pop(false),
+                child: const FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text('Cancelar'),
                 ),
               ),
-              icon: _enviando
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
-                      ),
-                    )
-                  : (!tiempoCumplido
-                      ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: AppPalette.secondary,
-                          ),
-                        )
-                      : const Icon(Icons.check, size: 18)),
-              label: Text(
-                textoBoton,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-              ),
-              onPressed: puedeConfirmar ? _ejecutarReasignacion : null,
-            );
-          },
+            ),
+          ],
         ),
       ],
     );
