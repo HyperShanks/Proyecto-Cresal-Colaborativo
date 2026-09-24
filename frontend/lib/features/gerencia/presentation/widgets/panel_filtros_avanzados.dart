@@ -16,6 +16,8 @@ class PanelFiltrosAvanzados extends StatelessWidget {
   final ValueChanged<String> onEstadoChanged;
   final String metodoPagoSeleccionado;
   final ValueChanged<String> onMetodoPagoChanged;
+  final String tipoActivoSeleccionado;
+  final ValueChanged<String> onTipoActivoChanged;
   final VoidCallback onLimpiar;
 
   const PanelFiltrosAvanzados({
@@ -28,6 +30,8 @@ class PanelFiltrosAvanzados extends StatelessWidget {
     required this.onEstadoChanged,
     required this.metodoPagoSeleccionado,
     required this.onMetodoPagoChanged,
+    this.tipoActivoSeleccionado = 'todos',
+    required this.onTipoActivoChanged,
     required this.onLimpiar,
   });
 
@@ -52,14 +56,14 @@ class PanelFiltrosAvanzados extends StatelessWidget {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final isWide = constraints.maxWidth >= 1000;
+          final isWide = constraints.maxWidth >= 1200;
 
           final widgets = [
             // 1. Buscador Predictivo (Folio, Cliente, RUT o Vendedor)
             ConstrainedBox(
               constraints: BoxConstraints(
-                minWidth: 240,
-                maxWidth: isWide ? 340 : double.infinity,
+                minWidth: isWide ? 180 : 200,
+                maxWidth: 340,
               ),
               child: TextField(
                 controller: busquedaController,
@@ -128,7 +132,10 @@ class PanelFiltrosAvanzados extends StatelessWidget {
             // 4. Dropdown de Método de Pago
             _buildDropdownMetodoPago(),
 
-            // 5. Botón Limpiar Filtros
+            // 5. Dropdown de Tipo de Activo (Motores y Cajas, Inventariados, Desarme)
+            _buildDropdownTipoActivo(),
+
+            // 6. Botón Limpiar Filtros
             _buildBotonLimpiar(),
           ];
 
@@ -136,20 +143,22 @@ class PanelFiltrosAvanzados extends StatelessWidget {
             return Row(
               children: [
                 Expanded(child: widgets[0]),
-                const SizedBox(width: 12),
+                const SizedBox(width: 6),
                 widgets[1],
-                const SizedBox(width: 12),
+                const SizedBox(width: 6),
                 widgets[2],
-                const SizedBox(width: 12),
+                const SizedBox(width: 6),
                 widgets[3],
-                const SizedBox(width: 12),
+                const SizedBox(width: 6),
                 widgets[4],
+                const SizedBox(width: 6),
+                widgets[5],
               ],
             );
           } else {
             return Wrap(
-              spacing: 12,
-              runSpacing: 10,
+              spacing: 8,
+              runSpacing: 8,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: widgets,
             );
@@ -184,7 +193,7 @@ class PanelFiltrosAvanzados extends StatelessWidget {
             onTap: () => onPeriodoChanged(p['id']!),
             borderRadius: BorderRadius.circular(6),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
               decoration: BoxDecoration(
                 color: isSelected ? AppPalette.surfaceLight : Colors.transparent,
                 borderRadius: BorderRadius.circular(6),
@@ -269,8 +278,8 @@ class PanelFiltrosAvanzados extends StatelessWidget {
     final metodos = [
       {'value': 'todos', 'label': 'Método: Todos'},
       {'value': 'Transferencia', 'label': 'Transferencia'},
-      {'value': 'Débito', 'label': 'Tarjeta Débito'},
-      {'value': 'Crédito', 'label': 'Tarjeta Crédito'},
+      {'value': 'Débito', 'label': 'Débito'},
+      {'value': 'Crédito', 'label': 'Crédito'},
       {'value': 'Efectivo', 'label': 'Efectivo'},
       {'value': 'Cheque', 'label': 'Cheque'},
     ];
@@ -281,7 +290,7 @@ class PanelFiltrosAvanzados extends StatelessWidget {
 
     return Container(
       height: 32,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(8),
@@ -315,12 +324,63 @@ class PanelFiltrosAvanzados extends StatelessWidget {
     );
   }
 
+  Widget _buildDropdownTipoActivo() {
+    final tipos = [
+      {'value': 'todos', 'label': 'Tipo: Todos'},
+      {'value': 'MOTORES_CAJAS', 'label': '⚙️ Solo Motores y Cajas'},
+    ];
+
+    final effectiveValue = tipos.any((t) => t['value'] == tipoActivoSeleccionado)
+        ? tipoActivoSeleccionado
+        : 'todos';
+    final isActive = effectiveValue != 'todos';
+
+    return Container(
+      height: 32,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: isActive ? const Color(0xFFEEF2FF) : Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isActive ? const Color(0xFF6366F1) : AppPalette.borderLight,
+          width: isActive ? 1.4 : 1.0,
+        ),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: effectiveValue,
+          dropdownColor: Colors.white,
+          icon: Icon(
+            Icons.expand_more,
+            size: 16,
+            color: isActive ? const Color(0xFF4338CA) : const Color(0xFF64748B),
+          ),
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+            color: isActive ? const Color(0xFF4338CA) : const Color(0xFF334155),
+          ),
+          items: tipos.map((t) {
+            return DropdownMenuItem<String>(
+              value: t['value'],
+              child: Text(t['label']!),
+            );
+          }).toList(),
+          onChanged: (val) {
+            if (val != null) onTipoActivoChanged(val);
+          },
+        ),
+      ),
+    );
+  }
+
   int get _cantidadFiltrosActivos {
     int count = 0;
     if (busquedaController.text.trim().isNotEmpty) count++;
     if (periodoSeleccionado != 'hoy') count++;
     if (estadoSeleccionado.isNotEmpty && estadoSeleccionado.toLowerCase() != 'todos') count++;
     if (metodoPagoSeleccionado.isNotEmpty && metodoPagoSeleccionado.toLowerCase() != 'todos') count++;
+    if (tipoActivoSeleccionado.isNotEmpty && tipoActivoSeleccionado.toLowerCase() != 'todos') count++;
     return count;
   }
 

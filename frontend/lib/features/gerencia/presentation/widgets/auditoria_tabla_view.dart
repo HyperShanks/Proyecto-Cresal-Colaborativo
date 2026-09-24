@@ -122,6 +122,45 @@ class AuditoriaTablaView extends StatelessWidget {
     }
   }
 
+  /// Badge distintivo de contenido físico (Opción 1):
+  /// En Cresal, los únicos repuestos inventariados son Motores y Cajas.
+  /// Si la orden incluye un Motor o Caja, muestra el badge ⚙️ Motor / Caja. De lo contrario, retorna null.
+  static Widget? buildBadgeTipoActivo(HistorialOrdenItemModel item) {
+    if (!item.tieneMotorOCaja) {
+      return null;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEEF2FF),
+        borderRadius: BorderRadius.circular(5),
+        border: Border.all(color: const Color(0xFFC7D2FE), width: 0.8),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.settings_rounded, size: 10, color: Color(0xFF4338CA)),
+          SizedBox(width: 3),
+          Flexible(
+            fit: FlexFit.loose,
+            child: Text(
+              'Motor / Caja',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 9.5,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF4338CA),
+                letterSpacing: 0.1,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Formatea la fecha en estilo "Hoy HH:mm" o "dd/MM HH:mm" como en el mockup
   String _formatearFechaHora(HistorialOrdenItemModel item) {
     try {
@@ -180,12 +219,12 @@ class AuditoriaTablaView extends StatelessWidget {
             ),
             child: Row(
               children: [
-                _buildHeaderCell('FOLIO', flex: 12),
+                _buildHeaderCell('FOLIO', flex: 15),
                 _buildHeaderCell('FECHA / HORA', flex: 10),
-                _buildHeaderCell('CLIENTE / RUT', flex: 19),
+                _buildHeaderCell('CLIENTE / RUT', flex: 18),
                 _buildHeaderCell('SUCURSAL', flex: 15),
                 _buildHeaderCell('VENDEDOR / CAJERA', flex: 15),
-                _buildHeaderCell('MÉTODO DE PAGO', flex: 20),
+                _buildHeaderCell('MÉTODO DE PAGO', flex: 18),
                 _buildHeaderCell('TOTAL VENTA', flex: 13),
                 _buildHeaderCell('PENDIENTE', flex: 12),
                 _buildHeaderCell('ESTADO OFICIAL', flex: 13),
@@ -258,18 +297,28 @@ class AuditoriaTablaView extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         child: Row(
           children: [
-            // 1. FOLIO
+            // 1. FOLIO (2 líneas: Folio y Distintivo de Activo Físico/Desarme - Opción 1)
             Expanded(
-              flex: 12,
-              child: Text(
-                item.folioDisplay,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.body.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: const Color(0xFF0F172A),
-                  fontSize: 14,
-                ),
+              flex: 15,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    item.folioDisplay,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.body.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF0F172A),
+                      fontSize: 14,
+                    ),
+                  ),
+                  if (buildBadgeTipoActivo(item) != null) ...[
+                    const SizedBox(height: 3),
+                    buildBadgeTipoActivo(item)!,
+                  ],
+                ],
               ),
             ),
 
@@ -288,7 +337,7 @@ class AuditoriaTablaView extends StatelessWidget {
 
             // 3. CLIENTE / RUT (2 líneas)
             Expanded(
-              flex: 19,
+              flex: 18,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
@@ -371,7 +420,7 @@ class AuditoriaTablaView extends StatelessWidget {
 
             // 6. MÉTODO DE PAGO (Pill + Monto)
             Expanded(
-              flex: 20,
+              flex: 18,
               child: _buildMetodoPagoCell(item),
             ),
 

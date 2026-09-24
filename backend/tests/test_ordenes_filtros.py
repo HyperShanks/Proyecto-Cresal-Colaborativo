@@ -498,3 +498,82 @@ def test_orden_detalle_arbol_completo_auditoria(client, db_session_auditoria):
     assert pago["metodo_pago"] == "Efectivo"
     assert pago["monto"] == 85000
     assert pago["estado_pago"] == "Procesado"
+
+
+def test_ordenes_filtro_por_tipo_activo(client, db_session_auditoria):
+    """
+    Verifico filtrado por motores y cajas (únicos activos inventariados de Cresal):
+    - MOTORES_CAJAS: sólo órdenes que incluyan motores o cajas de cambio
+    """
+    token_gerente = create_access_token(
+        {"sub": str(db_session_auditoria["gerente"].id_usuario)}
+    )
+
+    db = TestingSessionLocal()
+    o_motor = None
+    activo_motor = None
+    try:
+        cat_motor = db.query(Categoria_Activo).filter_by(id_categoria=1).first()
+        if not cat_motor:
+            cat_motor = Categoria_Activo(id_categoria=1, nombre_categoria="Motores")
+            db.add(cat_motor)
+            db.commit()
+
+        activo_motor = Activo_Inventariado(
+            id_activo=uuid.uuid4(),
+            id_sucursal_actual=201,
+            id_categoria=1,
+            sku_qr_fisico="MOT-TEST-001",
+            precio_referencia=500000,
+            id_estado=1,
+        )
+        db.add(activo_motor)
+        db.commit()
+
+        o_motor = Orden_Venta(
+            id_orden=uuid.uuid4(),
+            id_sucursal=201,
+            id_cliente=db_session_auditoria["cliente_perez"].id_cliente,
+            id_vendedor=db_session_auditoria["vendedor"].id_usuario,
+            id_cajera=db_session_auditoria["caja"].id_usuario,
+            estado_orden="Pagada",
+            total_venta=500000,
+            monto_pendiente=0,
+            fecha_creacion=datetime.now(timezone.utc).replace(tzinfo=None),
+            qr_transaccional_salida="ORD-AUD-MOTOR",
+        )
+        db.add(o_motor)
+        db.commit()
+
+        d_motor = Detalle_Orden(
+            id_detalle=uuid.uuid4(),
+            id_orden=o_motor.id_orden,
+            id_activo=activo_motor.id_activo,
+            descripcion_manual="Motor 2.0 HDI Completo",
+            cantidad=1,
+            precio_unitario=500000,
+            precio_final=500000,
+            estado_preparacion="Listo Retiro",
+        )
+        db.add(d_motor)
+        db.commit()
+
+        # Filtro MOTORES_CAJAS (ORD-AUD-MOTOR debe aparecer; 001 y 002 no)
+        res_motores = client.get(
+            "/api/v1/ordenes?tipo_activo=MOTORES_CAJAS",
+            headers={"Authorization": f"Bearer {token_gerente}"},
+        )
+        assert res_motores.status_code == 200
+        folios_motores = [it["folio"] for it in res_motores.json()["items"]]
+        assert "ORD-AUD-MOTOR" in folios_motores
+        assert "ORD-AUD-001" not in folios_motores
+        assert "ORD-AUD-002" not in folios_motores
+    finally:
+        if o_motor:
+            db.query(Detalle_Orden).filter_by(id_orden=o_motor.id_orden).delete()
+            db.query(Orden_Venta).filter_by(id_orden=o_motor.id_orden).delete()
+        if activo_motor:
+            db.query(Activo_Inventariado).filter_by(id_activo=activo_motor.id_activo).delete()
+        db.commit()
+        db.close()
+

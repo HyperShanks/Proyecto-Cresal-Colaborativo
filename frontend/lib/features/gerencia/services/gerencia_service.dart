@@ -130,6 +130,7 @@ class GerenciaService {
     String? fechaInicio,
     String? fechaFin,
     String? metodoPago,
+    String? tipoActivo,
     String? busqueda,
     int pagina = 1,
     int limite = 20,
@@ -160,6 +161,11 @@ class GerenciaService {
           metodoPago.isNotEmpty &&
           metodoPago.toLowerCase() != 'todos') {
         queryParams['metodo_pago'] = metodoPago;
+      }
+      if (tipoActivo != null &&
+          tipoActivo.isNotEmpty &&
+          tipoActivo.toLowerCase() != 'todos') {
+        queryParams['tipo_activo'] = tipoActivo;
       }
       if (busqueda != null && busqueda.trim().isNotEmpty) {
         queryParams['search'] = busqueda.trim();

@@ -37,6 +37,7 @@ class OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
   String _periodo = 'hoy';
   String _estado = 'todos';
   String _metodoPago = 'todos';
+  String _tipoActivo = 'todos';
   int _paginaActual = 1;
 
   bool _isLoading = false;
@@ -80,6 +81,7 @@ class OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
         estado: _estado,
         periodo: _periodo,
         metodoPago: _metodoPago,
+        tipoActivo: _tipoActivo,
         busqueda: _busquedaController.text.trim(),
         pagina: targetPage,
         limite: 20,
@@ -145,7 +147,7 @@ class OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
 
   /// Consulto las órdenes aplicando los criterios multidimensionales actuales.
   Future<void> _cargarOrdenes({int pagina = 1}) async {
-    debugPrint('📦 [GERENCIA-ORDENES] 🔄 Solicitando historial de órdenes (Sucursal: ${_idSucursal ?? "Todas"}, Periodo: $_periodo, Estado: $_estado, Método Pago: $_metodoPago, Pág: $pagina)...');
+    debugPrint('📦 [GERENCIA-ORDENES] 🔄 Solicitando historial de órdenes (Sucursal: ${_idSucursal ?? "Todas"}, Periodo: $_periodo, Estado: $_estado, Método Pago: $_metodoPago, Tipo Activo: $_tipoActivo, Pág: $pagina)...');
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -161,6 +163,7 @@ class OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
         estado: _estado,
         periodo: _periodo,
         metodoPago: _metodoPago,
+        tipoActivo: _tipoActivo,
         busqueda: _busquedaController.text.trim(),
         pagina: _paginaActual,
         limite: 20,
@@ -232,6 +235,14 @@ class OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
     _cargarOrdenes();
   }
 
+  void _onTipoActivoChanged(String nuevoTipo) {
+    setState(() {
+      _tipoActivo = nuevoTipo;
+      _paginaActual = 1;
+    });
+    _cargarOrdenes();
+  }
+
   void _onLimpiarFiltros() {
     _debounceTimer?.cancel();
     _busquedaController.clear();
@@ -239,6 +250,7 @@ class OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
       _periodo = 'hoy';
       _estado = 'todos';
       _metodoPago = 'todos';
+      _tipoActivo = 'todos';
       _paginaActual = 1;
     });
     _cargarOrdenes();
@@ -273,6 +285,8 @@ class OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
           onEstadoChanged: _onEstadoChanged,
           metodoPagoSeleccionado: _metodoPago,
           onMetodoPagoChanged: _onMetodoPagoChanged,
+          tipoActivoSeleccionado: _tipoActivo,
+          onTipoActivoChanged: _onTipoActivoChanged,
           onLimpiar: _onLimpiarFiltros,
         ),
 

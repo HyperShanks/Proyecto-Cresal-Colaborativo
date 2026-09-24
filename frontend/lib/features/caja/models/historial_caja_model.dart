@@ -251,6 +251,49 @@ class HistorialOrdenItemModel {
   bool get esAnulada => estadoOrden == 'Anulada';
   bool get esSplit => modalidadPago.toLowerCase() == 'split';
 
+  /// Retorna true si la orden incluye un Motor o Caja de cambios,
+  /// o si corresponde a una Venta en Verde / Backorder (en Cresal siempre son motores o cajas).
+  bool get tieneMotorOCaja {
+    // 1. Tipo de operación venta en verde o backorder
+    final op = tipoOperacion.toUpperCase();
+    if (op.contains('VERDE') || op.contains('BACKORDER')) {
+      return true;
+    }
+
+    // 2. Detección por artículos: motor, caja, venta en verde o SKU de motor/caja (ej. MOT-1001, CAJ-200)
+    return articulos.any((a) {
+      final cat = (a.categoria ?? '').toLowerCase();
+      final desc = a.descripcion.toLowerCase();
+      final sku = (a.sku ?? '').toLowerCase();
+
+      return cat.contains('motor') ||
+          cat.contains('caja') ||
+          desc.contains('motor') ||
+          desc.contains('caja') ||
+          desc.contains('venta en verde') ||
+          desc.contains('verde') ||
+          desc.contains('backorder') ||
+          sku.startsWith('mot') ||
+          sku.startsWith('caj') ||
+          sku.contains('motor') ||
+          sku.contains('caja');
+    });
+  }
+
+  /// Retorna true si la orden tiene al menos un activo físico inventariado con SKU/QR
+  bool get tieneInventariados =>
+      articulos.any((a) => a.esInventariado || (a.sku != null && a.sku!.isNotEmpty));
+
+  /// Retorna true si todos los ítems de la orden son activos inventariados
+  bool get soloInventariados =>
+      articulos.isNotEmpty &&
+      articulos.every((a) => a.esInventariado || (a.sku != null && a.sku!.isNotEmpty));
+
+  /// Retorna true si la orden contiene tanto ítems inventariados como piezas de desarme/mesón
+  bool get esMixta =>
+      articulos.any((a) => a.esInventariado || (a.sku != null && a.sku!.isNotEmpty)) &&
+      articulos.any((a) => !a.esInventariado && (a.sku == null || a.sku!.isEmpty));
+
   String get folioDisplay {
     if (folio.isNotEmpty && !folio.startsWith('TX-QR-') && !folio.startsWith('TX-')) {
       return folio;

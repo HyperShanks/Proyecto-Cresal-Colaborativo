@@ -102,6 +102,72 @@ void main() {
     ],
   );
 
+  final mockItem3 = HistorialOrdenItemModel(
+    idOrden: 'ord-003-uuid',
+    folio: 'ORD-AUD-003',
+    tipoOperacion: 'VENTA',
+    emiteQr: true,
+    fechaIso: '2026-09-07T12:00:00Z',
+    hora: '12:00',
+    fechaHoraFormateada: '07/09/2026 12:00',
+    clienteNombre: 'Carlos Santana',
+    vendedorNombre: 'Pedro Vendedor',
+    cajeraNombre: 'Lorena Valenzuela',
+    estadoOrden: 'Pagada',
+    modalidadPago: 'unico',
+    metodosResumen: 'Efectivo \$450.000',
+    totalVenta: 450000,
+    abonoPrevio: 0,
+    totalLiquidado: 450000,
+    montoPendiente: 0,
+    sucursalNombre: 'Sucursal Rancagua',
+    desglosePagos: [],
+    articulos: [
+      HistorialArticuloModel(
+        cantidad: 1,
+        tipo: 'INVENTARIADO',
+        descripcion: 'Motor 2.0 HDI Completo',
+        categoria: 'Motor',
+        sku: 'MOT-HDI-003',
+        precio: 450000,
+        subtotal: 450000,
+      ),
+    ],
+    historialMovimientos: [],
+  );
+
+  final mockItem4 = HistorialOrdenItemModel(
+    idOrden: 'ord-004-uuid',
+    folio: 'ORD-AUD-004',
+    tipoOperacion: 'VENTA',
+    emiteQr: true,
+    fechaIso: '2026-09-07T13:00:00Z',
+    hora: '13:00',
+    fechaHoraFormateada: '07/09/2026 13:00',
+    clienteNombre: 'Diego Muñoz',
+    vendedorNombre: 'Pedro Vendedor',
+    cajeraNombre: 'Lorena Valenzuela',
+    estadoOrden: 'Pagada',
+    modalidadPago: 'unico',
+    metodosResumen: 'Efectivo \$25.000',
+    totalVenta: 250000,
+    abonoPrevio: 0,
+    totalLiquidado: 250000,
+    montoPendiente: 0,
+    sucursalNombre: 'Sucursal La Calera',
+    desglosePagos: [],
+    articulos: [
+      HistorialArticuloModel(
+        cantidad: 1,
+        tipo: 'DESARME',
+        descripcion: 'Espejo Lateral Derecho Usado',
+        precio: 25000,
+        subtotal: 25000,
+      ),
+    ],
+    historialMovimientos: [],
+  );
+
   group('1. PanelFiltrosAvanzados (HU-5.2)', () {
     testWidgets('Renderiza controles de filtrado multidimensional según prototipo',
         (tester) async {
@@ -114,6 +180,7 @@ void main() {
       String periodo = 'todos';
       String estado = 'todos';
       String metodo = 'todos';
+      String tipoActivo = 'todos';
       bool limpioTriggered = false;
 
       await tester.pumpWidget(
@@ -128,6 +195,8 @@ void main() {
               onEstadoChanged: (e) => estado = e,
               metodoPagoSeleccionado: metodo,
               onMetodoPagoChanged: (m) => metodo = m,
+              tipoActivoSeleccionado: tipoActivo,
+              onTipoActivoChanged: (t) => tipoActivo = t,
               onLimpiar: () => limpioTriggered = true,
             ),
           ),
@@ -149,6 +218,7 @@ void main() {
       // Verificamos selects
       expect(find.text('Estado: Todos'), findsOneWidget);
       expect(find.text('Método: Todos'), findsOneWidget);
+      expect(find.text('Tipo: Todos'), findsOneWidget);
 
       // Verificamos botón Limpiar y su callback
       final btnLimpiar = find.text('Limpiar');
@@ -179,11 +249,11 @@ void main() {
             body: SizedBox(
               height: 600,
               child: AuditoriaTablaView(
-                items: [mockItem1, mockItem2],
+                items: [mockItem1, mockItem2, mockItem3, mockItem4],
                 paginaActual: 1,
                 totalPaginas: 1,
-                totalRegistros: 2,
-                totalConsolidado: 235000,
+                totalRegistros: 4,
+                totalConsolidado: 935000,
                 onCambiarPagina: (_) {},
                 onVerDetalle: (orden) => ordenAuditada = orden,
               ),
@@ -207,23 +277,30 @@ void main() {
       // 2. Verificamos celdas de las órdenes
       expect(find.text('ORD-AUD-001'), findsOneWidget);
       expect(find.text('ORD-AUD-002'), findsOneWidget);
+      expect(find.text('ORD-AUD-003'), findsOneWidget);
+      expect(find.text('ORD-AUD-004'), findsOneWidget);
       expect(find.text('Casa Matriz (Viña)'), findsOneWidget);
       expect(find.text('Patio Desarme (Limache)'), findsOneWidget);
 
       // 3. Verificamos columna PENDIENTE: '—' para orden 1 pagada, y '$50.000' para orden 2 abonada
-      expect(find.text('—'), findsOneWidget);
+      expect(find.text('—'), findsNWidgets(3));
       expect(find.text('\$50.000'), findsOneWidget);
 
-      // 4. Verificamos botones de acción "Auditar" con ícono de ojo
-      final botonesAuditar = find.text('Auditar');
-      expect(botonesAuditar, findsNWidgets(2));
-      expect(find.byIcon(Icons.visibility_outlined), findsNWidgets(2));
+      // 4. Verificamos distintivos en FOLIO (Opción 1: sólo para motores y cajas)
+      expect(find.text('Motor / Caja'), findsOneWidget);
+      expect(find.text('Inventariado'), findsNothing);
+      expect(find.text('Desarme'), findsNothing);
 
-      // 5. Verificamos pie de tabla integrado
+      // 5. Verificamos botones de acción "Auditar" con ícono de ojo
+      final botonesAuditar = find.text('Auditar');
+      expect(botonesAuditar, findsNWidgets(4));
+      expect(find.byIcon(Icons.visibility_outlined), findsNWidgets(4));
+
+      // 6. Verificamos pie de tabla integrado
       expect(find.textContaining('Mostrando '), findsOneWidget);
       expect(find.textContaining('Total Consolidado en Vista: '), findsOneWidget);
 
-      // 6. Verificamos clic en auditar la primera orden
+      // 7. Verificamos clic en auditar la primera orden
       await tester.tap(botonesAuditar.first);
       expect(ordenAuditada, isNotNull);
       expect(ordenAuditada!.folio, 'ORD-AUD-001');
@@ -243,7 +320,7 @@ void main() {
           home: Scaffold(
             body: Builder(
               builder: (context) => ElevatedButton(
-                onPressed: () => AuditoriaDetalleDialog.show(context, mockItem1),
+                onPressed: () => AuditoriaDetalleDialog.show(context, mockItem3),
                 child: const Text('Abrir Modal'),
               ),
             ),
@@ -254,21 +331,23 @@ void main() {
       await tester.tap(find.text('Abrir Modal'));
       await tester.pumpAndSettle();
 
-      // 1. Verificamos cabecera oficial
+      // 1. Verificamos cabecera oficial con Folio y Badge de Motor / Caja
       expect(find.text('AUDITORÍA DE VENTA'), findsOneWidget);
-      expect(find.text('ORD-AUD-001'), findsOneWidget);
+      expect(find.text('ORD-AUD-003'), findsOneWidget);
+      expect(find.text('Motor / Caja'), findsOneWidget);
 
       // 2. Verificamos tarjeta de Cliente y Responsables
       expect(find.text('CLIENTE'), findsOneWidget);
-      expect(find.text('Juan Carlos Pérez Cotapos'), findsOneWidget);
+      expect(find.text('Carlos Santana'), findsOneWidget);
       expect(find.text('RESPONSABLES'), findsOneWidget);
-      expect(find.textContaining('Pedro Vendedor'), findsOneWidget);
+      expect(find.textContaining('Pedro Vendedor'), findsWidgets);
 
-      // 3. Verificamos desglose de artículos con badge 1x
+      // 3. Verificamos desglose de artículos con badge 1x y tag de Activo Físico
       expect(find.text('ARTÍCULOS Y REPUESTOS'), findsOneWidget);
       expect(find.text('1x'), findsOneWidget);
-      expect(find.text('Amortiguador Delantero'), findsOneWidget);
-      expect(find.text('SKU: AMORT-FRON-001'), findsOneWidget);
+      expect(find.text('Motor 2.0 HDI Completo'), findsOneWidget);
+      expect(find.textContaining('SKU: MOT-HDI-003'), findsOneWidget);
+      expect(find.text('Activo Físico'), findsOneWidget);
 
       // 4. Verificamos desglose de pagos y total liquidado
       expect(find.text('DESGLOSE EXACTO DE PAGOS'), findsOneWidget);

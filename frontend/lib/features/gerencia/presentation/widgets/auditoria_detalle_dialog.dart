@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../../caja/models/historial_caja_model.dart';
 import '../../../caja/presentation/widgets/cobro_pendiente_card.dart';
+import 'auditoria_tabla_view.dart';
 
 /// Modal Forense 360° de Auditoría de Venta para Gerencia (HU-5.2).
 /// Diseñado para replicar fielmente el modal del mockup oficial:
@@ -154,15 +155,24 @@ class AuditoriaDetalleDialog extends StatelessWidget {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          orden.folioDisplay,
-                          style: AppTypography.headline.copyWith(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w900,
-                            color: const Color(0xFF0284C7),
-                            letterSpacing: -0.5,
-                          ),
+                        const SizedBox(height: 6),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Text(
+                              orden.folioDisplay,
+                              style: AppTypography.headline.copyWith(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w900,
+                                color: const Color(0xFF0284C7),
+                                letterSpacing: -0.5,
+                              ),
+                            ),
+                            if (AuditoriaTablaView.buildBadgeTipoActivo(orden) != null) ...[
+                              const SizedBox(width: 10),
+                              AuditoriaTablaView.buildBadgeTipoActivo(orden)!,
+                            ],
+                          ],
                         ),
                         const SizedBox(height: 2),
                         Text(
@@ -475,12 +485,38 @@ class AuditoriaDetalleDialog extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                               ),
                               if (art.sku != null && art.sku!.isNotEmpty)
-                                Text(
-                                  'SKU: ${art.sku}',
-                                  style: AppTypography.small.copyWith(
-                                    color: const Color(0xFF94A3B8),
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w500,
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Wrap(
+                                    spacing: 6,
+                                    runSpacing: 2,
+                                    crossAxisAlignment: WrapCrossAlignment.center,
+                                    children: [
+                                      Text(
+                                        'SKU: ${art.sku}',
+                                        style: AppTypography.small.copyWith(
+                                          color: const Color(0xFF64748B),
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFECFDF5),
+                                          borderRadius: BorderRadius.circular(4),
+                                          border: Border.all(color: const Color(0xFFA7F3D0), width: 0.8),
+                                        ),
+                                        child: const Text(
+                                          'Activo Físico',
+                                          style: TextStyle(
+                                            fontSize: 9.5,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF059669),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                             ],

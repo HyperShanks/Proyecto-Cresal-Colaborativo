@@ -525,6 +525,8 @@ def listar_ordenes_auditoria(
     fecha_desde: Optional[str] = Query(None, description="Alias para fecha_inicio"),
     fecha_hasta: Optional[str] = Query(None, description="Alias para fecha_fin"),
     metodo_pago: Optional[str] = Query(None, description="Filtro por método de pago"),
+    tipo_activo: Optional[str] = Query(None, description="Filtro por tipo de activo: 'TODOS', 'MOTORES_CAJAS'"),
+    tipo: Optional[str] = Query(None, description="Alias para tipo_activo"),
     search: Optional[str] = Query(None, description="Búsqueda predictiva (Folio, RUT, Cliente, Vendedor)"),
     busqueda: Optional[str] = Query(None, description="Alias para search"),
     pagina: int = Query(1, ge=1, description="Número de página"),
@@ -577,7 +579,34 @@ def listar_ordenes_auditoria(
         )
         query = query.filter(Orden_Venta.id_orden.in_(subq_pagos))
 
-    # 5. Búsqueda Predictiva y Tolerante
+    # 5. Filtro por Motores y Cajas (únicos activos inventariados en Cresal)
+    target_tipo = tipo_activo or tipo
+    if target_tipo and target_tipo.strip().upper() not in ["TODOS", ""]:
+        tipo_act_clean = target_tipo.strip().upper()
+        if tipo_act_clean in ["MOTORES_CAJAS", "MOTOR_CAJA", "MOTORES", "CAJAS", "INVENTARIADO", "INVENTARIADOS"]:
+            subq_motores_cajas = (
+                db.query(Detalle_Orden.id_orden)
+                .outerjoin(Activo_Inventariado, Detalle_Orden.id_activo == Activo_Inventariado.id_activo)
+                .outerjoin(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
+                .filter(
+                    or_(
+                        Activo_Inventariado.id_categoria.in_([1, 2]),
+                        func.lower(Categoria_Activo.nombre_categoria).like("%motor%"),
+                        func.lower(Categoria_Activo.nombre_categoria).like("%caja%"),
+                        func.lower(Detalle_Orden.descripcion_manual).like("%motor%"),
+                        func.lower(Detalle_Orden.descripcion_manual).like("%caja%"),
+                        func.lower(Detalle_Orden.descripcion_manual).like("%verde%"),
+                        func.lower(Detalle_Orden.descripcion_manual).like("%backorder%"),
+                        func.lower(Detalle_Orden.descripcion_manual).like("%mot-%"),
+                        func.lower(Detalle_Orden.descripcion_manual).like("%caj-%"),
+                        func.lower(Activo_Inventariado.sku_qr_fisico).like("%mot%"),
+                        func.lower(Activo_Inventariado.sku_qr_fisico).like("%caj%"),
+                    )
+                )
+            )
+            query = query.filter(Orden_Venta.id_orden.in_(subq_motores_cajas))
+
+    # 6. Búsqueda Predictiva y Tolerante
     term = (search or busqueda or "").strip()
     if term:
         term_clean_rut = term.replace(".", "").replace("-", "").strip()
@@ -675,6 +704,10 @@ def listar_ordenes_auditoria(
                     sku=sku_val,
                     precio=det.precio_unitario or 0,
                     subtotal=det.precio_final or ((det.precio_unitario or 0) * (det.cantidad or 1)),
+                    categoria=cat.nombre_categoria if cat else None,
+                    marca=veh.marca if veh else None,
+                    modelo=veh.modelo if veh else None,
+                    anio=veh.anio if veh else None,
                 )
             )
 
