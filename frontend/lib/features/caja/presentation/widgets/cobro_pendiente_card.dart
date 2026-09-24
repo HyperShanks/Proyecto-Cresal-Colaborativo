@@ -247,7 +247,7 @@ class CobroPendienteCard extends StatelessWidget {
                               '${orden.fechaEmisionFormateada} • ${orden.horaEmisionFormateada}',
                               style: AppTypography.small.copyWith(
                                 color: AppPalette.textSecondaryLight,
-                                fontSize: 13,
+                                fontSize: 14,
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -282,7 +282,7 @@ class CobroPendienteCard extends StatelessWidget {
                             relativeTime,
                             style: AppTypography.small.copyWith(
                               color: AppPalette.textPrimaryLight,
-                              fontSize: 13,
+                              fontSize: 12,
                               fontWeight: FontWeight.w700,
                             ),
                           ),

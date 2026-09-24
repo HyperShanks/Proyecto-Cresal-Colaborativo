@@ -5,6 +5,7 @@ from datetime import datetime, timezone, time, timedelta, date
 from uuid import UUID
 from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, Query, HTTPException, status
+from sqlalchemy import or_, and_, func, select
 from sqlalchemy.orm import Session, aliased
 
 from database import get_db
@@ -67,6 +68,13 @@ def format_chile_datetime(dt: Optional[datetime]) -> tuple[str, str, datetime]:
         dt_utc = dt.astimezone(timezone.utc)
     dt_chile = dt_utc.astimezone(tz_chile)
     return dt_chile.strftime("%d/%m/%Y"), dt_chile.strftime("%H:%M"), dt_utc
+
+
+def strip_accents(s: str) -> str:
+    import unicodedata
+    if not s:
+        return ""
+    return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn").lower()
 
 
 @router.get(
@@ -1174,7 +1182,27 @@ def obtener_historial_caja(
     )
 
     if start_utc is not None and end_utc is not None:
-        query = query.filter(Orden_Venta.fecha_creacion.between(start_utc, end_utc))
+        # Una orden pertenece al período contable de caja si:
+        # a) Tiene transacciones de pago registradas dentro del período, ó
+        # b) No tiene transacciones de pago pero su fecha_actualizacion o fecha_creacion está en el período (ej: anuladas)
+        subq_pagos = (
+            select(Transaccion_Pago.id_orden)
+            .filter(
+                Transaccion_Pago.id_orden.isnot(None),
+                Transaccion_Pago.fecha_pago.between(start_utc, end_utc),
+            )
+        )
+        subq_todos_pagos = (
+            select(Transaccion_Pago.id_orden)
+            .filter(Transaccion_Pago.id_orden.isnot(None))
+        )
+
+        cond_con_pago_en_periodo = Orden_Venta.id_orden.in_(subq_pagos)
+        cond_sin_pagos_en_periodo = and_(
+            Orden_Venta.id_orden.notin_(subq_todos_pagos),
+            func.coalesce(Orden_Venta.fecha_actualizacion, Orden_Venta.fecha_creacion).between(start_utc, end_utc),
+        )
+        query = query.filter(or_(cond_con_pago_en_periodo, cond_sin_pagos_en_periodo))
 
     if estado_orden and estado_orden.strip().upper() != "TODOS":
         query = query.filter(Orden_Venta.estado_orden == estado_orden.strip())
@@ -1214,10 +1242,10 @@ def obtener_historial_caja(
             for p in pagos_db
         ]
 
-        # Filtro por método de pago
+        # Filtro por método de pago normalizando tildes (Débito/Debito, Crédito/Credito)
         if metodo_pago and metodo_pago.strip().upper() != "TODOS":
-            mp_filtro = metodo_pago.strip().lower()
-            encontrado = any(mp_filtro in (p.metodo_pago or "").lower() for p in pagos_db)
+            mp_filtro = strip_accents(metodo_pago.strip())
+            encontrado = any(mp_filtro in strip_accents(p.metodo_pago or "") for p in pagos_db)
             if not encontrado:
                 continue
 
@@ -1310,10 +1338,22 @@ def obtener_historial_caja(
             else:
                 folio_doc = "ORD-0000"
 
-        fecha_fmt, hora_fmt, dt_utc = format_chile_datetime(orden.fecha_creacion)
+        # Fecha operativa de la orden en caja (momento del último pago registrado o actualización de estado)
+        fecha_operativa = orden.fecha_creacion
+        if pagos_db:
+            fechas_pago = [p.fecha_pago for p in pagos_db if p.fecha_pago is not None]
+            if fechas_pago:
+                fecha_operativa = max(fechas_pago)
+        elif orden.fecha_actualizacion:
+            fecha_operativa = orden.fecha_actualizacion
+
+        fecha_fmt, hora_fmt, dt_utc = format_chile_datetime(fecha_operativa)
         dt_chile = dt_utc.astimezone(tz_chile)
         fecha_iso = dt_chile.strftime("%Y-%m-%d")
         fecha_hora_fmt = f"{hora_fmt} - {fecha_fmt}"
+
+        # Hora de emisión inicial en mesón para la trazabilidad
+        _, hora_creacion_fmt, _ = format_chile_datetime(orden.fecha_creacion)
 
         cliente_nombre = f"{cliente.nombres} {cliente.apellidos}".strip()
         vendedor_nombre = f"{vendedor.nombres} {vendedor.apellidos}".strip()
@@ -1334,7 +1374,7 @@ def obtener_historial_caja(
         # Historial de movimientos (auditoría cronológica)
         movimientos: List[HistorialMovimientoDTO] = [
             HistorialMovimientoDTO(
-                hora=hora_fmt,
+                hora=hora_creacion_fmt,
                 evento=f"Orden emitida en Mesón por {vendedor_nombre}",
             )
         ]
@@ -1401,9 +1441,6 @@ def obtener_historial_caja(
 
     # Filtro reactivo de búsqueda multicriterio
     if busqueda and busqueda.strip():
-        def strip_accents(s: str) -> str:
-            import unicodedata
-            return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn").lower()
 
         q_raw = busqueda.strip().lower()
         q = strip_accents(q_raw)
@@ -1470,6 +1507,9 @@ def obtener_historial_caja(
         total_transferencia=tot_transferencia,
         total_cheque=tot_cheque,
     )
+
+    # Ordenar cronológicamente por fecha operativa de caja descendente
+    items_filtrados.sort(key=lambda it: it.fecha_iso + " " + it.hora, reverse=True)
 
     # Paginación
     total_registros = len(items_filtrados)

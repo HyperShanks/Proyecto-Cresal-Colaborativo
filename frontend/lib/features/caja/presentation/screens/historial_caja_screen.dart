@@ -196,7 +196,7 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen>
                 Text(
                   'Control de cobros, arqueo de turno y trazabilidad de ventas',
                   style: AppTypography.small.copyWith(
-                    fontSize: 12,
+                    fontSize: 14,
                     fontWeight: FontWeight.normal,
                     color: AppPalette.textSecondaryLight,
                   ),
@@ -426,6 +426,10 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen>
           ),
           const SizedBox(width: 10),
 
+          // Botón Limpiar Filtros con indicador y contador
+          _buildBotonLimpiarFiltros(state),
+          const SizedBox(width: 10),
+
           // Botón de Sincronización / Refresco
           Container(
             decoration: BoxDecoration(
@@ -447,6 +451,69 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen>
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildBotonLimpiarFiltros(HistorialCajaState state) {
+    final count = state.cantidadFiltrosActivos;
+    final hayFiltros = count > 0;
+
+    return OutlinedButton.icon(
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        backgroundColor: hayFiltros
+            ? AppPalette.primary.withValues(alpha: 0.1)
+            : Colors.transparent,
+        side: BorderSide(
+          color: hayFiltros
+              ? AppPalette.primary
+              : AppPalette.neutral.withValues(alpha: 0.25),
+          width: hayFiltros ? 1.5 : 1.0,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+      icon: Icon(
+        Icons.filter_alt_off_rounded,
+        size: 16,
+        color: hayFiltros ? AppPalette.primary : AppPalette.textSecondaryLight,
+      ),
+      label: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Limpiar',
+            style: AppTypography.button.copyWith(
+              color: hayFiltros ? AppPalette.primary : AppPalette.textSecondaryLight,
+              fontWeight: FontWeight.w700,
+              fontSize: 12,
+            ),
+          ),
+          if (hayFiltros) ...[
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                color: AppPalette.primary,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '$count',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+      onPressed: () {
+        _searchController.clear();
+        _provider.limpiarFiltros();
+      },
     );
   }
 
@@ -590,7 +657,7 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen>
             const SizedBox(height: 6),
             Text(
               'Pruebe seleccionando otro período contable o limpiando la búsqueda.',
-              style: AppTypography.small.copyWith(
+              style: AppTypography.body.copyWith(
                 color: AppPalette.textSecondaryLight,
               ),
             ),

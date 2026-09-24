@@ -57,6 +57,15 @@ class HistorialCajaState {
       fechaDesde != null ||
       fechaHasta != null;
 
+  int get cantidadFiltrosActivos {
+    int count = 0;
+    if (periodo != PeriodoHistorial.hoy || fechaDesde != null || fechaHasta != null) count++;
+    if (estadoOrden != 'TODOS') count++;
+    if (metodoPago != 'TODOS') count++;
+    if (busqueda.trim().isNotEmpty) count++;
+    return count;
+  }
+
   HistorialCajaState copyWith({
     bool? isLoading,
     String? errorMessage,
@@ -102,6 +111,7 @@ class HistorialCajaProvider extends ChangeNotifier {
 
   Timer? _debounceTimer;
   bool _isDisposed = false;
+  int _currentRequestId = 0;
 
   HistorialCajaProvider({
     ICajaService? cajaService,
@@ -114,6 +124,7 @@ class HistorialCajaProvider extends ChangeNotifier {
   }
 
   Future<void> cargarHistorial({int pagina = 1}) async {
+    final requestId = ++_currentRequestId;
     _state = _state.copyWith(
       isLoading: true,
       clearErrorMessage: true,
@@ -135,17 +146,21 @@ class HistorialCajaProvider extends ChangeNotifier {
         pagina: pagina,
       );
 
+      // Si otra petición se disparó mientras esta estaba en vuelo, descartar resultado obsoleto
+      if (requestId != _currentRequestId || _isDisposed) return;
+
       _state = _state.copyWith(
         isLoading: false,
         data: response,
       );
     } catch (e) {
+      if (requestId != _currentRequestId || _isDisposed) return;
       _state = _state.copyWith(
         isLoading: false,
         errorMessage: 'Error al obtener historial de auditoría: $e',
       );
     } finally {
-      if (!_isDisposed) {
+      if (requestId == _currentRequestId && !_isDisposed) {
         notifyListeners();
       }
     }
@@ -153,6 +168,7 @@ class HistorialCajaProvider extends ChangeNotifier {
 
   /// Recarga silenciosa en segundo plano manteniendo la página y filtros activos sin mostrar spinner
   Future<void> cargarHistorialSilencioso({int? pagina}) async {
+    final requestId = ++_currentRequestId;
     final targetPagina = pagina ?? _state.paginaActual;
     try {
       final response = await _cajaService.obtenerHistorialCaja(
@@ -168,6 +184,8 @@ class HistorialCajaProvider extends ChangeNotifier {
         pagina: targetPagina,
       );
 
+      if (requestId != _currentRequestId || _isDisposed) return;
+
       _state = _state.copyWith(
         isLoading: false,
         data: response,
@@ -176,7 +194,7 @@ class HistorialCajaProvider extends ChangeNotifier {
     } catch (_) {
       // Silenciar errores en ciclo en segundo plano
     } finally {
-      if (!_isDisposed) {
+      if (requestId == _currentRequestId && !_isDisposed) {
         notifyListeners();
       }
     }

@@ -585,3 +585,21 @@ def test_historial_excluye_ordenes_reservadas(client, tokens):
     for item in items:
         assert item["estado_orden"] != "Reservada"
 
+
+def test_filtro_metodo_pago_con_tildes_debito_y_credito(client, tokens):
+    """
+    Test 9: Valida que el filtro de método de pago normalice tildes (Débito == Debito).
+    """
+    headers = {"Authorization": f"Bearer {tokens['caja']}"}
+
+    # 'Débito' con tilde debe encontrar ORD-9778 (que tiene pago Débito)
+    r_deb = client.get("/api/v1/caja/historial?sucursal_id=1&periodo=HOY&metodo_pago=Débito", headers=headers)
+    assert r_deb.status_code == 200
+    assert r_deb.json()["total_registros"] == 1
+    assert r_deb.json()["items"][0]["folio"] == "ORD-9778"
+
+    # 'Debito' sin tilde también debe encontrarla
+    r_deb2 = client.get("/api/v1/caja/historial?sucursal_id=1&periodo=HOY&metodo_pago=Debito", headers=headers)
+    assert r_deb2.status_code == 200
+    assert r_deb2.json()["total_registros"] == 1
+

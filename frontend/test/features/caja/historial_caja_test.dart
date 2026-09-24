@@ -484,5 +484,69 @@ void main() {
       expect(find.text('No se encontraron órdenes en este período o filtro'), findsOneWidget);
       expect(find.byIcon(Icons.inbox_rounded), findsOneWidget);
     });
+
+    testWidgets('Botón Limpiar muestra contador activo y restablece filtros al ser pulsado', (tester) async {
+      tester.view.physicalSize = const Size(1366, 768);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final provider = HistorialCajaProvider(
+        cajaService: mockService,
+        sucursalId: 1,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: HistorialCajaScreen(provider: provider),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Inicialmente no hay filtros activos
+      expect(find.text('Limpiar'), findsOneWidget);
+      expect(provider.state.cantidadFiltrosActivos, 0);
+
+      // Activar filtro de estado 'Pagada' y período 'Esta Semana'
+      provider.cambiarFiltroEstado('Pagada');
+      provider.cambiarPeriodo(PeriodoHistorial.estaSemana);
+      await tester.pumpAndSettle();
+
+      // Debe mostrar contador de 2 filtros activos en el botón Limpiar
+      expect(provider.state.cantidadFiltrosActivos, 2);
+      expect(find.text('2'), findsOneWidget);
+
+      // Pulsar Limpiar
+      await tester.tap(find.text('Limpiar'));
+      await tester.pumpAndSettle();
+
+      // Filtros deben quedar restablecidos
+      expect(provider.state.cantidadFiltrosActivos, 0);
+      expect(provider.state.estadoOrden, 'TODOS');
+      expect(provider.state.periodo, PeriodoHistorial.hoy);
+    });
+
+    test('HistorialCajaProvider descarta respuestas asíncronas desfasadas (anti-race condition)', () async {
+      final provider = HistorialCajaProvider(
+        cajaService: mockService,
+        sucursalId: 1,
+        autoCargar: false,
+      );
+
+      // Disparar carga inicial
+      final f1 = provider.cargarHistorial();
+      // Inmediatamente cambiar filtro antes de que f1 termine
+      provider.cambiarFiltroEstado('Pagada');
+
+      await f1;
+
+      // El estado del provider no debe haber sido pisado por f1
+      expect(provider.state.estadoOrden, 'Pagada');
+      if (provider.state.data != null) {
+        expect(provider.state.data!.items.every((it) => it.estadoOrden == 'Pagada'), isTrue);
+      }
+    });
   });
 }
