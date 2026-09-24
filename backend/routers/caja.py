@@ -1030,7 +1030,7 @@ def registrar_cobro(
             else:
                 reserva.estado_reserva = "Confirmada"
                 qr_hash = None
-                folio_doc = f"RES-{str(reserva.id_reserva).replace('-', '')[:4].upper()}"
+                folio_doc = (orden_vinculada.folio if orden_vinculada and orden_vinculada.folio else None) or f"RES-{str(reserva.id_reserva).replace('-', '')[:4].upper()}"
                 estado_resultado = reserva.estado_reserva
 
                 if orden_vinculada:
@@ -1357,9 +1357,15 @@ def obtener_historial_caja(
         fecha_iso = dt_chile.strftime("%Y-%m-%d")
         fecha_hora_fmt = f"{hora_fmt} - {fecha_fmt}"
 
-        # Hora de emisión inicial en mesón para la trazabilidad
-        fecha_creacion_fmt, hora_creacion_fmt, _ = format_chile_datetime(orden.fecha_creacion)
-        fecha_creacion_formateada = f"{fecha_creacion_fmt} a las {hora_creacion_fmt} hrs"
+        # Fechas y horas en formato estándar chileno con año en 2 dígitos (26) para trazabilidad
+        dt_chile_creacion = (orden.fecha_creacion.replace(tzinfo=timezone.utc) if orden.fecha_creacion.tzinfo is None else orden.fecha_creacion).astimezone(tz_chile)
+        fecha_creacion_fmt_26 = dt_chile_creacion.strftime("%d/%m/%y")
+        hora_creacion_fmt = dt_chile_creacion.strftime("%H:%M")
+        fecha_creacion_formateada = f"{fecha_creacion_fmt_26} a las {hora_creacion_fmt} hrs"
+
+        dt_chile_op = (fecha_operativa.replace(tzinfo=timezone.utc) if fecha_operativa.tzinfo is None else fecha_operativa).astimezone(tz_chile)
+        fecha_fmt_26 = dt_chile_op.strftime("%d/%m/%y")
+        hora_fmt = dt_chile_op.strftime("%H:%M")
 
         cliente_nombre = f"{cliente.nombres} {cliente.apellidos}".strip()
         vendedor_nombre = f"{vendedor.nombres} {vendedor.apellidos}".strip()
@@ -1377,17 +1383,19 @@ def obtener_historial_caja(
 
         abono_prev = max(0, orden.total_venta - orden.monto_pendiente - total_liquidado)
 
-        # Historial de movimientos (auditoría cronológica con fecha y hora 24h)
+        # Historial de movimientos (auditoría cronológica con fecha y hora 24h, año 2 dígitos 26)
         movimientos: List[HistorialMovimientoDTO] = [
             HistorialMovimientoDTO(
-                hora=f"{fecha_creacion_fmt} {hora_creacion_fmt} hrs",
+                hora=f"{fecha_creacion_fmt_26} {hora_creacion_fmt} hrs",
                 evento=f"Orden emitida en Mesón por {vendedor_nombre}",
             )
         ]
 
         if desglose_pagos:
             for idx, p in enumerate(desglose_pagos):
-                p_fecha, p_hora, _ = format_chile_datetime(p.fecha_pago)
+                p_dt = (p.fecha_pago.replace(tzinfo=timezone.utc) if p.fecha_pago and p.fecha_pago.tzinfo is None else p.fecha_pago or datetime.now(timezone.utc)).astimezone(tz_chile)
+                p_fecha_26 = p_dt.strftime("%d/%m/%y")
+                p_hora = p_dt.strftime("%H:%M")
                 es_ultimo = (idx == len(desglose_pagos) - 1)
                 if orden.estado_orden in ["Pagada", "Completada", "Despachada"] and es_ultimo and orden.monto_pendiente == 0:
                     evento_str = f"Pago liquidado en ventanilla: {p.metodo_pago} ({format_clp(p.monto)}) por {cajera_nombre}"
@@ -1395,7 +1403,7 @@ def obtener_historial_caja(
                     evento_str = f"Abono registrado en ventanilla: {p.metodo_pago} ({format_clp(p.monto)}) por {cajera_nombre}"
                 movimientos.append(
                     HistorialMovimientoDTO(
-                        hora=f"{p_fecha} {p_hora} hrs",
+                        hora=f"{p_fecha_26} {p_hora} hrs",
                         evento=evento_str,
                     )
                 )
@@ -1403,7 +1411,7 @@ def obtener_historial_caja(
         if orden.qr_transaccional_salida:
             movimientos.append(
                 HistorialMovimientoDTO(
-                    hora=f"{fecha_fmt} {hora_fmt} hrs",
+                    hora=f"{fecha_fmt_26} {hora_fmt} hrs",
                     evento="QR Transaccional generado para barrera de salida",
                 )
             )
@@ -1414,19 +1422,24 @@ def obtener_historial_caja(
             .first()
         )
         if auditoria_barrera:
-            b_fecha, b_hora, _ = format_chile_datetime(auditoria_barrera.fecha_escaneo)
+            b_dt = (auditoria_barrera.fecha_escaneo.replace(tzinfo=timezone.utc) if auditoria_barrera.fecha_escaneo.tzinfo is None else auditoria_barrera.fecha_escaneo).astimezone(tz_chile)
+            b_fecha_26 = b_dt.strftime("%d/%m/%y")
+            b_hora = b_dt.strftime("%H:%M")
             movimientos.append(
                 HistorialMovimientoDTO(
-                    hora=f"{b_fecha} {b_hora} hrs",
+                    hora=f"{b_fecha_26} {b_hora} hrs",
                     evento="Pieza entregada en mesón y validada en barrera de salida",
                 )
             )
 
         if orden.estado_orden == "Anulada":
-            anul_fecha, anul_hora, _ = format_chile_datetime(orden.fecha_actualizacion or orden.fecha_creacion)
+            anul_dt_raw = orden.fecha_actualizacion or orden.fecha_creacion
+            anul_dt = (anul_dt_raw.replace(tzinfo=timezone.utc) if anul_dt_raw.tzinfo is None else anul_dt_raw).astimezone(tz_chile)
+            anul_fecha_26 = anul_dt.strftime("%d/%m/%y")
+            anul_hora = anul_dt.strftime("%H:%M")
             movimientos.append(
                 HistorialMovimientoDTO(
-                    hora=f"{anul_fecha} {anul_hora} hrs",
+                    hora=f"{anul_fecha_26} {anul_hora} hrs",
                     evento="Orden anulada en el sistema",
                 )
             )

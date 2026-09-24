@@ -202,7 +202,7 @@ class DetalleAuditoriaDialog extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Emitida el ${orden.fechaCreacionFormateada ?? orden.fechaHoraFormateada}',
+                        'Emitida el ${orden.fechaCreacionFormateada ?? orden.fechaHoraFormateada}'.replaceAll('/2026', '/26'),
                         style: AppTypography.small.copyWith(
                           color: AppPalette.textSecondaryLight,
                           fontSize: 12,
@@ -582,28 +582,15 @@ class DetalleAuditoriaDialog extends StatelessWidget {
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              pago.idTransaccion != null
-                                  ? 'TX: ${(pago.idTransaccion!.length > 8 ? pago.idTransaccion!.substring(0, 8) : pago.idTransaccion!).toUpperCase()}'
-                                  : 'Transacción Directa',
-                              style: AppTypography.small.copyWith(
-                                color: AppPalette.textPrimaryLight,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 12,
-                              ),
-                            ),
-                            if (pago.fechaPago != null)
-                              Text(
-                                '${pago.fechaPago!.day.toString().padLeft(2, '0')}/${pago.fechaPago!.month.toString().padLeft(2, '0')}/${pago.fechaPago!.year} a las ${pago.fechaPago!.hour.toString().padLeft(2, '0')}:${pago.fechaPago!.minute.toString().padLeft(2, '0')} hrs',
-                                style: AppTypography.small.copyWith(
-                                  color: AppPalette.textSecondaryLight,
-                                  fontSize: 11,
-                                ),
-                              ),
-                          ],
+                        child: Text(
+                          pago.idTransaccion != null
+                              ? 'TX: ${(pago.idTransaccion!.length > 8 ? pago.idTransaccion!.substring(0, 8) : pago.idTransaccion!).toUpperCase()}'
+                              : 'Transacción Directa',
+                          style: AppTypography.small.copyWith(
+                            color: AppPalette.textPrimaryLight,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                          ),
                         ),
                       ),
                       Text(
@@ -647,31 +634,42 @@ class DetalleAuditoriaDialog extends StatelessWidget {
             ),
           ),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: orden.historialMovimientos.map((mov) {
+              final horaDisplay = mov.hora.replaceAll('/2026', '/26');
+              final isLast = mov == orden.historialMovimientos.last;
               return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
+                padding: EdgeInsets.only(bottom: isLast ? 0 : 12),
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(
-                      Icons.schedule_rounded,
-                      size: 15,
-                      color: AppPalette.primary,
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.schedule_rounded,
+                          size: 14,
+                          color: AppPalette.primary,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          horaDisplay,
+                          style: AppTypography.small.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: AppPalette.textPrimaryLight,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      mov.hora,
-                      style: AppTypography.small.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: AppPalette.textPrimaryLight,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
+                    const SizedBox(height: 3),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 20),
                       child: Text(
                         mov.evento,
                         style: AppTypography.small.copyWith(
                           color: AppPalette.textSecondaryLight,
+                          fontSize: 12,
+                          height: 1.3,
                         ),
                       ),
                     ),

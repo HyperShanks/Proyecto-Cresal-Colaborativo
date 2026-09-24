@@ -722,7 +722,9 @@ def listar_ordenes_auditoria(
 
         fecha_iso = dt_chile.strftime("%Y-%m-%d")
         hora = dt_chile.strftime("%H:%M")
+        fecha_creacion_fmt_26 = dt_chile.strftime("%d/%m/%y")
         fecha_hora_formateada = dt_chile.strftime("%H:%M - %d/%m/%Y")
+        fecha_creacion_formateada = f"{fecha_creacion_fmt_26} a las {hora} hrs"
 
         # Pagos asociados recuperados desde memoria (O(1))
         pagos_db = pagos_por_orden.get(orden.id_orden, [])
@@ -747,7 +749,7 @@ def listar_ordenes_auditoria(
         # Artículos recuperados desde memoria (O(1))
         articulos_dto = articulos_por_orden.get(orden.id_orden, [])
 
-        # Timeline de movimientos
+        # Timeline de movimientos (con año en 2 dígitos 26)
         vendedor_nom = f"{vendedor.nombres} {vendedor.apellidos or ''}".strip()
         if cajera:
             cajera_nom = f"{cajera.nombres} {cajera.apellidos or ''}".strip()
@@ -760,26 +762,27 @@ def listar_ordenes_auditoria(
 
         movimientos = [
             HistorialMovimientoDTO(
-                hora=hora,
+                hora=f"{fecha_creacion_fmt_26} {hora} hrs",
                 evento=f"Orden emitida en Mesón por {vendedor_nom}",
             )
         ]
         for p in pagos_db:
             if p.fecha_pago:
                 p_dt = p.fecha_pago if p.fecha_pago.tzinfo else p.fecha_pago.replace(tzinfo=timezone.utc)
-                p_hora = p_dt.astimezone(tz_chile_ordenes).strftime("%H:%M")
+                p_dt_chile = p_dt.astimezone(tz_chile_ordenes)
+                p_hora_str = f"{p_dt_chile.strftime('%d/%m/%y')} {p_dt_chile.strftime('%H:%M')} hrs"
             else:
-                p_hora = hora
+                p_hora_str = f"{fecha_creacion_fmt_26} {hora} hrs"
             movimientos.append(
                 HistorialMovimientoDTO(
-                    hora=p_hora,
+                    hora=p_hora_str,
                     evento=f"Pago liquidado en ventanilla ({p.metodo_pago}: ${p.monto:,.0f})".replace(",", "."),
                 )
             )
         if orden.qr_transaccional_salida:
             movimientos.append(
                 HistorialMovimientoDTO(
-                    hora=hora,
+                    hora=f"{fecha_creacion_fmt_26} {hora} hrs",
                     evento="QR Transaccional generado para barrera de salida",
                 )
             )
@@ -803,6 +806,7 @@ def listar_ordenes_auditoria(
                 fecha_iso=fecha_iso,
                 hora=hora,
                 fecha_hora_formateada=fecha_hora_formateada,
+                fecha_creacion_formateada=fecha_creacion_formateada,
                 cliente_nombre=f"{cliente.nombres} {cliente.apellidos or ''}".strip(),
                 cliente_rut=cliente.rut_cliente,
                 vendedor_nombre=vendedor_nom,

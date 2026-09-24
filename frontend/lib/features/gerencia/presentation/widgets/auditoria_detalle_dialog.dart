@@ -82,10 +82,10 @@ class AuditoriaDetalleDialog extends StatelessWidget {
       }
       final dia = dt.day.toString().padLeft(2, '0');
       final mes = dt.month.toString().padLeft(2, '0');
-      final anio = dt.year;
+      final anio = dt.year.toString().substring(dt.year.toString().length >= 2 ? dt.year.toString().length - 2 : 0);
       return 'Registrada el $dia/$mes/$anio ${orden.hora}';
     } catch (_) {
-      return 'Registrada el ${orden.fechaHoraFormateada}';
+      return 'Registrada el ${orden.fechaHoraFormateada}'.replaceAll('/2026', '/26');
     }
   }
 
@@ -803,23 +803,37 @@ class AuditoriaDetalleDialog extends StatelessWidget {
             ),
           ),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: movimientos.isNotEmpty
                 ? movimientos.map((mov) {
+                    final horaDisplay = mov.hora.replaceAll('/2026', '/26');
+                    final isLast = mov == movimientos.last;
                     return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Row(
+                      padding: EdgeInsets.only(bottom: isLast ? 0 : 10),
+                      child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            mov.hora,
-                            style: AppTypography.small.copyWith(
-                              fontWeight: FontWeight.w800,
-                              color: const Color(0xFF334155),
-                              fontSize: 11,
-                            ),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.access_time_rounded,
+                                size: 13,
+                                color: Color(0xFF64748B),
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                horaDisplay,
+                                style: AppTypography.small.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  color: const Color(0xFF334155),
+                                  fontSize: 11.5,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
+                          const SizedBox(height: 2),
+                          Padding(
+                            padding: const EdgeInsets.only(left: 18),
                             child: Text(
                               mov.evento,
                               style: AppTypography.small.copyWith(
@@ -834,19 +848,30 @@ class AuditoriaDetalleDialog extends StatelessWidget {
                     );
                   }).toList()
                 : [
-                    Row(
+                    Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          orden.hora,
-                          style: AppTypography.small.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: const Color(0xFF334155),
-                            fontSize: 11,
-                          ),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.access_time_rounded,
+                              size: 13,
+                              color: Color(0xFF64748B),
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              orden.hora,
+                              style: AppTypography.small.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF334155),
+                                fontSize: 11.5,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
+                        const SizedBox(height: 2),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 18),
                           child: Text(
                             'Orden emitida en Mesón por ${orden.vendedorNombre}',
                             style: AppTypography.small.copyWith(
@@ -857,20 +882,31 @@ class AuditoriaDetalleDialog extends StatelessWidget {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 6),
-                    Row(
+                    const SizedBox(height: 10),
+                    Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          orden.hora,
-                          style: AppTypography.small.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: const Color(0xFF334155),
-                            fontSize: 11,
-                          ),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.access_time_rounded,
+                              size: 13,
+                              color: Color(0xFF64748B),
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              orden.hora,
+                              style: AppTypography.small.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF334155),
+                                fontSize: 11.5,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
+                        const SizedBox(height: 2),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 18),
                           child: Text(
                             'Pago liquidado en ventanilla por ${orden.cajeraNombre}',
                             style: AppTypography.small.copyWith(

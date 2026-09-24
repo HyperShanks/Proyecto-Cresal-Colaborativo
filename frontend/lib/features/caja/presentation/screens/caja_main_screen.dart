@@ -61,15 +61,23 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
     _cajaPollingManager = SilentPollingManager(
       interval: const Duration(seconds: 12),
       debugLabel: 'CajaPolling',
-      shouldPause: () =>
-          _selectedNavIndex != 0 ||
-          _cajaProvider.isProcesandoCobro ||
-          _cajaProvider.pagosDivididos.isNotEmpty,
+      shouldPause: () {
+        if (_selectedNavIndex == 0) {
+          return _cajaProvider.isProcesandoCobro ||
+              _cajaProvider.pagosDivididos.isNotEmpty;
+        } else if (_selectedNavIndex == 1) {
+          return _historialKey.currentState?.isModalAbierto ?? false;
+        }
+        return true;
+      },
       onPoll: () async {
-        if (mounted && _selectedNavIndex == 0) {
+        if (!mounted) return;
+        if (_selectedNavIndex == 0) {
           await _cajaProvider.cargarCobrosPendientesSilencioso(
             sucursalId: _idSucursal,
           );
+        } else if (_selectedNavIndex == 1) {
+          _historialKey.currentState?.refrescarSilencioso();
         }
       },
     )..start();
@@ -91,10 +99,13 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
   @override
   void didPopNext() {
     super.didPopNext();
-    if (_selectedNavIndex == 0) {
+    // SPEC-HU-TAREA-21: Los modales de auditoría (como ver detalle de una orden) son de solo lectura
+    // y no deben disparar recargas agresivas ni reseteos de página.
+    // Solo si estamos en la bandeja de cobros y no hay operación activa, sincronizamos en background.
+    if (_selectedNavIndex == 0 &&
+        !_cajaProvider.isProcesandoCobro &&
+        _cajaProvider.pagosDivididos.isEmpty) {
       _cajaProvider.cargarCobrosPendientesSilencioso(sucursalId: _idSucursal);
-    } else if (_selectedNavIndex == 1) {
-      _historialKey.currentState?.refrescar();
     }
   }
 
@@ -223,9 +234,13 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
                 _selectedNavIndex = index;
               });
               if (index == 0) {
-                _cajaProvider.cargarCobrosPendientes(sucursalId: _idSucursal);
+                if (_cajaProvider.cobros.isEmpty) {
+                  _cajaProvider.cargarCobrosPendientes(sucursalId: _idSucursal);
+                } else {
+                  _cajaProvider.cargarCobrosPendientesSilencioso(sucursalId: _idSucursal);
+                }
               } else if (index == 1) {
-                _historialKey.currentState?.refrescar();
+                _historialKey.currentState?.refrescarSilencioso();
               }
             },
           ),

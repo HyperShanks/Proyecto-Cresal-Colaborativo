@@ -26,6 +26,7 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen>
   late final HistorialCajaProvider _provider;
   bool _providerInterno = false;
   bool _isModalAbierto = false;
+  bool get isModalAbierto => _isModalAbierto;
   final TextEditingController _searchController = TextEditingController();
 
   @override
@@ -60,9 +61,8 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen>
   @override
   void didPopNext() {
     super.didPopNext();
-    if (!_isModalAbierto) {
-      refrescarSilencioso();
-    }
+    // SPEC-HU-TAREA-21: Los modales de auditoría y filtros son de solo lectura,
+    // no mutan el estado y no deben disparar recargas destructivas ni silenciosas al cerrarse.
   }
 
   /// Método público para forzar recarga (Auto-Refresh SPEC-HU-TAREA-20)
