@@ -506,6 +506,104 @@ class OrdenHistorialModel {
 
 /// Servicio HTTP para la gestión de órdenes de venta en FastAPI (HU-3.4 & HU-3.5).
 class OrdenesService {
+  /// Sanitiza cualquier error o excepción técnica para evitar la exposición de datos sensibles
+  /// (como IPs, dominios de Render, códigos de socket o trazas del sistema) y presentar al
+  /// personal de mesón y caja un mensaje claro, amigable y comprensible.
+  static String sanitizarMensajeError(dynamic error) {
+    if (error == null) {
+      return 'No pudimos cargar el historial en este momento. Revisa tu conexión a internet o intenta nuevamente.';
+    }
+
+    final raw = error is Exception
+        ? error.toString().replaceFirst(RegExp(r'^[A-Za-z0-9_]*Exception:\s*'), '')
+        : error.toString();
+    final lower = raw.toLowerCase();
+
+    // 1. Detección de Timeout / Tiempo de espera
+    if (lower.contains('timeout') ||
+        lower.contains('tiempo de espera') ||
+        lower.contains('timed out') ||
+        lower.contains('deadline')) {
+      return 'El servidor tardó demasiado en responder. Por favor, reintenta en unos instantes.';
+    }
+
+    // 2. Detección de fallos de red / Socket / Handshake / Sin conexión
+    if (lower.contains('socket') ||
+        lower.contains('clientexception') ||
+        lower.contains('connection failed') ||
+        lower.contains('connection refused') ||
+        lower.contains('connection reset') ||
+        lower.contains('connection closed') ||
+        lower.contains('failed host lookup') ||
+        lower.contains('network is unreachable') ||
+        lower.contains('network error') ||
+        lower.contains('handshake') ||
+        lower.contains('errno') ||
+        lower.contains('os error') ||
+        lower.contains('sin conexión') ||
+        lower.contains('no route to host') ||
+        lower.contains('address =') ||
+        lower.contains('port =')) {
+      return 'No pudimos conectar con el servidor. Revisa tu conexión a internet o intenta nuevamente.';
+    }
+
+    // 3. Detección de infraestructura técnica / Render / Cloud / IPs / Trazas internas
+    final contieneIp = RegExp(r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b').hasMatch(raw);
+    final contieneHostTecnico = lower.contains('onrender.com') ||
+        lower.contains('render') ||
+        lower.contains('supabase') ||
+        lower.contains('localhost') ||
+        lower.contains('http://') ||
+        lower.contains('https://') ||
+        lower.contains('traceback') ||
+        lower.contains('stack trace') ||
+        lower.contains('fastapi') ||
+        lower.contains('uvicorn') ||
+        lower.contains('sqlalchemy') ||
+        lower.contains('internal server error') ||
+        lower.contains('bad gateway') ||
+        lower.contains('service unavailable') ||
+        lower.contains('502') ||
+        lower.contains('503') ||
+        lower.contains('504') ||
+        lower.contains('500');
+
+    if (contieneIp || contieneHostTecnico) {
+      return 'El servicio de órdenes no se encuentra disponible temporalmente. Revisa tu conexión o intenta nuevamente en unos momentos.';
+    }
+
+    // 4. Sesión expirada o no autorizada
+    if (lower.contains('sesión expirada') ||
+        lower.contains('unauthorized') ||
+        lower.contains('token inválido') ||
+        lower.contains('401')) {
+      return 'Sesión expirada. Por favor vuelve a iniciar sesión.';
+    }
+
+    // 5. Permisos
+    if (lower.contains('permiso') || lower.contains('403') || lower.contains('forbidden')) {
+      return 'No cuentas con los permisos requeridos para realizar esta acción.';
+    }
+
+    // 6. Mensaje de negocio limpio (sin IPs, URLs ni trazas técnicas)
+    final limpio = raw
+        .replaceAll(RegExp(r'^[A-Za-z0-9_]*Exception:\s*', caseSensitive: false), '')
+        .replaceAll(RegExp(r'^[A-Za-z0-9_]*Error:\s*', caseSensitive: false), '')
+        .trim();
+
+    if (limpio.isNotEmpty &&
+        limpio.length <= 150 &&
+        !limpio.contains('{') &&
+        !limpio.contains('}') &&
+        !limpio.contains('File "') &&
+        !limpio.contains('.dart') &&
+        !limpio.contains('.py')) {
+      return limpio;
+    }
+
+    return 'No pudimos cargar el historial en este momento. Revisa tu conexión a internet o intenta nuevamente.';
+  }
+
   /// Crea una nueva orden de venta transaccional en el backend.
   static Future<OrdenResponseModel> crearOrden(
     Map<String, dynamic> payload, {
@@ -645,6 +743,10 @@ class OrdenesService {
     String? estado,
     bool incluirAnuladas = false,
     String seccion = 'normal',
+    int? limit,
+    int? offset,
+    int? mes,
+    int? anio,
     http.Client? client,
   }) async {
     final httpClient = client ?? http.Client();
@@ -656,6 +758,10 @@ class OrdenesService {
         if (estado != null && estado.isNotEmpty) 'estado': estado,
         if (estado == null && !incluirAnuladas) 'incluir_anuladas': 'false',
         if (seccion.isNotEmpty) 'seccion': seccion,
+        if (limit != null) 'limit': limit.toString(),
+        if (offset != null) 'offset': offset.toString(),
+        if (mes != null) 'mes': mes.toString(),
+        if (anio != null) 'anio': anio.toString(),
       };
 
       final uri = Uri.parse('${ApiConstants.ordenesEndpoint}/mis-ventas')
@@ -701,13 +807,15 @@ class OrdenesService {
         throw Exception('Sesión expirada. Por favor vuelve a iniciar sesión.');
       } else {
         final detail = decodedBody is Map ? decodedBody['detail'] : null;
-        throw Exception(
-          detail?.toString() ?? 'Error al consultar el historial de órdenes (${response.statusCode}).',
-        );
+        final rawMsg = detail?.toString() ??
+            'Error al consultar el historial de órdenes (${response.statusCode}).';
+        throw Exception(sanitizarMensajeError(rawMsg));
       }
     } catch (e) {
-      if (e is Exception) rethrow;
-      throw Exception('Error inesperado al cargar historial de ventas: $e');
+      if (kDebugMode) {
+        debugPrint('⚠️ [ORDENES-SERVICE] Error en obtenerMisVentas: $e');
+      }
+      throw Exception(sanitizarMensajeError(e));
     } finally {
       if (client == null) {
         httpClient.close();
@@ -869,11 +977,14 @@ class OrdenesService {
         throw Exception('Sesión expirada. Por favor vuelve a iniciar sesión.');
       } else {
         final detail = decodedBody is Map ? decodedBody['detail'] : null;
-        throw Exception(detail?.toString() ?? 'Error al anular la orden (${response.statusCode}).');
+        final rawMsg = detail?.toString() ?? 'Error al anular la orden (${response.statusCode}).';
+        throw Exception(sanitizarMensajeError(rawMsg));
       }
     } catch (e) {
-      if (e is Exception) rethrow;
-      throw Exception('Error inesperado al anular la orden: $e');
+      if (kDebugMode) {
+        debugPrint('⚠️ [ORDENES-SERVICE] Error en anularOrden: $e');
+      }
+      throw Exception(sanitizarMensajeError(e));
     } finally {
       if (client == null) {
         httpClient.close();
@@ -944,11 +1055,14 @@ class OrdenesService {
         throw Exception('Sesión expirada. Por favor vuelve a iniciar sesión.');
       } else {
         final detail = decodedBody is Map ? decodedBody['detail'] : null;
-        throw Exception(detail?.toString() ?? 'Error al actualizar instrucciones (${response.statusCode}).');
+        final rawMsg = detail?.toString() ?? 'Error al actualizar instrucciones (${response.statusCode}).';
+        throw Exception(sanitizarMensajeError(rawMsg));
       }
     } catch (e) {
-      if (e is Exception) rethrow;
-      throw Exception('Error inesperado al actualizar instrucciones: $e');
+      if (kDebugMode) {
+        debugPrint('⚠️ [ORDENES-SERVICE] Error en actualizarInstruccionesBodega: $e');
+      }
+      throw Exception(sanitizarMensajeError(e));
     } finally {
       if (client == null) {
         httpClient.close();
@@ -1017,11 +1131,14 @@ class OrdenesService {
         throw Exception('Sesión expirada. Por favor vuelve a iniciar sesión.');
       } else {
         final detail = decodedBody is Map ? decodedBody['detail'] : null;
-        throw Exception(detail?.toString() ?? 'Error al reasignar orden (${response.statusCode}).');
+        final rawMsg = detail?.toString() ?? 'Error al reasignar orden (${response.statusCode}).';
+        throw Exception(sanitizarMensajeError(rawMsg));
       }
     } catch (e) {
-      if (e is Exception) rethrow;
-      throw Exception('Error inesperado al reasignar orden: $e');
+      if (kDebugMode) {
+        debugPrint('⚠️ [ORDENES-SERVICE] Error en reasignarVendedor: $e');
+      }
+      throw Exception(sanitizarMensajeError(e));
     } finally {
       if (client == null) {
         httpClient.close();

@@ -359,15 +359,15 @@ void main() {
         findsOneWidget,
       );
 
-      // Abrir dropdown y verificar que Septiembre 2026 y Agosto 2026 están presentes
+      // Abrir dropdown de mes y verificar que los meses están disponibles
       await tester.tap(find.byKey(const Key('dropdown_mes_historial')));
       await tester.pumpAndSettle();
 
-      expect(find.text('Septiembre 2026'), findsOneWidget);
-      expect(find.text('Agosto 2026'), findsOneWidget);
+      expect(find.text('Septiembre'), findsWidgets);
+      expect(find.text('Agosto'), findsWidgets);
 
-      // Seleccionar Agosto 2026
-      await tester.tap(find.text('Agosto 2026'));
+      // Seleccionar Agosto
+      await tester.tap(find.text('Agosto').last);
       await tester.pumpAndSettle();
 
       // Aplicar filtros

@@ -27,30 +27,58 @@ class PeriodoMesModel {
   int get hashCode => key.hashCode;
 }
 
+/// Nombres oficiales de los meses en español
+const Map<int, String> kMesesDelAnio = {
+  1: 'Enero',
+  2: 'Febrero',
+  3: 'Marzo',
+  4: 'Abril',
+  5: 'Mayo',
+  6: 'Junio',
+  7: 'Julio',
+  8: 'Agosto',
+  9: 'Septiembre',
+  10: 'Octubre',
+  11: 'Noviembre',
+  12: 'Diciembre',
+};
+
 /// Panel lateral derecho (EndDrawer) para el filtrado avanzado de órdenes de venta (HU-3.5).
 /// Implementa Flat Design estricto, sin sombras y con touch targets >= 48x48.
 class HistorialFiltrosDrawer extends StatelessWidget {
   final bool verTodas;
   final String? filtroEstado;
-  final String? periodoMes;
-  final List<PeriodoMesModel>? periodosDisponibles;
+  final int? filtroAnio;
+  final int? filtroMes;
+  final List<int>? aniosDisponibles;
   final ValueChanged<bool> onPeriodoChanged;
   final ValueChanged<String?> onEstadoChanged;
-  final ValueChanged<String?>? onPeriodoMesChanged;
+  final ValueChanged<int?>? onAnioChanged;
+  final ValueChanged<int?>? onMesChanged;
   final VoidCallback onAplicar;
   final VoidCallback onLimpiar;
+
+  // Compatibilidad hacia atrás
+  final String? periodoMes;
+  final List<PeriodoMesModel>? periodosDisponibles;
+  final ValueChanged<String?>? onPeriodoMesChanged;
 
   const HistorialFiltrosDrawer({
     super.key,
     required this.verTodas,
     required this.filtroEstado,
-    this.periodoMes,
-    this.periodosDisponibles,
+    this.filtroAnio,
+    this.filtroMes,
+    this.aniosDisponibles,
     required this.onPeriodoChanged,
     required this.onEstadoChanged,
-    this.onPeriodoMesChanged,
+    this.onAnioChanged,
+    this.onMesChanged,
     required this.onAplicar,
     required this.onLimpiar,
+    this.periodoMes,
+    this.periodosDisponibles,
+    this.onPeriodoMesChanged,
   });
 
   Widget _buildSectionTitle(String title) {
@@ -104,21 +132,23 @@ class HistorialFiltrosDrawer extends StatelessWidget {
     );
   }
 
-  Widget _buildPeriodoDropdown(BuildContext context) {
+  Widget _buildAnioDropdown(BuildContext context) {
+    final anios = aniosDisponibles ?? [2026, 2025, 2024, 2023];
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 4.0),
       decoration: BoxDecoration(
         color: AppPalette.background,
         borderRadius: BorderRadius.circular(8.0),
         border: Border.all(
-          color: periodoMes != null ? AppPalette.primary : Colors.white12,
+          color: filtroAnio != null ? AppPalette.primary : Colors.white12,
           width: 1.0,
         ),
       ),
       child: DropdownButtonHideUnderline(
-        child: DropdownButton<String?>(
-          key: const Key('dropdown_mes_historial'),
-          value: periodoMes,
+        child: DropdownButton<int?>(
+          key: const Key('dropdown_anio_historial'),
+          value: filtroAnio,
           isExpanded: true,
           dropdownColor: AppPalette.surface,
           style: TextStyle(
@@ -129,27 +159,80 @@ class HistorialFiltrosDrawer extends StatelessWidget {
           ),
           icon: const Icon(Icons.keyboard_arrow_down, color: AppPalette.textSecondary),
           hint: const Text(
-            'Todo el Historial (Todos los meses)',
+            'Todos los años',
             style: TextStyle(
               color: Color(0xFFCBD5E1),
               fontSize: 13.5,
             ),
           ),
           items: [
-            const DropdownMenuItem<String?>(
+            const DropdownMenuItem<int?>(
               value: null,
-              child: Text('Todo el Historial (Todos los meses)'),
+              child: Text('Todos los años'),
             ),
-            if (periodosDisponibles != null)
-              ...periodosDisponibles!.map(
-                (p) => DropdownMenuItem<String?>(
-                  value: p.key,
-                  child: Text(p.label),
-                ),
+            ...anios.map(
+              (y) => DropdownMenuItem<int?>(
+                value: y,
+                child: Text('$y'),
               ),
+            ),
           ],
           onChanged: (val) {
-            onPeriodoMesChanged?.call(val);
+            onAnioChanged?.call(val);
+            if (val != null) {
+              onPeriodoChanged(true);
+            }
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMesDropdown(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 4.0),
+      decoration: BoxDecoration(
+        color: AppPalette.background,
+        borderRadius: BorderRadius.circular(8.0),
+        border: Border.all(
+          color: filtroMes != null ? AppPalette.primary : Colors.white12,
+          width: 1.0,
+        ),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<int?>(
+          key: const Key('dropdown_mes_historial'),
+          value: filtroMes,
+          isExpanded: true,
+          dropdownColor: AppPalette.surface,
+          style: TextStyle(
+            color: AppPalette.textPrimary,
+            fontFamily: AppTypography.fontFamily,
+            fontSize: 13.5,
+            fontWeight: FontWeight.w500,
+          ),
+          icon: const Icon(Icons.keyboard_arrow_down, color: AppPalette.textSecondary),
+          hint: const Text(
+            'Todos los meses',
+            style: TextStyle(
+              color: Color(0xFFCBD5E1),
+              fontSize: 13.5,
+            ),
+          ),
+          items: [
+            const DropdownMenuItem<int?>(
+              value: null,
+              child: Text('Todos los meses'),
+            ),
+            ...kMesesDelAnio.entries.map(
+              (e) => DropdownMenuItem<int?>(
+                value: e.key,
+                child: Text(e.value),
+              ),
+            ),
+          ],
+          onChanged: (val) {
+            onMesChanged?.call(val);
             if (val != null) {
               onPeriodoChanged(true);
             }
@@ -233,20 +316,24 @@ class HistorialFiltrosDrawer extends StatelessWidget {
                     children: [
                       _buildChoiceChip(
                         label: 'Ventas de Hoy',
-                        isSelected: !verTodas && periodoMes == null,
+                        isSelected: !verTodas && filtroAnio == null && filtroMes == null && periodoMes == null,
                         onSelected: (selected) {
                           if (selected) {
                             onPeriodoChanged(false);
+                            onAnioChanged?.call(null);
+                            onMesChanged?.call(null);
                             onPeriodoMesChanged?.call(null);
                           }
                         },
                       ),
                       _buildChoiceChip(
                         label: 'Historial Completo',
-                        isSelected: verTodas && periodoMes == null,
+                        isSelected: verTodas && filtroAnio == null && filtroMes == null && periodoMes == null,
                         onSelected: (selected) {
                           if (selected) {
                             onPeriodoChanged(true);
+                            onAnioChanged?.call(null);
+                            onMesChanged?.call(null);
                             onPeriodoMesChanged?.call(null);
                           }
                         },
@@ -255,9 +342,31 @@ class HistorialFiltrosDrawer extends StatelessWidget {
                   ),
 
                   const SizedBox(height: 14.0),
-                  _buildSectionTitle('MES DEL HISTORIAL'),
-                  const SizedBox(height: 8.0),
-                  _buildPeriodoDropdown(context),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildSectionTitle('AÑO'),
+                            const SizedBox(height: 6.0),
+                            _buildAnioDropdown(context),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10.0),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildSectionTitle('MES'),
+                            const SizedBox(height: 6.0),
+                            _buildMesDropdown(context),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
 
                   const SizedBox(height: 24.0),
                   const Divider(color: Colors.white10, height: 1.0),

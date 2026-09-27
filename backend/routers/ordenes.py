@@ -852,6 +852,10 @@ def obtener_mis_ventas(
     estado: Optional[str] = None,
     incluir_anuladas: bool = Query(True, description="Si es False y estado no es 'Anulada', oculta órdenes anuladas"),
     seccion: Optional[str] = Query("normal", description="Sección: 'normal' u 'por_asignar'"),
+    limit: Optional[int] = Query(None, description="Límite de elementos por página"),
+    offset: int = Query(0, ge=0, description="Desplazamiento para paginación"),
+    mes: Optional[int] = Query(None, ge=1, le=12, description="Filtro por mes específico (1 a 12)"),
+    anio: Optional[int] = Query(None, description="Filtro por año específico (ej. 2026)"),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
@@ -902,8 +906,8 @@ def obtener_mis_ventas(
             )
         )
 
-        # Filtro de Rendimiento: Por defecto solo órdenes de hoy
-        if not todas:
+        # Filtro de Rendimiento: Por defecto solo órdenes de hoy, salvo que se pida historial completo o mes/año específico
+        if not todas and mes is None and anio is None:
             try:
                 tz_chile = ZoneInfo("America/Santiago")
             except Exception:
@@ -938,7 +942,13 @@ def obtener_mis_ventas(
         elif not incluir_anuladas:
             query = query.filter(func.lower(Orden_Venta.estado_orden) != "anulada")
 
-    ordenes = query.order_by(
+    # Filtros separados de Mes y Año
+    if anio is not None:
+        query = query.filter(func.extract("year", Orden_Venta.fecha_creacion) == anio)
+    if mes is not None:
+        query = query.filter(func.extract("month", Orden_Venta.fecha_creacion) == mes)
+
+    query_ordered = query.order_by(
         case(
             (func.lower(Orden_Venta.estado_orden) == "anulada", 2),
             (func.lower(Orden_Venta.estado_orden) == "completada", 1),
@@ -946,19 +956,82 @@ def obtener_mis_ventas(
             else_=0,
         ),
         Orden_Venta.fecha_creacion.desc(),
-    ).all()
+    )
+
+    if offset > 0:
+        query_ordered = query_ordered.offset(offset)
+    if limit is not None and limit > 0:
+        query_ordered = query_ordered.limit(limit)
+
+    ordenes = query_ordered.all()
+
+    if not ordenes:
+        return []
+
+    orden_ids = [orden.id_orden for orden in ordenes]
+    cliente_ids = list({orden.id_cliente for orden in ordenes if orden.id_cliente})
+
+    # Carga por lotes para eliminar el cuello de botella N+1
+    clientes_map: Dict[uuid.UUID, Cliente] = {}
+    if cliente_ids:
+        clientes = db.query(Cliente).filter(Cliente.id_cliente.in_(cliente_ids)).all()
+        clientes_map = {c.id_cliente: c for c in clientes}
+
+    despachos = db.query(Despacho).filter(Despacho.id_orden.in_(orden_ids)).all()
+    despachos_map: Dict[uuid.UUID, Despacho] = {d.id_orden: d for d in despachos}
+
+    comuna_ids = set()
+    for c in clientes_map.values():
+        if c.id_comuna:
+            comuna_ids.add(c.id_comuna)
+    for d in despachos:
+        if d.id_comuna_destino:
+            comuna_ids.add(d.id_comuna_destino)
+
+    comunas_map: Dict[int, str] = {}
+    if comuna_ids:
+        comunas = db.query(Comuna).filter(Comuna.id_comuna.in_(comuna_ids)).all()
+        comunas_map = {c.id_comuna: c.nombre_comuna for c in comunas}
+
+    reservas = db.query(Reservas_Backorder).filter(Reservas_Backorder.id_orden.in_(orden_ids)).all()
+    reservas_map: Dict[uuid.UUID, Reservas_Backorder] = {r.id_orden: r for r in reservas}
+    reserva_cat_ids = {r.id_categoria_requerida for r in reservas if r.id_categoria_requerida}
+
+    detalles = (
+        db.query(Detalle_Orden)
+        .filter(Detalle_Orden.id_orden.in_(orden_ids))
+        .order_by(Detalle_Orden.id_detalle.asc())
+        .all()
+    )
+    detalles_map: Dict[uuid.UUID, List[Detalle_Orden]] = defaultdict(list)
+    for d in detalles:
+        detalles_map[d.id_orden].append(d)
+
+    activo_ids = list({d.id_activo for d in detalles if d.id_activo})
+    activos_map = {}
+    if activo_ids:
+        activos_info = (
+            db.query(Activo_Inventariado, Vehiculo_Origen, Categoria_Activo)
+            .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
+            .join(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
+            .filter(Activo_Inventariado.id_activo.in_(activo_ids))
+            .all()
+        )
+        for act, veh, cat in activos_info:
+            activos_map[act.id_activo] = (act, veh, cat)
+
+    categorias_map: Dict[int, Categoria_Activo] = {}
+    if reserva_cat_ids:
+        cats = db.query(Categoria_Activo).filter(Categoria_Activo.id_categoria.in_(reserva_cat_ids)).all()
+        categorias_map = {c.id_categoria: c for c in cats}
 
     resultado = []
     for orden in ordenes:
         # Cliente
-        cliente_db = db.query(Cliente).filter(Cliente.id_cliente == orden.id_cliente).first()
+        cliente_db = clientes_map.get(orden.id_cliente)
         cliente_resumen = None
         if cliente_db:
-            comuna_nombre = None
-            if cliente_db.id_comuna:
-                c_obj = db.query(Comuna).filter(Comuna.id_comuna == cliente_db.id_comuna).first()
-                if c_obj:
-                    comuna_nombre = c_obj.nombre_comuna
+            comuna_nombre = comunas_map.get(cliente_db.id_comuna) if cliente_db.id_comuna else None
             cliente_resumen = ClienteOrdenResumen(
                 rut_cliente=cliente_db.rut_cliente,
                 nombres=cliente_db.nombres,
@@ -969,14 +1042,10 @@ def obtener_mis_ventas(
             )
 
         # Despacho
-        despacho_db = db.query(Despacho).filter(Despacho.id_orden == orden.id_orden).first()
+        despacho_db = despachos_map.get(orden.id_orden)
         despacho_resumen = None
         if despacho_db:
-            comuna_dest_nombre = None
-            if despacho_db.id_comuna_destino:
-                c_dest = db.query(Comuna).filter(Comuna.id_comuna == despacho_db.id_comuna_destino).first()
-                if c_dest:
-                    comuna_dest_nombre = c_dest.nombre_comuna
+            comuna_dest_nombre = comunas_map.get(despacho_db.id_comuna_destino) if despacho_db.id_comuna_destino else None
             despacho_resumen = DespachoOrdenResumen(
                 id_despacho=despacho_db.id_despacho,
                 direccion_envio=despacho_db.direccion_envio,
@@ -990,8 +1059,8 @@ def obtener_mis_ventas(
             )
 
         # Detalle de líneas
-        reserva_asociada = db.query(Reservas_Backorder).filter(Reservas_Backorder.id_orden == orden.id_orden).first()
-        detalles_db = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == orden.id_orden).all()
+        reserva_asociada = reservas_map.get(orden.id_orden)
+        detalles_db = detalles_map.get(orden.id_orden, [])
         detalles_resumen = []
         for d in detalles_db:
             sku_fisico = None
@@ -1002,13 +1071,7 @@ def obtener_mis_ventas(
             nom_cat = None
             if d.id_activo:
                 es_inv = True
-                activo_db = (
-                    db.query(Activo_Inventariado, Vehiculo_Origen, Categoria_Activo)
-                    .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
-                    .join(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
-                    .filter(Activo_Inventariado.id_activo == d.id_activo)
-                    .first()
-                )
+                activo_db = activos_map.get(d.id_activo)
                 if activo_db:
                     act, veh, cat = activo_db
                     sku_fisico = act.sku_qr_fisico
@@ -1020,7 +1083,7 @@ def obtener_mis_ventas(
                     else:
                         titulo_item = f"{nombre_cat} ({sku_fisico})"
             elif reserva_asociada:
-                cat_bo = db.query(Categoria_Activo).filter(Categoria_Activo.id_categoria == reserva_asociada.id_categoria_requerida).first()
+                cat_bo = categorias_map.get(reserva_asociada.id_categoria_requerida)
                 id_cat = cat_bo.id_categoria if cat_bo else None
                 nom_cat = cat_bo.nombre_categoria if cat_bo else "Venta en Verde"
                 if not d.descripcion_manual or "VENTA EN VERDE" in d.descripcion_manual.upper() or "BACKORDER" in d.descripcion_manual.upper():

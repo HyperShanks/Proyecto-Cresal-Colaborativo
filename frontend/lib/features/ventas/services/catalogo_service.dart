@@ -21,7 +21,7 @@ class CatalogoService {
     int? anio,
     String? cilindrada,
     String? transmision,
-    int limit = 15,
+    int limit = 20,
     int offset = 0,
   }) async {
     try {

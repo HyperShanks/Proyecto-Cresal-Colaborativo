@@ -470,7 +470,7 @@ def obtener_catalogo(
     anio: Optional[int] = Query(None, description="Filtro por año"),
     cilindrada: Optional[str] = Query(None, description="Filtro por cilindrada"),
     transmision: Optional[str] = Query(None, description="Filtro por tipo de transmisión"),
-    limit: int = Query(15, ge=1, le=100, description="Límite de elementos por página"),
+    limit: int = Query(20, ge=1, le=100, description="Límite de elementos por página"),
     offset: int = Query(0, ge=0, description="Desplazamiento para paginación"),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),

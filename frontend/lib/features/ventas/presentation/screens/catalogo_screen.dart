@@ -101,7 +101,7 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
   List<CatalogoItem> _items = [];
   int _totalCount = 0;
   int _offset = 0;
-  static const int _limit = 15;
+  static const int _limit = 20;
 
   bool _isLoadingInitial = true;
   bool _isLoadingMore = false;
