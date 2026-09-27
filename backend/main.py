@@ -13,7 +13,7 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="API Cresal-SaaS",
     description="Backend transaccional para gestión de inventario y barrera digital",
-    version="1.0.0"
+    version="1.0.7"
 )
 
 # Registrar Manejadores de Excepciones Globales y Sanitización (SPEC-HU-07)
