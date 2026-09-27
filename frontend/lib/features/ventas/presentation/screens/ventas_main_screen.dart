@@ -39,6 +39,15 @@ class _VentasMainScreenState extends State<VentasMainScreen>
   String? _userSucursal;
   int _pendientesTasacionCount = 0;
   Timer? _updateCheckTimer;
+  bool _isAnyDrawerOpen = false;
+
+  void _handleEndDrawerChanged(bool isOpen) {
+    if (_isAnyDrawerOpen != isOpen && mounted) {
+      setState(() {
+        _isAnyDrawerOpen = isOpen;
+      });
+    }
+  }
 
   @override
   void initState() {
@@ -363,11 +372,13 @@ class _VentasMainScreenState extends State<VentasMainScreen>
       CatalogoScreen(
         key: _catalogoKey,
         onOpenMenuDrawer: () => _scaffoldKey.currentState?.openDrawer(),
+        onEndDrawerChanged: _handleEndDrawerChanged,
       ),
       HistorialScreen(
         key: _historialKey,
         onOpenMenuDrawer: () => _scaffoldKey.currentState?.openDrawer(),
         onRefreshCatalogo: () => _catalogoKey.currentState?.refrescarCatalogo(),
+        onEndDrawerChanged: _handleEndDrawerChanged,
       ),
     ];
 
@@ -456,36 +467,46 @@ class _VentasMainScreenState extends State<VentasMainScreen>
             Positioned.fill(
               child: IndexedStack(index: safeIndex, children: tabs),
             ),
-            Positioned(
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeInOut,
               left: 0,
               right: 0,
-              bottom: 0,
-              child: ListenableBuilder(
-                listenable: CartController.instance,
-                builder: (context, _) {
-                  final totalItems = CartController.instance.totalItems;
-                  final navItems = _buildNavItems(totalItems);
+              bottom: _isAnyDrawerOpen ? -110.0 : 0.0,
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeInOut,
+                opacity: _isAnyDrawerOpen ? 0.0 : 1.0,
+                child: IgnorePointer(
+                  ignoring: _isAnyDrawerOpen,
+                  child: ListenableBuilder(
+                    listenable: CartController.instance,
+                    builder: (context, _) {
+                      final totalItems = CartController.instance.totalItems;
+                      final navItems = _buildNavItems(totalItems);
 
-                  return FloatingGlassNavBar(
-                    currentIndex: safeIndex,
-                    items: navItems,
-                    onTap: (index) {
-                      setState(() {
-                        _currentIndex = index;
-                      });
-                      _actualizarPendientesTasacion();
-                      if (index == 0) {
-                        _catalogoKey.currentState?.refrescarCatalogoSilencioso();
-                      } else if (index == 1) {
-                        _historialKey.currentState?.refrescarSilencioso();
-                      } else if (_esJefeVentas && index == 2) {
-                        _bandejaPreciosKey.currentState?.refrescarSilencioso();
-                      } else if (index == tabs.length - 1) {
-                        CartController.instance.reconciliarConBackend();
-                      }
+                      return FloatingGlassNavBar(
+                        currentIndex: safeIndex,
+                        items: navItems,
+                        onTap: (index) {
+                          setState(() {
+                            _currentIndex = index;
+                          });
+                          _actualizarPendientesTasacion();
+                          if (index == 0) {
+                            _catalogoKey.currentState?.refrescarCatalogoSilencioso();
+                          } else if (index == 1) {
+                            _historialKey.currentState?.refrescarSilencioso();
+                          } else if (_esJefeVentas && index == 2) {
+                            _bandejaPreciosKey.currentState?.refrescarSilencioso();
+                          } else if (index == tabs.length - 1) {
+                            CartController.instance.reconciliarConBackend();
+                          }
+                        },
+                      );
                     },
-                  );
-                },
+                  ),
+                ),
               ),
             ),
           ],

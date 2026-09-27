@@ -24,12 +24,17 @@ import 'detalle_activo_screen.dart';
 /// scroll infinito y FAB de Venta Rápida.
 class CatalogoScreen extends StatefulWidget {
   final VoidCallback? onOpenMenuDrawer;
+  final ValueChanged<bool>? onEndDrawerChanged;
 
   /// Notificador estático global para recargar el catálogo automáticamente
   /// tras tasación de precios u otros eventos externos.
   static final ValueNotifier<int> refreshNotifier = ValueNotifier<int>(0);
 
-  const CatalogoScreen({super.key, this.onOpenMenuDrawer});
+  const CatalogoScreen({
+    super.key,
+    this.onOpenMenuDrawer,
+    this.onEndDrawerChanged,
+  });
 
   @override
   State<CatalogoScreen> createState() => CatalogoScreenState();
@@ -518,6 +523,7 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
           Navigator.of(context).pop();
         },
       ),
+      onEndDrawerChanged: widget.onEndDrawerChanged,
       appBar: AppBar(
         backgroundColor: AppPalette.background,
         elevation: 0,

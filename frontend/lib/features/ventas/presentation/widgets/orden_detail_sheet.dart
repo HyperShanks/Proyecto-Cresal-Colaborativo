@@ -44,11 +44,19 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
     String label = _orden.estadoOrden;
 
     if (_orden.esReservada) {
-      bgColor = AppPalette.secondary.withValues(alpha: 0.15);
-      borderColor = AppPalette.secondary.withValues(alpha: 0.5);
-      textColor = AppPalette.secondary;
-      icon = Icons.schedule;
-      label = 'Reservada';
+      if (_orden.esVentaEnVerde) {
+        bgColor = AppPalette.success.withValues(alpha: 0.15);
+        borderColor = AppPalette.success.withValues(alpha: 0.5);
+        textColor = AppPalette.success;
+        icon = Icons.eco_outlined;
+        label = 'Venta en Verde';
+      } else {
+        bgColor = AppPalette.warning.withValues(alpha: 0.15);
+        borderColor = AppPalette.warning.withValues(alpha: 0.5);
+        textColor = AppPalette.warning;
+        icon = Icons.account_balance_wallet_outlined;
+        label = 'Abonado';
+      }
     } else if (_orden.esPagada) {
       bgColor = AppPalette.success.withValues(alpha: 0.15);
       borderColor = AppPalette.success.withValues(alpha: 0.5);
@@ -768,6 +776,64 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                             ),
                           ],
                         ),
+                        if (_orden.esAbonada) ...[
+                          const SizedBox(height: 8.0),
+                          Divider(color: Colors.white.withValues(alpha: 0.08), height: 1),
+                          const SizedBox(height: 8.0),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.check_circle_outline, color: AppPalette.success, size: 16.0),
+                                  const SizedBox(width: 6.0),
+                                  Text(
+                                    'Monto Abonado',
+                                    style: AppTypography.body.copyWith(
+                                      color: AppPalette.success,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Text(
+                                _orden.montoPagadoFormateado,
+                                style: AppTypography.title.copyWith(
+                                  fontSize: 16.0,
+                                  color: AppPalette.success,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6.0),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.pending_actions_outlined, color: AppPalette.warning, size: 16.0),
+                                  const SizedBox(width: 6.0),
+                                  Text(
+                                    'Saldo Pendiente',
+                                    style: AppTypography.body.copyWith(
+                                      color: AppPalette.warning,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Text(
+                                _orden.montoPendienteFormateado,
+                                style: AppTypography.title.copyWith(
+                                  fontSize: 16.0,
+                                  color: AppPalette.warning,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),

@@ -2,13 +2,41 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 
+/// Representa un periodo mensual agrupado (Año / Mes) para filtros de historial.
+class PeriodoMesModel {
+  final int year;
+  final int month;
+  final String key; // e.g. "2026-09"
+  final String label; // e.g. "Septiembre 2026"
+
+  const PeriodoMesModel({
+    required this.year,
+    required this.month,
+    required this.key,
+    required this.label,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PeriodoMesModel &&
+          runtimeType == other.runtimeType &&
+          key == other.key;
+
+  @override
+  int get hashCode => key.hashCode;
+}
+
 /// Panel lateral derecho (EndDrawer) para el filtrado avanzado de órdenes de venta (HU-3.5).
 /// Implementa Flat Design estricto, sin sombras y con touch targets >= 48x48.
 class HistorialFiltrosDrawer extends StatelessWidget {
   final bool verTodas;
   final String? filtroEstado;
+  final String? periodoMes;
+  final List<PeriodoMesModel>? periodosDisponibles;
   final ValueChanged<bool> onPeriodoChanged;
   final ValueChanged<String?> onEstadoChanged;
+  final ValueChanged<String?>? onPeriodoMesChanged;
   final VoidCallback onAplicar;
   final VoidCallback onLimpiar;
 
@@ -16,8 +44,11 @@ class HistorialFiltrosDrawer extends StatelessWidget {
     super.key,
     required this.verTodas,
     required this.filtroEstado,
+    this.periodoMes,
+    this.periodosDisponibles,
     required this.onPeriodoChanged,
     required this.onEstadoChanged,
+    this.onPeriodoMesChanged,
     required this.onAplicar,
     required this.onLimpiar,
   });
@@ -73,12 +104,71 @@ class HistorialFiltrosDrawer extends StatelessWidget {
     );
   }
 
+  Widget _buildPeriodoDropdown(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 4.0),
+      decoration: BoxDecoration(
+        color: AppPalette.background,
+        borderRadius: BorderRadius.circular(8.0),
+        border: Border.all(
+          color: periodoMes != null ? AppPalette.primary : Colors.white12,
+          width: 1.0,
+        ),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String?>(
+          key: const Key('dropdown_mes_historial'),
+          value: periodoMes,
+          isExpanded: true,
+          dropdownColor: AppPalette.surface,
+          style: TextStyle(
+            color: AppPalette.textPrimary,
+            fontFamily: AppTypography.fontFamily,
+            fontSize: 13.5,
+            fontWeight: FontWeight.w500,
+          ),
+          icon: const Icon(Icons.keyboard_arrow_down, color: AppPalette.textSecondary),
+          hint: const Text(
+            'Todo el Historial (Todos los meses)',
+            style: TextStyle(
+              color: Color(0xFFCBD5E1),
+              fontSize: 13.5,
+            ),
+          ),
+          items: [
+            const DropdownMenuItem<String?>(
+              value: null,
+              child: Text('Todo el Historial (Todos los meses)'),
+            ),
+            if (periodosDisponibles != null)
+              ...periodosDisponibles!.map(
+                (p) => DropdownMenuItem<String?>(
+                  value: p.key,
+                  child: Text(p.label),
+                ),
+              ),
+          ],
+          onChanged: (val) {
+            onPeriodoMesChanged?.call(val);
+            if (val != null) {
+              onPeriodoChanged(true);
+            }
+          },
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final bottomPadding = MediaQuery.paddingOf(context).bottom;
+    final bottomOffset = bottomPadding > 0 ? bottomPadding + 8.0 : 16.0;
+
     return Drawer(
       backgroundColor: AppPalette.surface,
       elevation: 0,
       child: SafeArea(
+        bottom: false,
         child: Column(
           children: [
             // ── Encabezado ──────────────────────────────────────────────
@@ -143,20 +233,31 @@ class HistorialFiltrosDrawer extends StatelessWidget {
                     children: [
                       _buildChoiceChip(
                         label: 'Ventas de Hoy',
-                        isSelected: !verTodas,
+                        isSelected: !verTodas && periodoMes == null,
                         onSelected: (selected) {
-                          if (selected) onPeriodoChanged(false);
+                          if (selected) {
+                            onPeriodoChanged(false);
+                            onPeriodoMesChanged?.call(null);
+                          }
                         },
                       ),
                       _buildChoiceChip(
                         label: 'Historial Completo',
-                        isSelected: verTodas,
+                        isSelected: verTodas && periodoMes == null,
                         onSelected: (selected) {
-                          if (selected) onPeriodoChanged(true);
+                          if (selected) {
+                            onPeriodoChanged(true);
+                            onPeriodoMesChanged?.call(null);
+                          }
                         },
                       ),
                     ],
                   ),
+
+                  const SizedBox(height: 14.0),
+                  _buildSectionTitle('MES DEL HISTORIAL'),
+                  const SizedBox(height: 8.0),
+                  _buildPeriodoDropdown(context),
 
                   const SizedBox(height: 24.0),
                   const Divider(color: Colors.white10, height: 1.0),
@@ -180,6 +281,14 @@ class HistorialFiltrosDrawer extends StatelessWidget {
                         activeColor: AppPalette.secondary,
                         onSelected: (selected) {
                           onEstadoChanged(selected ? 'Reservada' : null);
+                        },
+                      ),
+                      _buildChoiceChip(
+                        label: 'Abonados',
+                        isSelected: filtroEstado == 'Abonado',
+                        activeColor: AppPalette.warning,
+                        onSelected: (selected) {
+                          onEstadoChanged(selected ? 'Abonado' : null);
                         },
                       ),
                       _buildChoiceChip(
@@ -214,7 +323,7 @@ class HistorialFiltrosDrawer extends StatelessWidget {
 
             // ── Barra Inferior: Botones de Acción ───────────────────────
             Container(
-              padding: const EdgeInsets.all(16.0),
+              padding: EdgeInsets.fromLTRB(16.0, 14.0, 16.0, bottomOffset),
               decoration: const BoxDecoration(
                 color: AppPalette.background,
                 border: Border(

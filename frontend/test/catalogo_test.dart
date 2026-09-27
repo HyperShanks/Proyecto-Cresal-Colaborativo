@@ -7,6 +7,7 @@ import 'package:frontend/features/ventas/presentation/widgets/filtros_drawer.dar
 import 'package:frontend/features/ventas/presentation/screens/ventas_main_screen.dart';
 import 'package:frontend/features/ventas/presentation/screens/catalogo_screen.dart';
 import 'package:frontend/features/ventas/presentation/screens/detalle_activo_screen.dart';
+import 'package:frontend/features/ventas/presentation/screens/historial_screen.dart';
 import 'package:frontend/core/theme/tokens/app_palette.dart';
 
 void main() {
@@ -256,7 +257,7 @@ void main() {
       // Cambiar a pestaña Mis Órdenes
       await tester.tap(find.text('Mis Órdenes'));
       await tester.pump();
-      expect(find.text('Mis Órdenes de Venta'), findsOneWidget);
+      expect(find.byType(HistorialScreen), findsOneWidget);
 
       // Cambiar a pestaña Carrito (Checkout Wizard)
       await tester.tap(find.text('Carrito'));

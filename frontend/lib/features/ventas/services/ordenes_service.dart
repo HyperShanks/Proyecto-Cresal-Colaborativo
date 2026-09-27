@@ -356,6 +356,15 @@ class OrdenHistorialModel {
   bool get esPagada => estadoOrden.toLowerCase() == 'pagada';
   bool get esCompletada => estadoOrden.toLowerCase() == 'completada';
   bool get esAnulada => estadoOrden.toLowerCase() == 'anulada';
+  bool get esVentaEnVerde =>
+      (folio != null && folio!.toUpperCase().startsWith('RES-')) ||
+      detalles.any((d) =>
+          d.titulo.toUpperCase().contains('RESERVA EN VERDE') ||
+          d.titulo.toUpperCase().contains('VENTA EN VERDE') ||
+          (d.descripcionManual != null &&
+              (d.descripcionManual!.toUpperCase().contains('RESERVA EN VERDE') ||
+               d.descripcionManual!.toUpperCase().contains('VENTA EN VERDE'))));
+  bool get esAbonada => montoPendiente > 0 && totalVenta > montoPendiente;
   bool get contieneMotorOCaja => detalles.any((d) => d.esMotorOCaja);
   bool get contieneMiscelaneos => detalles.any((d) => !d.esMotorOCaja);
   bool get esMixta => contieneMotorOCaja && contieneMiscelaneos;

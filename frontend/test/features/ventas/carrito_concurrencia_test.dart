@@ -182,7 +182,7 @@ void main() {
       versionLock: 2,
     );
 
-    testWidgets('Item disponible muestra chip DISPONIBLE y botón de carrito activo', (tester) async {
+    testWidgets('Item disponible no muestra etiqueta redundante DISPONIBLE y tiene botón de carrito activo', (tester) async {
       bool tapExecuted = false;
 
       await tester.pumpWidget(
@@ -199,13 +199,38 @@ void main() {
         ),
       );
 
-      expect(find.text('DISPONIBLE'), findsOneWidget);
+      expect(find.text('DISPONIBLE'), findsNothing);
       expect(find.byIcon(Icons.add_shopping_cart), findsOneWidget);
 
       await tester.tap(find.byIcon(Icons.add_shopping_cart));
       await tester.pump();
 
       expect(tapExecuted, isTrue);
+    });
+
+    testWidgets('Item con observación muestra badge Obs con puntos suspensivos y sin chip DISPONIBLE', (tester) async {
+      final itemConObs = itemDisponible.copyWith(
+        observacionEstado: 'Unida al motor y probada en banco con detalles estéticos menores',
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: CatalogoItemCard(
+              item: itemConObs,
+              vendedorSucursalId: 1,
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('DISPONIBLE'), findsNothing);
+      expect(find.byIcon(Icons.sticky_note_2_outlined), findsOneWidget);
+      expect(find.textContaining('Obs: Unida al motor'), findsOneWidget);
+
+      final textWidget = tester.widget<Text>(find.textContaining('Obs: Unida al motor'));
+      expect(textWidget.maxLines, 1);
+      expect(textWidget.overflow, TextOverflow.ellipsis);
     });
 
     testWidgets('Item reservado (id_estado = 2) muestra chip RESERVADO y botón desactivado', (tester) async {

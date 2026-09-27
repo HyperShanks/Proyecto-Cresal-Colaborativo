@@ -308,7 +308,7 @@ void main() {
       );
 
       expect(find.text('ORD-TEST-001'), findsOneWidget);
-      expect(find.text('Reservada'), findsOneWidget);
+      expect(find.text('Abonado'), findsOneWidget);
       expect(find.text('Carlos González (18.765.432-1)'), findsOneWidget);
       expect(find.text('2 ítems'), findsOneWidget);
       expect(find.text('Despacho: Av. Libertad 1234, Depto 402'), findsOneWidget);
@@ -801,6 +801,7 @@ void main() {
       expect(topReservada, lessThan(topCompletada));
 
       // 2. Al seleccionar el filtro 'Solo Anuladas', se muestran únicamente las anuladas
+      await tester.ensureVisible(find.text('Solo Anuladas'));
       await tester.tap(find.text('Solo Anuladas'));
       await tester.pumpAndSettle();
 

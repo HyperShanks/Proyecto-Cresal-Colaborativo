@@ -16,6 +16,7 @@ import '../../../../core/services/silent_polling_manager.dart';
 class HistorialScreen extends StatefulWidget {
   final VoidCallback? onOpenMenuDrawer;
   final VoidCallback? onRefreshCatalogo;
+  final ValueChanged<bool>? onEndDrawerChanged;
   final List<OrdenHistorialModel>? initialOrdenes;
   final http.Client? client;
 
@@ -23,6 +24,7 @@ class HistorialScreen extends StatefulWidget {
     super.key,
     this.onOpenMenuDrawer,
     this.onRefreshCatalogo,
+    this.onEndDrawerChanged,
     this.initialOrdenes,
     this.client,
   });
@@ -37,10 +39,27 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
 
   List<OrdenHistorialModel> _ordenesHistorial = [];
   List<OrdenHistorialModel> _ordenesPorAsignar = [];
+  List<OrdenHistorialModel> _historicoGlobalCache = [];
   int _activeRequestId = 0;
 
   List<OrdenHistorialModel> get _ordenes =>
       _seccionActual == 'por_asignar' ? _ordenesPorAsignar : _ordenesHistorial;
+
+  List<OrdenHistorialModel> get _baseOrdenes {
+    if (_seccionActual == 'por_asignar') {
+      return _ordenesPorAsignar;
+    }
+    if (_filtroPeriodoMes != null) {
+      final cache = _historicoGlobalCache.isNotEmpty
+          ? _historicoGlobalCache
+          : _ordenesHistorial;
+      return cache
+          .where((o) => (o.fechaCreacion ?? '').startsWith(_filtroPeriodoMes!))
+          .toList();
+    }
+    return _ordenesHistorial;
+  }
+
   bool _isLoading = true;
   String? _errorMessage;
   String _searchQuery = '';
@@ -48,10 +67,12 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
   // Filtros aplicados
   bool _verTodas = false;
   String? _filtroEstado;
+  String? _filtroPeriodoMes;
 
   // Filtros temporales mientras el drawer está abierto
   bool _tempVerTodas = false;
   String? _tempFiltroEstado;
+  String? _tempFiltroPeriodoMes;
 
   // Sección actual: 'normal' (Historial de Órdenes) o 'por_asignar' (Ventas en Verde Pagadas sin activo asignado)
   String _seccionActual = 'normal';
@@ -64,17 +85,86 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
     super.initState();
     _tempVerTodas = _verTodas;
     _tempFiltroEstado = _filtroEstado;
+    _tempFiltroPeriodoMes = _filtroPeriodoMes;
 
     OrdenesSyncNotifier.instance.addListener(_onSyncNotification);
     _iniciarAutoRefresh();
 
     if (widget.initialOrdenes != null) {
       _ordenesHistorial = List.from(widget.initialOrdenes!);
+      _historicoGlobalCache = List.from(widget.initialOrdenes!);
       _ordenarOrdenes(_ordenesHistorial);
       _isLoading = false;
     } else {
       _cargarOrdenes();
+      _precargarHistoricoGlobalCache();
     }
+  }
+
+  Future<void> _precargarHistoricoGlobalCache() async {
+    if (widget.initialOrdenes != null && widget.client == null) return;
+    try {
+      final todas = await OrdenesService.obtenerMisVentas(
+        todas: true,
+        client: widget.client,
+      );
+      if (mounted) {
+        setState(() {
+          _historicoGlobalCache = todas;
+        });
+      }
+    } catch (_) {}
+  }
+
+  List<PeriodoMesModel> get _periodosDisponibles {
+    final Map<String, PeriodoMesModel> periodos = {};
+    const meses = [
+      '',
+      'Enero',
+      'Febrero',
+      'Marzo',
+      'Abril',
+      'Mayo',
+      'Junio',
+      'Julio',
+      'Agosto',
+      'Septiembre',
+      'Octubre',
+      'Noviembre',
+      'Diciembre',
+    ];
+
+    final fuentes = _historicoGlobalCache.isNotEmpty
+        ? _historicoGlobalCache
+        : (_ordenesHistorial.isNotEmpty ? _ordenesHistorial : _ordenes);
+
+    for (final orden in fuentes) {
+      if (orden.fechaCreacion == null || orden.fechaCreacion!.isEmpty) continue;
+      final dt = DateTime.tryParse(orden.fechaCreacion!);
+      if (dt != null) {
+        final key = '${dt.year}-${dt.month.toString().padLeft(2, '0')}';
+        if (!periodos.containsKey(key)) {
+          final label = '${meses[dt.month]} ${dt.year}';
+          periodos[key] = PeriodoMesModel(
+            year: dt.year,
+            month: dt.month,
+            key: key,
+            label: label,
+          );
+        }
+      }
+    }
+
+    final lista = periodos.values.toList();
+    lista.sort((a, b) => b.key.compareTo(a.key));
+    return lista;
+  }
+
+  String _labelPeriodo(String key) {
+    for (final p in _periodosDisponibles) {
+      if (p.key == key) return p.label;
+    }
+    return key;
   }
 
   void _iniciarAutoRefresh() {
@@ -173,10 +263,26 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
       return;
     }
 
+    // Si hay un filtro por mes específico y ya tenemos el caché global, resolvemos en local
+    if (_filtroPeriodoMes != null && _historicoGlobalCache.isNotEmpty) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = null;
+      });
+      return;
+    }
+
     try {
+      final String? estadoParaBackend =
+          (seccionSolicitada == 'por_asignar' || _filtroEstado == 'Abonado')
+              ? null
+              : _filtroEstado;
+
       final ordenes = await OrdenesService.obtenerMisVentas(
-        todas: seccionSolicitada == 'por_asignar' ? true : _verTodas,
-        estado: seccionSolicitada == 'por_asignar' ? null : _filtroEstado,
+        todas: seccionSolicitada == 'por_asignar'
+            ? true
+            : (_verTodas || _filtroPeriodoMes != null),
+        estado: estadoParaBackend,
         seccion: seccionSolicitada,
         client: widget.client,
       );
@@ -189,6 +295,10 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
 
       // Ordenar: Activas al principio, completadas al final y anuladas al final absoluto
       _ordenarOrdenes(ordenes);
+
+      if (_verTodas || _filtroPeriodoMes != null) {
+        _historicoGlobalCache = List.from(ordenes);
+      }
 
       int conteo = _conteoPorAsignar;
       if (seccionSolicitada == 'por_asignar') {
@@ -241,9 +351,16 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
     final String seccionSolicitada = _seccionActual;
 
     try {
+      final String? estadoParaBackend =
+          (seccionSolicitada == 'por_asignar' || _filtroEstado == 'Abonado')
+              ? null
+              : _filtroEstado;
+
       final ordenes = await OrdenesService.obtenerMisVentas(
-        todas: seccionSolicitada == 'por_asignar' ? true : _verTodas,
-        estado: seccionSolicitada == 'por_asignar' ? null : _filtroEstado,
+        todas: seccionSolicitada == 'por_asignar'
+            ? true
+            : (_verTodas || _filtroPeriodoMes != null),
+        estado: estadoParaBackend,
         seccion: seccionSolicitada,
         client: widget.client,
       );
@@ -254,6 +371,10 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
         return;
       }
       _ordenarOrdenes(ordenes);
+
+      if (_verTodas || _filtroPeriodoMes != null) {
+        _historicoGlobalCache = List.from(ordenes);
+      }
 
       int conteo = _conteoPorAsignar;
       if (seccionSolicitada == 'por_asignar') {
@@ -291,13 +412,20 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
 
   /// Lista filtrada reactivamente según el término de búsqueda ingresado
   List<OrdenHistorialModel> get _ordenesFiltradas {
-    var lista = _ordenes;
+    var lista = _baseOrdenes;
 
     // Regla de Negocio: Las órdenes anuladas salen ocultas por defecto en Mis Órdenes,
     // salvo que se seleccione explícitamente el filtro de 'Anulada'.
     if (_filtroEstado != null) {
       if (_filtroEstado == 'Anulada') {
         lista = lista.where((orden) => orden.esAnulada).toList();
+      } else if (_filtroEstado == 'Abonado') {
+        lista = lista
+            .where((orden) =>
+                !orden.esAnulada &&
+                orden.montoPendiente > 0 &&
+                orden.totalVenta > orden.montoPendiente)
+            .toList();
       } else {
         lista = lista
             .where((orden) =>
@@ -594,11 +722,15 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
           children: [
             _buildQuickChip(
               label: 'Activas',
-              isSelected: _filtroEstado == null,
+              isSelected: _filtroEstado == null && !_verTodas,
               icon: Icons.check_circle_outline,
               onTap: () {
-                if (_filtroEstado != null) {
-                  setState(() => _filtroEstado = null);
+                if (_filtroEstado != null || _verTodas || _filtroPeriodoMes != null) {
+                  setState(() {
+                    _filtroEstado = null;
+                    _verTodas = false;
+                    _filtroPeriodoMes = null;
+                  });
                   _cargarOrdenes();
                 }
               },
@@ -610,7 +742,34 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
               activeColor: AppPalette.secondary,
               onTap: () {
                 setState(() {
-                  _filtroEstado = _filtroEstado == 'Reservada' ? null : 'Reservada';
+                  if (_filtroEstado == 'Reservada') {
+                    _filtroEstado = null;
+                    _verTodas = false;
+                  } else {
+                    _filtroEstado = 'Reservada';
+                    _verTodas = true;
+                    _filtroPeriodoMes = null;
+                  }
+                });
+                _cargarOrdenes();
+              },
+            ),
+            const SizedBox(width: 8.0),
+            _buildQuickChip(
+              label: 'Abonados',
+              isSelected: _filtroEstado == 'Abonado',
+              activeColor: AppPalette.warning,
+              icon: Icons.account_balance_wallet_outlined,
+              onTap: () {
+                setState(() {
+                  if (_filtroEstado == 'Abonado') {
+                    _filtroEstado = null;
+                    _verTodas = false;
+                  } else {
+                    _filtroEstado = 'Abonado';
+                    _verTodas = true;
+                    _filtroPeriodoMes = null;
+                  }
                 });
                 _cargarOrdenes();
               },
@@ -622,7 +781,14 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
               activeColor: AppPalette.success,
               onTap: () {
                 setState(() {
-                  _filtroEstado = _filtroEstado == 'Pagada' ? null : 'Pagada';
+                  if (_filtroEstado == 'Pagada') {
+                    _filtroEstado = null;
+                    _verTodas = false;
+                  } else {
+                    _filtroEstado = 'Pagada';
+                    _verTodas = false;
+                    _filtroPeriodoMes = null;
+                  }
                 });
                 _cargarOrdenes();
               },
@@ -634,7 +800,14 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
               activeColor: AppPalette.primary,
               onTap: () {
                 setState(() {
-                  _filtroEstado = _filtroEstado == 'Completada' ? null : 'Completada';
+                  if (_filtroEstado == 'Completada') {
+                    _filtroEstado = null;
+                    _verTodas = false;
+                  } else {
+                    _filtroEstado = 'Completada';
+                    _verTodas = false;
+                    _filtroPeriodoMes = null;
+                  }
                 });
                 _cargarOrdenes();
               },
@@ -647,7 +820,14 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
               icon: Icons.cancel_outlined,
               onTap: () {
                 setState(() {
-                  _filtroEstado = _filtroEstado == 'Anulada' ? null : 'Anulada';
+                  if (_filtroEstado == 'Anulada') {
+                    _filtroEstado = null;
+                    _verTodas = false;
+                  } else {
+                    _filtroEstado = 'Anulada';
+                    _verTodas = false;
+                    _filtroPeriodoMes = null;
+                  }
                 });
                 _cargarOrdenes();
               },
@@ -1107,6 +1287,8 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
             Text(
               esPorAsignar
                   ? 'Sin ventas en verde por asignar'
+                  : _filtroPeriodoMes != null
+                  ? 'No hay órdenes en ${_labelPeriodo(_filtroPeriodoMes!)}'
                   : _filtroEstado != null
                   ? 'No hay órdenes en estado "$_filtroEstado"'
                   : _verTodas
@@ -1119,7 +1301,7 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
             Text(
               esPorAsignar
                   ? 'Todas tus ventas en verde pagadas ya cuentan con su activo físico asignado o están en proceso.'
-                  : _filtroEstado != null
+                  : (_filtroEstado != null || _filtroPeriodoMes != null)
                   ? 'Prueba cambiando o limpiando los filtros para ver otras ventas.'
                   : _verTodas
                   ? 'Tus ventas derivadas a caja aparecerán aquí con su estado en tiempo real.'
@@ -1130,7 +1312,7 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24.0),
-            if (!esPorAsignar && (_filtroEstado != null || !_verTodas))
+            if (!esPorAsignar && (_filtroEstado != null || _filtroPeriodoMes != null || !_verTodas))
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppPalette.primary,
@@ -1144,19 +1326,26 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
                   ),
                 ),
                 icon: Icon(
-                  _filtroEstado != null ? Icons.filter_alt_off : Icons.history,
+                  (_filtroEstado != null || _filtroPeriodoMes != null)
+                      ? Icons.filter_alt_off
+                      : Icons.history,
                   size: 18.0,
                 ),
                 label: Text(
-                  _filtroEstado != null
+                  (_filtroEstado != null || _filtroPeriodoMes != null)
                       ? 'Limpiar Filtros'
                       : 'Ver Historial Completo',
                 ),
                 onPressed: () {
                   setState(() {
-                    _filtroEstado = null;
-                    _tempFiltroEstado = null;
-                    if (_filtroEstado == null && !_verTodas) {
+                    if (_filtroEstado != null || _filtroPeriodoMes != null) {
+                      _filtroEstado = null;
+                      _tempFiltroEstado = null;
+                      _filtroPeriodoMes = null;
+                      _tempFiltroPeriodoMes = null;
+                      _verTodas = false;
+                      _tempVerTodas = false;
+                    } else {
                       _verTodas = true;
                       _tempVerTodas = true;
                     }
@@ -1215,7 +1404,8 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
 
   @override
   Widget build(BuildContext context) {
-    final hayFiltrosActivos = _verTodas || _filtroEstado != null;
+    final hayFiltrosActivos =
+        _verTodas || _filtroEstado != null || _filtroPeriodoMes != null;
     final ordenesMostradas = _ordenesFiltradas;
 
     return Scaffold(
@@ -1234,10 +1424,12 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Mis Órdenes de Venta', style: AppTypography.title),
+            const Text('Mis Órdenes', style: AppTypography.title),
             Text(
               _seccionActual == 'por_asignar'
                   ? 'Ventas en verde pagadas pendientes de activo'
+                  : _filtroPeriodoMes != null
+                  ? 'Periodo: ${_labelPeriodo(_filtroPeriodoMes!)}${_filtroEstado != null ? " · $_filtroEstado" : ""}'
                   : _filtroEstado != null
                   ? 'Filtro: $_filtroEstado (${_verTodas ? "Historial" : "Hoy"})'
                   : _verTodas
@@ -1269,6 +1461,7 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
                     setState(() {
                       _tempVerTodas = _verTodas;
                       _tempFiltroEstado = _filtroEstado;
+                      _tempFiltroPeriodoMes = _filtroPeriodoMes;
                     });
                     Scaffold.of(ctx).openEndDrawer();
                   },
@@ -1301,16 +1494,34 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
       endDrawer: HistorialFiltrosDrawer(
         verTodas: _tempVerTodas,
         filtroEstado: _tempFiltroEstado,
+        periodoMes: _tempFiltroPeriodoMes,
+        periodosDisponibles: _periodosDisponibles,
         onPeriodoChanged: (val) {
-          setState(() => _tempVerTodas = val);
+          setState(() {
+            _tempVerTodas = val;
+            if (!val) _tempFiltroPeriodoMes = null;
+          });
         },
         onEstadoChanged: (val) {
-          setState(() => _tempFiltroEstado = val);
+          setState(() {
+            _tempFiltroEstado = val;
+            if (val == 'Reservada' || val == 'Abonado') {
+              _tempVerTodas = true;
+              _tempFiltroPeriodoMes = null;
+            }
+          });
+        },
+        onPeriodoMesChanged: (val) {
+          setState(() {
+            _tempFiltroPeriodoMes = val;
+            if (val != null) _tempVerTodas = true;
+          });
         },
         onAplicar: () {
           setState(() {
             _verTodas = _tempVerTodas;
             _filtroEstado = _tempFiltroEstado;
+            _filtroPeriodoMes = _tempFiltroPeriodoMes;
           });
           _cargarOrdenes();
         },
@@ -1318,12 +1529,15 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
           setState(() {
             _verTodas = false;
             _filtroEstado = null;
+            _filtroPeriodoMes = null;
             _tempVerTodas = false;
             _tempFiltroEstado = null;
+            _tempFiltroPeriodoMes = null;
           });
           _cargarOrdenes();
         },
       ),
+      onEndDrawerChanged: widget.onEndDrawerChanged,
       body: Column(
         children: [
           _buildSearchBar(),
@@ -1337,7 +1551,7 @@ class HistorialScreenState extends State<HistorialScreen> with RouteAware {
                   )
                 : _errorMessage != null
                 ? _buildErrorState()
-                : _ordenes.isEmpty
+                : _baseOrdenes.isEmpty || (_searchQuery.isEmpty && ordenesMostradas.isEmpty)
                 ? RefreshIndicator(
                     onRefresh: _cargarOrdenes,
                     color: AppPalette.primary,

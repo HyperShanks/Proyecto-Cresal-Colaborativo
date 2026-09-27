@@ -33,11 +33,19 @@ class OrdenCard extends StatelessWidget {
     String label = orden.estadoOrden;
 
     if (orden.esReservada) {
-      bgColor = AppPalette.secondary.withValues(alpha: 0.15);
-      borderColor = AppPalette.secondary.withValues(alpha: 0.5);
-      textColor = AppPalette.secondary;
-      icon = Icons.schedule;
-      label = 'Reservada';
+      if (orden.esVentaEnVerde) {
+        bgColor = AppPalette.success.withValues(alpha: 0.15);
+        borderColor = AppPalette.success.withValues(alpha: 0.5);
+        textColor = AppPalette.success;
+        icon = Icons.eco_outlined;
+        label = 'Venta en Verde';
+      } else {
+        bgColor = AppPalette.warning.withValues(alpha: 0.15);
+        borderColor = AppPalette.warning.withValues(alpha: 0.5);
+        textColor = AppPalette.warning;
+        icon = Icons.account_balance_wallet_outlined;
+        label = 'Abonado';
+      }
     } else if (orden.esPagada) {
       bgColor = AppPalette.success.withValues(alpha: 0.15);
       borderColor = AppPalette.success.withValues(alpha: 0.5);
@@ -462,6 +470,53 @@ class OrdenCard extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
+                          if (orden.esAbonada) ...[
+                            const SizedBox(height: 4.0),
+                            Wrap(
+                              spacing: 8.0,
+                              runSpacing: 2.0,
+                              children: [
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      Icons.check_circle_outline,
+                                      size: 13.0,
+                                      color: AppPalette.success,
+                                    ),
+                                    const SizedBox(width: 3.0),
+                                    Text(
+                                      'Abonado: ${orden.montoPagadoFormateado}',
+                                      style: const TextStyle(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppPalette.success,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      Icons.pending_actions_outlined,
+                                      size: 13.0,
+                                      color: AppPalette.warning,
+                                    ),
+                                    const SizedBox(width: 3.0),
+                                    Text(
+                                      'Pendiente: ${orden.montoPendienteFormateado}',
+                                      style: const TextStyle(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppPalette.warning,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ],
                         ],
                       ),
                     ),

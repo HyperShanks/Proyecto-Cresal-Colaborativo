@@ -166,45 +166,6 @@ class CatalogoItemCard extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          if (item.observacionEstado != null &&
-                              item.observacionEstado!.trim().isNotEmpty &&
-                              item.observacionEstado!.trim().toLowerCase() != 'null' &&
-                              item.observacionEstado!.trim() != 'Sin observaciones registradas.') ...[
-                            const SizedBox(height: 5),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: AppPalette.secondary.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(
-                                  color: AppPalette.secondary.withValues(alpha: 0.25),
-                                ),
-                              ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Icon(
-                                    Icons.sticky_note_2_outlined,
-                                    size: 13,
-                                    color: AppPalette.secondary,
-                                  ),
-                                  const SizedBox(width: 5),
-                                  Expanded(
-                                    child: Text(
-                                      'Obs: ${item.observacionEstado!.trim()}',
-                                      style: AppTypography.small.copyWith(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                        color: AppPalette.secondary,
-                                      ),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
                         ],
                       ),
                     ),
@@ -212,13 +173,21 @@ class CatalogoItemCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
 
-                // ── 2. Fila Intermedia: Badge Sucursal + Chip Estado Disponible ──
+                // ── 2. Fila Intermedia: Badge Sucursal + Observación / Reservado ──
                 Row(
                   mainAxisAlignment: MainAxisAlignment.start,
                   children: [
                     _buildSucursalBadge(),
-                    const SizedBox(width: 8.0),
-                    _buildDisponibilidadChip(),
+                    if (item.esReservado) ...[
+                      const SizedBox(width: 8.0),
+                      _buildReservadoBadge(),
+                    ],
+                    if (_observacionValida != null) ...[
+                      const SizedBox(width: 8.0),
+                      Flexible(
+                        child: _buildObservacionBadge(_observacionValida!),
+                      ),
+                    ],
                   ],
                 ),
                 const SizedBox(height: 14),
@@ -281,27 +250,76 @@ class CatalogoItemCard extends StatelessWidget {
     );
   }
 
-  /// Chip de Disponibilidad
-  Widget _buildDisponibilidadChip() {
-    final bool esReservado = item.esReservado;
-    final estado = esReservado ? 'RESERVADO' : (item.estadoActivo ?? 'Disponible');
-    final bool esDisponible = !esReservado && estado.toLowerCase() == 'disponible';
-    final colorChip = esDisponible
-        ? AppPalette.success
-        : (esReservado ? const Color(0xFFF59E0B) : AppPalette.secondary);
+  String? get _observacionValida {
+    final obs = item.observacionEstado?.trim();
+    if (obs != null &&
+        obs.isNotEmpty &&
+        obs.toLowerCase() != 'null' &&
+        obs != 'Sin observaciones registradas.') {
+      return obs;
+    }
+    return null;
+  }
 
+  /// Badge de Observación con puntos suspensivos si excede 1 línea y tooltip de lectura completa.
+  Widget _buildObservacionBadge(String obs) {
+    return Tooltip(
+      message: 'Obs: $obs',
+      waitDuration: const Duration(milliseconds: 300),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+        decoration: BoxDecoration(
+          color: AppPalette.secondary.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(6.0),
+          border: Border.all(
+            color: AppPalette.secondary.withValues(alpha: 0.35),
+            width: 1.0,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.sticky_note_2_outlined,
+              size: 13.0,
+              color: AppPalette.secondary,
+            ),
+            const SizedBox(width: 5.0),
+            Flexible(
+              child: Text(
+                'Obs: $obs',
+                style: AppTypography.small.copyWith(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  color: AppPalette.secondary,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Badge de Estado Reservado (solo para activos retenidos)
+  Widget _buildReservadoBadge() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
       decoration: BoxDecoration(
-        color: colorChip.withValues(alpha: 0.12),
+        color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(6.0),
-        border: Border.all(color: colorChip.withValues(alpha: 0.4), width: 1.0),
+        border: Border.all(
+          color: const Color(0xFFF59E0B).withValues(alpha: 0.4),
+          width: 1.0,
+        ),
       ),
       child: Text(
-        estado.toUpperCase(),
+        'RESERVADO',
         style: AppTypography.small.copyWith(
           fontSize: 11,
-          color: colorChip,
+          color: const Color(0xFFF59E0B),
           fontWeight: FontWeight.bold,
         ),
       ),
