@@ -7,6 +7,8 @@ from core.config import settings  # Importamos nuestra nueva configuración tipa
 
 # Obtiene la URL de conexión segura directamente desde el objeto settings
 SQLALCHEMY_DATABASE_URL = settings.DATABASE_URL
+if SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
+    SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 # Crea el motor de base de datos
 engine = create_engine(SQLALCHEMY_DATABASE_URL)

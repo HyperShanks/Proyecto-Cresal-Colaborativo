@@ -6,6 +6,7 @@ python-multipart>=0.0.9
 # Base de Datos y ORM
 SQLAlchemy>=2.0.0
 psycopg2-binary>=2.9.9
+psycopg[binary]>=3.1.0
 
 # Configuración y Entorno
 pydantic>=2.0.0
