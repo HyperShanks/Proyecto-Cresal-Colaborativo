@@ -39,12 +39,18 @@ class OrdenCard extends StatelessWidget {
         textColor = AppPalette.success;
         icon = Icons.eco_outlined;
         label = 'Venta en Verde';
-      } else {
+      } else if (orden.esAbonada) {
         bgColor = AppPalette.warning.withValues(alpha: 0.15);
         borderColor = AppPalette.warning.withValues(alpha: 0.5);
         textColor = AppPalette.warning;
         icon = Icons.account_balance_wallet_outlined;
         label = 'Abonado';
+      } else {
+        bgColor = AppPalette.secondary.withValues(alpha: 0.15);
+        borderColor = AppPalette.secondary.withValues(alpha: 0.5);
+        textColor = AppPalette.secondary;
+        icon = Icons.bookmark_border_rounded;
+        label = 'Reservada';
       }
     } else if (orden.esPagada) {
       bgColor = AppPalette.success.withValues(alpha: 0.15);

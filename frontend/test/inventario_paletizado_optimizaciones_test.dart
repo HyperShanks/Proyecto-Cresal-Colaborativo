@@ -211,7 +211,7 @@ void main() {
       );
 
       expect(find.text('ORD-MUY-LARGA-123456789-VINA'), findsOneWidget);
-      expect(find.text('Abonado'), findsOneWidget);
+      expect(find.text('Reservada'), findsOneWidget);
     });
   });
 }
