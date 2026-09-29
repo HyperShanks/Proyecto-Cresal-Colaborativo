@@ -497,3 +497,95 @@ def test_checkout_wizard_con_descuento_por_vale_a_favor(client, wizard_db, auth_
     assert orden_en_caja["total_operacion"] == 100000  # Total bruto antes del descuento
     assert orden_en_caja["descuento"] == 30000
     assert orden_en_caja["monto_a_cobrar"] == 70000  # Saldo neto a cobrar en caja
+
+
+# ── TEST 10: Venta en Verde Rechaza Consumidor Final ─────────────────────────
+def test_checkout_wizard_venta_en_verde_rechaza_consumidor_final(client, wizard_db, auth_vendedor_wiz):
+    """Verifica que Venta en Verde rechaza emisión para Consumidor Final (RUT 6.666.666-6)."""
+    db = TestingSessionLocal()
+    try:
+        cli_anon = Cliente(
+            id_cliente=uuid.uuid4(),
+            rut_cliente="6.666.666-6",
+            nombres="Consumidor",
+            apellidos="Final",
+            telefono="+56912345678",
+            id_comuna=30,
+            estado="Activo"
+        )
+        db.add(cli_anon)
+        db.commit()
+        db.refresh(cli_anon)
+        id_cli_anon = str(cli_anon.id_cliente)
+    finally:
+        db.close()
+
+    payload = {
+        "id_cliente": id_cli_anon,
+        "tipo_entrega": "Retiro",
+        "total_venta": 1200000,
+        "monto_pendiente": 600000,
+        "items_inventariados": [],
+        "items_manuales": [],
+        "reservas": [
+            {
+                "id_categoria_requerida": 31,
+                "marca_requerida": "Toyota",
+                "modelo_requerido": "Yaris",
+                "anio_requerido": 2020,
+                "precio_acordado": 1200000,
+                "monto_abonado": 600000,
+            }
+        ],
+    }
+
+    res = client.post("/api/v1/ordenes/checkout-wizard", json=payload, headers=auth_vendedor_wiz)
+    assert res.status_code == 400
+    assert "Venta en Verde" in res.json()["detail"]
+    assert "Consumidor Final" in res.json()["detail"]
+
+
+# ── TEST 11: Venta en Verde Exige Teléfono de Contacto ────────────────────────
+def test_checkout_wizard_venta_en_verde_exige_telefono(client, wizard_db, auth_vendedor_wiz):
+    """Verifica que Venta en Verde exige registrar un teléfono válido del cliente."""
+    db = TestingSessionLocal()
+    try:
+        cli_sin_tel = Cliente(
+            id_cliente=uuid.uuid4(),
+            rut_cliente="17.777.888-9",
+            nombres="Carlos",
+            apellidos="Gómez",
+            telefono="",  # Vacío
+            id_comuna=30,
+            estado="Activo"
+        )
+        db.add(cli_sin_tel)
+        db.commit()
+        db.refresh(cli_sin_tel)
+        id_cli_sin_tel = str(cli_sin_tel.id_cliente)
+    finally:
+        db.close()
+
+    payload = {
+        "id_cliente": id_cli_sin_tel,
+        "tipo_entrega": "Retiro",
+        "total_venta": 850000,
+        "monto_pendiente": 425000,
+        "items_inventariados": [],
+        "items_manuales": [],
+        "reservas": [
+            {
+                "id_categoria_requerida": 32,
+                "marca_requerida": "Nissan",
+                "modelo_requerido": "Versa",
+                "anio_requerido": 2021,
+                "precio_acordado": 850000,
+                "monto_abonado": 425000,
+            }
+        ],
+    }
+
+    res = client.post("/api/v1/ordenes/checkout-wizard", json=payload, headers=auth_vendedor_wiz)
+    assert res.status_code == 400
+    assert "teléfono de contacto" in res.json()["detail"]
+

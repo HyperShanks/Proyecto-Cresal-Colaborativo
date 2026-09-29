@@ -76,6 +76,17 @@ class CheckoutWizardController extends ChangeNotifier {
       _itemsManuales.fold<int>(0, (sum, m) => sum + m.cantidad) +
       _reservas.length;
 
+  /// Indica si la orden en curso corresponde a una Venta en Verde (Reserva Backorder)
+  bool get tieneVentaEnVerde =>
+      _reservas.isNotEmpty ||
+      CartController.instance.tieneVentaEnVerde ||
+      _itemsManuales.any((m) {
+        final d = m.descripcion.toUpperCase();
+        return d.contains('VENTA EN VERDE') ||
+            d.contains('COMPRA EN VERDE') ||
+            d.contains('BACKORDER');
+      });
+
   // ── Gestión de Pasos (0: Ítems, 1: Cliente, 2: Abonos, 3: Confirmación) ───────
   void setStep(int step) {
     if (step >= 0 && step <= 3) {
@@ -95,7 +106,9 @@ class CheckoutWizardController extends ChangeNotifier {
       return false;
     }
     if (_currentStep == 1 && !validateStep2()) {
-      _errorMessage = 'Falta identificar al cliente. Por favor, ingresa un RUT válido antes de proceder con la reserva de estos activos.';
+      _errorMessage = tieneVentaEnVerde
+          ? 'Las compras en verde requieren obligatoriamente registrar los datos del cliente (RUT, nombre, apellido, teléfono y correo válido).'
+          : 'Falta identificar al cliente. Por favor, ingresa un RUT válido antes de proceder con la reserva de estos activos.';
       notifyListeners();
       return false;
     }
@@ -123,7 +136,37 @@ class CheckoutWizardController extends ChangeNotifier {
 
   bool validateStep1() =>
       totalItemsCount > 0 && !CartController.instance.hayPreciosInvalidos;
-  bool validateStep2() => _clienteSeleccionado != null && _clienteSeleccionado!.rut.trim().isNotEmpty;
+
+  bool validateStep2() {
+    if (_clienteSeleccionado == null) return false;
+    final rut = _clienteSeleccionado!.rut.trim();
+    if (rut.isEmpty) return false;
+
+    if (tieneVentaEnVerde) {
+      final rutNorm = rut.replaceAll('.', '').replaceAll('-', '').toUpperCase();
+      final esConsumidorFinal = rutNorm == '66666666' ||
+          rutNorm == '6666666' ||
+          rutNorm == '666666666' ||
+          _clienteSeleccionado!.nombres.trim().toUpperCase() == 'CONSUMIDOR';
+      if (esConsumidorFinal) return false;
+
+      final nom = _clienteSeleccionado!.nombres.trim();
+      final ape = _clienteSeleccionado!.apellidos.trim();
+      final tel = _clienteSeleccionado!.telefono?.trim() ?? '';
+      final email = _clienteSeleccionado!.correo?.trim() ?? '';
+      final emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+
+      return nom.isNotEmpty &&
+          ape.isNotEmpty &&
+          tel.isNotEmpty &&
+          tel.replaceAll(RegExp(r'\D'), '').length >= 8 &&
+          email.isNotEmpty &&
+          emailRegex.hasMatch(email);
+    }
+
+    return true;
+  }
+
   bool validateStep3() => totalAbonos <= totalVenta;
   bool validateStep4() => totalAbonos <= totalVenta; // Compatibilidad legacy
 
@@ -352,7 +395,9 @@ class CheckoutWizardController extends ChangeNotifier {
   // ── Emisión Transaccional (ACID) ──────────────────────────────────────────
   Future<CheckoutWizardResponseModel?> submitOrder({http.Client? client}) async {
     if (!validateStep1() || !validateStep2() || !validateStep3() || !validateStep4()) {
-      _errorMessage = 'Por favor complete todos los datos requeridos antes de emitir la orden.';
+      _errorMessage = (tieneVentaEnVerde && !validateStep2())
+          ? 'Las compras en verde requieren obligatoriamente registrar los datos del cliente (RUT, nombre, apellido, teléfono y correo válido).'
+          : 'Por favor complete todos los datos requeridos antes de emitir la orden.';
       notifyListeners();
       return null;
     }

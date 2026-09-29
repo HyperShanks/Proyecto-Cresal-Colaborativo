@@ -2751,6 +2751,24 @@ def checkout_wizard(
             detail="La orden debe contener al menos un producto inventariado, ítem manual o reserva por encargo."
         )
 
+    # 2.1 Restricción Venta en Verde: Prohibir Consumidor Final y exigir datos de contacto
+    if num_res > 0:
+        rut_cliente_norm = (cliente.rut_cliente or "").replace(".", "").replace("-", "").strip().upper()
+        nombre_cliente_norm = f"{cliente.nombres or ''} {cliente.apellidos or ''}".upper()
+        if (
+            rut_cliente_norm in ["66666666", "6666666", "666666666"]
+            or "CONSUMIDOR FINAL" in nombre_cliente_norm
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Las compras bajo la modalidad de Venta en Verde requieren obligatoriamente la identificación del cliente (RUT, nombres y teléfono de contacto). No se permite asignar a Consumidor Final."
+            )
+        if not cliente.telefono or len(cliente.telefono.strip()) < 8:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Las compras bajo la modalidad de Venta en Verde requieren registrar un teléfono de contacto directo del cliente para coordinar la entrega o retiro."
+            )
+
     # Validar datos de despacho si aplica
     tipo_ent = (request.tipo_entrega or "Retiro").strip()
     es_despacho = "despacho" in tipo_ent.lower()
