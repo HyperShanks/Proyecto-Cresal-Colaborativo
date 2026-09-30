@@ -37,10 +37,14 @@ from schemas import (
     ConfirmarReingresoResponse,
     ResumenAlertasDTO,
 )
-from core.security import get_current_user
+from core.security import get_current_user, require_bodega_access
 from core.policies import validar_horario_operativo_bodega
 
-router = APIRouter(prefix="/api/v1/bodega", tags=["Tablero Operativo"])
+router = APIRouter(
+    prefix="/api/v1/bodega",
+    tags=["Tablero Operativo"],
+    dependencies=[Depends(require_bodega_access)]
+)
 
 # Alias retrocompatible
 TareaAlerta = TareaAlertaResponse

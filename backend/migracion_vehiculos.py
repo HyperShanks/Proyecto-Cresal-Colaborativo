@@ -56,6 +56,21 @@ def procesar_anio(valor_raw):
         return 2000
 
 
+def procesar_fecha_ingreso(valor_raw):
+    """Parsea la fecha de ingreso físico en patio (Columna D). Defecto: hoy."""
+    if pd.isna(valor_raw):
+        return datetime.now().date()
+    if isinstance(valor_raw, (datetime, pd.Timestamp)):
+        return valor_raw.date()
+    try:
+        dt = pd.to_datetime(valor_raw, errors='coerce')
+        if pd.notnull(dt):
+            return dt.date()
+    except Exception:
+        pass
+    return datetime.now().date()
+
+
 def extraer_cilindrada(modelo_raw, obs_raw=""):
     """
     Extrae la cilindrada del vehículo analizando el modelo y observaciones
@@ -447,13 +462,28 @@ def ejecutar_migracion():
         detalles_caja_batch = []
         
         for idx, row in df_limpio.iterrows():
-            patente_final = limpiar_patente(row.get("Patente"), patentes_registradas)
             num_ingreso_final = str(row["_numero_ingreso_limpio"])
+            patente_final = limpiar_patente(row.get("Patente"), patentes_registradas)
+            
+            # Estandarización SPEC-22: Si no posee patente o es genérica, asignar SPPU-{numero_ingreso}
+            if not patente_final:
+                patente_final = f"SPPU-{num_ingreso_final}"
 
             marca_val = str(row.get("Marca")).strip() if pd.notnull(row.get("Marca")) else ""
             modelo_val = str(row.get("Modelo")).strip() if pd.notnull(row.get("Modelo")) else ""
             obs_val = str(row.get(col_obs)).strip() if col_obs and pd.notnull(row.get(col_obs)) else ""
             anio_final = procesar_anio(row.get(col_anio)) if col_anio else 2000
+
+            # ------------------------------------------------------------------
+            # COLUMNAS MATRIZ CENTRAL (A a M - SPEC-22)
+            # ------------------------------------------------------------------
+            factura_val = str(row.get("Factura")).strip()[:50] if pd.notnull(row.get("Factura")) and str(row.get("Factura")).strip().upper() not in ["NAN", "NONE", ""] else None
+            fecha_ingreso_val = procesar_fecha_ingreso(row.get("Fecha ingreso"))
+            origen_val = str(row.get("Origen")).strip().upper()[:100] if pd.notnull(row.get("Origen")) and str(row.get("Origen")).strip().upper() not in ["NAN", "NONE", ""] else None
+            color_val = str(row.get("Color")).strip().upper()[:50] if pd.notnull(row.get("Color")) and str(row.get("Color")).strip().upper() not in ["NAN", "NONE", ""] else None
+            destino_val = str(row.get("Destino")).strip().upper()[:50] if pd.notnull(row.get("Destino")) and str(row.get("Destino")).strip().upper() not in ["NAN", "NONE", ""] else "DESARME"
+            grua_val = str(row.get("GRUA")).strip().upper()[:100] if pd.notnull(row.get("GRUA")) and str(row.get("GRUA")).strip().upper() not in ["NAN", "NONE", ""] else None
+            obs_final = obs_val if obs_val and obs_val.upper() not in ["NAN", "NONE", ""] else None
             
             # ------------------------------------------------------------------
             # EXTRACCIÓN AVANZADA ESTANDARIZADA
@@ -493,7 +523,7 @@ def ejecutar_migracion():
             # Detección de filas sin datos vehiculares mínimos (ej. registros históricos vacíos)
             tiene_marca = bool(marca_val) and marca_val.upper() not in ["NAN", "NONE", "DESCONOCIDA", "S/I", "S/A", "SIN DATOS"]
             tiene_modelo = bool(modelo_val) and modelo_val.upper() not in ["NAN", "NONE", "DESCONOCIDO", "S/I", "S/A", "SIN DATOS"]
-            tiene_patente = patente_final is not None and patente_final != ""
+            tiene_patente = bool(patente_final) and not patente_final.startswith("SPPU-")
             tiene_motor = numero_motor_final != "S/A"
 
             es_sin_datos = not (tiene_marca or tiene_modelo or tiene_patente or tiene_motor)
@@ -511,7 +541,7 @@ def ejecutar_migracion():
                 estado_activo = "Activo"
                 id_estado_activo = 5  # Pendiente de Paletizado / Desarmado
 
-            # 1. Vehículo Base (Vehiculo_Origen)
+            # 1. Vehículo Base (Vehiculo_Origen - 13 Columnas)
             if num_ingreso_final in vehiculos_existentes:
                 id_vehiculo = vehiculos_existentes[num_ingreso_final]
             else:
@@ -521,9 +551,17 @@ def ejecutar_migracion():
                     numero_ingreso=num_ingreso_final,
                     patente=patente_final,
                     vin=None,
+                    factura=factura_val,
+                    fecha_ingreso=fecha_ingreso_val,
+                    origen=origen_val,
                     marca=marca_final,
                     modelo=modelo_final,
                     anio=anio_final,
+                    color=color_val,
+                    numero_motor=numero_motor_final if numero_motor_final != "S/A" else None,
+                    destino=destino_val,
+                    grua=grua_val,
+                    observaciones=obs_final,
                     traccion=traccion_final,
                     estado=estado_vehiculo,
                     fecha_creacion=datetime.now()

@@ -2,7 +2,7 @@ import os
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 from typing import Optional, List, Any, Union
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, date
 from enum import Enum
 import re
 from core.utils.validators import validar_rut_modulo11
@@ -114,6 +114,60 @@ class VehiculoForzadoUpdate(BaseModel):
     traccion: str
     motor: MotorUpdate
     caja: CajaUpdate
+
+# ==========================================
+# ESQUEMAS PARA RECEPCIÓN VEHICULAR (SPEC-22)
+# ==========================================
+
+class VehiculoRecepcionCreate(BaseModel):
+    numero_ingreso: Optional[str] = Field(None, description="Correlativo único. Si se omite, se autocalcula")
+    patente: Optional[str] = Field(None, description="Patente vehicular en mayúsculas o SPPU")
+    es_sppu: bool = Field(False, description="Flag para vehículos sin patente (S/PPU)")
+    factura: Optional[str] = Field(None, description="N° Factura, póliza o remate")
+    fecha_ingreso: Optional[str] = Field(None, description="Fecha de ingreso YYYY-MM-DD")
+    origen: Optional[str] = Field(None, description="Proveedor / remate de procedencia")
+    marca: str = Field(..., description="Marca comercial en mayúsculas")
+    modelo: str = Field(..., description="Modelo y versión")
+    anio: Optional[int] = Field(None, description="Año de fabricación")
+    color: Optional[str] = Field(None, description="Color predominante de carrocería")
+    numero_motor: Optional[str] = Field(None, description="Número de serie del bloque de motor")
+    destino: str = Field("DESARME", description="Destino: DESARME, VENTA, REPARACION, CHATARRA")
+    grua: Optional[str] = Field(None, description="Operador o chofer de grúa")
+    observaciones: Optional[str] = Field(None, description="Observaciones de llaves, papeles, choques, etc.")
+    traccion: Optional[str] = None
+    combustible: Optional[str] = None
+    transmision: Optional[str] = None
+    cilindrada: Optional[str] = None
+
+class VehiculoRecepcionItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id_vehiculo: UUID
+    numero_ingreso: str
+    patente: Optional[str] = None
+    factura: Optional[str] = None
+    fecha_ingreso: Optional[date] = None
+    origen: Optional[str] = None
+    marca: str
+    modelo: str
+    anio: Optional[int] = None
+    color: Optional[str] = None
+    numero_motor: Optional[str] = None
+    destino: Optional[str] = "DESARME"
+    grua: Optional[str] = None
+    observaciones: Optional[str] = None
+    traccion: Optional[str] = None
+    estado: Optional[str] = "Activo"
+    fecha_creacion: Optional[datetime] = None
+
+class VehiculoRecepcionRecientesResponse(BaseModel):
+    total: int
+    items: List[VehiculoRecepcionItem]
+
+class VehiculoRecepcionExportarResponse(BaseModel):
+    total: int
+    tsv: str
+    items: List[VehiculoRecepcionItem]
 
 # ==========================================
 # ESQUEMAS PARA PALETIZADO / IMPRESIÓN (HU-2.4)

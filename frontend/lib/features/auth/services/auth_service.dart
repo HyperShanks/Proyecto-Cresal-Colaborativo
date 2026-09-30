@@ -154,6 +154,8 @@ class AuthService {
           if (idRol == 5) rolText = 'Administrador';
           if (idRol == 6) rolText = 'Jefe de Ventas';
           if (idRol == 7) rolText = 'Vendedor Online';
+          if (idRol == 8) rolText = 'Auditor';
+          if (idRol == 9) rolText = 'Recepción';
         }
         final sucursalId = usuarioMap?['id_sucursal']?.toString();
         final sucursalNombre = usuarioMap?['nombre_sucursal']?.toString() ??
@@ -272,6 +274,8 @@ class AuthService {
           if (idRol == 5) rolText = 'Administrador';
           if (idRol == 6) rolText = 'Jefe de Ventas';
           if (idRol == 7) rolText = 'Vendedor Online';
+          if (idRol == 8) rolText = 'Auditor';
+          if (idRol == 9) rolText = 'Recepción';
         }
         final sucursalId = usuarioMap?['id_sucursal']?.toString();
         final sucursalNombre = usuarioMap?['nombre_sucursal']?.toString() ??
@@ -529,6 +533,12 @@ class AuthService {
     );
     _currentUserCache = recontructed;
     return recontructed;
+  }
+
+  /// Retorna true si el usuario autenticado posee rol de Recepción Patio (id_rol == 9).
+  static Future<bool> esRecepcion() async {
+    final idRol = await getIdRol();
+    return idRol == 9;
   }
 
   /// Elimina el token, rol y datos de sesión activa (para logout o sesiones expiradas),

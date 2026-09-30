@@ -4,7 +4,7 @@
 # autogenere la documentación Swagger.
 
 import uuid
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, text, CheckConstraint, Sequence
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date, Text, ForeignKey, text, CheckConstraint, Sequence
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from database import Base
@@ -120,11 +120,19 @@ class Vehiculo_Origen(Base):
     
     id_vehiculo = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     numero_ingreso = Column(String(10), nullable=False, unique=True)
-    patente = Column(String(10), nullable=True, unique=True)
+    patente = Column(String(20), nullable=False, unique=True)
     vin = Column(String(17), nullable=True, unique=True)
+    factura = Column(String(50), nullable=True)
+    fecha_ingreso = Column(Date, nullable=True, server_default=text("CURRENT_DATE"))
+    origen = Column(String(100), nullable=True)
     marca = Column(String(100), nullable=False)
     modelo = Column(String(100), nullable=False)
     anio = Column(Integer, nullable=True)
+    color = Column(String(50), nullable=True)
+    numero_motor = Column(String(100), nullable=True)
+    destino = Column(String(50), nullable=True, server_default="DESARME")
+    grua = Column(String(100), nullable=True)
+    observaciones = Column(Text, nullable=True)
     traccion = Column(String(50), nullable=True)
     estado = Column(String(20), nullable=False, server_default="Activo")
     fecha_creacion = Column(DateTime, nullable=False, server_default=text("now()"))

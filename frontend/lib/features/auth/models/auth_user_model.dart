@@ -21,6 +21,13 @@ class AuthUserModel {
 
   String get nombreCompleto => '$nombres $apellidos'.trim();
 
+  bool get esRecepcion => idRol == 9;
+  bool get esBodeguero => idRol == 1;
+  bool get esVendedor => idRol == 2 || idRol == 6 || idRol == 7;
+  bool get esCaja => idRol == 3;
+  bool get esGerente => idRol == 4 || idRol == 8;
+  bool get esAdmin => idRol == 5;
+
   factory AuthUserModel.fromJson(Map<String, dynamic> json) {
     return AuthUserModel(
       idUsuario: (json['id_usuario'] ?? json['idUsuario'] ?? '').toString(),
