@@ -25,9 +25,8 @@ class DialogoAdvertenciaConsumidorFinal extends StatefulWidget {
     return showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => DialogoAdvertenciaConsumidorFinal(
-        duracionSegundos: duracionSegundos,
-      ),
+      builder: (ctx) =>
+          DialogoAdvertenciaConsumidorFinal(duracionSegundos: duracionSegundos),
     );
   }
 
@@ -210,7 +209,7 @@ class _DialogoAdvertenciaConsumidorFinalState
                         strokeWidth: 2,
                         value: widget.duracionSegundos > 0
                             ? (widget.duracionSegundos - _segundosRestantes) /
-                                widget.duracionSegundos.toDouble()
+                                  widget.duracionSegundos.toDouble()
                             : 0,
                         color: AppPalette.warning,
                       ),
@@ -255,13 +254,9 @@ class _DialogoAdvertenciaConsumidorFinalState
           width: double.infinity,
           child: Row(
             children: [
-              Expanded(
-                child: _buildBotonCancelar(),
-              ),
+              Expanded(child: _buildBotonCancelar()),
               const SizedBox(width: 8),
-              Expanded(
-                child: _buildBotonConfirmar(),
-              ),
+              Expanded(child: _buildBotonConfirmar()),
             ],
           ),
         ),
@@ -283,7 +278,7 @@ class _DialogoAdvertenciaConsumidorFinalState
       label: Text(
         _segundosRestantes > 0
             ? 'CONTINUAR (${_segundosRestantes}s)'
-            : 'CONTINUAR COMO CONSUMIDOR FINAL',
+            : 'CONTINUAR',
         overflow: TextOverflow.ellipsis,
         maxLines: 1,
         style: TextStyle(
@@ -294,12 +289,9 @@ class _DialogoAdvertenciaConsumidorFinalState
       ),
       style: ElevatedButton.styleFrom(
         backgroundColor: const Color(0xFFD97706),
-        disabledBackgroundColor:
-            const Color(0xFFD97706).withValues(alpha: 0.2),
+        disabledBackgroundColor: const Color(0xFFD97706).withValues(alpha: 0.2),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     );
   }
@@ -311,9 +303,7 @@ class _DialogoAdvertenciaConsumidorFinalState
       style: OutlinedButton.styleFrom(
         side: BorderSide(color: AppPalette.primary.withValues(alpha: 0.5)),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
       child: Text(
         'VOLVER Y PEDIR DATOS',

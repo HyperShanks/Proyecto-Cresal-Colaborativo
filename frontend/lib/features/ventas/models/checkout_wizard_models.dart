@@ -272,6 +272,7 @@ class CheckoutWizardResponseModel {
   final int totalVenta;
   final int descuento;
   final int montoPendiente;
+  final int abonoRequerido;
   final int reservasGeneradas;
   final int activosReservados;
   final bool despachoGenerado;
@@ -285,6 +286,7 @@ class CheckoutWizardResponseModel {
     required this.totalVenta,
     this.descuento = 0,
     required this.montoPendiente,
+    this.abonoRequerido = 0,
     this.reservasGeneradas = 0,
     this.activosReservados = 0,
     this.despachoGenerado = false,
@@ -313,6 +315,7 @@ class CheckoutWizardResponseModel {
       totalVenta: json['total_venta'] is int ? json['total_venta'] : int.tryParse(json['total_venta']?.toString() ?? '0') ?? 0,
       descuento: json['descuento'] is int ? json['descuento'] : int.tryParse(json['descuento']?.toString() ?? '0') ?? 0,
       montoPendiente: json['monto_pendiente'] is int ? json['monto_pendiente'] : int.tryParse(json['monto_pendiente']?.toString() ?? '0') ?? 0,
+      abonoRequerido: json['abono_requerido'] is int ? json['abono_requerido'] : int.tryParse(json['abono_requerido']?.toString() ?? '0') ?? 0,
       reservasGeneradas: json['reservas_generadas'] is int ? json['reservas_generadas'] : int.tryParse(json['reservas_generadas']?.toString() ?? '0') ?? 0,
       activosReservados: json['activos_reservados'] is int ? json['activos_reservados'] : int.tryParse(json['activos_reservados']?.toString() ?? '0') ?? 0,
       despachoGenerado: json['despacho_generado'] == true,
