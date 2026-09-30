@@ -69,6 +69,7 @@ def db_session_gerencia(setup_database):
             Rol(id_rol=3, nombre_rol="Caja"),
             Rol(id_rol=4, nombre_rol="Gerente"),
             Rol(id_rol=5, nombre_rol="Administrador"),
+            Rol(id_rol=8, nombre_rol="Auditor"),
         ]
         for rol in roles:
             if not db.query(Rol).filter_by(id_rol=rol.id_rol).first():
@@ -137,7 +138,19 @@ def db_session_gerencia(setup_database):
             pin_acceso="1001",
             estado="Activo",
         )
-        db.add_all([user_gerente, user_admin, user_vendedor, user_bodeguero])
+        user_auditor = Usuario(
+            id_usuario=uuid.uuid4(),
+            id_rol=8,
+            id_sucursal=101,
+            rut_usuario="13.456.789-0",
+            nombres="Ricardo",
+            apellidos="Crovetto",
+            email="auditor.test@cresal.cl",
+            password_hash=hash_password("auditor123"),
+            pin_acceso="8001",
+            estado="Activo",
+        )
+        db.add_all([user_gerente, user_admin, user_vendedor, user_bodeguero, user_auditor])
 
         # 5. Clientes
         cli1 = Cliente(
@@ -351,6 +364,7 @@ def db_session_gerencia(setup_database):
             "user_admin": user_admin,
             "user_vendedor": user_vendedor,
             "user_bodeguero": user_bodeguero,
+            "user_auditor": user_auditor,
             "sucursal_1": 101,
             "sucursal_2": 102,
         }
@@ -533,3 +547,44 @@ def test_gerencia_operativa_alertas_y_flujo_bodega(
 
     assert data_suc1["cuellos_botella_paletizados"] == 1
     assert data_suc1["alertas_saldo_pendiente"] == 1
+
+
+def test_auditor_zero_trust_read_only_and_mutation_blocked(
+    client, db_session_gerencia
+):
+    """
+    Verifica que el Auditor (id_rol=8):
+    1. Puede consultar los endpoints GET de Gerencia (200 OK).
+    2. Recibe 403 Forbidden estricto si intenta emitir órdenes (POST /api/v1/ordenes).
+    3. Recibe 403 Forbidden estricto si intenta anular órdenes (POST /api/v1/ordenes/{id}/anular).
+    """
+    auditor = db_session_gerencia["user_auditor"]
+    token = create_access_token(
+        data={"sub": str(auditor.id_usuario), "rol": auditor.id_rol}
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. Consulta lectura exitosa
+    resp_kpis = client.get("/api/v1/gerencia/dashboard/kpis", headers=headers)
+    assert resp_kpis.status_code == 200
+
+    # 2. Bloqueo de emisión de orden
+    payload_orden = {
+        "id_sucursal": 101,
+        "consentimiento_legal": True,
+        "cliente": {
+            "rut_cliente": "12.345.678-9",
+            "nombres": "Cliente",
+            "apellidos": "Prueba",
+        },
+        "items": [{"id_activo": str(uuid.uuid4()), "cantidad": 1, "precio_final": 50000}],
+    }
+    resp_crear = client.post("/api/v1/ordenes", json=payload_orden, headers=headers)
+    assert resp_crear.status_code == 403
+    assert "Auditoría no posee permisos" in resp_crear.json()["detail"]
+
+    # 3. Bloqueo de anulación de orden
+    fake_order_id = str(uuid.uuid4())
+    resp_anular = client.post(f"/api/v1/ordenes/{fake_order_id}/anular", headers=headers)
+    assert resp_anular.status_code == 403
+    assert "Auditoría no posee permisos" in resp_anular.json()["detail"]

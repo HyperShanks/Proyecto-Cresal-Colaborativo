@@ -111,7 +111,14 @@ def crear_orden(
     3. Rollback inmediato ante cualquier fallo.
     """
     # ── 1. Validaciones Previas de Negocio ──────────────────────────────────
-    # 1.0 Validación de Horario Operativo y Periodo de Gracia por Rol
+    # 1.0 Control RBAC Zero-Trust: Bloqueo de emisión de órdenes para Auditor (Rol 8) y roles no comerciales
+    if current_user.id_rol == 8 or current_user.id_rol not in [1, 2, 4, 5, 6, 7]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso denegado: El perfil de Auditoría no posee permisos para emitir órdenes de venta."
+        )
+
+    # 1.0.1 Validación de Horario Operativo y Periodo de Gracia por Rol
     validar_horario_operativo_ordenes(current_user, orden_in.items, db)
 
     if not orden_in.consentimiento_legal:
@@ -1264,6 +1271,12 @@ def asignar_activo_backorder(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
+    if current_user.id_rol == 8:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso denegado: El perfil de Auditoría no posee permisos para asignar repuestos a órdenes."
+        )
+
     orden = db.query(Orden_Venta).filter(Orden_Venta.id_orden == id_orden).first()
     if not orden:
         raise HTTPException(status_code=404, detail="Orden de venta no encontrada.")
@@ -2189,6 +2202,12 @@ def anular_orden_post(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
+    if current_user.id_rol == 8:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso denegado: El perfil de Auditoría no posee permisos para anular órdenes de venta."
+        )
+
     rol_nombre = (current_user.nombre_rol or "").lower()
     es_vendedor_o_admin = current_user.id_rol in [2, 4, 5, 6, 7] or (
         "vendedor" in rol_nombre or "admin" in rol_nombre or "jefe" in rol_nombre or "gerente" in rol_nombre
@@ -2291,6 +2310,12 @@ def anular_orden_patch(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
+    if current_user.id_rol == 8:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso denegado: El perfil de Auditoría no posee permisos para anular órdenes de venta."
+        )
+
     rol_nombre = (current_user.nombre_rol or "").lower()
     es_vendedor_o_admin = current_user.id_rol in [2, 4, 5, 6, 7] or (
         "vendedor" in rol_nombre or "admin" in rol_nombre or "jefe" in rol_nombre or "gerente" in rol_nombre

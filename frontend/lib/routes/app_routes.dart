@@ -98,9 +98,14 @@ class AppRoutes {
       return false;
     }
 
-    // Administrador (5), Gerente (4) y Auditor / Gerente Auditor (8): Acceso a vistas gerenciales
-    if (idRol == 4 || idRol == 5 || idRol == 8) {
+    // Administrador (5) y Gerente General (4): Acceso global
+    if (idRol == 4 || idRol == 5) {
       return true;
+    }
+
+    // Auditor / Gerente Solo Lectura (8): Acceso restringido exclusivamente a vistas gerenciales
+    if (idRol == 8) {
+      return route == gerencia;
     }
 
     // Caja (id_rol == 3)

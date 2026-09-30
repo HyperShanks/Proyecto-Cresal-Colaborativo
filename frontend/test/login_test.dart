@@ -66,6 +66,7 @@ void main() {
 
     test('AppRoutes.getHomeRouteForRole resuelve rutas según SSOT', () {
       expect(AppRoutes.getHomeRouteForRole(4), equals(AppRoutes.gerencia));
+      expect(AppRoutes.getHomeRouteForRole(8), equals(AppRoutes.gerencia));
       expect(AppRoutes.getHomeRouteForRole(3), equals(AppRoutes.caja));
       expect(AppRoutes.getHomeRouteForRole(2), equals(AppRoutes.ventasMain));
       expect(AppRoutes.getHomeRouteForRole(6), equals(AppRoutes.ventasMain));
@@ -73,6 +74,15 @@ void main() {
       expect(AppRoutes.getHomeRouteForRole(1), equals(AppRoutes.home));
       expect(AppRoutes.getHomeRouteForRole(5), equals(AppRoutes.home)); // Admin técnico permanece en home
       expect(AppRoutes.getHomeRouteForRole(null), equals(AppRoutes.home));
+    });
+
+    test('AppRoutes.isRouteAllowedForRole restringe al Auditor (8) exclusivamente a gerencia', () {
+      expect(AppRoutes.isRouteAllowedForRole(8, AppRoutes.gerencia), isTrue);
+      expect(AppRoutes.isRouteAllowedForRole(8, AppRoutes.caja), isFalse);
+      expect(AppRoutes.isRouteAllowedForRole(8, AppRoutes.ventasMain), isFalse);
+      expect(AppRoutes.isRouteAllowedForRole(8, AppRoutes.paletizado), isFalse);
+      expect(AppRoutes.isRouteAllowedForRole(8, AppRoutes.recepcion), isFalse);
+      expect(AppRoutes.isRouteAllowedForRole(8, AppRoutes.login), isTrue); // Ruta pública siempre permitida
     });
   });
 

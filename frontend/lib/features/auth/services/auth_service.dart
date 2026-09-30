@@ -439,8 +439,7 @@ class AuthService {
     return rLower == 'vendedor' ||
         rLower == 'vendedoronline' ||
         rLower == 'vendedor online' ||
-        rLower == 'jefe de ventas' ||
-        rLower == 'auditor';
+        rLower == 'jefe de ventas';
   }
 
   /// Verifica si el usuario actual es VendedorOnline (id_rol == 7).
@@ -458,7 +457,7 @@ class AuthService {
     if (idRol == 6) return true;
     final rol = await getRol();
     final rLower = rol?.toLowerCase() ?? '';
-    return rLower == 'jefe de ventas' || rLower == 'auditor';
+    return rLower == 'jefe de ventas';
   }
 
   /// Recupera el ID de sucursal del usuario autenticado (para Radar de Stock).
