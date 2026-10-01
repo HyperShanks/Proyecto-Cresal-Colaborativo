@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 // Rutas relativas hacia la capa core y services del feature
@@ -7,6 +8,7 @@ import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../../../core/constants/especificaciones_vehiculo.dart';
 import '../../services/vehiculo_service.dart';
+import '../../utils/vehiculo_parser_util.dart';
 
 class RecepcionVehiculoScreen extends StatefulWidget {
   const RecepcionVehiculoScreen({super.key});
@@ -30,7 +32,6 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
   String? traccionSeleccionada;
   String? transmisionSeleccionada;
   String? combustibleSeleccionado;
-  String _destinoSeleccionado = 'DESARME';
 
   // Fecha de Ingreso
   DateTime _fechaIngreso = DateTime.now();
@@ -50,6 +51,7 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
   final TextEditingController _facturaController = TextEditingController();
   final TextEditingController _origenController = TextEditingController();
   final TextEditingController _colorController = TextEditingController();
+  final TextEditingController _destinoController = TextEditingController(text: 'DESARME');
   final TextEditingController _gruaController = TextEditingController();
   final TextEditingController _observacionesController = TextEditingController();
 
@@ -81,6 +83,7 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
     _facturaController.dispose();
     _origenController.dispose();
     _colorController.dispose();
+    _destinoController.dispose();
     _gruaController.dispose();
     _observacionesController.dispose();
     super.dispose();
@@ -129,6 +132,7 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
         _cilindradaController.text = datos['cilindrada'] ?? '';
         _motorController.text = datos['numero_motor'] ?? '';
       });
+      _inferirEspecificacionesDesdeModelo();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('✅ Datos recuperados exitosamente.'),
@@ -146,6 +150,25 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
 
     setState(() {
       _isSearchingPatente = false;
+    });
+  }
+
+  /// Infiere en tiempo real cilindrada, transmisión, combustible y tracción
+  /// analizando la descripción ingresada en Marca y Modelo (Matriz Los Pinos).
+  void _inferirEspecificacionesDesdeModelo() {
+    final modelo = _modeloController.text.trim();
+    if (modelo.isEmpty) return;
+    final inf = VehiculoParserUtil.inferir(
+      modelo: modelo,
+      marca: _marcaController.text.trim(),
+    );
+    setState(() {
+      if (inf.cilindrada != null) {
+        _cilindradaController.text = inf.cilindrada!;
+      }
+      traccionSeleccionada = inf.traccion;
+      transmisionSeleccionada = inf.transmision;
+      combustibleSeleccionado = inf.combustible;
     });
   }
 
@@ -418,15 +441,11 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: _buildDropdown(
+                    child: _buildTextField(
+                      controller: _destinoController,
                       label: 'Destino',
-                      value: _destinoSeleccionado,
-                      items: const ['DESARME', 'VENTA', 'REPARACIÓN', 'CHATARRA'],
-                      onChanged: (nuevoValor) {
-                        if (nuevoValor != null) {
-                          setState(() => _destinoSeleccionado = nuevoValor);
-                        }
-                      },
+                      hint: 'Ej: DESARME',
+                      isCapitalized: true,
                     ),
                   ),
                 ],
@@ -435,13 +454,41 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
               const SizedBox(height: 22),
 
               // 5. DATOS TÉCNICOS DEL VEHÍCULO
-              Text(
-                'Datos Técnicos del Vehículo',
-                style: AppTypography.cardTitle.copyWith(
-                  color: AppPalette.primary,
-                  fontSize: 13.5,
-                  letterSpacing: 0.5,
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Datos Técnicos del Vehículo',
+                    style: AppTypography.cardTitle.copyWith(
+                      color: AppPalette.primary,
+                      fontSize: 13.5,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppPalette.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: AppPalette.primary.withValues(alpha: 0.3)),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.auto_awesome, color: AppPalette.primary, size: 12),
+                        SizedBox(width: 4),
+                        Text(
+                          'Autocompletado activo',
+                          style: TextStyle(
+                            color: AppPalette.primary,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 10),
 
@@ -453,6 +500,7 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
                       label: 'Marca *',
                       hint: 'Ej: Toyota',
                       isCapitalized: true,
+                      onChanged: (_) => _inferirEspecificacionesDesdeModelo(),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -462,6 +510,7 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
                       label: 'Modelo *',
                       hint: 'Ej: Yaris',
                       isCapitalized: true,
+                      onChanged: (_) => _inferirEspecificacionesDesdeModelo(),
                     ),
                   ),
                 ],
@@ -695,6 +744,7 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
     TextInputType? keyboardType,
     Widget? suffixWidget,
     bool enabled = true,
+    ValueChanged<String>? onChanged,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -716,6 +766,7 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
           child: TextField(
             controller: controller,
             enabled: enabled,
+            onChanged: onChanged,
             style: AppTypography.body.copyWith(
               color: enabled ? AppPalette.textPrimary : AppPalette.textSecondary,
               fontSize: 13.5,
@@ -960,7 +1011,7 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
       "anio": int.tryParse(_anoController.text.trim()) ?? 2000,
       "color": _colorController.text.trim(),
       "numero_motor": _motorController.text.trim(),
-      "destino": _destinoSeleccionado,
+      "destino": _destinoController.text.trim().isEmpty ? 'DESARME' : _destinoController.text.trim().toUpperCase(),
       "grua": _gruaController.text.trim(),
       "observaciones": _observacionesController.text.trim(),
       "cilindrada": _cilindradaController.text.trim(),
@@ -982,14 +1033,38 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
         _ocrFailedAttempts = 0;
         _seRegistroAlMenosUno = true;
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Poka-Yoke Superado: ¡Vehículo ingresado con éxito!'),
-            backgroundColor: AppPalette.success,
-            duration: Duration(seconds: 4),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        final tsvRow = [
+          numeroIngreso,
+          patenteFinal,
+          _facturaController.text.trim(),
+          '${_fechaIngreso.year}-${_fechaIngreso.month.toString().padLeft(2, '0')}-${_fechaIngreso.day.toString().padLeft(2, '0')}',
+          _origenController.text.trim(),
+          _marcaController.text.trim(),
+          _modeloController.text.trim(),
+          _anoController.text.trim(),
+          _colorController.text.trim(),
+          _motorController.text.trim(),
+          _destinoController.text.trim().isEmpty ? 'DESARME' : _destinoController.text.trim().toUpperCase(),
+          _gruaController.text.trim(),
+          _observacionesController.text.trim().replaceAll('\t', ' ').replaceAll('\n', ' '),
+        ].join('\t');
+
+        await Clipboard.setData(ClipboardData(text: tsvRow));
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '✅ N° $numeroIngreso ingresado. Fila copiada para Excel (pega con Ctrl+V en columna A).',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+              backgroundColor: const Color(0xFF107C41),
+              duration: const Duration(seconds: 5),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          );
+        }
 
         _limpiarFormulario();
         _cargarFolioDesdeBackend();
@@ -1059,12 +1134,12 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
     _facturaController.clear();
     _origenController.clear();
     _colorController.clear();
+    _destinoController.text = 'DESARME';
     _gruaController.clear();
     _observacionesController.clear();
     setState(() {
       _esSppu = false;
       _fechaIngreso = DateTime.now();
-      _destinoSeleccionado = 'DESARME';
       traccionSeleccionada = null;
       transmisionSeleccionada = null;
       combustibleSeleccionado = null;

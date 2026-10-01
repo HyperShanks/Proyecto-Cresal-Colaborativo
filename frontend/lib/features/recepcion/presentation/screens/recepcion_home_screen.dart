@@ -98,10 +98,34 @@ class _RecepcionHomeScreenState extends State<RecepcionHomeScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          '📋 Folio N° ${v.numeroIngreso} (${v.patente ?? "S/PPU"}): Campos y valores copiados al portapapeles',
+          '📋 Folio N° ${v.numeroIngreso} (${v.patente ?? "S/PPU"}): Ficha copiada al portapapeles',
           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
-        backgroundColor: AppPalette.success,
+        backgroundColor: AppPalette.primary,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 4),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        action: SnackBarAction(
+          label: 'VER FICHA',
+          textColor: Colors.white,
+          onPressed: () => _mostrarDetalleVehiculo(v),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _copiarFilaExcelAlPortapapeles(VehiculoRecepcionModel v) async {
+    final tsv = v.toTsvRow();
+    await Clipboard.setData(ClipboardData(text: tsv));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '📊 Folio N° ${v.numeroIngreso}: Fila copiada para Excel. Pégala con Ctrl+V en la columna A.',
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: const Color(0xFF107C41),
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 4),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -615,7 +639,7 @@ class _RecepcionHomeScreenState extends State<RecepcionHomeScreen> {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: () => _copiarRegistroAlPortapapeles(v),
+        onTap: () => _copiarFilaExcelAlPortapapeles(v),
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -666,33 +690,68 @@ class _RecepcionHomeScreenState extends State<RecepcionHomeScreen> {
                     ),
                   ),
                   const Spacer(),
-                  // Botón Copiar TXT
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppPalette.primary.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                        color: AppPalette.primary.withValues(alpha: 0.4),
-                      ),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.copy_rounded, color: AppPalette.primary, size: 13),
-                        SizedBox(width: 4),
-                        Text(
-                          'Copiar TXT',
-                          style: TextStyle(
-                            color: AppPalette.primary,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
+                  // Botón Copiar Excel (TSV)
+                  InkWell(
+                    borderRadius: BorderRadius.circular(6),
+                    onTap: () => _copiarFilaExcelAlPortapapeles(v),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF107C41).withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: const Color(0xFF107C41).withValues(alpha: 0.6),
                         ),
-                      ],
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.table_chart_rounded, color: Color(0xFF22C55E), size: 13),
+                          SizedBox(width: 4),
+                          Text(
+                            'Excel',
+                            style: TextStyle(
+                              color: Color(0xFF22C55E),
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(width: 6),
+                  // Botón Copiar TXT
+                  InkWell(
+                    borderRadius: BorderRadius.circular(6),
+                    onTap: () => _copiarRegistroAlPortapapeles(v),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppPalette.primary.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: AppPalette.primary.withValues(alpha: 0.4),
+                        ),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.copy_rounded, color: AppPalette.primary, size: 13),
+                          SizedBox(width: 4),
+                          Text(
+                            'TXT',
+                            style: TextStyle(
+                              color: AppPalette.primary,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
                   IconButton(
                     icon: const Icon(Icons.info_outline_rounded, size: 20, color: AppPalette.textSecondary),
                     padding: EdgeInsets.zero,
@@ -848,6 +907,23 @@ class _RecepcionHomeScreenState extends State<RecepcionHomeScreen> {
                   Row(
                     children: [
                       Expanded(
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF107C41),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          icon: const Icon(Icons.table_chart_rounded, size: 18),
+                          label: const Text('COPIAR EXCEL', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          onPressed: () {
+                            Navigator.of(ctx).pop();
+                            _copiarFilaExcelAlPortapapeles(v);
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
                         child: OutlinedButton.icon(
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppPalette.primary,
@@ -856,26 +932,11 @@ class _RecepcionHomeScreenState extends State<RecepcionHomeScreen> {
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           ),
                           icon: const Icon(Icons.copy_rounded, size: 18),
-                          label: const Text('COPIAR TXT', style: TextStyle(fontWeight: FontWeight.bold)),
+                          label: const Text('COPIAR TXT', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                           onPressed: () {
                             Navigator.of(ctx).pop();
                             _copiarRegistroAlPortapapeles(v);
                           },
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppPalette.surface,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              side: const BorderSide(color: Colors.white24),
-                            ),
-                          ),
-                          onPressed: () => Navigator.of(ctx).pop(),
-                          child: const Text('CERRAR', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                         ),
                       ),
                     ],
