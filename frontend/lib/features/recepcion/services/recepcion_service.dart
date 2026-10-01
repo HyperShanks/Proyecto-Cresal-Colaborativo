@@ -20,43 +20,16 @@ class RecepcionService {
     try {
       final headers = await _headers();
       final uri = Uri.parse('${ApiConstants.vehiculosEndpoint}/recepcion/siguiente-ingreso');
-      debugPrint('[RECEPCION_SERVICE] Consultando siguiente correlativo en: $uri');
-      http.Response res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 10));
-
-      // Si falla en remoto o responde 404, intentar contra el backend local
-      if ((res.statusCode == 404 || res.statusCode == 502 || res.statusCode == 503) &&
-          !uri.host.contains('127.0.0.1') && !uri.host.contains('localhost')) {
-        try {
-          final localUri = Uri.parse('http://127.0.0.1:8000/api/v1/vehiculos/recepcion/siguiente-ingreso');
-          debugPrint('[RECEPCION_SERVICE] Fallback local para correlativo: $localUri');
-          final localRes = await http.get(localUri, headers: headers).timeout(const Duration(seconds: 4));
-          if (localRes.statusCode == 200) {
-            res = localRes;
-          }
-        } catch (_) {}
-      }
-
-      // Si da 401 por token desfasado de otro entorno, intentar sin encabezado Authorization
-      if (res.statusCode == 401) {
-        try {
-          final localUri = Uri.parse('http://127.0.0.1:8000/api/v1/vehiculos/recepcion/siguiente-ingreso');
-          final noAuthRes = await http.get(localUri).timeout(const Duration(seconds: 4));
-          if (noAuthRes.statusCode == 200) {
-            res = noAuthRes;
-          }
-        } catch (_) {}
-      }
+      final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 15));
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        final numFolio = data['siguiente_ingreso']?.toString() ?? '1';
-        debugPrint('[RECEPCION_SERVICE] Siguiente ingreso obtenido con éxito: N° $numFolio');
-        return numFolio;
+        return data['siguiente_ingreso']?.toString() ?? '1';
       }
 
       // Fallback retrocompatible
       final fallbackUri = Uri.parse('${ApiConstants.vehiculosEndpoint}/siguiente-ingreso');
-      final fallbackRes = await http.get(fallbackUri, headers: headers).timeout(const Duration(seconds: 10));
+      final fallbackRes = await http.get(fallbackUri, headers: headers).timeout(const Duration(seconds: 15));
       if (fallbackRes.statusCode == 200) {
         final data = jsonDecode(fallbackRes.body);
         return data['siguiente_ingreso']?.toString() ?? '1';
@@ -64,15 +37,6 @@ class RecepcionService {
       return '1';
     } catch (e) {
       debugPrint('[RECEPCION_SERVICE] Error al obtener siguiente ingreso: $e');
-      // Intento final directo a localhost
-      try {
-        final localUri = Uri.parse('http://127.0.0.1:8000/api/v1/vehiculos/recepcion/siguiente-ingreso');
-        final localRes = await http.get(localUri).timeout(const Duration(seconds: 4));
-        if (localRes.statusCode == 200) {
-          final data = jsonDecode(localRes.body);
-          return data['siguiente_ingreso']?.toString() ?? '1';
-        }
-      } catch (_) {}
       return '1';
     }
   }
@@ -91,19 +55,16 @@ class RecepcionService {
 
       final uri = Uri.parse('${ApiConstants.vehiculosEndpoint}/recepcion/recientes')
           .replace(queryParameters: queryParams);
-      debugPrint('[RECEPCION_SERVICE] Consultando recientes en: $uri');
 
-      http.Response res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 15));
-      debugPrint('[RECEPCION_SERVICE] Recientes status: ${res.statusCode}');
+      var res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 15));
 
-      // Fallback automático al backend local si el endpoint remoto responde 404 o error de gateway
-      if ((res.statusCode == 404 || res.statusCode == 502 || res.statusCode == 503) &&
-          !uri.host.contains('127.0.0.1') && !uri.host.contains('localhost')) {
+      // Si el servidor configurado (ej: Render) devuelve 404 porque aún no ha desplegado la ruta,
+      // intentamos fallback automático al servidor local de desarrollo si está disponible.
+      if (res.statusCode == 404 && !uri.host.contains('127.0.0.1') && !uri.host.contains('localhost')) {
         try {
-          final localUri = Uri.parse('http://127.0.0.1:8000/api/v1/vehiculos/recepcion/recientes')
+          final fallbackLocalUri = Uri.parse('http://127.0.0.1:8000/api/v1/vehiculos/recepcion/recientes')
               .replace(queryParameters: queryParams);
-          debugPrint('[RECEPCION_SERVICE] Fallback local para recientes: $localUri');
-          final localRes = await http.get(localUri, headers: headers).timeout(const Duration(seconds: 5));
+          final localRes = await http.get(fallbackLocalUri, headers: headers).timeout(const Duration(seconds: 4));
           if (localRes.statusCode == 200) {
             res = localRes;
           }
@@ -113,32 +74,15 @@ class RecepcionService {
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
         final items = (data['items'] as List<dynamic>? ?? []);
-        debugPrint('[RECEPCION_SERVICE] Recientes obtenidos: ${items.length} vehículos');
         return items
             .map((item) => VehiculoRecepcionModel.fromJson(item as Map<String, dynamic>))
             .toList();
+      } else {
+        debugPrint('[RECEPCION_SERVICE] HTTP ${res.statusCode} al obtener recientes: ${res.body}');
       }
-
-      if (res.statusCode == 401) {
-        debugPrint('⚠️ [RECEPCION_SERVICE] Error 401 No Autorizado. El token guardado no coincide con el backend activo. Se requiere re-login.');
-      }
-
       return [];
     } catch (e) {
       debugPrint('[RECEPCION_SERVICE] Error al obtener recientes: $e');
-      // Intento de rescate directo a localhost
-      try {
-        final headers = await _headers();
-        final localUri = Uri.parse('http://127.0.0.1:8000/api/v1/vehiculos/recepcion/recientes');
-        final localRes = await http.get(localUri, headers: headers).timeout(const Duration(seconds: 4));
-        if (localRes.statusCode == 200) {
-          final data = jsonDecode(localRes.body) as Map<String, dynamic>;
-          final items = (data['items'] as List<dynamic>? ?? []);
-          return items
-              .map((item) => VehiculoRecepcionModel.fromJson(item as Map<String, dynamic>))
-              .toList();
-        }
-      } catch (_) {}
       return [];
     }
   }
@@ -149,11 +93,25 @@ class RecepcionService {
       final headers = await _headers();
       final uri = Uri.parse('${ApiConstants.vehiculosEndpoint}/recepcion/registro');
 
-      final res = await http.post(
+      var res = await http.post(
         uri,
         headers: headers,
         body: jsonEncode(datos),
       ).timeout(const Duration(seconds: 30));
+
+      if (res.statusCode == 404 && !uri.host.contains('127.0.0.1') && !uri.host.contains('localhost')) {
+        try {
+          final localUri = Uri.parse('http://127.0.0.1:8000/api/v1/vehiculos/recepcion/registro');
+          final localRes = await http.post(
+            localUri,
+            headers: headers,
+            body: jsonEncode(datos),
+          ).timeout(const Duration(seconds: 15));
+          if (localRes.statusCode == 200 || localRes.statusCode == 201) {
+            res = localRes;
+          }
+        } catch (_) {}
+      }
 
       final body = jsonDecode(res.body);
 
@@ -185,7 +143,17 @@ class RecepcionService {
       final headers = await _headers();
       final uri = Uri.parse('${ApiConstants.vehiculosEndpoint}/recepcion/exportar-matriz?limite=$limite');
 
-      final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 30));
+      var res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 30));
+
+      if (res.statusCode == 404 && !uri.host.contains('127.0.0.1') && !uri.host.contains('localhost')) {
+        try {
+          final localUri = Uri.parse('http://127.0.0.1:8000/api/v1/vehiculos/recepcion/exportar-matriz?limite=$limite');
+          final localRes = await http.get(localUri, headers: headers).timeout(const Duration(seconds: 15));
+          if (localRes.statusCode == 200) {
+            res = localRes;
+          }
+        } catch (_) {}
+      }
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;

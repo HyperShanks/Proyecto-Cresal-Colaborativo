@@ -121,6 +121,28 @@ class VehiculoRecepcionModel {
     ].join('\t');
   }
 
+  /// Retorna un texto formateado con todos los campos y sus valores para el portapapeles.
+  String toTextoCamposValores() {
+    final fechaStr = fechaIngreso != null
+        ? '${fechaIngreso!.year}-${fechaIngreso!.month.toString().padLeft(2, '0')}-${fechaIngreso!.day.toString().padLeft(2, '0')}'
+        : 'S/I';
+    return [
+      'N° Ingreso: $numeroIngreso',
+      'Patente: ${patente ?? "S/PPU"}',
+      'Factura: ${factura ?? "S/I"}',
+      'Fecha Ingreso: $fechaStr',
+      'Origen: ${origen ?? "S/I"}',
+      'Marca: $marca',
+      'Modelo: $modelo',
+      'Año: ${anio?.toString() ?? "S/I"}',
+      'Color: ${color ?? "S/I"}',
+      'N° Motor: ${numeroMotor ?? "S/I"}',
+      'Destino: $destino',
+      'Grúa: ${grua ?? "S/I"}',
+      'Observaciones: ${observaciones ?? "Sin observaciones"}',
+    ].join('\n');
+  }
+
   static String tsvHeaders() {
     return [
       'N° Ingreso',

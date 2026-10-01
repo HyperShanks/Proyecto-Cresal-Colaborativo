@@ -5,7 +5,7 @@ import '../features/home/presentation/screens/home_screen.dart';
 import '../features/caja/presentation/screens/caja_main_screen.dart';
 import '../features/ventas/presentation/screens/ventas_main_screen.dart';
 import '../features/recepcion/presentation/screens/recepcion_home_screen.dart';
-import '../features/recepcion/presentation/screens/registro_vehiculo_screen.dart';
+import '../features/recepcion/presentation/screens/recepcion_vehiculo_screen.dart';
 import '../features/tickets/presentation/screens/tickets_screen.dart';
 import '../features/paletizado/presentation/screens/paletizado_screen.dart';
 import '../features/paletizado/presentation/screens/etiqueta_preview_screen.dart';
@@ -157,7 +157,7 @@ class AppRoutes {
       gerencia: (context) => const DashboardGerenciaView(),
       ventasMain: (context) => const VentasMainScreen(),
       recepcion: (context) => const RecepcionHomeScreen(),
-      recepcionRegistro: (context) => const RegistroVehiculoScreen(),
+      recepcionRegistro: (context) => const RecepcionVehiculoScreen(),
       tickets: (context) => const TicketsScreen(),
       paletizado: (context) {
         final args = ModalRoute.of(context)?.settings.arguments as String?;

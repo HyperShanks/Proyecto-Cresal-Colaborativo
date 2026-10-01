@@ -85,7 +85,7 @@ class PatenteInput(BaseModel):
 class VehiculoCreate(BaseModel):
     # Datos del Vehículo (Autocompletados por scraper o copiados del padrón)
     correlativo_ingreso: Optional[str] = None
-    patente: str = Field(..., description="Patente validada del vehículo")
+    patente: Optional[str] = Field(None, description="Patente validada del vehículo o SPPU")
     marca: str
     modelo: str
     anio: int
@@ -98,6 +98,17 @@ class VehiculoCreate(BaseModel):
 
     # Datos que FastAPI usará para crear el Detalle_Caja_Cambio internamente
     transmision: str = Field(..., description="Ej: mec, at")
+
+    # Nuevos campos de Vehiculo_Origen (13 columnas matriz Los Pinos)
+    factura: Optional[str] = None
+    fecha_ingreso: Optional[str] = None
+    origen: Optional[str] = None
+    color: Optional[str] = None
+    destino: Optional[str] = "DESARME"
+    grua: Optional[str] = None
+    observaciones: Optional[str] = None
+    es_sppu: Optional[bool] = False
+
 
 class MotorUpdate(BaseModel):
     cilindrada: str

@@ -208,19 +208,7 @@ class _RegistroVehiculoScreenState extends State<RegistroVehiculoScreen> {
       request.files.add(await http.MultipartFile.fromPath('file', imagen.path));
 
       final streamedResponse = await request.send().timeout(const Duration(seconds: 25));
-      var res = await http.Response.fromStream(streamedResponse);
-
-      // Fallback local automático si responde 404 en el servidor remoto
-      if (res.statusCode == 404 && !uri.host.contains('127.0.0.1') && !uri.host.contains('localhost')) {
-        try {
-          final localUri = Uri.parse('http://127.0.0.1:8000/api/v1/vehiculos/ocr-padron');
-          final localRequest = http.MultipartRequest('POST', localUri);
-          if (token != null) localRequest.headers['Authorization'] = 'Bearer $token';
-          localRequest.files.add(await http.MultipartFile.fromPath('file', imagen.path));
-          final localStreamed = await localRequest.send().timeout(const Duration(seconds: 15));
-          res = await http.Response.fromStream(localStreamed);
-        } catch (_) {}
-      }
+      final res = await http.Response.fromStream(streamedResponse);
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);

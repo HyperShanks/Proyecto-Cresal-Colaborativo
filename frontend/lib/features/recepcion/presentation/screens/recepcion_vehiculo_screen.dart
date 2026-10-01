@@ -20,14 +20,22 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
   // Variables de Estado
   String numeroIngreso = "Cargando...";
   bool isLoading = true;
+  bool _seRegistroAlMenosUno = false;
   final VehiculoService _vehiculoService = VehiculoService();
+
+  // Switch Sin Patente (S/PPU)
+  bool _esSppu = false;
 
   // Variables para los selectores obligatorios
   String? traccionSeleccionada;
   String? transmisionSeleccionada;
   String? combustibleSeleccionado;
+  String _destinoSeleccionado = 'DESARME';
 
-  // Controladores de texto
+  // Fecha de Ingreso
+  DateTime _fechaIngreso = DateTime.now();
+
+  // Controladores de texto técnicos
   final TextEditingController _patenteController = TextEditingController();
   final TextEditingController _marcaController = TextEditingController();
   final TextEditingController _modeloController = TextEditingController();
@@ -37,6 +45,13 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
   final TextEditingController _traccionOtroController = TextEditingController();
   final TextEditingController _transmisionOtroController = TextEditingController();
   final TextEditingController _combustibleOtroController = TextEditingController();
+
+  // Controladores Matriz Los Pinos (13 columnas)
+  final TextEditingController _facturaController = TextEditingController();
+  final TextEditingController _origenController = TextEditingController();
+  final TextEditingController _colorController = TextEditingController();
+  final TextEditingController _gruaController = TextEditingController();
+  final TextEditingController _observacionesController = TextEditingController();
 
   // Variables para la cámara
   final ImagePicker _picker = ImagePicker();
@@ -63,6 +78,11 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
     _traccionOtroController.dispose();
     _transmisionOtroController.dispose();
     _combustibleOtroController.dispose();
+    _facturaController.dispose();
+    _origenController.dispose();
+    _colorController.dispose();
+    _gruaController.dispose();
+    _observacionesController.dispose();
     super.dispose();
   }
 
@@ -73,6 +93,9 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
       setState(() {
         numeroIngreso = folio;
         isLoading = false;
+        if (_esSppu) {
+          _patenteController.text = 'SPPU-$folio';
+        }
       });
     }
   }
@@ -128,286 +151,754 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppPalette.background, // ⚠️ Aplicamos el fondo del token
-      appBar: AppBar(
-        title: const Text(
-          'Recepción de Vehículo',
-          style: AppTypography.title,
-        ), // ⚠️ Aplicamos tipografía
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (didPop, result) {},
+      child: Scaffold(
         backgroundColor: AppPalette.background,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: AppPalette.primary),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 1. TARJETA DEL FOLIO (Diseño alineado a Paletizado)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(
-                vertical: 32.0,
-                horizontal: 16.0,
+        appBar: AppBar(
+          title: const Text(
+            'Recepción de Vehículo',
+            style: AppTypography.title,
+          ),
+          backgroundColor: AppPalette.surface,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: AppPalette.primary),
+            onPressed: () => Navigator.of(context).pop(_seRegistroAlMenosUno),
+          ),
+        ),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 20.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 1. TARJETA DEL FOLIO (Diseño corporativo industrial sin desbordamiento)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  vertical: 20.0,
+                  horizontal: 16.0,
+                ),
+                decoration: BoxDecoration(
+                  color: AppPalette.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppPalette.primary.withValues(alpha: 0.3),
+                    width: 1.5,
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      'NÚMERO DE INGRESO (FOLIO)',
+                      style: AppTypography.small.copyWith(
+                        color: AppPalette.primary,
+                        letterSpacing: 1.5,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        numeroIngreso,
+                        style: AppTypography.headline.copyWith(
+                          fontSize: 44,
+                          color: AppPalette.textPrimary,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Raye este número con plumón Posca en el vehículo antes de guardar',
+                      style: AppTypography.small.copyWith(
+                        color: AppPalette.textSecondary,
+                        fontSize: 11,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
               ),
-              decoration: BoxDecoration(
-                color: AppPalette.surface,
-                borderRadius: BorderRadius.circular(12),
+
+              const SizedBox(height: 20),
+
+              // 2. SWITCH S/PPU (SIN PATENTE) - PROTEGIDO CON EXPANDED
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppPalette.surface,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: _esSppu
+                        ? AppPalette.secondary.withValues(alpha: 0.6)
+                        : AppPalette.surface,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.no_crash_rounded,
+                      color: _esSppu ? AppPalette.secondary : AppPalette.textSecondary,
+                      size: 22,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Vehículo Sin Patente (S/PPU)',
+                            style: AppTypography.body.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: _esSppu ? AppPalette.secondary : AppPalette.textPrimary,
+                              fontSize: 13,
+                            ),
+                          ),
+                          Text(
+                            _esSppu ? 'Folio: SPPU-$numeroIngreso' : 'Vehículo con placa física',
+                            style: AppTypography.small.copyWith(
+                              color: AppPalette.textSecondary,
+                              fontSize: 11,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Switch(
+                      value: _esSppu,
+                      activeThumbColor: AppPalette.secondary,
+                      onChanged: (val) {
+                        setState(() {
+                          _esSppu = val;
+                          if (val) {
+                            _patenteController.text = 'SPPU-$numeroIngreso';
+                          } else {
+                            _patenteController.clear();
+                          }
+                        });
+                      },
+                    ),
+                  ],
+                ),
               ),
-              child: Column(
+
+              const SizedBox(height: 16),
+
+              // 3. CAMPO PATENTE CON SCRAPING NATIVO (TITULO ARRIBA)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'NÚMERO DE INGRESO',
+                    _esSppu ? 'Patente Asignada (S/PPU)' : 'Patente del Vehículo *',
                     style: AppTypography.small.copyWith(
-                      color: AppPalette.primary,
-                      letterSpacing: 2.0,
-                      fontWeight: FontWeight.bold,
+                      color: AppPalette.textSecondary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    numeroIngreso,
-                    style: AppTypography.headline.copyWith(
-                      fontSize: 52,
-                      color: AppPalette.textPrimary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 32),
-            const Text(
-              'Datos Técnicos del Vehículo',
-              style: AppTypography.title, // ⚠️ Tipografía unificada
-            ),
-            const SizedBox(height: 16),
-
-            // 2. FORMULARIO COMPLETO
-            _buildTextField(
-              controller: _patenteController,
-              label: 'Patente (Ej: XXYY11)',
-              icon: Icons.directions_car,
-              isCapitalized: true,
-              suffixWidget: _isSearchingPatente
-                  ? const Padding(
-                      padding: EdgeInsets.all(12.0),
-                      child: SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: AppPalette.primary,
-                        ),
-                      ),
-                    )
-                  : IconButton(
-                      icon: const Icon(Icons.search),
-                      color: AppPalette.primary,
-                      onPressed: _ejecutarScrapingPatente,
-                      tooltip: 'Buscar datos del vehículo',
-                    ),
-            ),
-            const SizedBox(height: 16),
-
-            Row(
-              children: [
-                Expanded(
-                  child: _buildTextField(
-                    controller: _marcaController,
-                    label: 'Marca',
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildTextField(
-                    controller: _modeloController,
-                    label: 'Modelo',
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            Row(
-              children: [
-                Expanded(
-                  child: _buildTextField(
-                    controller: _anoController,
-                    label: 'Año',
-                    keyboardType: TextInputType.number,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildTextField(
-                    controller: _cilindradaController,
-                    label: 'Cilindrada',
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            _buildTextField(
-              controller: _motorController,
-              label: 'Nro. de Motor',
-            ),
-            const SizedBox(height: 16),
-
-            // 3. SELECTORES OBLIGATORIOS
-            _buildDropdown(
-              label: 'Tracción',
-              value: traccionSeleccionada,
-              items: OpcionesTraccion.listaConSeleccionar,
-              onChanged: (nuevoValor) =>
-                  setState(() => traccionSeleccionada = nuevoValor),
-            ),
-            if (traccionSeleccionada == OpcionesTraccion.otro) ...[
-              const SizedBox(height: 8),
-              _buildTextField(
-                controller: _traccionOtroController,
-                label: 'Especifique Tracción',
-              ),
-            ],
-            const SizedBox(height: 16),
-
-            _buildDropdown(
-              label: 'Transmisión',
-              value: transmisionSeleccionada,
-              items: OpcionesTransmision.listaConSeleccionar,
-              onChanged: (nuevoValor) =>
-                  setState(() => transmisionSeleccionada = nuevoValor),
-            ),
-            if (transmisionSeleccionada == OpcionesTransmision.otro) ...[
-              const SizedBox(height: 8),
-              _buildTextField(
-                controller: _transmisionOtroController,
-                label: 'Especifique Transmisión',
-              ),
-            ],
-            const SizedBox(height: 16),
-
-            _buildDropdown(
-              label: 'Combustible',
-              value: combustibleSeleccionado,
-              items: OpcionesCombustible.listaConSeleccionar,
-              onChanged: (nuevoValor) =>
-                  setState(() => combustibleSeleccionado = nuevoValor),
-            ),
-            if (combustibleSeleccionado == OpcionesCombustible.otro) ...[
-              const SizedBox(height: 8),
-              _buildTextField(
-                controller: _combustibleOtroController,
-                label: 'Especifique Combustible',
-              ),
-            ],
-
-            const SizedBox(height: 24),
-
-            // Banner instructivo de validación obligatoria OCR
-            Container(
-              margin: const EdgeInsets.only(bottom: 16),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(
-                color: AppPalette.surface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: AppPalette.secondary.withValues(alpha: 0.35),
-                  width: 1.2,
-                ),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  const Icon(
-                    Icons.camera_alt_outlined,
-                    color: AppPalette.secondary,
-                    size: 24,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      '📸 Validación Obligatoria: Al continuar se solicitará fotografiar el N° de ingreso físico para validación automática vía OCR.',
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    height: 48,
+                    child: TextField(
+                      controller: _patenteController,
+                      enabled: !_esSppu,
                       style: AppTypography.body.copyWith(
-                        color: AppPalette.textPrimary,
-                        fontSize: 12.5,
-                        height: 1.35,
+                        color: !_esSppu ? AppPalette.textPrimary : AppPalette.textSecondary,
+                        letterSpacing: 1.5,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                      textCapitalization: TextCapitalization.characters,
+                      decoration: InputDecoration(
+                        hintText: _esSppu ? 'SPPU-$numeroIngreso' : 'Ej: XXYY11',
+                        hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                        filled: true,
+                        fillColor: !_esSppu
+                            ? AppPalette.surface
+                            : AppPalette.surface.withValues(alpha: 0.5),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        isDense: true,
+                        prefixIcon: const Icon(Icons.directions_car, color: AppPalette.primary, size: 20),
+                        prefixIconConstraints: const BoxConstraints(minWidth: 38, minHeight: 38),
+                        suffixIcon: _esSppu
+                            ? null
+                            : (_isSearchingPatente
+                                ? const Padding(
+                                    padding: EdgeInsets.all(12.0),
+                                    child: SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: AppPalette.primary,
+                                      ),
+                                    ),
+                                  )
+                                : IconButton(
+                                    icon: const Icon(Icons.search, size: 20),
+                                    color: AppPalette.primary,
+                                    onPressed: _ejecutarScrapingPatente,
+                                    tooltip: 'Buscar datos del vehículo en línea',
+                                  )),
                       ),
                     ),
                   ),
                 ],
               ),
-            ),
 
-            // 4. EL BOTÓN GUARDAR / REGISTRAR CON OCR ATÓMICO
-            GradientButton(
-              key: const Key('btn_guardar_ingreso_ocr'),
-              onPressed: _isUploading ? null : _ejecutarGuardadoConOCR,
-              gradient: const LinearGradient(
-                colors: [AppPalette.primary, AppPalette.primary],
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
+              const SizedBox(height: 22),
+
+              // 4. DATOS DE INGRESO Y MATRIZ (13 COLUMNAS LOS PINOS)
+              Text(
+                'Datos de Ingreso y Procedencia',
+                style: AppTypography.cardTitle.copyWith(
+                  color: AppPalette.primary,
+                  fontSize: 13.5,
+                  letterSpacing: 0.5,
+                ),
               ),
-              child: _isUploading
-                  ? const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2.5,
-                          ),
-                        ),
-                        SizedBox(width: 12),
-                        Text(
-                          'VALIDANDO OCR Y GUARDANDO...',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                            letterSpacing: 1.0,
-                          ),
-                        ),
-                      ],
-                    )
-                  : const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.camera_alt, color: Colors.white, size: 22),
-                        SizedBox(width: 10),
-                        Text(
-                          'GUARDAR / REGISTRAR INGRESO',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                            letterSpacing: 1.0,
-                          ),
-                        ),
-                      ],
+              const SizedBox(height: 10),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildTextField(
+                      controller: _facturaController,
+                      label: 'Factura / Póliza',
+                      hint: 'Ej: 10423',
                     ),
-            ),
-            const SizedBox(height: 40),
-          ],
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _buildDatePickerField(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildTextField(
+                      controller: _origenController,
+                      label: 'Origen / Proveedor',
+                      hint: 'Ej: Remates Sur',
+                      isCapitalized: true,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _buildTextField(
+                      controller: _gruaController,
+                      label: 'Grúa / Chofer',
+                      hint: 'Ej: Juan Pérez',
+                      isCapitalized: true,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildTextField(
+                      controller: _colorController,
+                      label: 'Color Carrocería',
+                      hint: 'Ej: Blanco',
+                      isCapitalized: true,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _buildDropdown(
+                      label: 'Destino',
+                      value: _destinoSeleccionado,
+                      items: const ['DESARME', 'VENTA', 'REPARACIÓN', 'CHATARRA'],
+                      onChanged: (nuevoValor) {
+                        if (nuevoValor != null) {
+                          setState(() => _destinoSeleccionado = nuevoValor);
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 22),
+
+              // 5. DATOS TÉCNICOS DEL VEHÍCULO
+              Text(
+                'Datos Técnicos del Vehículo',
+                style: AppTypography.cardTitle.copyWith(
+                  color: AppPalette.primary,
+                  fontSize: 13.5,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildTextField(
+                      controller: _marcaController,
+                      label: 'Marca *',
+                      hint: 'Ej: Toyota',
+                      isCapitalized: true,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _buildTextField(
+                      controller: _modeloController,
+                      label: 'Modelo *',
+                      hint: 'Ej: Yaris',
+                      isCapitalized: true,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildTextField(
+                      controller: _anoController,
+                      label: 'Año *',
+                      hint: 'Ej: 2018',
+                      keyboardType: TextInputType.number,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _buildTextField(
+                      controller: _cilindradaController,
+                      label: 'Cilindrada',
+                      hint: 'Ej: 1.5L',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              _buildTextField(
+                controller: _motorController,
+                label: 'Nro. de Motor',
+                hint: 'Ej: 1NZ-FE123456',
+                isCapitalized: true,
+              ),
+              const SizedBox(height: 12),
+
+              // 6. SELECTORES OBLIGATORIOS (TRACCIÓN, TRANSMISIÓN, COMBUSTIBLE)
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildDropdown(
+                      label: 'Tracción',
+                      value: traccionSeleccionada,
+                      items: OpcionesTraccion.listaConSeleccionar,
+                      onChanged: (nuevoValor) =>
+                          setState(() => traccionSeleccionada = nuevoValor),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _buildDropdown(
+                      label: 'Transmisión',
+                      value: transmisionSeleccionada,
+                      items: OpcionesTransmision.listaConSeleccionar,
+                      onChanged: (nuevoValor) =>
+                          setState(() => transmisionSeleccionada = nuevoValor),
+                    ),
+                  ),
+                ],
+              ),
+              if (traccionSeleccionada == OpcionesTraccion.otro) ...[
+                const SizedBox(height: 8),
+                _buildTextField(
+                  controller: _traccionOtroController,
+                  label: 'Especifique Tracción',
+                  hint: 'Ej: AWD Inteligente',
+                ),
+              ],
+              if (transmisionSeleccionada == OpcionesTransmision.otro) ...[
+                const SizedBox(height: 8),
+                _buildTextField(
+                  controller: _transmisionOtroController,
+                  label: 'Especifique Transmisión',
+                  hint: 'Ej: CVT Secuencial',
+                ),
+              ],
+              const SizedBox(height: 12),
+
+              _buildDropdown(
+                label: 'Combustible',
+                value: combustibleSeleccionado,
+                items: OpcionesCombustible.listaConSeleccionar,
+                onChanged: (nuevoValor) =>
+                    setState(() => combustibleSeleccionado = nuevoValor),
+              ),
+              if (combustibleSeleccionado == OpcionesCombustible.otro) ...[
+                const SizedBox(height: 8),
+                _buildTextField(
+                  controller: _combustibleOtroController,
+                  label: 'Especifique Combustible',
+                  hint: 'Ej: Híbrido Enchufable',
+                ),
+              ],
+
+              const SizedBox(height: 14),
+
+              // 7. OBSERVACIONES (TITULO ARRIBA)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Observaciones (Llaves, choques, faltantes, etc.)',
+                    style: AppTypography.small.copyWith(
+                      color: AppPalette.textSecondary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: _observacionesController,
+                    style: AppTypography.body.copyWith(fontSize: 13.5),
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      hintText: 'Ingrese observaciones del estado de recepción...',
+                      hintStyle: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                      filled: true,
+                      fillColor: AppPalette.surface,
+                      contentPadding: EdgeInsets.all(12),
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 22),
+
+              // 8. BANNER INSTRUCTIVO DE VALIDACIÓN POKA-YOKE OCR
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppPalette.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppPalette.secondary.withValues(alpha: 0.35),
+                    width: 1.2,
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.camera_alt_outlined,
+                      color: AppPalette.secondary,
+                      size: 24,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        '📸 Poka-Yoke: Al presionar GUARDAR se abrirá la cámara para verificar el folio N° $numeroIngreso rayado en el vehículo.',
+                        style: AppTypography.body.copyWith(
+                          color: AppPalette.textPrimary,
+                          fontSize: 12,
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 18),
+
+              // 9. BOTÓN GUARDAR CON OCR ATÓMICO (ALTURA EXACTA 50PX)
+              SizedBox(
+                height: 50,
+                width: double.infinity,
+                child: GradientButton(
+                  key: const Key('btn_guardar_ingreso_ocr'),
+                  onPressed: _isUploading ? null : _ejecutarGuardadoConOCR,
+                  gradient: const LinearGradient(
+                    colors: [AppPalette.primary, AppPalette.primary],
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                  ),
+                  child: _isUploading
+                      ? const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2.5,
+                              ),
+                            ),
+                            SizedBox(width: 10),
+                            Text(
+                              'VALIDANDO OCR...',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                                letterSpacing: 0.8,
+                              ),
+                            ),
+                          ],
+                        )
+                      : const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.camera_alt, color: Colors.white, size: 20),
+                            SizedBox(width: 8),
+                            Text(
+                              'GUARDAR / REGISTRAR INGRESO',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                                letterSpacing: 0.8,
+                              ),
+                            ),
+                          ],
+                        ),
+                ),
+              ),
+              const SizedBox(height: 36),
+            ],
+          ),
         ),
       ),
     );
   }
 
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    String? hint,
+    IconData? icon,
+    bool isCapitalized = false,
+    TextInputType? keyboardType,
+    Widget? suffixWidget,
+    bool enabled = true,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: AppTypography.small.copyWith(
+            color: AppPalette.textSecondary,
+            fontWeight: FontWeight.w600,
+            fontSize: 12,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: 6),
+        SizedBox(
+          height: 48,
+          child: TextField(
+            controller: controller,
+            enabled: enabled,
+            style: AppTypography.body.copyWith(
+              color: enabled ? AppPalette.textPrimary : AppPalette.textSecondary,
+              fontSize: 13.5,
+            ),
+            textCapitalization: isCapitalized
+                ? TextCapitalization.characters
+                : TextCapitalization.none,
+            keyboardType: keyboardType,
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
+              filled: true,
+              fillColor: enabled
+                  ? AppPalette.surface
+                  : AppPalette.surface.withValues(alpha: 0.5),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              isDense: true,
+              prefixIcon: icon != null
+                  ? Icon(icon, color: AppPalette.primary, size: 18)
+                  : null,
+              prefixIconConstraints: icon != null
+                  ? const BoxConstraints(minWidth: 34, minHeight: 34)
+                  : null,
+              suffixIcon: suffixWidget,
+              suffixIconConstraints: suffixWidget != null
+                  ? const BoxConstraints(minWidth: 34, minHeight: 34)
+                  : null,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDropdown({
+    required String label,
+    required String? value,
+    required List<String> items,
+    required Function(String?) onChanged,
+  }) {
+    final effectiveValue = items.contains(value) ? value : items.first;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: AppTypography.small.copyWith(
+            color: AppPalette.textSecondary,
+            fontWeight: FontWeight.w600,
+            fontSize: 12,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: 6),
+        SizedBox(
+          height: 48,
+          child: DropdownButtonFormField<String>(
+            isExpanded: true,
+            initialValue: effectiveValue,
+            dropdownColor: AppPalette.surface,
+            style: AppTypography.body.copyWith(
+              fontSize: 13.5,
+              color: AppPalette.textPrimary,
+            ),
+            icon: const Icon(Icons.keyboard_arrow_down, color: AppPalette.primary, size: 18),
+            decoration: const InputDecoration(
+              filled: true,
+              fillColor: AppPalette.surface,
+              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              isDense: true,
+            ),
+            items: items.map((String valor) {
+              return DropdownMenuItem<String>(
+                value: valor,
+                child: Text(
+                  valor,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 13),
+                ),
+              );
+            }).toList(),
+            onChanged: onChanged,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDatePickerField() {
+    final fechaStr =
+        '${_fechaIngreso.year}-${_fechaIngreso.month.toString().padLeft(2, '0')}-${_fechaIngreso.day.toString().padLeft(2, '0')}';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'Fecha Ingreso',
+          style: AppTypography.small.copyWith(
+            color: AppPalette.textSecondary,
+            fontWeight: FontWeight.w600,
+            fontSize: 12,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: 6),
+        InkWell(
+          onTap: () async {
+            final seleccionada = await showDatePicker(
+              context: context,
+              initialDate: _fechaIngreso,
+              firstDate: DateTime(2000),
+              lastDate: DateTime(2035),
+              builder: (context, child) {
+                return Theme(
+                  data: Theme.of(context).copyWith(
+                    colorScheme: const ColorScheme.dark(
+                      primary: AppPalette.primary,
+                      onPrimary: Colors.white,
+                      surface: AppPalette.surface,
+                      onSurface: AppPalette.textPrimary,
+                    ),
+                    dialogTheme: const DialogThemeData(
+                      backgroundColor: AppPalette.surface,
+                    ),
+                  ),
+                  child: child!,
+                );
+              },
+            );
+            if (seleccionada != null) {
+              setState(() => _fechaIngreso = seleccionada);
+            }
+          },
+          borderRadius: BorderRadius.circular(8),
+          child: SizedBox(
+            height: 48,
+            child: IgnorePointer(
+              child: TextField(
+                controller: TextEditingController(text: fechaStr),
+                style: AppTypography.body.copyWith(fontSize: 13.5),
+                decoration: const InputDecoration(
+                  filled: true,
+                  fillColor: AppPalette.surface,
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  isDense: true,
+                  suffixIcon: Icon(Icons.calendar_today_rounded, color: AppPalette.primary, size: 18),
+                  suffixIconConstraints: BoxConstraints(minWidth: 32, minHeight: 32),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Future<void> _ejecutarGuardadoConOCR() async {
-    // 1. Validar campos manuales obligatorios
-    if (_patenteController.text.trim().isEmpty ||
-        _marcaController.text.trim().isEmpty ||
+    final patenteFinal = _esSppu
+        ? "SPPU-$numeroIngreso"
+        : _patenteController.text.trim().toUpperCase();
+
+    // 1. Validar campos obligatorios
+    if (!_esSppu && patenteFinal.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⚠️ Ingresa una patente o activa la casilla S/PPU.'),
+          backgroundColor: AppPalette.secondary,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    if (_marcaController.text.trim().isEmpty ||
         _modeloController.text.trim().isEmpty ||
         _anoController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            '⚠️ Bloqueo: Completa los datos obligatorios (Patente, Marca, Modelo y Año) antes de registrar.',
+            '⚠️ Completa los datos obligatorios (Marca, Modelo y Año) antes de registrar.',
           ),
           backgroundColor: AppPalette.secondary,
           behavior: SnackBarBehavior.floating,
@@ -425,7 +916,6 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
     );
 
     if (foto == null) {
-      // El usuario canceló la cámara
       return;
     }
 
@@ -433,24 +923,47 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
       _isUploading = true;
     });
 
-    final traccionFinal = (traccionSeleccionada == OpcionesTraccion.otro && _traccionOtroController.text.trim().isNotEmpty)
+    final traccionFinal = (traccionSeleccionada == OpcionesTraccion.otro &&
+            _traccionOtroController.text.trim().isNotEmpty)
         ? _traccionOtroController.text.trim()
-        : (traccionSeleccionada != null && traccionSeleccionada != OpcionesTraccion.seleccionar ? traccionSeleccionada! : "");
-    final transmisionFinal = (transmisionSeleccionada == OpcionesTransmision.otro && _transmisionOtroController.text.trim().isNotEmpty)
+        : (traccionSeleccionada != null &&
+                traccionSeleccionada != OpcionesTraccion.seleccionar
+            ? traccionSeleccionada!
+            : "");
+    final transmisionFinal = (transmisionSeleccionada ==
+                OpcionesTransmision.otro &&
+            _transmisionOtroController.text.trim().isNotEmpty)
         ? _transmisionOtroController.text.trim()
-        : (transmisionSeleccionada != null && transmisionSeleccionada != OpcionesTransmision.seleccionar ? transmisionSeleccionada! : "");
-    final combustibleFinal = (combustibleSeleccionado == OpcionesCombustible.otro && _combustibleOtroController.text.trim().isNotEmpty)
+        : (transmisionSeleccionada != null &&
+                transmisionSeleccionada != OpcionesTransmision.seleccionar
+            ? transmisionSeleccionada!
+            : "");
+    final combustibleFinal = (combustibleSeleccionado ==
+                OpcionesCombustible.otro &&
+            _combustibleOtroController.text.trim().isNotEmpty)
         ? _combustibleOtroController.text.trim()
-        : (combustibleSeleccionado != null && combustibleSeleccionado != OpcionesCombustible.seleccionar ? combustibleSeleccionado! : "");
+        : (combustibleSeleccionado != null &&
+                combustibleSeleccionado != OpcionesCombustible.seleccionar
+            ? combustibleSeleccionado!
+            : "");
 
     final datosNuevos = {
       "correlativo_ingreso": numeroIngreso,
-      "patente": _patenteController.text.trim().toUpperCase(),
+      "patente": patenteFinal,
+      "es_sppu": _esSppu,
+      "factura": _facturaController.text.trim(),
+      "fecha_ingreso":
+          '${_fechaIngreso.year}-${_fechaIngreso.month.toString().padLeft(2, '0')}-${_fechaIngreso.day.toString().padLeft(2, '0')}',
+      "origen": _origenController.text.trim(),
       "marca": _marcaController.text.trim(),
       "modelo": _modeloController.text.trim(),
       "anio": int.tryParse(_anoController.text.trim()) ?? 2000,
-      "cilindrada": _cilindradaController.text.trim(),
+      "color": _colorController.text.trim(),
       "numero_motor": _motorController.text.trim(),
+      "destino": _destinoSeleccionado,
+      "grua": _gruaController.text.trim(),
+      "observaciones": _observacionesController.text.trim(),
+      "cilindrada": _cilindradaController.text.trim(),
       "traccion": traccionFinal,
       "transmision": transmisionFinal,
       "combustible": combustibleFinal,
@@ -467,33 +980,18 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
 
       if (resultado['exito'] == true) {
         _ocrFailedAttempts = 0;
+        _seRegistroAlMenosUno = true;
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-              '✅ Poka-Yoke Superado: ¡Vehículo ingresado con éxito!',
-            ),
+            content: Text('✅ Poka-Yoke Superado: ¡Vehículo ingresado con éxito!'),
             backgroundColor: AppPalette.success,
             duration: Duration(seconds: 4),
             behavior: SnackBarBehavior.floating,
           ),
         );
 
-        _patenteController.clear();
-        _marcaController.clear();
-        _modeloController.clear();
-        _anoController.clear();
-        _cilindradaController.clear();
-        _motorController.clear();
-        _traccionOtroController.clear();
-        _transmisionOtroController.clear();
-        _combustibleOtroController.clear();
-        setState(() {
-          traccionSeleccionada = null;
-          transmisionSeleccionada = null;
-          combustibleSeleccionado = null;
-          numeroIngreso = "Cargando...";
-        });
-
+        _limpiarFormulario();
         _cargarFolioDesdeBackend();
       } else {
         _ocrFailedAttempts++;
@@ -505,11 +1003,11 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
             mensajeError.toLowerCase().contains('texto') ||
             mensajeError.toLowerCase().contains('corresponde')) {
           feedback =
-              'No se pudo validar el OCR de la pieza. Por favor, reintente con una foto más clara';
+              'No se pudo validar el OCR del vehículo. Verifique que el N° $numeroIngreso esté rayado claramente y reintente.';
         } else {
           feedback = mensajeError.isNotEmpty
               ? mensajeError
-              : 'No se pudo validar el OCR de la pieza. Por favor, reintente con una foto más clara';
+              : 'Fallo de validación OCR en el vehículo.';
         }
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -530,12 +1028,11 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('❌ Error de conexión o fallo en servicio OCR (Intento $_ocrFailedAttempts/3).'),
+            content: Text('❌ Error en servicio OCR (Intento $_ocrFailedAttempts/3).'),
             backgroundColor: AppPalette.error,
             behavior: SnackBarBehavior.floating,
           ),
         );
-        // Solo si se alcanzaron los 3 intentos fallidos -> Dispara contingencia manual
         if (_ocrFailedAttempts >= 3) {
           _mostrarModalIngresoManual(context, datosNuevos);
         }
@@ -549,7 +1046,33 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
     }
   }
 
-  // ── MODALES DE CONTINGENCIA / VALIDACIÓN MANUAL (HU-2.3 Poka-Yoke Fallback) ──
+  void _limpiarFormulario() {
+    _patenteController.clear();
+    _marcaController.clear();
+    _modeloController.clear();
+    _anoController.clear();
+    _cilindradaController.clear();
+    _motorController.clear();
+    _traccionOtroController.clear();
+    _transmisionOtroController.clear();
+    _combustibleOtroController.clear();
+    _facturaController.clear();
+    _origenController.clear();
+    _colorController.clear();
+    _gruaController.clear();
+    _observacionesController.clear();
+    setState(() {
+      _esSppu = false;
+      _fechaIngreso = DateTime.now();
+      _destinoSeleccionado = 'DESARME';
+      traccionSeleccionada = null;
+      transmisionSeleccionada = null;
+      combustibleSeleccionado = null;
+      numeroIngreso = "Cargando...";
+    });
+  }
+
+  // ── MODALES DE CONTINGENCIA / VALIDACIÓN MANUAL (Poka-Yoke Fallback) ──
 
   Future<void> _mostrarModalIngresoManual(
     BuildContext context,
@@ -586,7 +1109,7 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'No logramos detectar el número automáticamente o hubo un problema de conexión. Ingresa manualmente el N° de Ingreso visible en el vehículo o pieza.',
+              'No logramos detectar el número automáticamente en la foto. Ingresa manualmente el N° de Ingreso visible en el vehículo.',
               style: AppTypography.body.copyWith(fontSize: 13, height: 1.4),
             ),
             const SizedBox(height: 16),
@@ -595,7 +1118,7 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
               controller: manualIngresoController,
               decoration: const InputDecoration(
                 labelText: 'N° de Ingreso Físico',
-                hintText: 'Ej: 1001',
+                hintText: 'Ej: 1003',
                 prefixIcon: Icon(
                   Icons.confirmation_number_outlined,
                   color: AppPalette.primary,
@@ -665,7 +1188,7 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
           ],
         ),
         content: Text(
-          '¿Confirmas que el N° de Ingreso $numeroManual corresponde fielmente al vehículo/pieza física?',
+          '¿Confirmas que el N° de Ingreso $numeroManual corresponde fielmente al vehículo físico?',
           style: AppTypography.body.copyWith(fontSize: 14, height: 1.4),
         ),
         actions: [
@@ -698,12 +1221,16 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
 
       final datosFinales = Map<String, dynamic>.from(datosNuevos);
       datosFinales["correlativo_ingreso"] = numeroManual;
+      if (_esSppu) {
+        datosFinales["patente"] = "SPPU-$numeroManual";
+      }
 
       try {
         final res = await _vehiculoService.guardarIngresoManual(datosFinales);
         if (!mounted) return;
 
         if (res['exito'] == true) {
+          _seRegistroAlMenosUno = true;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
@@ -715,21 +1242,7 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
             ),
           );
 
-          _patenteController.clear();
-          _marcaController.clear();
-          _modeloController.clear();
-          _anoController.clear();
-          _cilindradaController.clear();
-          _motorController.clear();
-          _traccionOtroController.clear();
-          _transmisionOtroController.clear();
-          _combustibleOtroController.clear();
-          setState(() {
-            traccionSeleccionada = null;
-            transmisionSeleccionada = null;
-            combustibleSeleccionado = null;
-            numeroIngreso = "Cargando...";
-          });
+          _limpiarFormulario();
           _cargarFolioDesdeBackend();
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -756,56 +1269,5 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
         }
       }
     }
-  }
-
-  // ── WIDGETS REUTILIZABLES PARA FORMULARIOS ──
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    IconData? icon,
-    bool isCapitalized = false,
-    TextInputType? keyboardType,
-    Widget? suffixWidget,
-  }) {
-    return TextField(
-      controller: controller,
-      style: AppTypography.body, // ⚠️ Tipografía correcta
-      textCapitalization: isCapitalized
-          ? TextCapitalization.characters
-          : TextCapitalization.none,
-      keyboardType: keyboardType,
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: AppTypography.small,
-        prefixIcon: icon != null
-            ? Icon(icon, color: AppPalette.primary, size: 20)
-            : null,
-        suffixIcon: suffixWidget,
-      ),
-    );
-  }
-
-  Widget _buildDropdown({
-    required String label,
-    required String? value,
-    required List<String> items,
-    required Function(String?) onChanged,
-  }) {
-    return DropdownButtonFormField<String>(
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: AppTypography.small,
-      ),
-      initialValue: value ?? items.first,
-      dropdownColor:
-          AppPalette.surface, // ⚠️ Evita menús blancos en modo oscuro
-      style: AppTypography.body, // ⚠️ Tipografía correcta
-      icon: const Icon(Icons.keyboard_arrow_down, color: AppPalette.primary),
-      items: items.map((String valor) {
-        return DropdownMenuItem<String>(value: valor, child: Text(valor));
-      }).toList(),
-      onChanged: onChanged,
-    );
   }
 }

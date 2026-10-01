@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
+import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../core/widgets/update_dialog.dart';
+import '../../../../core/services/app_update_service.dart';
 import '../../../../routes/app_routes.dart';
 import '../../../auth/services/auth_service.dart';
 import '../../models/vehiculo_recepcion_model.dart';
@@ -74,7 +77,11 @@ class _RecepcionHomeScreenState extends State<RecepcionHomeScreen> {
 
   Future<void> _cargarRecientes([String? busqueda]) async {
     setState(() => _isLoadingRecientes = true);
-    final lista = await _recepcionService.obtenerRecientes(busqueda: busqueda);
+    final esBusqueda = busqueda != null && busqueda.trim().isNotEmpty;
+    final lista = await _recepcionService.obtenerRecientes(
+      busqueda: esBusqueda ? busqueda : null,
+      limite: esBusqueda ? 50 : 5,
+    );
     if (mounted) {
       setState(() {
         _recientes = lista;
@@ -83,53 +90,32 @@ class _RecepcionHomeScreenState extends State<RecepcionHomeScreen> {
     }
   }
 
-  Future<void> _copiarFormatoMatriz() async {
-    if (_recientes.isEmpty) {
-      _mostrarSnackBar('No hay registros recientes para copiar', AppPalette.warning);
-      return;
-    }
-
-    final headers = VehiculoRecepcionModel.tsvHeaders();
-    final filas = _recientes.map((v) => v.toTsvRow()).join('\n');
-    final tsvFinal = '$headers\n$filas';
-
-    await Clipboard.setData(ClipboardData(text: tsvFinal));
-    _mostrarSnackBar(
-      '📋 ${_recientes.length} filas copiadas en formato Matriz Excel (Columnas A a M). ¡Listo para pegar!',
-      AppPalette.success,
-    );
-  }
-
-  Future<void> _exportarCsvMatriz() async {
-    final res = await _recepcionService.exportarMatriz();
-    if (res['exito'] == true) {
-      final tsv = res['tsv'] as String;
-      await Clipboard.setData(ClipboardData(text: tsv));
-      _mostrarSnackBar(
-        '📥 Matriz exportada y copiada al portapapeles (${res['total']} vehículos A-M).',
-        AppPalette.success,
-      );
-    } else {
-      _mostrarSnackBar('Error al exportar matriz: ${res['mensaje']}', AppPalette.error);
-    }
-  }
-
-  void _mostrarSnackBar(String mensaje, Color color) {
+  Future<void> _copiarRegistroAlPortapapeles(VehiculoRecepcionModel v) async {
+    final texto = v.toTextoCamposValores();
+    await Clipboard.setData(ClipboardData(text: texto));
     if (!mounted) return;
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(mensaje, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        backgroundColor: color,
+        content: Text(
+          '📋 Folio N° ${v.numeroIngreso} (${v.patente ?? "S/PPU"}): Campos y valores copiados al portapapeles',
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: AppPalette.success,
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 4),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        action: SnackBarAction(
+          label: 'VER FICHA',
+          textColor: Colors.white,
+          onPressed: () => _mostrarDetalleVehiculo(v),
+        ),
       ),
     );
   }
 
   Future<void> _cerrarSesion() async {
-    final confirmar = await showDialog<bool>(
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppPalette.surface,
@@ -141,23 +127,181 @@ class _RecepcionHomeScreenState extends State<RecepcionHomeScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancelar', style: TextStyle(color: AppPalette.textSecondary)),
+            child: Text(
+              'Cancelar',
+              style: AppTypography.button.copyWith(color: AppPalette.neutral),
+            ),
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppPalette.error),
+          TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Cerrar Sesión', style: TextStyle(color: Colors.white)),
+            child: Text(
+              'CERRAR SESIÓN',
+              style: AppTypography.button.copyWith(color: AppPalette.error),
+            ),
           ),
         ],
       ),
     );
 
-    if (confirmar == true) {
-      await AuthService.logout();
-      if (mounted) {
-        Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.login, (r) => false);
-      }
-    }
+    if (confirmed != true || !mounted) return;
+    await AuthService.clearToken();
+    if (!mounted) return;
+    Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.login, (route) => false);
+  }
+
+  Widget _buildDrawerItem({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+      leading: Icon(icon, color: AppPalette.primary, size: 22),
+      title: Text(
+        label,
+        style: AppTypography.button.copyWith(fontSize: 14, letterSpacing: 1.0),
+      ),
+      onTap: onTap,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    );
+  }
+
+  Widget _buildDrawer(BuildContext context) {
+    final cached = AuthService.cachedUser;
+    final nombreCompleto = (_userNombre != null && _userNombre!.trim().isNotEmpty)
+        ? _userNombre!.trim()
+        : (cached != null && cached.nombres.isNotEmpty
+            ? '${cached.nombres} ${cached.apellidos}'.trim()
+            : 'GLORIA');
+    final email = (_userEmail != null && _userEmail!.trim().isNotEmpty)
+        ? _userEmail!.trim()
+        : (cached != null && cached.email.isNotEmpty ? cached.email : 'gloria@cresal.cl');
+    final sucursal = 'Patio Central • $email';
+
+    return Drawer(
+      backgroundColor: AppPalette.surface,
+      child: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(16, 48, 16, 16),
+            decoration: const BoxDecoration(
+              color: AppPalette.background,
+              border: Border(
+                bottom: BorderSide(color: AppPalette.surface, width: 1),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 58,
+                  height: 58,
+                  decoration: BoxDecoration(
+                    color: AppPalette.primary,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.person,
+                    color: AppPalette.textPrimary,
+                    size: 32,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  nombreCompleto,
+                  style: AppTypography.title.copyWith(
+                    fontSize: 15,
+                    letterSpacing: 0.8,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  'RECEPCIÓN DE PATIO',
+                  style: AppTypography.small.copyWith(
+                    color: AppPalette.primary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 11,
+                  ),
+                ),
+                Text(
+                  sucursal,
+                  style: AppTypography.small.copyWith(
+                    color: AppPalette.textSecondary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          _buildDrawerItem(
+            icon: Icons.confirmation_number_outlined,
+            label: 'TICKET',
+            onTap: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).pushNamed(AppRoutes.tickets);
+            },
+          ),
+          _buildDrawerItem(
+            icon: Icons.settings_outlined,
+            label: 'CONFIGURACIÓN',
+            onTap: () => Navigator.of(context).pop(),
+          ),
+          _buildDrawerItem(
+            icon: Icons.system_update_alt_rounded,
+            label: 'BUSCAR ACTUALIZACIONES',
+            onTap: () {
+              Navigator.of(context).pop();
+              AppUpdateChecker.check(context, showIfUpToDate: true);
+            },
+          ),
+          const Spacer(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            child: SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton.icon(
+                onPressed: _cerrarSesion,
+                icon: const Icon(Icons.logout, size: 20),
+                label: Text(
+                  'CERRAR SESIÓN',
+                  style: AppTypography.button.copyWith(
+                    fontSize: 14,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppPalette.error,
+                  foregroundColor: AppPalette.textPrimary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  elevation: 0,
+                ),
+              ),
+            ),
+          ),
+          FutureBuilder<String>(
+            future: AppUpdateService().getCurrentVersion(),
+            builder: (context, snapshot) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Text(
+                  'Cresal App v${snapshot.data ?? "..."}',
+                  style: AppTypography.small.copyWith(
+                    color: AppPalette.textSecondary.withValues(alpha: 0.6),
+                    fontSize: 11,
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -166,25 +310,21 @@ class _RecepcionHomeScreenState extends State<RecepcionHomeScreen> {
       backgroundColor: AppPalette.background,
       appBar: AppBar(
         backgroundColor: AppPalette.surface,
+        foregroundColor: AppPalette.textPrimary,
         elevation: 0,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.directions_car_filled_rounded, color: AppPalette.primary, size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  'Recepción de Patio',
-                  style: const TextStyle(color: AppPalette.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            Text(
-              '${_userNombre ?? 'Operario'} (${_userEmail ?? 'gloria@cresal.cl'})',
-              style: const TextStyle(color: AppPalette.textSecondary, fontSize: 12),
-            ),
-          ],
+        title: Text(
+          'Terminal Recepción',
+          style: AppTypography.title.copyWith(fontSize: 17),
+        ),
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.menu, color: AppPalette.textPrimary),
+            onPressed: () {
+              FocusScope.of(context).unfocus();
+              Scaffold.of(context).openDrawer();
+            },
+            tooltip: 'Menú',
+          ),
         ),
         actions: [
           IconButton(
@@ -192,13 +332,9 @@ class _RecepcionHomeScreenState extends State<RecepcionHomeScreen> {
             tooltip: 'Actualizar bandeja',
             onPressed: _cargarDatos,
           ),
-          IconButton(
-            icon: const Icon(Icons.logout_rounded, color: AppPalette.error),
-            tooltip: 'Cerrar sesión',
-            onPressed: _cerrarSesion,
-          ),
         ],
       ),
+      drawer: _buildDrawer(context),
       body: RefreshIndicator(
         onRefresh: _cargarDatos,
         color: AppPalette.primary,
@@ -217,19 +353,14 @@ class _RecepcionHomeScreenState extends State<RecepcionHomeScreen> {
               // 2. BOTÓN PRINCIPAL: + INGRESAR VEHÍCULO A PATIO (ALTA VISIBILIDAD)
               _buildBotonIngresarVehiculo(),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
 
-              // 3. HERRAMIENTAS MATRIZ CENTRAL EXCEL (A-M)
-              _buildHerramientasMatriz(),
-
-              const SizedBox(height: 24),
-
-              // 4. BUSCADOR RÁPIDO PARA EVITAR DUPLICADOS
+              // 3. BUSCADOR RÁPIDO PARA EVITAR DUPLICADOS
               _buildBuscadorRapido(),
 
               const SizedBox(height: 16),
 
-              // 5. BANDEJA DE ENTRADAS RECIENTES
+              // 4. BANDEJA DE ENTRADAS RECIENTES (PREDETERMINADO 5)
               _buildBandejaRecientes(),
             ],
           ),
@@ -349,78 +480,6 @@ class _RecepcionHomeScreenState extends State<RecepcionHomeScreen> {
     );
   }
 
-  Widget _buildHerramientasMatriz() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: AppPalette.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppPalette.neutral.withValues(alpha: 0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.table_view_rounded, color: AppPalette.secondary, size: 18),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Herramientas Matriz Central (13 Columnas A-M)',
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                  style: const TextStyle(
-                    color: AppPalette.textSecondary,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppPalette.textPrimary,
-                    side: const BorderSide(color: AppPalette.primary),
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  icon: const Icon(Icons.content_copy_rounded, size: 18, color: AppPalette.primary),
-                  label: const FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text('📋 Copiar TSV', style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                  onPressed: _copiarFormatoMatriz,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppPalette.textPrimary,
-                    side: const BorderSide(color: AppPalette.secondary),
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  icon: const Icon(Icons.file_download_outlined, size: 18, color: AppPalette.secondary),
-                  label: const FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text('📥 Exportar Matriz', style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                  onPressed: _exportarCsvMatriz,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildBuscadorRapido() {
     return Container(
       decoration: BoxDecoration(
@@ -430,14 +489,14 @@ class _RecepcionHomeScreenState extends State<RecepcionHomeScreen> {
       ),
       child: TextField(
         controller: _searchController,
-        style: const TextStyle(color: AppPalette.textPrimary),
+        style: const TextStyle(color: AppPalette.textPrimary, fontSize: 14),
         decoration: InputDecoration(
           hintText: 'Buscar por Patente, Folio N°, Marca o Chofer...',
-          hintStyle: const TextStyle(color: AppPalette.textSecondary),
-          prefixIcon: const Icon(Icons.search_rounded, color: AppPalette.primary),
+          hintStyle: const TextStyle(color: AppPalette.textSecondary, fontSize: 13),
+          prefixIcon: const Icon(Icons.search_rounded, color: AppPalette.primary, size: 22),
           suffixIcon: _searchController.text.isNotEmpty
               ? IconButton(
-                  icon: const Icon(Icons.clear, color: AppPalette.textSecondary),
+                  icon: const Icon(Icons.clear, color: AppPalette.textSecondary, size: 20),
                   onPressed: () {
                     _searchController.clear();
                     _cargarRecientes();
@@ -447,33 +506,61 @@ class _RecepcionHomeScreenState extends State<RecepcionHomeScreen> {
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
         ),
+        onChanged: (val) {
+          setState(() {});
+          if (val.trim().isEmpty) {
+            _cargarRecientes();
+          }
+        },
         onSubmitted: (val) => _cargarRecientes(val),
       ),
     );
   }
 
   Widget _buildBandejaRecientes() {
+    final esBusqueda = _searchController.text.trim().isNotEmpty;
+    final titulo = esBusqueda
+        ? 'Resultados de Búsqueda (${_recientes.length})'
+        : 'Últimos 5 Ingresos Registrados';
+    final subtitulo = esBusqueda
+        ? 'Coincidencias encontradas'
+        : 'Presiona cualquier registro para copiar sus datos';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Expanded(
-              child: Text(
-                'Bandeja de Entradas Recientes (${_recientes.length})',
-                style: const TextStyle(
-                  color: AppPalette.textPrimary,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-                overflow: TextOverflow.ellipsis,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    titulo,
+                    style: const TextStyle(
+                      color: AppPalette.textPrimary,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitulo,
+                    style: const TextStyle(color: AppPalette.textSecondary, fontSize: 11),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(width: 8),
-            const Text(
-              'Verificación',
-              style: TextStyle(color: AppPalette.textSecondary, fontSize: 12),
-            ),
+            if (esBusqueda)
+              TextButton(
+                onPressed: () {
+                  _searchController.clear();
+                  _cargarRecientes();
+                },
+                child: const Text('Ver últimos 5', style: TextStyle(color: AppPalette.secondary, fontSize: 12)),
+              ),
           ],
         ),
         const SizedBox(height: 12),
@@ -493,12 +580,15 @@ class _RecepcionHomeScreenState extends State<RecepcionHomeScreen> {
             ),
             child: Center(
               child: Column(
-                children: const [
-                  Icon(Icons.no_crash_rounded, color: AppPalette.textSecondary, size: 48),
-                  SizedBox(height: 12),
+                children: [
+                  const Icon(Icons.no_crash_rounded, color: AppPalette.textSecondary, size: 48),
+                  const SizedBox(height: 12),
                   Text(
-                    'No hay ingresos vehiculares registrados aún',
-                    style: TextStyle(color: AppPalette.textSecondary, fontSize: 14),
+                    esBusqueda
+                        ? 'No se encontraron resultados para la búsqueda'
+                        : 'No hay ingresos vehiculares registrados aún',
+                    style: const TextStyle(color: AppPalette.textSecondary, fontSize: 14),
+                    textAlign: TextAlign.center,
                   ),
                 ],
               ),
@@ -525,7 +615,7 @@ class _RecepcionHomeScreenState extends State<RecepcionHomeScreen> {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: () => _mostrarDetalleVehiculo(v),
+        onTap: () => _copiarRegistroAlPortapapeles(v),
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -537,7 +627,6 @@ class _RecepcionHomeScreenState extends State<RecepcionHomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   // Folio N°
                   Container(
@@ -555,6 +644,7 @@ class _RecepcionHomeScreenState extends State<RecepcionHomeScreen> {
                       ),
                     ),
                   ),
+                  const SizedBox(width: 8),
                   // Patente / Badge SPPU
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -575,21 +665,56 @@ class _RecepcionHomeScreenState extends State<RecepcionHomeScreen> {
                       ),
                     ),
                   ),
+                  const Spacer(),
+                  // Botón Copiar TXT
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppPalette.primary.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: AppPalette.primary.withValues(alpha: 0.4),
+                      ),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.copy_rounded, color: AppPalette.primary, size: 13),
+                        SizedBox(width: 4),
+                        Text(
+                          'Copiar TXT',
+                          style: TextStyle(
+                            color: AppPalette.primary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  IconButton(
+                    icon: const Icon(Icons.info_outline_rounded, size: 20, color: AppPalette.textSecondary),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    tooltip: 'Ver ficha completa',
+                    onPressed: () => _mostrarDetalleVehiculo(v),
+                  ),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               Text(
                 '${v.marca} ${v.modelo} ${v.anio != null ? "(${v.anio})" : ""}',
                 style: const TextStyle(
                   color: AppPalette.textPrimary,
-                  fontSize: 16,
+                  fontSize: 15,
                   fontWeight: FontWeight.bold,
                 ),
               ),
               const SizedBox(height: 6),
               Row(
                 children: [
-                  if (v.origen != null) ...[
+                  if (v.origen != null && v.origen!.isNotEmpty) ...[
                     const Icon(Icons.store_rounded, size: 14, color: AppPalette.textSecondary),
                     const SizedBox(width: 4),
                     Flexible(
@@ -601,7 +726,7 @@ class _RecepcionHomeScreenState extends State<RecepcionHomeScreen> {
                     ),
                     const SizedBox(width: 12),
                   ],
-                  if (v.grua != null) ...[
+                  if (v.grua != null && v.grua!.isNotEmpty) ...[
                     const Icon(Icons.local_shipping_rounded, size: 14, color: AppPalette.textSecondary),
                     const SizedBox(width: 4),
                     Flexible(
@@ -720,17 +845,40 @@ class _RecepcionHomeScreenState extends State<RecepcionHomeScreen> {
                   _buildDetalleFila('Grúa:', v.grua ?? 'S/I'),
                   _buildDetalleFila('Observaciones:', v.observaciones ?? 'Sin observaciones'),
                   const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppPalette.primary,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppPalette.primary,
+                            side: const BorderSide(color: AppPalette.primary),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          icon: const Icon(Icons.copy_rounded, size: 18),
+                          label: const Text('COPIAR TXT', style: TextStyle(fontWeight: FontWeight.bold)),
+                          onPressed: () {
+                            Navigator.of(ctx).pop();
+                            _copiarRegistroAlPortapapeles(v);
+                          },
+                        ),
                       ),
-                      onPressed: () => Navigator.of(ctx).pop(),
-                      child: const Text('CERRAR FICHA', style: TextStyle(fontWeight: FontWeight.bold)),
-                    ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppPalette.surface,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              side: const BorderSide(color: Colors.white24),
+                            ),
+                          ),
+                          onPressed: () => Navigator.of(ctx).pop(),
+                          child: const Text('CERRAR', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
