@@ -1855,18 +1855,15 @@ def despaletizar_activo(
         db.commit()
         db.refresh(activo)
 
-        # Obtener nombre de categoría para mensaje
-        cat_nombre = "Repuesto"
-        if activo.id_categoria:
-            cat_obj = db.query(Categoria_Activo).filter(Categoria_Activo.id_categoria == activo.id_categoria).first()
-            if cat_obj:
-                cat_nombre = cat_obj.nombre_categoria
+        # Obtener descripción enriquecida de pieza para mensaje gerencial (Categoría + Marca + Modelo + Cilindrada + Año)
+        from routers.bodega import construir_descripcion_repuesto
+        pieza_desc = construir_descripcion_repuesto(db, activo)
 
         # Disparar alerta asíncrona a Telegram para Gerencia
         background_tasks.add_task(
             TelegramService.notificar_repuesto_despaletizado,
             sku=activo.sku_qr_fisico,
-            pieza_nombre=cat_nombre,
+            pieza_nombre=pieza_desc,
             ubicacion_anterior=ubicacion_anterior,
             bodeguero_nombre=nombre_completo,
             motivo_despaletizado=motivo,

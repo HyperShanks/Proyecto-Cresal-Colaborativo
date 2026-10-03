@@ -317,11 +317,12 @@ def db_session_gerencia(setup_database):
         )
         db.add(pago4_anulado)
 
-        # Pago MTD
-        if ahora_chile.day > 5:
-            fecha_mtd = hoy_utc - timedelta(days=3)
+        # Pago MTD (debe ser de un día anterior dentro del mes, para no sumarse a las ventas del día)
+        if ahora_chile.day > 1:
+            fecha_mtd = hoy_utc - timedelta(days=1)
         else:
-            fecha_mtd = hoy_utc - timedelta(hours=12)
+            # En día 1 del mes, colocar al inicio del día pero fuera de la ventana horaria si aplica
+            fecha_mtd = hoy_utc.replace(hour=0, minute=1, second=0)
 
         ord_mtd = Orden_Venta(
             id_orden=uuid.uuid4(),

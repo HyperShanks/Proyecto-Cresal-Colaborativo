@@ -120,14 +120,14 @@ void main() {
   });
 
   group('HomeScreen - Cuadrícula de Acciones Frecuentes y Buscador', () {
-    testWidgets('Segregación SPEC-22: No renderiza Recepción de Vehículo en Bodega y renderiza Reingresos', (tester) async {
+    testWidgets('Segregación: No renderiza Recepción de Vehículo ni Reingresos y Alertas en Acciones Frecuentes', (tester) async {
       await tester.pumpWidget(_createHomeScreenWrapper());
       await tester.pumpAndSettle();
 
       expect(find.text('Recepción de Vehículo'), findsNothing);
-      expect(find.text('Reingresos y Alertas'), findsOneWidget);
-      expect(find.text('Bandeja de logística inversa y piezas devueltas'), findsOneWidget);
-      expect(find.byIcon(Icons.assignment_return_rounded), findsOneWidget);
+      expect(find.text('Reingresos y Alertas'), findsNothing);
+      expect(find.text('Bandeja de logística inversa y piezas devueltas'), findsNothing);
+      expect(find.byIcon(Icons.assignment_return_rounded), findsNothing);
     });
 
     testWidgets('Renderiza Paletizado de Piezas y navega correctamente', (tester) async {
