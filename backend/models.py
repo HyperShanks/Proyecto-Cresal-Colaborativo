@@ -120,7 +120,7 @@ class Vehiculo_Origen(Base):
     
     id_vehiculo = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     numero_ingreso = Column(String(10), nullable=False, unique=True)
-    patente = Column(String(20), nullable=False, unique=True)
+    patente = Column(String(20), nullable=False, unique=True, default=lambda: f"SPPU-{uuid.uuid4().hex[:6].upper()}")
     vin = Column(String(17), nullable=True, unique=True)
     factura = Column(String(50), nullable=True)
     fecha_ingreso = Column(Date, nullable=True, server_default=text("CURRENT_DATE"))
@@ -165,7 +165,7 @@ class Activo_Inventariado(Base):
     precio_referencia = Column(Integer, nullable=True)
     precio_minimo = Column(Integer, nullable=True)
     precio_maximo = Column(Integer, nullable=True)
-    observacion_estado = Column(String(255), nullable=True)
+    observacion_estado = Column(Text, nullable=True)
     version_lock = Column(Integer, nullable=False, default=1)
     estado = Column(String(20), nullable=False, server_default="Activo")
     fecha_creacion = Column(DateTime, nullable=False, server_default=text("now()"))
@@ -240,6 +240,12 @@ class Orden_Venta(Base):
     fecha_creacion = Column(DateTime, nullable=False, server_default=text("now()"))
     fecha_actualizacion = Column(DateTime, nullable=True)
     numero_orden = Column(Integer, Sequence("Orden_Venta_numero_orden_seq"), nullable=True)
+    motivo_anulacion = Column(String(100), nullable=True)
+    observacion_anulacion = Column(Text, nullable=True)
+    id_usuario_anulacion = Column(UUID(as_uuid=True), ForeignKey("Usuario.id_usuario"), nullable=True)
+    fecha_anulacion = Column(DateTime(timezone=True), nullable=True)
+
+    usuario_anulacion = relationship("Usuario", foreign_keys=[id_usuario_anulacion])
 
     @property
     def folio(self) -> str:
@@ -358,3 +364,42 @@ class Despacho(Base):
     estado = Column(String(20), nullable=False, server_default="Activo")
     fecha_creacion = Column(DateTime, nullable=False, server_default=text("now()"))
     fecha_actualizacion = Column(DateTime, nullable=True)
+
+# ==========================================
+# BITÁCORA Y AUDITORÍA DE MOVIMIENTOS WMS
+# ==========================================
+
+class Bitacora_Movimiento_Inventario(Base):
+    __tablename__ = "Bitacora_Movimiento_Inventario"
+
+    id_bitacora = Column(Integer, primary_key=True, autoincrement=True)
+    id_activo = Column(UUID(as_uuid=True), ForeignKey("Activo_Inventariado.id_activo"), nullable=False)
+    id_usuario = Column(UUID(as_uuid=True), ForeignKey("Usuario.id_usuario"), nullable=False)
+    tipo_evento = Column(String(50), nullable=False)
+    ubicacion_anterior = Column(String(100), nullable=True)
+    ubicacion_nueva = Column(String(100), nullable=True)
+    motivo = Column(String(100), nullable=False)
+    observacion = Column(Text, nullable=False)
+    fecha_registro = Column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+
+    activo = relationship("Activo_Inventariado")
+    usuario = relationship("Usuario")
+
+# ==========================================
+# COLA Y RESILIENCIA DE NOTIFICACIONES SISTEMA
+# ==========================================
+
+class Notificacion_Sistema(Base):
+    __tablename__ = "Notificacion_Sistema"
+
+    id_notificacion = Column(Integer, primary_key=True, autoincrement=True)
+    canal = Column(String(20), nullable=False, server_default="TELEGRAM")
+    destinatario = Column(String(100), nullable=False)
+    tipo_evento = Column(String(50), nullable=False)
+    referencia_id = Column(String(100), nullable=False)
+    mensaje = Column(Text, nullable=False)
+    estado = Column(String(20), nullable=False, server_default="PENDIENTE")
+    intentos = Column(Integer, nullable=False, default=0)
+    ultimo_error = Column(Text, nullable=True)
+    fecha_creacion = Column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    fecha_envio = Column(DateTime(timezone=True), nullable=True)

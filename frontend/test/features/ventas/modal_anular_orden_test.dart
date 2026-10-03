@@ -219,7 +219,7 @@ void main() {
       expect(find.byType(DialogoDevolucionDinero), findsNothing);
     });
 
-    testWidgets('ModalAnularOrden bloquea el botón por 5 segundos y exige marcar casilla He leído para confirmar', (tester) async {
+    testWidgets('ModalAnularOrden bloquea el botón por 5 segundos y exige marcar casilla He leído y redactar >= 10 caracteres para confirmar', (tester) async {
       tester.view.physicalSize = const Size(800, 1200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() => tester.view.resetPhysicalSize());
@@ -252,6 +252,8 @@ void main() {
 
       expect(find.byType(ModalAnularOrden), findsOneWidget);
       expect(find.byKey(const Key('check_confirmar_anulacion')), findsOneWidget);
+      expect(find.byKey(const Key('select_motivo_anulacion')), findsOneWidget);
+      expect(find.byKey(const Key('input_observacion_anulacion')), findsOneWidget);
 
       // 1. Inicialmente deshabilitado con contador (5s)
       final btnInicial = tester.widget<ElevatedButton>(find.byKey(const Key('btn_confirmar_anulacion_orden')));
@@ -268,19 +270,34 @@ void main() {
       await tester.pump(const Duration(seconds: 3));
       expect(find.text('Confirmar Anulación'), findsOneWidget);
 
-      // Sigue bloqueado porque falta marcar la casilla He leído
+      // Sigue bloqueado porque falta marcar la casilla He leído y la observación está vacía
       final btnSinCheck = tester.widget<ElevatedButton>(find.byKey(const Key('btn_confirmar_anulacion_orden')));
       expect(btnSinCheck.onPressed, isNull);
 
-      // 4. Marcar casilla obligatoria
+      // 4. Marcar casilla obligatoria (pero sin observación aún)
       await tester.tap(find.byKey(const Key('check_confirmar_anulacion_tap')));
       await tester.pump();
 
-      // 5. Ahora sí está habilitado
+      // Debe seguir deshabilitado (Poka-Yoke: 0 < 10 caracteres)
+      final btnSinTexto = tester.widget<ElevatedButton>(find.byKey(const Key('btn_confirmar_anulacion_orden')));
+      expect(btnSinTexto.onPressed, isNull);
+
+      // 5. Ingresar texto insuficiente (< 10 caracteres)
+      await tester.enterText(find.byKey(const Key('input_observacion_anulacion')), 'Error');
+      await tester.pump();
+      expect(find.textContaining('Faltan 5 caracteres'), findsOneWidget);
+      final btnTextoCorto = tester.widget<ElevatedButton>(find.byKey(const Key('btn_confirmar_anulacion_orden')));
+      expect(btnTextoCorto.onPressed, isNull);
+
+      // 6. Ingresar justificación completa válida (>= 10 caracteres)
+      await tester.enterText(find.byKey(const Key('input_observacion_anulacion')), 'Cliente desiste formalmente de la compra.');
+      await tester.pump();
+
+      // 7. Ahora sí está habilitado
       final btnHabilitado = tester.widget<ElevatedButton>(find.byKey(const Key('btn_confirmar_anulacion_orden')));
       expect(btnHabilitado.onPressed, isNotNull);
 
-      // 6. Si desmarcamos la casilla, se vuelve a inhabilitar
+      // 8. Si desmarcamos la casilla, se vuelve a inhabilitar
       await tester.tap(find.byKey(const Key('check_confirmar_anulacion_tap')));
       await tester.pump();
       final btnDesmarcado = tester.widget<ElevatedButton>(find.byKey(const Key('btn_confirmar_anulacion_orden')));
@@ -382,6 +399,13 @@ void main() {
       await tester.tap(find.byKey(const Key('check_confirmar_anulacion_tap')));
       await tester.pump(const Duration(seconds: 5));
 
+      // Ingresar justificación obligatoria de al menos 10 caracteres
+      await tester.enterText(
+        find.byKey(const Key('input_observacion_anulacion')),
+        'Cliente solicitó devolución formal de su dinero.',
+      );
+      await tester.pump();
+
       // Confirmar la anulación
       await tester.tap(find.byKey(const Key('btn_confirmar_anulacion_orden')));
       await tester.pump(); // Inicia la petición
@@ -458,6 +482,138 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.byKey(const Key('btn_confirmar_anulacion_orden')), findsOneWidget);
       expect(find.text('Volver'), findsOneWidget);
+    });
+
+    testWidgets('Poka-Yoke: Observación con solo espacios en blanco o menos de 10 caracteres impide confirmación', (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () {
+                  ModalAnularOrden.mostrar(
+                    context,
+                    idOrden: 'ord-pokayoke',
+                    folio: 'ORD-POKA-01',
+                    duracionSegundos: 0, // timer ya completado
+                  );
+                },
+                child: const Text('Abrir'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Abrir'));
+      await tester.pumpAndSettle();
+
+      // Marcar checkbox
+      await tester.tap(find.byKey(const Key('check_confirmar_anulacion_tap')));
+      await tester.pump();
+
+      // Caso 1: Vacío
+      final btnVacio = tester.widget<ElevatedButton>(find.byKey(const Key('btn_confirmar_anulacion_orden')));
+      expect(btnVacio.onPressed, isNull);
+
+      // Caso 2: Solo espacios en blanco (trim() < 10)
+      await tester.enterText(find.byKey(const Key('input_observacion_anulacion')), '            ');
+      await tester.pump();
+      final btnEspacios = tester.widget<ElevatedButton>(find.byKey(const Key('btn_confirmar_anulacion_orden')));
+      expect(btnEspacios.onPressed, isNull);
+
+      // Caso 3: 9 caracteres útiles
+      await tester.enterText(find.byKey(const Key('input_observacion_anulacion')), '123456789');
+      await tester.pump();
+      expect(find.textContaining('Faltan 1 caracteres'), findsOneWidget);
+      final btnNueve = tester.widget<ElevatedButton>(find.byKey(const Key('btn_confirmar_anulacion_orden')));
+      expect(btnNueve.onPressed, isNull);
+
+      // Caso 4: 10 caracteres exactos útiles
+      await tester.enterText(find.byKey(const Key('input_observacion_anulacion')), '1234567890');
+      await tester.pump();
+      expect(find.textContaining('10 / 10 mín.'), findsOneWidget);
+      final btnDiez = tester.widget<ElevatedButton>(find.byKey(const Key('btn_confirmar_anulacion_orden')));
+      expect(btnDiez.onPressed, isNotNull);
+    });
+
+    testWidgets('ModalAnularOrden envía motivo tipificado y observación al endpoint de anulación', (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      String? motivoRecibido;
+      String? obsRecibida;
+
+      final mockClient = MockClient((request) async {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        motivoRecibido = body['motivo'] ?? body['motivo_anulacion'];
+        obsRecibida = body['observacion'] ?? body['observacion_anulacion'];
+
+        return http.Response(
+          jsonEncode({
+            'id_orden': 'ord-test-audit',
+            'estado_orden': 'Anulada',
+            'mensaje': 'Orden anulada',
+            'activos_liberados': 1,
+            'pagos_reversados': 0,
+          }),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      });
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () {
+                  ModalAnularOrden.mostrar(
+                    context,
+                    idOrden: 'ord-test-audit',
+                    folio: 'ORD-AUDIT-01',
+                    client: mockClient,
+                    duracionSegundos: 0,
+                  );
+                },
+                child: const Text('Abrir'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Abrir'));
+      await tester.pumpAndSettle();
+
+      // Cambiar motivo en el dropdown
+      await tester.tap(find.byKey(const Key('select_motivo_anulacion')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Quiebre de stock físico o pieza defectuosa').last);
+      await tester.pumpAndSettle();
+
+      // Ingresar observación
+      await tester.enterText(
+        find.byKey(const Key('input_observacion_anulacion')),
+        'Pieza con fisura no reportada en la bodega.',
+      );
+      await tester.pump();
+
+      // Marcar checkbox
+      await tester.tap(find.byKey(const Key('check_confirmar_anulacion_tap')));
+      await tester.pump();
+
+      // Confirmar
+      await tester.tap(find.byKey(const Key('btn_confirmar_anulacion_orden')));
+      await tester.pumpAndSettle();
+
+      expect(motivoRecibido, 'Quiebre de stock físico o pieza defectuosa');
+      expect(obsRecibida, 'Pieza con fisura no reportada en la bodega.');
     });
   });
 
@@ -543,7 +699,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('btn_anular_orden_detail')), findsNothing);
-      expect(find.text('Orden Entregada / Completada'), findsOneWidget);
+      expect(find.text('Orden Completada'), findsWidgets);
     });
 
     testWidgets('Al anular orden desde OrdenDetailSheet, se cierra el bottom sheet y vuelve a la vista anterior', (tester) async {
@@ -618,6 +774,13 @@ void main() {
       // Marcar casilla obligatoria y avanzar el temporizador de 5 segundos
       await tester.tap(find.byKey(const Key('check_confirmar_anulacion_tap')));
       await tester.pump(const Duration(seconds: 5));
+
+      // Ingresar justificación obligatoria de al menos 10 caracteres
+      await tester.enterText(
+        find.byKey(const Key('input_observacion_anulacion')),
+        'Cancelación confirmada desde el detalle de la orden.',
+      );
+      await tester.pump();
 
       // Confirmar anulación (montoPagado es 0, no abre DialogoDevolucionDinero)
       await tester.tap(find.byKey(const Key('btn_confirmar_anulacion_orden')));

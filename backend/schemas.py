@@ -945,12 +945,48 @@ class OrdenAnulacionResponse(BaseModel):
     pagos_reversados: int = 0
     monto_reversado: int = 0
     motivo_anulacion: Optional[str] = None
+    observacion_anulacion: Optional[str] = None
 
 
 class AnularOrdenRequest(BaseModel):
-    """Payload para anular una orden desde el mesón de ventas."""
+    """Payload para anular una orden desde el mesón de ventas con validación Poka-Yoke."""
     model_config = ConfigDict(from_attributes=True)
+    motivo: Optional[str] = None
     motivo_anulacion: Optional[str] = None
+    observacion: Optional[str] = None
+    observacion_anulacion: Optional[str] = None
+
+    @model_validator(mode="after")
+    def sincronizar_campos(self) -> "AnularOrdenRequest":
+        m = self.motivo or self.motivo_anulacion or ""
+        obs = self.observacion or self.observacion_anulacion or ""
+
+        m_clean = m.strip() if m else ""
+        obs_clean = obs.strip() if obs else ""
+
+        if not obs_clean and len(m_clean) >= 10:
+            obs_clean = m_clean
+
+        self.motivo = m_clean if m_clean else None
+        self.motivo_anulacion = self.motivo
+        self.observacion = obs_clean if obs_clean else None
+        self.observacion_anulacion = self.observacion
+        return self
+
+
+class DespaletizarActivoRequest(BaseModel):
+    """Payload obligatorio para despaletizar un activo en bodega/patio."""
+    model_config = ConfigDict(from_attributes=True)
+    motivo: str = Field(..., description="Motivo tipificado del despaletizado")
+    observacion: str = Field(..., min_length=10, description="Justificación detallada del movimiento")
+
+    @field_validator("observacion")
+    @classmethod
+    def validar_observacion(cls, v: str) -> str:
+        v_clean = v.strip()
+        if len(v_clean) < 10:
+            raise ValueError("La justificación u observación debe contener al menos 10 caracteres explicativos.")
+        return v_clean
 
 
 class ReasignarVendedorRequest(BaseModel):

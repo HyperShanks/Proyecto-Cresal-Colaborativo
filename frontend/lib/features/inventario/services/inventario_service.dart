@@ -272,6 +272,8 @@ class InventarioService {
   /// Despaletiza un activo y lo devuelve al estado "En Desarme", liberando su ubicación física (HU anti-equivocación).
   static Future<Map<String, dynamic>> despaletizarActivo(
     String idActivo, {
+    String? motivo,
+    String? observacion,
     http.Client? client,
   }) async {
     final httpClient = client ?? http.Client();
@@ -283,8 +285,13 @@ class InventarioService {
         'Content-Type': 'application/json',
       };
 
+      final bodyPayload = jsonEncode({
+        if (motivo != null && motivo.isNotEmpty) 'motivo': motivo,
+        if (observacion != null && observacion.isNotEmpty) 'observacion': observacion,
+      });
+
       final response = await httpClient
-          .post(uri, headers: headers)
+          .post(uri, headers: headers, body: bodyPayload)
           .timeout(const Duration(seconds: 35));
 
       Map<String, dynamic> body = {};

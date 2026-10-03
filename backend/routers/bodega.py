@@ -2,12 +2,13 @@ import uuid
 from datetime import datetime, timezone
 from uuid import UUID
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
 from sqlalchemy import or_, func
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from database import get_db
+from services.telegram_service import TelegramService
 from models import (
     Activo_Inventariado,
     Orden_Venta,
@@ -23,6 +24,7 @@ from models import (
     Tracking_Logistico,
     Despacho,
     Reservas_Backorder,
+    Sucursal,
 )
 from schemas import (
     TareaAlertaResponse,
@@ -686,6 +688,7 @@ def verificar_qr_salida(
 )
 def escanear_salida(
     payload: EscanearSalidaRequest,
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
@@ -835,6 +838,26 @@ def escanear_salida(
 
         folio = orden.folio
         print(f"✅ [BARRERA] Orden {folio} completada exitosamente. Total piezas entregadas: {len(skus_entregados_nombres)}.")
+
+        # Disparar alerta asíncrona a Telegram para Gerencia
+        cliente_obj = db.query(Cliente).filter(Cliente.id_cliente == orden.id_cliente).first()
+        cliente_nom = f"{cliente_obj.nombres} {cliente_obj.apellidos}".strip() if cliente_obj else "Cliente Particular"
+        sucursal_obj = db.query(Sucursal).filter(Sucursal.id_sucursal == orden.id_sucursal).first()
+        sucursal_nom = sucursal_obj.nombre_sucursal if sucursal_obj else f"Sucursal {orden.id_sucursal}"
+        bodeguero_nom = f"{current_user.nombres} {current_user.apellidos}".strip()
+
+        repuestos_str = ", ".join(skus_entregados_nombres) if skus_entregados_nombres else "Repuesto(s)"
+        skus_str = ", ".join(skus_entregados_nombres) if skus_entregados_nombres else "S/SKU"
+
+        background_tasks.add_task(
+            TelegramService.notificar_entrega_barrera,
+            folio=folio,
+            cliente_nombre=cliente_nom,
+            descripcion_pieza=repuestos_str,
+            sku=skus_str,
+            bodeguero_nombre=bodeguero_nom,
+            sucursal_nombre=sucursal_nom,
+        )
 
         return EscanearSalidaResponse(
             id_orden=orden.id_orden,
