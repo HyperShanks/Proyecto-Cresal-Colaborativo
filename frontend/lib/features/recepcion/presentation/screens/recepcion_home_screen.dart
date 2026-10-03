@@ -433,21 +433,25 @@ class _RecepcionHomeScreenState extends State<RecepcionHomeScreen> {
                   ),
                 ),
                 const SizedBox(height: 2),
-                Row(
-                  children: [
-                    const Text(
-                      'Siguiente Ingreso: ',
-                      style: TextStyle(color: AppPalette.textPrimary, fontSize: 14),
-                    ),
-                    Text(
-                      _isLoadingFolio ? '...' : 'N° $_siguienteIngreso',
-                      style: const TextStyle(
-                        color: AppPalette.secondary,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 20,
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Row(
+                    children: [
+                      const Text(
+                        'Siguiente Ingreso: ',
+                        style: TextStyle(color: AppPalette.textPrimary, fontSize: 14),
                       ),
-                    ),
-                  ],
+                      Text(
+                        _isLoadingFolio ? '...' : 'N° $_siguienteIngreso',
+                        style: const TextStyle(
+                          color: AppPalette.secondary,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 20,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -488,7 +492,7 @@ class _RecepcionHomeScreenState extends State<RecepcionHomeScreen> {
               child: FittedBox(
                 fit: BoxFit.scaleDown,
                 child: const Text(
-                  '+ INGRESAR VEHÍCULO A PATIO',
+                  'INGRESAR VEHÍCULO A PATIO',
                   style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w900,

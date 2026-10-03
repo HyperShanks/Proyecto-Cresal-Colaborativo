@@ -454,8 +454,11 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
               const SizedBox(height: 22),
 
               // 5. DATOS TÉCNICOS DEL VEHÍCULO
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 6,
                 children: [
                   Text(
                     'Datos Técnicos del Vehículo',
