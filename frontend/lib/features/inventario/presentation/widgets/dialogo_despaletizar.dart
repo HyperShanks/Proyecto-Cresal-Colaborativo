@@ -1,19 +1,55 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../services/inventario_service.dart';
 
 /// Diálogo de seguridad anti-equivocación para despaletizar un activo y devolverlo
-/// al estado "En Desarme".
+/// al estado "En Desarme" (SPEC-HU-TAREA-23).
 ///
-/// Implementa un temporizador regresivo de 5 segundos durante el cual el botón de
-/// confirmación permanece deshabilitado para evitar pulsaciones impulsivas o accidentales.
+/// Implementa un temporizador regresivo de 5 segundos, selección obligatoria de motivo
+/// con botones táctiles ergonómicos para operarios con guantes en PDA, y aduana Poka-Yoke
+/// de justificación mínima de 10 caracteres antes de permitir la confirmación.
 class DialogoDespaletizar extends StatefulWidget {
   final String idActivo;
   final String sku;
   final String categoria;
   final String? numeroIngreso;
+  final String? ubicacionActual;
+  final http.Client? client;
+  final int duracionSegundos;
+  final String? motivoInicial;
+  final String? observacionInicial;
+
+  /// Catálogo táctil ergonómico de motivos para bodega / patio (SPEC-HU-TAREA-23)
+  static const List<Map<String, String>> motivosDisponibles = [
+    {
+      'id': 'Preparación Venta / Despacho Inmediato',
+      'label': 'Preparación Venta / Despacho Inmediato',
+      'icon': '🏷️',
+    },
+    {
+      'id': 'Merma / Daño Físico Detectado',
+      'label': 'Merma / Daño Físico Detectado',
+      'icon': '⚠️',
+    },
+    {
+      'id': 'Garantía o Devolución a Revisión Técnica',
+      'label': 'Garantía o Devolución a Revisión Técnica',
+      'icon': '🔄',
+    },
+    {
+      'id': 'Reubicación a Otro Pasillo o Nivel',
+      'label': 'Reubicación a Otro Pasillo o Nivel',
+      'icon': '📦',
+    },
+    {
+      'id': 'Otro Motivo Operativo',
+      'label': 'Otro Motivo Operativo',
+      'icon': '❓',
+    },
+  ];
 
   const DialogoDespaletizar({
     super.key,
@@ -21,6 +57,11 @@ class DialogoDespaletizar extends StatefulWidget {
     required this.sku,
     required this.categoria,
     this.numeroIngreso,
+    this.ubicacionActual,
+    this.client,
+    this.duracionSegundos = 5,
+    this.motivoInicial,
+    this.observacionInicial,
   });
 
   /// Método de utilidad para mostrar el diálogo.
@@ -31,6 +72,11 @@ class DialogoDespaletizar extends StatefulWidget {
     required String sku,
     required String categoria,
     String? numeroIngreso,
+    String? ubicacionActual,
+    http.Client? client,
+    int duracionSegundos = 5,
+    String? motivoInicial,
+    String? observacionInicial,
   }) {
     return showDialog<bool>(
       context: context,
@@ -40,6 +86,11 @@ class DialogoDespaletizar extends StatefulWidget {
         sku: sku,
         categoria: categoria,
         numeroIngreso: numeroIngreso,
+        ubicacionActual: ubicacionActual,
+        client: client,
+        duracionSegundos: duracionSegundos,
+        motivoInicial: motivoInicial,
+        observacionInicial: observacionInicial,
       ),
     );
   }
@@ -49,14 +100,26 @@ class DialogoDespaletizar extends StatefulWidget {
 }
 
 class _DialogoDespaletizarState extends State<DialogoDespaletizar> {
-  int _segundosRestantes = 5;
+  late int _segundosRestantes;
   Timer? _timer;
   bool _isLoading = false;
+
+  String? _motivoSeleccionado;
+  late final TextEditingController _observacionController;
 
   @override
   void initState() {
     super.initState();
-    _iniciarCuentaRegresiva();
+    _segundosRestantes = widget.duracionSegundos;
+    _motivoSeleccionado = widget.motivoInicial;
+    _observacionController = TextEditingController(text: widget.observacionInicial ?? '');
+    _observacionController.addListener(() {
+      if (mounted) setState(() {});
+    });
+
+    if (_segundosRestantes > 0) {
+      _iniciarCuentaRegresiva();
+    }
   }
 
   void _iniciarCuentaRegresiva() {
@@ -80,6 +143,7 @@ class _DialogoDespaletizarState extends State<DialogoDespaletizar> {
 
   @override
   void dispose() {
+    _observacionController.dispose();
     _timer?.cancel();
     super.dispose();
   }
@@ -87,7 +151,12 @@ class _DialogoDespaletizarState extends State<DialogoDespaletizar> {
   Future<void> _ejecutarDespaletizado() async {
     setState(() => _isLoading = true);
     try {
-      await InventarioService.despaletizarActivo(widget.idActivo);
+      await InventarioService.despaletizarActivo(
+        widget.idActivo,
+        motivo: _motivoSeleccionado,
+        observacion: _observacionController.text.trim(),
+        client: widget.client,
+      );
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } catch (e) {
@@ -112,6 +181,12 @@ class _DialogoDespaletizarState extends State<DialogoDespaletizar> {
         ? 'Folio Ingreso: ${widget.numeroIngreso}'
         : 'SKU: ${widget.sku}';
 
+    final int obsLongitud = _observacionController.text.trim().length;
+    final bool observacionValida = obsLongitud >= 10;
+    final bool motivoValido = _motivoSeleccionado != null && _motivoSeleccionado!.isNotEmpty;
+    final bool tiempoCumplido = _segundosRestantes == 0;
+    final bool puedeConfirmar = !_isLoading && tiempoCumplido && motivoValido && observacionValida;
+
     return AlertDialog(
       backgroundColor: AppPalette.surface,
       shape: RoundedRectangleBorder(
@@ -119,7 +194,7 @@ class _DialogoDespaletizarState extends State<DialogoDespaletizar> {
         side: BorderSide(color: AppPalette.error.withValues(alpha: 0.3)),
       ),
       titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
-      contentPadding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+      contentPadding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
       actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       title: Row(
         children: [
@@ -166,6 +241,7 @@ class _DialogoDespaletizarState extends State<DialogoDespaletizar> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Alerta inicial de impacto
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -180,7 +256,7 @@ class _DialogoDespaletizarState extends State<DialogoDespaletizar> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Esta acción devolverá este repuesto (${widget.categoria}) al estado "En Desarme".',
+                      'Esta acción devolverá este repuesto (${widget.categoria}) al estado "En Desarme" y alertará a Gerencia.',
                       style: AppTypography.body.copyWith(
                         color: AppPalette.textPrimary,
                         fontSize: 12.5,
@@ -191,21 +267,197 @@ class _DialogoDespaletizarState extends State<DialogoDespaletizar> {
                 ],
               ),
             ),
+            const SizedBox(height: 12),
+
+            // Trazabilidad de Ubicación Previa en Pantalla
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppPalette.background,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.white12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.location_on_outlined, color: AppPalette.warning, size: 16),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Ubicación que será liberada en WMS:',
+                        style: AppTypography.small.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: AppPalette.warning,
+                          fontSize: 11.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    widget.ubicacionActual ?? 'Galpón / Pasillo / Pallet registrado',
+                    style: AppTypography.body.copyWith(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12.5,
+                      color: AppPalette.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '⚠️ Esta pieza quedará sin ubicación fija hasta ser repaletizada.',
+                    style: AppTypography.small.copyWith(
+                      color: AppPalette.textSecondary,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(height: 14),
+
+            // Selector Táctil Ergonómico de Motivo (Gran tamaño para PDA con guantes)
             Text(
-              'Consecuencias de esta acción:',
+              'Seleccione Motivo Operativo *',
               style: AppTypography.small.copyWith(
-                color: AppPalette.textSecondary,
+                color: AppPalette.textPrimary,
                 fontWeight: FontWeight.bold,
-                fontSize: 11.5,
+                fontSize: 12,
               ),
             ),
             const SizedBox(height: 8),
-            _buildCheckItem('Se liberará la ubicación física (Galpón, Pasillo y Pallet).'),
-            _buildCheckItem('El estado del QR físico se restablecerá a pendiente.'),
-            _buildCheckItem('Se desvincularán las fotos comerciales registradas.'),
-            _buildCheckItem('El repuesto volverá a aparecer en "Pendientes de Paletizado".'),
-            const SizedBox(height: 14),
+            Column(
+              children: DialogoDespaletizar.motivosDisponibles.map((motivoMap) {
+                final id = motivoMap['id']!;
+                final label = motivoMap['label']!;
+                final icon = motivoMap['icon']!;
+                final isSelected = _motivoSeleccionado == id;
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      key: Key('chip_motivo_$id'),
+                      onTap: _isLoading
+                          ? null
+                          : () {
+                              setState(() {
+                                _motivoSeleccionado = id;
+                              });
+                            },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        constraints: const BoxConstraints(minHeight: 46),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? AppPalette.primary.withValues(alpha: 0.18)
+                              : AppPalette.background,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: isSelected ? AppPalette.primary : Colors.white12,
+                            width: isSelected ? 1.5 : 1.0,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Text(icon, style: const TextStyle(fontSize: 18)),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                label,
+                                style: AppTypography.body.copyWith(
+                                  fontSize: 12,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                  color: isSelected ? AppPalette.primary : AppPalette.textPrimary,
+                                ),
+                              ),
+                            ),
+                            if (isSelected)
+                              const Icon(Icons.check_circle, color: AppPalette.primary, size: 18),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 10),
+
+            // Justificación Obligatoria (Poka-Yoke >= 10 chars)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Justificación de Movimiento *',
+                  style: AppTypography.small.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppPalette.textPrimary,
+                    fontSize: 12,
+                  ),
+                ),
+                Text(
+                  '$obsLongitud / 10 mín.',
+                  key: const Key('contador_caracteres_despaletizar'),
+                  style: AppTypography.small.copyWith(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11,
+                    color: observacionValida
+                        ? AppPalette.success
+                        : (obsLongitud > 0 ? AppPalette.warning : AppPalette.textSecondary),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            TextField(
+              key: const Key('input_observacion_despaletizar'),
+              controller: _observacionController,
+              enabled: !_isLoading,
+              maxLines: 2,
+              style: AppTypography.body.copyWith(fontSize: 12.5, color: AppPalette.textPrimary),
+              decoration: InputDecoration(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                filled: true,
+                fillColor: AppPalette.background,
+                hintText: 'Detalle el motivo del despaletizado para auditoría y gerencia...',
+                hintStyle: AppTypography.small.copyWith(color: AppPalette.textSecondary, fontSize: 11.5),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(
+                    color: obsLongitud > 0 && !observacionValida ? AppPalette.error : Colors.white24,
+                  ),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(
+                    color: obsLongitud > 0 && !observacionValida ? AppPalette.error : Colors.white24,
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(
+                    color: observacionValida ? AppPalette.success : AppPalette.primary,
+                    width: 1.5,
+                  ),
+                ),
+              ),
+            ),
+            if (obsLongitud > 0 && !observacionValida) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Faltan ${10 - obsLongitud} caracteres mínimos explicativos.',
+                style: AppTypography.small.copyWith(
+                  color: AppPalette.error,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
 
             // Banner del contador de seguridad
             Container(
@@ -235,7 +487,7 @@ class _DialogoDespaletizarState extends State<DialogoDespaletizar> {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      'Por seguridad, espera $_segundosRestantes s para confirmar...',
+                      'Espera $_segundosRestantes s para confirmar...',
                       style: AppTypography.small.copyWith(
                         color: AppPalette.warning,
                         fontSize: 11.5,
@@ -246,7 +498,7 @@ class _DialogoDespaletizarState extends State<DialogoDespaletizar> {
                     const Icon(Icons.check_circle_outline, color: AppPalette.success, size: 16),
                     const SizedBox(width: 8),
                     Text(
-                      'Verificación completa. Ya puedes confirmar.',
+                      'Temporizador completado.',
                       style: AppTypography.small.copyWith(
                         color: AppPalette.success,
                         fontSize: 11.5,
@@ -271,7 +523,7 @@ class _DialogoDespaletizarState extends State<DialogoDespaletizar> {
         ),
         ElevatedButton.icon(
           key: const Key('btn_confirmar_despaletizado'),
-          onPressed: (_segundosRestantes == 0 && !_isLoading) ? _ejecutarDespaletizado : null,
+          onPressed: puedeConfirmar ? _ejecutarDespaletizado : null,
           icon: _isLoading
               ? const SizedBox(
                   width: 16,
@@ -284,7 +536,7 @@ class _DialogoDespaletizarState extends State<DialogoDespaletizar> {
               : Icon(
                   Icons.undo_rounded,
                   size: 18,
-                  color: _segundosRestantes == 0 ? Colors.white : Colors.white38,
+                  color: puedeConfirmar ? Colors.white : Colors.white38,
                 ),
           label: Text(
             _isLoading
@@ -293,7 +545,7 @@ class _DialogoDespaletizarState extends State<DialogoDespaletizar> {
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.bold,
-              color: _segundosRestantes == 0 ? Colors.white : Colors.white38,
+              color: puedeConfirmar ? Colors.white : Colors.white38,
             ),
           ),
           style: ElevatedButton.styleFrom(
@@ -304,29 +556,6 @@ class _DialogoDespaletizarState extends State<DialogoDespaletizar> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildCheckItem(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.arrow_right_rounded, color: AppPalette.error, size: 18),
-          const SizedBox(width: 4),
-          Expanded(
-            child: Text(
-              text,
-              style: AppTypography.small.copyWith(
-                color: AppPalette.textSecondary,
-                fontSize: 12,
-                height: 1.3,
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

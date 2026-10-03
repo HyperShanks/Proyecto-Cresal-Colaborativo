@@ -4,6 +4,7 @@ import '../features/auth/presentation/screens/pin_login_screen.dart';
 import '../features/home/presentation/screens/home_screen.dart';
 import '../features/caja/presentation/screens/caja_main_screen.dart';
 import '../features/ventas/presentation/screens/ventas_main_screen.dart';
+import '../features/recepcion/presentation/screens/recepcion_home_screen.dart';
 import '../features/recepcion/presentation/screens/recepcion_vehiculo_screen.dart';
 import '../features/tickets/presentation/screens/tickets_screen.dart';
 import '../features/paletizado/presentation/screens/paletizado_screen.dart';
@@ -28,6 +29,7 @@ class AppRoutes {
   static const String caja = '/caja';
   static const String gerencia = '/gerencia';
   static const String recepcion = '/recepcion';
+  static const String recepcionRegistro = '/recepcion/registro';
   static const String tickets = '/tickets';
   static const String paletizado = '/paletizado';
   static const String paletizadoDetallePrefix = '/paletizado/detalle';
@@ -53,13 +55,18 @@ class AppRoutes {
   /// Rutas autorizadas para Bodeguero (id_rol == 1).
   static const List<String> _bodegaRoutes = [
     home,
-    recepcion,
     paletizado,
     etiquetaPreview,
     buscador,
     alertas,
     reingresos,
     forzarIngreso,
+  ];
+
+  /// Rutas autorizadas para Recepción de Patio (id_rol == 9).
+  static const List<String> _recepcionRoutes = [
+    recepcion,
+    recepcionRegistro,
   ];
 
   /// Rutas autorizadas para Vendedor (id_rol == 2, 7) y Jefe de Ventas (id_rol == 6).
@@ -80,6 +87,7 @@ class AppRoutes {
 
   /// Retorna la ruta inicial o panel principal correspondiente a un rol (SSOT).
   static String getHomeRouteForRole(int? idRol) {
+    if (idRol == 9) return recepcion;
     if (idRol == 4 || idRol == 8) return gerencia;
     if (idRol == 3) return caja;
     if (idRol == 2 || idRol == 6 || idRol == 7) return ventasMain;
@@ -106,6 +114,11 @@ class AppRoutes {
     // Caja (id_rol == 3)
     if (idRol == 3) {
       return _cajaRoutes.contains(route);
+    }
+
+    // Recepción Patio (id_rol == 9)
+    if (idRol == 9) {
+      return _recepcionRoutes.contains(route);
     }
 
     // Bodeguero (id_rol == 1)
@@ -143,7 +156,8 @@ class AppRoutes {
       caja: (context) => const CajaMainScreen(),
       gerencia: (context) => const DashboardGerenciaView(),
       ventasMain: (context) => const VentasMainScreen(),
-      recepcion: (context) => const RecepcionVehiculoScreen(),
+      recepcion: (context) => const RecepcionHomeScreen(),
+      recepcionRegistro: (context) => const RecepcionVehiculoScreen(),
       tickets: (context) => const TicketsScreen(),
       paletizado: (context) {
         final args = ModalRoute.of(context)?.settings.arguments as String?;

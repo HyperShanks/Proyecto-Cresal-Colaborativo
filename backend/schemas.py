@@ -2,7 +2,7 @@ import os
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 from typing import Optional, List, Any, Union
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, date
 from enum import Enum
 import re
 from core.utils.validators import validar_rut_modulo11
@@ -85,7 +85,7 @@ class PatenteInput(BaseModel):
 class VehiculoCreate(BaseModel):
     # Datos del Vehículo (Autocompletados por scraper o copiados del padrón)
     correlativo_ingreso: Optional[str] = None
-    patente: str = Field(..., description="Patente validada del vehículo")
+    patente: Optional[str] = Field(None, description="Patente validada del vehículo o SPPU")
     marca: str
     modelo: str
     anio: int
@@ -98,6 +98,17 @@ class VehiculoCreate(BaseModel):
 
     # Datos que FastAPI usará para crear el Detalle_Caja_Cambio internamente
     transmision: str = Field(..., description="Ej: mec, at")
+
+    # Nuevos campos de Vehiculo_Origen (13 columnas matriz Los Pinos)
+    factura: Optional[str] = None
+    fecha_ingreso: Optional[str] = None
+    origen: Optional[str] = None
+    color: Optional[str] = None
+    destino: Optional[str] = "DESARME"
+    grua: Optional[str] = None
+    observaciones: Optional[str] = None
+    es_sppu: Optional[bool] = False
+
 
 class MotorUpdate(BaseModel):
     cilindrada: str
@@ -114,6 +125,60 @@ class VehiculoForzadoUpdate(BaseModel):
     traccion: str
     motor: MotorUpdate
     caja: CajaUpdate
+
+# ==========================================
+# ESQUEMAS PARA RECEPCIÓN VEHICULAR (SPEC-22)
+# ==========================================
+
+class VehiculoRecepcionCreate(BaseModel):
+    numero_ingreso: Optional[str] = Field(None, description="Correlativo único. Si se omite, se autocalcula")
+    patente: Optional[str] = Field(None, description="Patente vehicular en mayúsculas o SPPU")
+    es_sppu: bool = Field(False, description="Flag para vehículos sin patente (S/PPU)")
+    factura: Optional[str] = Field(None, description="N° Factura, póliza o remate")
+    fecha_ingreso: Optional[str] = Field(None, description="Fecha de ingreso YYYY-MM-DD")
+    origen: Optional[str] = Field(None, description="Proveedor / remate de procedencia")
+    marca: str = Field(..., description="Marca comercial en mayúsculas")
+    modelo: str = Field(..., description="Modelo y versión")
+    anio: Optional[int] = Field(None, description="Año de fabricación")
+    color: Optional[str] = Field(None, description="Color predominante de carrocería")
+    numero_motor: Optional[str] = Field(None, description="Número de serie del bloque de motor")
+    destino: str = Field("DESARME", description="Destino: DESARME, VENTA, REPARACION, CHATARRA")
+    grua: Optional[str] = Field(None, description="Operador o chofer de grúa")
+    observaciones: Optional[str] = Field(None, description="Observaciones de llaves, papeles, choques, etc.")
+    traccion: Optional[str] = None
+    combustible: Optional[str] = None
+    transmision: Optional[str] = None
+    cilindrada: Optional[str] = None
+
+class VehiculoRecepcionItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id_vehiculo: UUID
+    numero_ingreso: str
+    patente: Optional[str] = None
+    factura: Optional[str] = None
+    fecha_ingreso: Optional[date] = None
+    origen: Optional[str] = None
+    marca: str
+    modelo: str
+    anio: Optional[int] = None
+    color: Optional[str] = None
+    numero_motor: Optional[str] = None
+    destino: Optional[str] = "DESARME"
+    grua: Optional[str] = None
+    observaciones: Optional[str] = None
+    traccion: Optional[str] = None
+    estado: Optional[str] = "Activo"
+    fecha_creacion: Optional[datetime] = None
+
+class VehiculoRecepcionRecientesResponse(BaseModel):
+    total: int
+    items: List[VehiculoRecepcionItem]
+
+class VehiculoRecepcionExportarResponse(BaseModel):
+    total: int
+    tsv: str
+    items: List[VehiculoRecepcionItem]
 
 # ==========================================
 # ESQUEMAS PARA PALETIZADO / IMPRESIÓN (HU-2.4)
@@ -880,12 +945,48 @@ class OrdenAnulacionResponse(BaseModel):
     pagos_reversados: int = 0
     monto_reversado: int = 0
     motivo_anulacion: Optional[str] = None
+    observacion_anulacion: Optional[str] = None
 
 
 class AnularOrdenRequest(BaseModel):
-    """Payload para anular una orden desde el mesón de ventas."""
+    """Payload para anular una orden desde el mesón de ventas con validación Poka-Yoke."""
     model_config = ConfigDict(from_attributes=True)
+    motivo: Optional[str] = None
     motivo_anulacion: Optional[str] = None
+    observacion: Optional[str] = None
+    observacion_anulacion: Optional[str] = None
+
+    @model_validator(mode="after")
+    def sincronizar_campos(self) -> "AnularOrdenRequest":
+        m = self.motivo or self.motivo_anulacion or ""
+        obs = self.observacion or self.observacion_anulacion or ""
+
+        m_clean = m.strip() if m else ""
+        obs_clean = obs.strip() if obs else ""
+
+        if not obs_clean and len(m_clean) >= 10:
+            obs_clean = m_clean
+
+        self.motivo = m_clean if m_clean else None
+        self.motivo_anulacion = self.motivo
+        self.observacion = obs_clean if obs_clean else None
+        self.observacion_anulacion = self.observacion
+        return self
+
+
+class DespaletizarActivoRequest(BaseModel):
+    """Payload obligatorio para despaletizar un activo en bodega/patio."""
+    model_config = ConfigDict(from_attributes=True)
+    motivo: str = Field(..., description="Motivo tipificado del despaletizado")
+    observacion: str = Field(..., min_length=10, description="Justificación detallada del movimiento")
+
+    @field_validator("observacion")
+    @classmethod
+    def validar_observacion(cls, v: str) -> str:
+        v_clean = v.strip()
+        if len(v_clean) < 10:
+            raise ValueError("La justificación u observación debe contener al menos 10 caracteres explicativos.")
+        return v_clean
 
 
 class ReasignarVendedorRequest(BaseModel):

@@ -915,6 +915,7 @@ class OrdenesService {
   static Future<Map<String, dynamic>> anularOrden(
     String idOrden, {
     String? motivoAnulacion,
+    String? observacionAnulacion,
     bool usePost = false,
     http.Client? client,
   }) async {
@@ -930,8 +931,14 @@ class OrdenesService {
       };
 
       final body = jsonEncode({
-        if (motivoAnulacion != null && motivoAnulacion.isNotEmpty)
+        if (motivoAnulacion != null && motivoAnulacion.isNotEmpty) ...{
+          'motivo': motivoAnulacion,
           'motivo_anulacion': motivoAnulacion,
+        },
+        if (observacionAnulacion != null && observacionAnulacion.isNotEmpty) ...{
+          'observacion': observacionAnulacion,
+          'observacion_anulacion': observacionAnulacion,
+        },
       });
 
       final response = (usePost || motivoAnulacion != null)

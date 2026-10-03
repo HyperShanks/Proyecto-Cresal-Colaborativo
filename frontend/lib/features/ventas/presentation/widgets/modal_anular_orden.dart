@@ -8,7 +8,7 @@ import '../../services/ventas_service.dart';
 import '../../services/ordenes_sync_notifier.dart';
 import 'dialogo_devolucion_dinero.dart';
 
-/// Modal dialog interactivo para anulación de órdenes en Mesón de Ventas (SPEC-HU-TAREA-4)
+/// Modal dialog interactivo para anulación de órdenes en Mesón de Ventas (SPEC-HU-TAREA-4 & SPEC-HU-TAREA-23)
 class ModalAnularOrden extends StatefulWidget {
   final String idOrden;
   final String folio;
@@ -18,6 +18,17 @@ class ModalAnularOrden extends StatefulWidget {
   final VoidCallback? onOrdenAnulada;
   final http.Client? client;
   final int duracionSegundos;
+  final String? motivoInicial;
+  final String? observacionInicial;
+
+  /// Catálogo tipificado de motivos de anulación (SPEC-HU-TAREA-23)
+  static const List<String> motivosDisponibles = [
+    'Desistimiento voluntario del cliente',
+    'Error en digitación o repuesto erróneo',
+    'Quiebre de stock físico o pieza defectuosa',
+    'Duplicidad de orden',
+    'Anulación administrativa autorizada',
+  ];
 
   const ModalAnularOrden({
     super.key,
@@ -29,6 +40,8 @@ class ModalAnularOrden extends StatefulWidget {
     this.onOrdenAnulada,
     this.client,
     this.duracionSegundos = 5,
+    this.motivoInicial,
+    this.observacionInicial,
   });
 
   /// Helper estático para abrir el diálogo fácilmente
@@ -42,6 +55,8 @@ class ModalAnularOrden extends StatefulWidget {
     VoidCallback? onOrdenAnulada,
     http.Client? client,
     int duracionSegundos = 5,
+    String? motivoInicial,
+    String? observacionInicial,
   }) {
     return showDialog<bool>(
       context: context,
@@ -55,6 +70,8 @@ class ModalAnularOrden extends StatefulWidget {
         onOrdenAnulada: onOrdenAnulada,
         client: client,
         duracionSegundos: duracionSegundos,
+        motivoInicial: motivoInicial,
+        observacionInicial: observacionInicial,
       ),
     );
   }
@@ -71,10 +88,19 @@ class _ModalAnularOrdenState extends State<ModalAnularOrden> {
   Timer? _timer;
   bool _heLeidoConfirmacion = false;
 
+  String? _motivoSeleccionado;
+  late final TextEditingController _observacionController;
+
   @override
   void initState() {
     super.initState();
     _segundosRestantes = widget.duracionSegundos;
+    _motivoSeleccionado = widget.motivoInicial ?? ModalAnularOrden.motivosDisponibles.first;
+    _observacionController = TextEditingController(text: widget.observacionInicial ?? '');
+    _observacionController.addListener(() {
+      if (mounted) setState(() {});
+    });
+
     if (_segundosRestantes > 0) {
       _iniciarTemporizador();
     }
@@ -101,6 +127,7 @@ class _ModalAnularOrdenState extends State<ModalAnularOrden> {
 
   @override
   void dispose() {
+    _observacionController.dispose();
     _timer?.cancel();
     super.dispose();
   }
@@ -117,7 +144,8 @@ class _ModalAnularOrdenState extends State<ModalAnularOrden> {
     try {
       await VentasService.anularOrden(
         widget.idOrden,
-        motivoAnulacion: null,
+        motivoAnulacion: _motivoSeleccionado,
+        observacionAnulacion: _observacionController.text.trim(),
         client: widget.client,
       );
 
@@ -171,6 +199,16 @@ class _ModalAnularOrdenState extends State<ModalAnularOrden> {
   Widget build(BuildContext context) {
     final bool tieneDineroPagado = widget.montoPagado > 0;
     final montoFormateado = CurrencyFormatter.formatCLP(widget.montoPagado);
+
+    final int obsLongitud = _observacionController.text.trim().length;
+    final bool observacionValida = obsLongitud >= 10;
+    final bool motivoValido = _motivoSeleccionado != null && _motivoSeleccionado!.isNotEmpty;
+    final bool tiempoCumplido = _segundosRestantes == 0;
+    final bool puedeConfirmar = !_isLoading &&
+        tiempoCumplido &&
+        _heLeidoConfirmacion &&
+        motivoValido &&
+        observacionValida;
 
     return AlertDialog(
       backgroundColor: AppPalette.surface,
@@ -355,7 +393,7 @@ class _ModalAnularOrdenState extends State<ModalAnularOrden> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Esta acción cancelará la orden de inmediato. Todo el stock reservado se liberará al catálogo general y quedará registrada la baja en auditoría.',
+                      'Esta acción cancelará la orden de inmediato. Todo el stock reservado se liberará al catálogo general y quedará registrada la baja en auditoría para Gerencia.',
                       style: AppTypography.small.copyWith(
                         color: const Color(0xFFFDE68A),
                         fontSize: 12,
@@ -379,8 +417,150 @@ class _ModalAnularOrdenState extends State<ModalAnularOrden> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
             ],
+
+            // 1. Selector de Motivo Tipificado (Auditoría Gerencia)
+            Text(
+              'Motivo de Anulación *',
+              style: AppTypography.small.copyWith(
+                fontWeight: FontWeight.bold,
+                color: AppPalette.textPrimary,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 4),
+            DropdownButtonFormField<String>(
+              key: const Key('select_motivo_anulacion'),
+              initialValue: _motivoSeleccionado,
+              dropdownColor: AppPalette.surface,
+              isExpanded: true,
+              style: AppTypography.body.copyWith(fontSize: 13, color: AppPalette.textPrimary),
+              decoration: InputDecoration(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                filled: true,
+                fillColor: AppPalette.background,
+                hintText: 'Seleccione un motivo tipificado...',
+                hintStyle: AppTypography.small.copyWith(color: AppPalette.textSecondary),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Colors.white24),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Colors.white24),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: AppPalette.primary, width: 1.5),
+                ),
+              ),
+              selectedItemBuilder: (BuildContext context) {
+                return ModalAnularOrden.motivosDisponibles.map<Widget>((String item) {
+                  return Text(
+                    item,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  );
+                }).toList();
+              },
+              items: ModalAnularOrden.motivosDisponibles.map((motivo) {
+                return DropdownMenuItem<String>(
+                  value: motivo,
+                  child: Text(
+                    motivo,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                    style: const TextStyle(fontSize: 12.5),
+                  ),
+                );
+              }).toList(),
+              onChanged: _isLoading
+                  ? null
+                  : (val) {
+                      setState(() {
+                        _motivoSeleccionado = val;
+                      });
+                    },
+            ),
+            const SizedBox(height: 12),
+
+            // 2. Justificación / Observación Detallada (Poka-Yoke >= 10 chars)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    'Justificación de Auditoría *',
+                    style: AppTypography.small.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: AppPalette.textPrimary,
+                      fontSize: 12,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '$obsLongitud / 10 mín.',
+                  key: const Key('contador_caracteres_anulacion'),
+                  style: AppTypography.small.copyWith(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11,
+                    color: observacionValida ? AppPalette.success : (obsLongitud > 0 ? AppPalette.warning : AppPalette.textSecondary),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            TextField(
+              key: const Key('input_observacion_anulacion'),
+              controller: _observacionController,
+              enabled: !_isLoading,
+              maxLines: 3,
+              minLines: 2,
+              style: AppTypography.body.copyWith(fontSize: 12.5, color: AppPalette.textPrimary),
+              decoration: InputDecoration(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                filled: true,
+                fillColor: AppPalette.background,
+                hintText: 'Detalle el motivo exacto de la cancelación para la bitácora de auditoría y gerencia...',
+                hintStyle: AppTypography.small.copyWith(color: AppPalette.textSecondary, fontSize: 11.5),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(
+                    color: obsLongitud > 0 && !observacionValida ? AppPalette.error : Colors.white24,
+                  ),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(
+                    color: obsLongitud > 0 && !observacionValida ? AppPalette.error : Colors.white24,
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(
+                    color: observacionValida ? AppPalette.success : AppPalette.primary,
+                    width: 1.5,
+                  ),
+                ),
+              ),
+            ),
+            if (obsLongitud > 0 && !observacionValida) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Faltan ${10 - obsLongitud} caracteres mínimos explicativos.',
+                style: AppTypography.small.copyWith(
+                  color: AppPalette.error,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+
             // Casilla de verificación obligatoria (He leído...)
             InkWell(
               key: const Key('check_confirmar_anulacion_tap'),
@@ -488,10 +668,6 @@ class _ModalAnularOrdenState extends State<ModalAnularOrden> {
           children: [
             Builder(
               builder: (context) {
-                final bool tiempoCumplido = _segundosRestantes == 0;
-                final bool puedeConfirmar =
-                    !_isLoading && tiempoCumplido && _heLeidoConfirmacion;
-
                 String textoBoton;
                 if (_isLoading) {
                   textoBoton = 'Anulando...';
@@ -574,4 +750,5 @@ class _ModalAnularOrdenState extends State<ModalAnularOrden> {
     );
   }
 }
+
 

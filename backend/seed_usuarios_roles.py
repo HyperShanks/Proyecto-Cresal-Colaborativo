@@ -88,6 +88,28 @@ USUARIOS_A_SEMBRAR = [
         "pin_acceso": "7007",
         "id_sucursal": 1,
         "estado": "Activo"
+    },
+    {
+        "id_rol": 8,
+        "email": "gerenteauditor@cresal.cl",
+        "rut_usuario": "11.222.222-1",
+        "nombres": "Carlos",
+        "apellidos": "Gerente Auditor",
+        "password_plano": "Password123!",
+        "pin_acceso": "8008",
+        "id_sucursal": 1,
+        "estado": "Activo"
+    },
+    {
+        "id_rol": 9,
+        "email": "gloria@cresal.cl",
+        "rut_usuario": "20.999.888-7",
+        "nombres": "Gloria",
+        "apellidos": "Recepción Patio",
+        "password_plano": "RecepcionApp2026-16",
+        "pin_acceso": "4598",
+        "id_sucursal": 1,
+        "estado": "Activo"
     }
 ]
 

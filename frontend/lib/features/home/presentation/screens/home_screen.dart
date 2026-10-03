@@ -644,21 +644,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         Expanded(
           child: _buildActionCard(
             context: context,
-            title: 'Recepción de Vehículo',
-            subtitle:
-                'Requiere OCR: Fotografiar el N° de ingreso físico del vehículo',
-            icon: Icons.local_shipping_outlined,
-            onTap: () => Navigator.pushNamed(context, '/recepcion'),
+            title: 'Buscador de Inventario',
+            subtitle: 'Consulta rápida por SKU, QR, Pasillo o Modelo',
+            icon: Icons.search_rounded,
+            onTap: () => Navigator.pushNamed(context, '/buscador'),
           ),
         ),
         const SizedBox(width: 12),
         Expanded(
           child: _buildActionCard(
             context: context,
-            title: 'Buscador de Inventario',
-            subtitle: 'Consulta rápida por SKU, QR, Pasillo o Modelo',
-            icon: Icons.search_rounded,
-            onTap: () => Navigator.pushNamed(context, '/buscador'),
+            title: 'Reingresos y Alertas',
+            subtitle: 'Bandeja de logística inversa y piezas devueltas',
+            icon: Icons.assignment_return_rounded,
+            onTap: () => Navigator.pushNamed(context, '/reingresos'),
           ),
         ),
       ],

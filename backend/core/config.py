@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     SUPABASE_URL: str
     SUPABASE_KEY: str
 
+    # Integración y Notificaciones Telegram (Gerencia)
+    TELEGRAM_BOT_TOKEN: str = ""
+    TELEGRAM_GERENCIA_CHAT_ID: str = ""
+    TELEGRAM_ENABLED: bool = True
+
+
 
 # Instanciamos la clase para poder importarla en otros archivos
 settings = Settings()

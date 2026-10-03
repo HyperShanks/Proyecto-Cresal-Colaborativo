@@ -19,6 +19,7 @@ Este documento detalla los usuarios activos cargados y sincronizados en la base 
 | **6** | **Jefe de Ventas** | Gastón Marcelo Zamora Herrera | `21.337.385-4` | `gastonzamoracc@gmail.com` | `Password123!` | `6006` | Viña del Mar (1) | Laptop / Monitor de Ventas | **Light Mode** (`ThemeMode.light`) |
 | **7** | **Vendedor Online** | Marcela Online Soto | `12.345.678-9` | `marcela.online@cresal.cl` | `Password123!` | `7007` | Viña del Mar (1) | Desktop Omnicanal | **Light Mode** (`ThemeMode.light`) |
 | **8** | **Auditor** *(Gerente Solo Lectura)* | Carlos Gerente Auditor | `13.456.789-0` | `gerenteauditor@cresal.cl` | `Password123!` | `8008` | Viña del Mar (1) | Desktop / Monitor Ejecutivo | **Light Mode** (`ThemeMode.light`) |
+| **9** | **Recepción (Patio)** | Gloria Recepción Patio | `20.999.888-7` | `gloria@cresal.cl` | `RecepcionApp2026-16` | `4598` | Viña del Mar (1) | Teléfono / Móvil Patio | **Dark Mode** (`ThemeMode.dark`) |
 
 ---
 
@@ -148,6 +149,25 @@ En la industria de software logístico y retail automotriz, la asignación de te
   - ❌ **Sin permisos de tasación**: No puede fijar ni actualizar precios comerciales de repuestos (`verificar_rol_tasacion` emite `403 Forbidden`). En la interfaz se ocultan automáticamente los botones de "Tasar" y "Precio".
   - ❌ **Sin anulación de ventas ni emisiones**: No puede anular órdenes de venta ni registrar transacciones operativas.
   - ❌ **Sin operaciones de bodega ni caja**: No puede liberar repuestos ni registrar cobros físicos.
+
+---
+
+### 9. Recepción (Patio - `id_rol = 9`)
+- **Usuario**: `gloria@cresal.cl`
+- **PIN**: `4598`
+- **Contraseña**: `RecepcionApp2026-16`
+- **RUT**: `20.999.888-7`
+- **UUID (`id_usuario`)**: `07e2069f-da72-4e88-b673-d1f97104bf32`
+- **Ruta Principal**: `/recepcion`
+- **Tema Visual**: Dark Mode (`ThemeMode.dark`)
+- **Módulos y Rutas Habilitadas**:
+  - `/recepcion`: Panel y bandeja de recepción vehicular de patio (correlativo en vivo, bandeja de entradas recientes y exportación de matriz A-M).
+  - `/recepcion/registro`: Formulario de ingreso de vehículos donantes con OCR asistido, switch S/PPU y chips inteligentes.
+  - `/tickets`: Soporte técnico y mesa de ayuda interna.
+- **Restricciones Explícitas de Seguridad (Principio de Menor Privilegio)**:
+  - ❌ **Sin acceso a Bodega / WMS**: No puede ingresar a `/paletizado`, `/etiqueta-preview`, `/alertas`, `/buscador` ni `/reingresos`.
+  - ❌ **Bloqueo a nivel API**: Los endpoints `/api/v1/bodega/*` rechazan las llamadas del token con `HTTP 403 Forbidden`.
+  - ❌ **Sin operaciones comerciales ni de caja**: No tiene acceso a cotizaciones, ventas, catálogo ni cobros.
 
 ---
 

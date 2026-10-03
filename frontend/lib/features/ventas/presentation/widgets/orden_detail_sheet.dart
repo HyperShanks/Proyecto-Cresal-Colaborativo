@@ -999,7 +999,7 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Orden Entregada / Completada',
+                                  'Orden Completada',
                                   style: AppTypography.title.copyWith(
                                     color: AppPalette.primary,
                                     fontSize: 14.0,
@@ -1008,7 +1008,7 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                                 ),
                                 const SizedBox(height: 4.0),
                                 Text(
-                                  'El ciclo operativo de esta venta se encuentra cerrado y validado.',
+                                  'Los repuestos fueron validados y entregados exitosamente en barrera de bodega.',
                                   style: AppTypography.small.copyWith(
                                     color: AppPalette.textSecondary,
                                     fontSize: 12.0,
@@ -1033,7 +1033,8 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                     // Botón Editar Instrucciones a Bodega (solo para órdenes Reservadas con repuestos inventariados)
                     if (_orden.esReservada &&
                         (_orden.contieneMotorOCaja ||
-                            _orden.detalles.any((d) => d.esInventariado))) ...[
+                            _orden.detalles.any((d) => d.esInventariado) ||
+                            _orden.detalles.isEmpty)) ...[
                       SizedBox(
                         width: double.infinity,
                         height: 48.0,
