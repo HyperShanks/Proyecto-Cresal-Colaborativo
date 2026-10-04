@@ -28,6 +28,7 @@ from models import (
     Despacho,
 )
 from core.security import create_access_token, hash_password
+from routers.gerencia import calcular_limites_temporales_chile
 from conftest import TestingSessionLocal
 
 tz_chile = ZoneInfo("America/Santiago")
@@ -150,7 +151,19 @@ def db_session_gerencia(setup_database):
             pin_acceso="8001",
             estado="Activo",
         )
-        db.add_all([user_gerente, user_admin, user_vendedor, user_bodeguero, user_auditor])
+        user_auditor_limache = Usuario(
+            id_usuario=uuid.uuid4(),
+            id_rol=8,
+            id_sucursal=102,
+            rut_usuario="17.890.123-4",
+            nombres="Auditor",
+            apellidos="Limache",
+            email="auditor.limache@cresal.cl",
+            password_hash=hash_password("limache123"),
+            pin_acceso="8002",
+            estado="Activo",
+        )
+        db.add_all([user_gerente, user_admin, user_vendedor, user_bodeguero, user_auditor, user_auditor_limache])
 
         # 5. Clientes
         cli1 = Cliente(
@@ -330,11 +343,12 @@ def db_session_gerencia(setup_database):
         )
         db.add(pago4_anulado)
 
-        # Pago MTD
-        if ahora_chile.day > 5:
-            fecha_mtd = hoy_utc - timedelta(days=3)
+        # Pago MTD (debe caer dentro del mes pero antes de hoy para no duplicar ventas del día)
+        inicio_hoy_test_utc, _, _ = calcular_limites_temporales_chile()
+        if ahora_chile.day > 1:
+            fecha_mtd = inicio_hoy_test_utc - timedelta(hours=2)
         else:
-            fecha_mtd = hoy_utc - timedelta(hours=12)
+            fecha_mtd = inicio_hoy_test_utc + timedelta(hours=1)
 
         ord_mtd = Orden_Venta(
             id_orden=uuid.uuid4(),
@@ -365,6 +379,7 @@ def db_session_gerencia(setup_database):
             "user_vendedor": user_vendedor,
             "user_bodeguero": user_bodeguero,
             "user_auditor": user_auditor,
+            "user_auditor_limache": user_auditor_limache,
             "sucursal_1": 101,
             "sucursal_2": 102,
         }
@@ -588,3 +603,54 @@ def test_auditor_zero_trust_read_only_and_mutation_blocked(
     resp_anular = client.post(f"/api/v1/ordenes/{fake_order_id}/anular", headers=headers)
     assert resp_anular.status_code == 403
     assert "Auditoría no posee permisos" in resp_anular.json()["detail"]
+
+
+def test_auditor_satelite_limache_aislamiento_estricto(
+    client, db_session_gerencia
+):
+    """
+    Verifica el aislamiento estricto Zero-Trust del Auditor de Sucursal Satélite (Limache, id_rol=8, id_sucursal=102):
+    1. Bloqueo 403 Forbidden a /dashboard/kpis.
+    2. Bloqueo 403 Forbidden a /dashboard/pagos.
+    3. Bloqueo 403 Forbidden a /dashboard/operativa.
+    4. Bloqueo 403 Forbidden a /backorders.
+    5. Bloqueo 403 Forbidden a /api/v1/ordenes (historial de clientes).
+    6. Permiso 200 OK a /api/v1/gerencia/sucursales (para listado de sucursales en selector).
+    7. Permiso 200 OK a /api/v1/inventario/maestro (para consulta de stock de Viña del Mar y Limache).
+    """
+    auditor_limache = db_session_gerencia["user_auditor_limache"]
+    token = create_access_token(
+        data={"sub": str(auditor_limache.id_usuario), "rol": auditor_limache.id_rol}
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. KPIs ejecutivos bloqueados
+    r_kpi = client.get("/api/v1/gerencia/dashboard/kpis", headers=headers)
+    assert r_kpi.status_code == 403
+    assert "sucursal satélite" in r_kpi.json()["detail"].lower()
+
+    # 2. Resumen pagos bloqueado
+    r_pagos = client.get("/api/v1/gerencia/dashboard/pagos", headers=headers)
+    assert r_pagos.status_code == 403
+
+    # 3. Pulso operativo bloqueado
+    r_flujo = client.get("/api/v1/gerencia/dashboard/operativa", headers=headers)
+    assert r_flujo.status_code == 403
+
+    # 4. Backorders bloqueados
+    r_backorders = client.get("/api/v1/gerencia/backorders", headers=headers)
+    assert r_backorders.status_code == 403
+
+    # 5. Historial de órdenes bloqueado
+    r_ordenes = client.get("/api/v1/ordenes", headers=headers)
+    assert r_ordenes.status_code == 403
+    assert "sucursal satélite" in r_ordenes.json()["detail"].lower()
+
+    # 6. Sucursales permitido para selector
+    r_suc = client.get("/api/v1/gerencia/sucursales", headers=headers)
+    assert r_suc.status_code == 200
+    assert len(r_suc.json()) >= 2
+
+    # 7. Maestro de inventario multi-sucursal permitido para chequear stock de Viña del Mar
+    r_inv = client.get("/api/v1/inventario/maestro?id_sucursal=101", headers=headers)
+    assert r_inv.status_code == 200

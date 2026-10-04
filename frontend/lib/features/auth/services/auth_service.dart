@@ -69,6 +69,12 @@ class AuthService {
   /// Retorna inmediatamente el modelo de usuario cacheado en memoria si existe
   static AuthUserModel? get cachedUser => _currentUserCache;
 
+  /// Permite inyectar o limpiar el usuario en memoria para pruebas unitarias
+  @visibleForTesting
+  static void setMockUserCache(AuthUserModel? user) {
+    _currentUserCache = user;
+  }
+
   static const _storage = FlutterSecureStorage(
     aOptions: AndroidOptions(
       encryptedSharedPreferences: true,
@@ -418,6 +424,23 @@ class AuthService {
     final rLower = rol?.toLowerCase() ?? '';
     return rLower == 'auditor';
   }
+
+  /// Verifica si el usuario actual es un Auditor de Sucursal Satélite (id_rol == 8 y id_sucursal != 1).
+  /// Estos usuarios tienen acceso restringido exclusivamente al inventario/catálogo para consulta de stock.
+  static Future<bool> esAuditorSucursal() async {
+    final auditor = await esAuditor();
+    if (!auditor) return false;
+    final sucursalId = await getSucursalId();
+    return sucursalId != null && sucursalId != 1;
+  }
+
+  /// Determina de forma sincrónica e inmediata (0 ms) si el usuario en memoria RAM
+  /// es un Auditor de Sucursal Satélite (id_rol == 8 y id_sucursal != 1).
+  /// Útil para inicializar estados de UI en el Frame 0 sin parpadeos visuales (FOUC).
+  static bool get esAuditorSucursalSync =>
+      _currentUserCache != null &&
+      _currentUserCache!.idRol == 8 &&
+      _currentUserCache!.idSucursal != 1;
 
   /// Verifica si el usuario actual tiene permisos para tasar o fijar precios.
   /// Solo disponible para Gerencia General (4), Administrador (5) y Jefe de Ventas (6).

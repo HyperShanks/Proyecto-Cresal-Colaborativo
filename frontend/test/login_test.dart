@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:frontend/features/auth/services/auth_service.dart';
+import 'package:frontend/features/auth/models/auth_user_model.dart';
 import 'package:frontend/features/auth/presentation/screens/splash_screen.dart';
 import 'package:frontend/features/home/presentation/screens/home_screen.dart';
 import 'package:frontend/routes/app_routes.dart';
@@ -62,6 +63,64 @@ void main() {
       await const FlutterSecureStorage().write(key: 'user_id_rol', value: '1');
       await const FlutterSecureStorage().write(key: 'user_rol', value: 'Bodeguero');
       expect(await AuthService.esGerente(), isFalse);
+    });
+
+    test('esAuditor retorna true solo para id_rol 8 o rol Auditor', () async {
+      await const FlutterSecureStorage().write(key: 'user_id_rol', value: '8');
+      await const FlutterSecureStorage().write(key: 'user_rol', value: 'Auditor');
+      expect(await AuthService.esAuditor(), isTrue);
+
+      await const FlutterSecureStorage().write(key: 'user_id_rol', value: '4');
+      await const FlutterSecureStorage().write(key: 'user_rol', value: 'Gerente');
+      expect(await AuthService.esAuditor(), isFalse);
+    });
+
+    test('esAuditorSucursal distingue entre Auditor Casa Matriz (sucursal 1) y Auditor Satélite (sucursal 2)', () async {
+      // Auditor Limache (sucursal 2) -> true
+      await const FlutterSecureStorage().write(key: 'user_id_rol', value: '8');
+      await const FlutterSecureStorage().write(key: 'user_rol', value: 'Auditor');
+      await const FlutterSecureStorage().write(key: 'user_sucursal_id', value: '2');
+      expect(await AuthService.esAuditorSucursal(), isTrue);
+
+      // Auditor Ricardo Crovetto / Casa Matriz (sucursal 1) -> false
+      await const FlutterSecureStorage().write(key: 'user_sucursal_id', value: '1');
+      expect(await AuthService.esAuditorSucursal(), isFalse);
+
+      // Gerente general en sucursal 2 -> false (no es auditor)
+      await const FlutterSecureStorage().write(key: 'user_id_rol', value: '4');
+      await const FlutterSecureStorage().write(key: 'user_rol', value: 'Gerente');
+      expect(await AuthService.esAuditorSucursal(), isFalse);
+    });
+
+    test('esAuditorSucursalSync resuelve instantáneamente en RAM sin latencia de disco', () {
+      AuthService.setMockUserCache(null);
+      expect(AuthService.esAuditorSucursalSync, isFalse);
+
+      AuthService.setMockUserCache(const AuthUserModel(
+        idUsuario: 'usr-1',
+        rutUsuario: '11.111.111-1',
+        nombres: 'Auditor',
+        apellidos: 'Limache',
+        email: 'auditor.limache@cresal.cl',
+        idRol: 8,
+        nombreRol: 'Auditor',
+        idSucursal: 2,
+      ));
+      expect(AuthService.esAuditorSucursalSync, isTrue);
+
+      AuthService.setMockUserCache(const AuthUserModel(
+        idUsuario: 'usr-2',
+        rutUsuario: '22.222.222-2',
+        nombres: 'Ricardo',
+        apellidos: 'Crovetto',
+        email: 'gerenteauditor@cresal.cl',
+        idRol: 8,
+        nombreRol: 'Auditor',
+        idSucursal: 1,
+      ));
+      expect(AuthService.esAuditorSucursalSync, isFalse);
+
+      AuthService.setMockUserCache(null);
     });
 
     test('AppRoutes.getHomeRouteForRole resuelve rutas según SSOT', () {

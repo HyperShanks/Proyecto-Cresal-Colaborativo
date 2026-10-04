@@ -175,20 +175,23 @@ class _BandejaCobrosPanelState extends State<BandejaCobrosPanel> {
       child: Row(
         children: [
           _buildPill(
-            label: 'Todos (${provider.totalCobros})',
-            isSelected: provider.filtroTipo == 'TODOS',
-            onTap: () => provider.setFiltroTipo('TODOS'),
+            label: 'Ventas en Tienda (${provider.totalVentasCount})',
+            isSelected: provider.filtroTipo == 'VENTA',
+            activeColor: const Color(0xFFB78103),
+            onTap: () => provider.setFiltroTipo('VENTA'),
           ),
           const SizedBox(width: 4),
           _buildPill(
-            label: 'Saldos Venta (${provider.totalVentasCount})',
-            isSelected: provider.filtroTipo == 'VENTA',
-            onTap: () => provider.setFiltroTipo('VENTA'),
+            label: 'Abonos Activos (${provider.totalAbonosCount})',
+            isSelected: provider.filtroTipo == 'ABONOS' || provider.filtroTipo == 'ABONO',
+            activeColor: const Color(0xFF7E22CE),
+            onTap: () => provider.setFiltroTipo('ABONOS'),
           ),
           const SizedBox(width: 4),
           _buildPill(
             label: 'Ventas en Verde (${provider.totalBackordersCount})',
             isSelected: provider.filtroTipo == 'BACKORDER',
+            activeColor: const Color(0xFF4F46E5),
             onTap: () => provider.setFiltroTipo('BACKORDER'),
           ),
         ],
@@ -200,10 +203,11 @@ class _BandejaCobrosPanelState extends State<BandejaCobrosPanel> {
     required String label,
     required bool isSelected,
     required VoidCallback onTap,
+    Color? activeColor,
   }) {
     final bgColor = isSelected ? AppPalette.surfaceLight : Colors.transparent;
     final textColor = isSelected
-        ? AppPalette.primary
+        ? (activeColor ?? AppPalette.primary)
         : AppPalette.textSecondaryLight;
 
     return Expanded(
@@ -230,8 +234,8 @@ class _BandejaCobrosPanelState extends State<BandejaCobrosPanel> {
             label,
             style: AppTypography.small.copyWith(
               color: textColor,
-              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-              fontSize: 13,
+              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
+              fontSize: 12,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,

@@ -26,7 +26,7 @@ from models import (
     Categoria_Activo,
     Reservas_Backorder,
 )
-from core.security import require_gerencia_role
+from core.security import require_gerencia_role, require_gerencia_o_auditor_central
 from schemas import (
     KpiFinancieroDTO,
     ResumenPagosDTO,
@@ -126,7 +126,7 @@ def obtener_kpis_financieros(
         description="ID de sucursal. Si se omite, consolida toda la cadena.",
     ),
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_gerencia_role),
+    current_user: Usuario = Depends(require_gerencia_o_auditor_central),
 ):
     """
     Calculo los KPIs financieros en tiempo real.
@@ -216,7 +216,7 @@ def obtener_resumen_pagos(
         description="ID de sucursal. Si se omite, consolida toda la cadena.",
     ),
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_gerencia_role),
+    current_user: Usuario = Depends(require_gerencia_o_auditor_central),
 ):
     """
     Agrupo los métodos de pago de hoy para generar el gráfico Donut.
@@ -308,7 +308,7 @@ def obtener_flujo_operativo(
         description="ID de sucursal. Si se omite, consolida toda la cadena.",
     ),
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_gerencia_role),
+    current_user: Usuario = Depends(require_gerencia_o_auditor_central),
 ):
     """
     Calculo el flujo logístico de bodega: ítems en preparación física,
@@ -451,7 +451,7 @@ def obtener_backorders_gerencia(
     q: Optional[str] = Query(None, description="Búsqueda predictiva (Folio, Cliente, Vendedor, Marca, Modelo)"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    current_user: Usuario = Depends(require_gerencia_role),
+    current_user: Usuario = Depends(require_gerencia_o_auditor_central),
     db: Session = Depends(get_db),
 ):
     query = (
@@ -568,7 +568,7 @@ def obtener_backorders_gerencia(
 )
 def obtener_kpis_backorders_gerencia(
     id_sucursal: Optional[int] = Query(None, description="Filtrar por sucursal"),
-    current_user: Usuario = Depends(require_gerencia_role),
+    current_user: Usuario = Depends(require_gerencia_o_auditor_central),
     db: Session = Depends(get_db),
 ):
     query = db.query(Reservas_Backorder)

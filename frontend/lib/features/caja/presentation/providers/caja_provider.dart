@@ -15,7 +15,7 @@ class CajaProvider extends ChangeNotifier {
   List<CobroPendienteModel> _todosLosCobros = [];
   List<CobroPendienteModel> _cobrosFiltrados = [];
   CobroPendienteModel? _ordenSeleccionada;
-  String _filtroTipo = 'TODOS'; // 'TODOS' | 'VENTA' | 'BACKORDER'
+  String _filtroTipo = 'VENTA'; // 'VENTA' | 'ABONOS' | 'BACKORDER' | 'TODOS'
   String _terminoBusqueda = '';
   bool _isLoading = false;
   bool _isRefreshing = false;
@@ -45,8 +45,12 @@ class CajaProvider extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   int get totalCobros => _todosLosCobros.length;
 
-  int get totalVentasCount => _todosLosCobros.where((c) => c.esVenta).length;
-  int get totalBackordersCount => _todosLosCobros.where((c) => c.esBackorder).length;
+  int get totalVentasCount =>
+      _todosLosCobros.where((c) => c.esVenta && c.abonoPrevio == 0).length;
+  int get totalAbonosCount =>
+      _todosLosCobros.where((c) => c.abonoPrevio > 0 && c.saldoPendiente > 0).length;
+  int get totalBackordersCount =>
+      _todosLosCobros.where((c) => c.esBackorder && c.abonoPrevio == 0).length;
 
   int get montoTotalPendiente =>
       _todosLosCobros.fold(0, (sum, item) => sum + item.montoACobrar);
@@ -201,14 +205,7 @@ class CajaProvider extends ChangeNotifier {
   void _aplicarFiltrosLocales() {
     var resultado = List<CobroPendienteModel>.from(_todosLosCobros);
 
-    // Filtro por píldora de tipo
-    if (_filtroTipo == 'VENTA') {
-      resultado = resultado.where((c) => c.esVenta).toList();
-    } else if (_filtroTipo == 'BACKORDER') {
-      resultado = resultado.where((c) => c.esBackorder).toList();
-    }
-
-    // Filtro por término de búsqueda (multicriterio)
+    // Búsqueda global reactiva: si hay término de búsqueda, busca en todo el universo de cobros
     if (_terminoBusqueda.trim().isNotEmpty) {
       final query = _terminoBusqueda.trim().toLowerCase();
       resultado = resultado.where((c) {
@@ -221,6 +218,16 @@ class CajaProvider extends ChangeNotifier {
             rut.contains(query) ||
             vendedor.contains(query);
       }).toList();
+    } else {
+      // Si no hay búsqueda activa, se aplica el filtro de la píldora seleccionada
+      if (_filtroTipo == 'VENTA') {
+        resultado = resultado.where((c) => c.esVenta && c.abonoPrevio == 0).toList();
+      } else if (_filtroTipo == 'ABONOS' || _filtroTipo == 'ABONO') {
+        resultado = resultado.where((c) => c.abonoPrevio > 0 && c.saldoPendiente > 0).toList();
+      } else if (_filtroTipo == 'BACKORDER') {
+        resultado = resultado.where((c) => c.esBackorder && c.abonoPrevio == 0).toList();
+      }
+      // Si _filtroTipo == 'TODOS', se preserva el listado completo
     }
 
     _cobrosFiltrados = resultado;

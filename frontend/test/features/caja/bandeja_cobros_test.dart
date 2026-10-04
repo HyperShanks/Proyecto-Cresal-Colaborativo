@@ -96,11 +96,13 @@ void main() {
 
   late MockCajaService mockService;
   late CobroPendienteModel sampleVenta;
+  late CobroPendienteModel sampleAbono;
   late CobroPendienteModel sampleBackorder;
 
   setUp(() {
     mockService = MockCajaService();
 
+    // Venta en Tienda (pura, sin abonos previos)
     sampleVenta = CobroPendienteModel(
       idReferencia: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
       folioDocumento: 'ORD-9780',
@@ -112,10 +114,10 @@ void main() {
       fechaEmision: DateTime.now().subtract(const Duration(minutes: 15)),
       fechaEmisionFormateada: '21/08/2026',
       horaEmisionFormateada: '11:38',
-      totalOperacion: 650000,
-      abonoPrevio: 150000,
-      saldoPendiente: 500000,
-      montoACobrar: 500000,
+      totalOperacion: 550000,
+      abonoPrevio: 0,
+      saldoPendiente: 550000,
+      montoACobrar: 550000,
       articulos: [
         ArticuloResumenModel(
           cantidad: 1,
@@ -129,6 +131,45 @@ void main() {
       especificacionesBackorder: null,
     );
 
+    // Venta con Abono Activo previo registrado
+    sampleAbono = CobroPendienteModel(
+      idReferencia: 'a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d',
+      folioDocumento: 'ORD-8820',
+      tipoOperacion: 'VENTA',
+      estadoDocumento: 'Reservada',
+      clienteNombre: 'Fernando Gonzalez Soto',
+      clienteRut: '16.543.210-9',
+      vendedorNombre: 'Juaquin Leiva',
+      fechaEmision: DateTime.now().subtract(const Duration(days: 2)),
+      fechaEmisionFormateada: '19/08/2026',
+      horaEmisionFormateada: '15:20',
+      totalOperacion: 650000,
+      abonoPrevio: 150000,
+      saldoPendiente: 500000,
+      montoACobrar: 500000,
+      historialAbonos: [
+        HistorialAbonoItemModel(
+          idPago: 'pago-001',
+          monto: 150000,
+          metodoPago: 'Efectivo',
+          fechaPago: DateTime.now().subtract(const Duration(days: 2)),
+          fechaPagoFormateada: '19/08/2026',
+          horaPagoFormateada: '15:30',
+        ),
+      ],
+      articulos: [
+        ArticuloResumenModel(
+          cantidad: 1,
+          tipo: 'INVENTARIADO',
+          descripcion: 'Caja de Cambios Manual Peugeot 206',
+          sku: 'CAJ-PEU-206-001',
+          precio: 650000,
+          subtotal: 650000,
+        ),
+      ],
+    );
+
+    // Venta en Verde (Backorder nuevo sin abono previo)
     sampleBackorder = CobroPendienteModel(
       idReferencia: '7c9e6679-7425-40de-944b-e07fc1f90ae7',
       folioDocumento: 'RES-5401',
@@ -141,9 +182,9 @@ void main() {
       fechaEmisionFormateada: '21/08/2026',
       horaEmisionFormateada: '12:20',
       totalOperacion: 1200000,
-      abonoPrevio: 900000,
-      saldoPendiente: 300000,
-      montoACobrar: 300000,
+      abonoPrevio: 0,
+      saldoPendiente: 1200000,
+      montoACobrar: 1200000,
       articulos: [],
       especificacionesBackorder: BackorderEspecificacionesModel(
         marca: 'Hyundai',
@@ -156,7 +197,7 @@ void main() {
       ),
     );
 
-    mockService.dummyItems = [sampleVenta, sampleBackorder];
+    mockService.dummyItems = [sampleVenta, sampleAbono, sampleBackorder];
   });
 
   group('SPEC-HU-4.2: DTOs & Model Tests', () {
@@ -164,7 +205,7 @@ void main() {
       final json = sampleVenta.toJson();
       expect(json['folio_documento'], 'ORD-9780');
       expect(json['tipo_operacion'], 'VENTA');
-      expect(json['monto_a_cobrar'], 500000);
+      expect(json['monto_a_cobrar'], 550000);
       expect(sampleVenta.esVenta, isTrue);
       expect(sampleVenta.esBackorder, isFalse);
 
@@ -179,38 +220,80 @@ void main() {
   });
 
   group('SPEC-HU-4.2: CajaProvider State Tests', () {
-    test('CajaProvider carga cobros, calcula totales y selecciona orden', () async {
+    test('CajaProvider carga cobros, calcula totales por categoría y selecciona orden', () async {
       final provider = CajaProvider(cajaService: mockService);
       expect(provider.cobros, isEmpty);
 
       await provider.cargarCobrosPendientes(sucursalId: 1);
 
-      expect(provider.cobros.length, 2);
-      expect(provider.totalCobros, 2);
+      // Por defecto arranca en 'VENTA' (Ventas en Tienda)
+      expect(provider.filtroTipo, 'VENTA');
+      expect(provider.cobros.length, 1);
+      expect(provider.cobros.first.folioDocumento, 'ORD-9780');
+
+      expect(provider.totalCobros, 3);
       expect(provider.totalVentasCount, 1);
+      expect(provider.totalAbonosCount, 1);
       expect(provider.totalBackordersCount, 1);
-      expect(provider.montoTotalPendiente, 800000);
+      expect(provider.montoTotalPendiente, 2250000);
 
       // Selección de orden
       provider.seleccionarOrden(sampleVenta);
       expect(provider.ordenSeleccionada?.idReferencia, sampleVenta.idReferencia);
     });
 
-    test('CajaProvider filtra por píldoras VENTA y BACKORDER', () async {
+    test('CajaProvider filtra correctamente por VENTA, ABONOS y BACKORDER', () async {
       final provider = CajaProvider(cajaService: mockService);
       await provider.cargarCobrosPendientes(sucursalId: 1);
 
+      // Píldora Venta en Tienda
       provider.setFiltroTipo('VENTA');
       await Future.delayed(Duration.zero);
       expect(provider.filtroTipo, 'VENTA');
       expect(provider.cobros.length, 1);
       expect(provider.cobros.first.folioDocumento, 'ORD-9780');
 
+      // Píldora Abonos Activos
+      provider.setFiltroTipo('ABONOS');
+      await Future.delayed(Duration.zero);
+      expect(provider.filtroTipo, 'ABONOS');
+      expect(provider.cobros.length, 1);
+      expect(provider.cobros.first.folioDocumento, 'ORD-8820');
+
+      // Píldora Ventas en Verde
       provider.setFiltroTipo('BACKORDER');
       await Future.delayed(Duration.zero);
       expect(provider.filtroTipo, 'BACKORDER');
       expect(provider.cobros.length, 1);
       expect(provider.cobros.first.folioDocumento, 'RES-5401');
+    });
+
+    test('CajaProvider búsqueda global encuentra órdenes de cualquier categoría reactivamente', () async {
+      final provider = CajaProvider(cajaService: mockService);
+      await provider.cargarCobrosPendientes(sucursalId: 1);
+
+      // Estando en pestaña VENTA, buscar cliente de Backorder 'Camila'
+      provider.setFiltroTipo('VENTA');
+      expect(provider.cobros.first.folioDocumento, 'ORD-9780');
+
+      provider.buscar('Camila');
+      await Future.delayed(const Duration(milliseconds: 200));
+
+      // Búsqueda global encuentra a Camila a pesar de estar parada en VENTA
+      expect(provider.cobros.length, 1);
+      expect(provider.cobros.first.folioDocumento, 'RES-5401');
+
+      // Buscar abono activo por RUT
+      provider.buscar('16.543.210-9');
+      await Future.delayed(const Duration(milliseconds: 200));
+      expect(provider.cobros.length, 1);
+      expect(provider.cobros.first.folioDocumento, 'ORD-8820');
+
+      // Limpiar búsqueda restaura la categoría seleccionada
+      provider.buscar('');
+      await Future.delayed(const Duration(milliseconds: 200));
+      expect(provider.cobros.length, 1);
+      expect(provider.cobros.first.folioDocumento, 'ORD-9780');
     });
 
     test('CajaProvider maneja errores de red adecuadamente', () async {
@@ -224,7 +307,7 @@ void main() {
   });
 
   group('SPEC-HU-4.2: CobroPendienteCard Widget Tests', () {
-    testWidgets('CobroPendienteCard renderiza datos de Venta y badge Ámbar', (tester) async {
+    testWidgets('CobroPendienteCard renderiza datos de Venta en Tienda y badge Ámbar', (tester) async {
       tester.view.physicalSize = const Size(500, 800);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -249,11 +332,38 @@ void main() {
       expect(find.text('Cristobal Alejandro Espinoza Perez'), findsOneWidget);
       expect(find.text('RUT: 14.892.401-2'), findsOneWidget);
       expect(find.text('Vendedor: Juaquin Leiva'), findsOneWidget);
-      expect(find.text('Saldo Pendiente:'), findsOneWidget);
-      expect(find.text('\$500.000'), findsOneWidget);
+      expect(find.text('Total a Pagar:'), findsOneWidget);
+      expect(find.text('\$550.000'), findsOneWidget);
 
       await tester.tap(find.byType(CobroPendienteCard));
       expect(tapped, isTrue);
+    });
+
+    testWidgets('CobroPendienteCard renderiza datos de Abono Activo y badge Morado', (tester) async {
+      tester.view.physicalSize = const Size(500, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: CobroPendienteCard(
+              orden: sampleAbono,
+              isSelected: true,
+              onTap: () {},
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('ORD-8820'), findsOneWidget);
+      expect(find.text('Abono Activo'), findsOneWidget);
+      expect(find.text('Fernando Gonzalez Soto'), findsOneWidget);
+      expect(find.text('Saldo Pendiente:'), findsOneWidget);
+      expect(find.text('\$500.000'), findsOneWidget);
+      expect(find.textContaining('Último abono: 19/08/2026'), findsOneWidget);
+      expect(find.textContaining('Total: \$650.000 • Abonado: \$150.000'), findsOneWidget);
     });
 
     testWidgets('CobroPendienteCard renderiza datos de Backorder y badge Índigo', (tester) async {
@@ -277,13 +387,13 @@ void main() {
       expect(find.text('RES-5401'), findsOneWidget);
       expect(find.text('Ventas en Verde'), findsOneWidget);
       expect(find.text('Camila Andrea Soto Lagos'), findsOneWidget);
-      expect(find.text('Saldo Pendiente:'), findsOneWidget);
-      expect(find.text('\$300.000'), findsOneWidget);
+      expect(find.text('Total Reserva:'), findsOneWidget);
+      expect(find.text('\$1.200.000'), findsOneWidget);
     });
   });
 
   group('SPEC-HU-4.2: BandejaCobrosPanel & Zero State Widget Tests', () {
-    testWidgets('BandejaCobrosPanel renderiza cabecera, buscador, píldoras y lista de tarjetas', (tester) async {
+    testWidgets('BandejaCobrosPanel renderiza cabecera, buscador, 3 píldoras y lista de tarjetas', (tester) async {
       tester.view.physicalSize = const Size(600, 900);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -309,25 +419,30 @@ void main() {
 
       expect(find.text('CAJA'), findsOneWidget);
       expect(find.text('Pagos Pendientes'), findsOneWidget);
-      expect(find.text('2 órdenes esperando cobro'), findsOneWidget);
-      expect(find.text('Todos (2)'), findsOneWidget);
-      expect(find.text('Saldos Venta (1)'), findsOneWidget);
+      expect(find.text('3 órdenes esperando cobro'), findsOneWidget);
+      expect(find.text('Ventas en Tienda (1)'), findsOneWidget);
+      expect(find.text('Abonos Activos (1)'), findsOneWidget);
       expect(find.text('Ventas en Verde (1)'), findsOneWidget);
-      expect(find.text('ORD-9780'), findsOneWidget);
-      expect(find.text('RES-5401'), findsOneWidget);
 
-      // Tap en píldora Saldos Venta
-      await tester.tap(find.text('Saldos Venta (1)'));
-      await tester.pumpAndSettle();
+      // Estado inicial en Ventas en Tienda
       expect(find.text('ORD-9780'), findsOneWidget);
+      expect(find.text('ORD-8820'), findsNothing);
       expect(find.text('RES-5401'), findsNothing);
 
-      // Búsqueda en caja de texto
+      // Tap en píldora Abonos Activos
+      await tester.tap(find.text('Abonos Activos (1)'));
+      await tester.pumpAndSettle();
+      expect(find.text('ORD-8820'), findsOneWidget);
+      expect(find.text('ORD-9780'), findsNothing);
+      expect(find.text('RES-5401'), findsNothing);
+
+      // Búsqueda global en caja de texto por cliente de otra categoría
       final searchInput = find.byType(TextField);
-      await tester.enterText(searchInput, 'Cristobal');
+      await tester.enterText(searchInput, 'Camila');
       await tester.pump(const Duration(milliseconds: 350));
       await tester.pumpAndSettle();
-      expect(find.text('ORD-9780'), findsOneWidget);
+      expect(find.text('RES-5401'), findsOneWidget);
+      expect(find.text('ORD-8820'), findsNothing);
     });
 
     testWidgets('BandejaCobrosPanel renderiza Zero State cuando no hay órdenes', (tester) async {
@@ -395,7 +510,9 @@ void main() {
       expect(find.text('Motor MG ZS 1.5 VTi-Tech Completo'), findsWidgets);
       expect(find.text('TOTAL VENTA'), findsOneWidget);
 
-      // Seleccionar orden de Backorder (RES-5401)
+      // Cambiar a pestaña Ventas en Verde y seleccionar RES-5401
+      await tester.tap(find.text('Ventas en Verde (1)'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('RES-5401').first);
       await tester.pumpAndSettle();
 

@@ -39,28 +39,42 @@ class CobroPendienteCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isVenta = orden.esVenta;
-    final bool tieneAbonoInicial =
-        (orden.abonoRequerido > 0 ||
-            (orden.montoACobrar > 0 &&
-                orden.montoACobrar < orden.totalOperacion)) &&
-        orden.esPrimerAbono;
+    final bool esAbonoActivo =
+        orden.abonoPrevio > 0 && orden.saldoPendiente > 0;
     final int montoAbonoInicial = orden.abonoRequerido > 0
         ? orden.abonoRequerido
         : orden.montoACobrar;
+    final bool tieneAbonoInicial = orden.esPrimerAbono &&
+        montoAbonoInicial > 0 &&
+        montoAbonoInicial < orden.totalOperacion &&
+        orden.saldoPendiente > 0;
 
-    final badgeBg = isVenta
-        ? AppPalette.secondary.withValues(alpha: 0.15)
-        : const Color(0xFF4F46E5).withValues(alpha: 0.12);
-    final badgeBorder = isVenta
-        ? AppPalette.secondary.withValues(alpha: 0.5)
-        : const Color(0xFF4F46E5).withValues(alpha: 0.4);
-    final badgeColor = isVenta
-        ? const Color(0xFFB78103)
-        : const Color(0xFF4F46E5);
-    final badgeText = isVenta ? 'Venta en Tienda' : 'Ventas en Verde';
-    final badgeIcon = isVenta
-        ? Icons.storefront_rounded
-        : Icons.directions_boat_filled_outlined;
+    // Preservar la identidad de Ventas en Verde aún cuando tengan abonos
+    final bool esAbonoTienda = isVenta && esAbonoActivo;
+
+    final badgeBg = !isVenta
+        ? const Color(0xFF4F46E5).withValues(alpha: 0.12)
+        : (esAbonoTienda
+            ? const Color(0xFFF3E8FF)
+            : AppPalette.secondary.withValues(alpha: 0.15));
+    final badgeBorder = !isVenta
+        ? const Color(0xFF4F46E5).withValues(alpha: 0.4)
+        : (esAbonoTienda
+            ? const Color(0xFFC084FC)
+            : AppPalette.secondary.withValues(alpha: 0.5));
+    final badgeColor = !isVenta
+        ? const Color(0xFF4F46E5)
+        : (esAbonoTienda
+            ? const Color(0xFF7E22CE)
+            : const Color(0xFFB78103));
+    final badgeText = !isVenta
+        ? 'Ventas en Verde'
+        : (esAbonoTienda ? 'Abono Activo' : 'Venta en Tienda');
+    final badgeIcon = !isVenta
+        ? Icons.directions_boat_filled_outlined
+        : (esAbonoTienda
+            ? Icons.savings_rounded
+            : Icons.storefront_rounded);
 
     final borderColor = isSelected
         ? AppPalette.primary
@@ -69,7 +83,11 @@ class CobroPendienteCard extends StatelessWidget {
         ? AppPalette.primary.withValues(alpha: 0.04)
         : AppPalette.surfaceLight;
 
-    final relativeTime = _calcTiempoRelativo(orden.fechaEmision);
+    final DateTime fechaReferencia =
+        (esAbonoActivo && orden.historialAbonos.isNotEmpty)
+            ? orden.historialAbonos.last.fechaPago
+            : orden.fechaEmision;
+    final relativeTime = _calcTiempoRelativo(fechaReferencia);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -143,43 +161,6 @@ class CobroPendienteCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                if (tieneAbonoInicial) ...[
-                  const SizedBox(height: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF3E8FF),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                        color: const Color(0xFFC084FC),
-                        width: 1,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.savings_rounded,
-                          size: 12,
-                          color: Color(0xFF7E22CE),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'ABONO INICIAL: ${formatClp(montoAbonoInicial)}',
-                          style: AppTypography.small.copyWith(
-                            color: const Color(0xFF7E22CE),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.2,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
                 const SizedBox(height: 8),
 
                 // ── FILA 2: Cliente destacado, RUT y Vendedor ──
@@ -236,18 +217,27 @@ class CobroPendienteCard extends StatelessWidget {
                     Expanded(
                       child: Row(
                         children: [
-                          const Icon(
-                            Icons.access_time_rounded,
+                          Icon(
+                            esAbonoActivo
+                                ? Icons.payments_outlined
+                                : Icons.access_time_rounded,
                             size: 13,
-                            color: AppPalette.textSecondaryLight,
+                            color: esAbonoActivo
+                                ? const Color(0xFF7E22CE)
+                                : AppPalette.textSecondaryLight,
                           ),
                           const SizedBox(width: 4),
                           Flexible(
                             child: Text(
-                              '${orden.fechaEmisionFormateada} • ${orden.horaEmisionFormateada}',
+                              (esAbonoActivo && orden.historialAbonos.isNotEmpty)
+                                  ? 'Último abono: ${orden.historialAbonos.last.fechaPagoFormateada} • ${orden.historialAbonos.last.horaPagoFormateada}'
+                                  : '${orden.fechaEmisionFormateada} • ${orden.horaEmisionFormateada}',
                               style: AppTypography.small.copyWith(
-                                color: AppPalette.textSecondaryLight,
-                                fontSize: 14,
+                                color: esAbonoActivo
+                                    ? const Color(0xFF7E22CE)
+                                    : AppPalette.textSecondaryLight,
+                                fontSize: 13,
+                                fontWeight: esAbonoActivo ? FontWeight.w600 : FontWeight.w400,
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -262,26 +252,34 @@ class CobroPendienteCard extends StatelessWidget {
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
-                        color: AppPalette.primary.withValues(alpha: 0.08),
+                        color: esAbonoActivo
+                            ? const Color(0xFF7E22CE).withValues(alpha: 0.08)
+                            : AppPalette.primary.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(5),
                         border: Border.all(
-                          color: AppPalette.primary.withValues(alpha: 0.2),
+                          color: esAbonoActivo
+                              ? const Color(0xFF7E22CE).withValues(alpha: 0.25)
+                              : AppPalette.primary.withValues(alpha: 0.2),
                           width: 1,
                         ),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.schedule_rounded,
                             size: 15,
-                            color: AppPalette.primary,
+                            color: esAbonoActivo
+                                ? const Color(0xFF7E22CE)
+                                : AppPalette.primary,
                           ),
                           const SizedBox(width: 4),
                           Text(
                             relativeTime,
                             style: AppTypography.small.copyWith(
-                              color: AppPalette.textPrimaryLight,
+                              color: esAbonoActivo
+                                  ? const Color(0xFF7E22CE)
+                                  : AppPalette.textPrimaryLight,
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
                             ),
@@ -305,16 +303,16 @@ class CobroPendienteCard extends StatelessWidget {
                           Text(
                             tieneAbonoInicial
                                 ? 'Abono Inicial Acordado:'
-                                : (orden.abonoPrevio > 0
+                                : (esAbonoActivo
                                       ? 'Saldo Pendiente:'
                                       : (!isVenta
                                             ? 'Total Reserva:'
                                             : 'Total a Pagar:')),
                             style: AppTypography.small.copyWith(
-                              color: tieneAbonoInicial
+                              color: tieneAbonoInicial || esAbonoActivo
                                   ? const Color(0xFF7E22CE)
                                   : AppPalette.textSecondaryLight,
-                              fontSize: 16,
+                              fontSize: esAbonoActivo ? 15 : 16,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -329,12 +327,12 @@ class CobroPendienteCard extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                          ] else if (orden.abonoPrevio > 0) ...[
+                          ] else if (esAbonoActivo) ...[
                             Text(
-                              'Total: ${formatClp(orden.totalOperacion)} • Abonos: ${formatClp(orden.abonoPrevio)}',
+                              'Total: ${formatClp(orden.totalOperacion)} • Abonado: ${formatClp(orden.abonoPrevio)}',
                               style: AppTypography.small.copyWith(
                                 color: AppPalette.textSecondaryLight,
-                                fontSize: 10,
+                                fontSize: 11,
                                 fontWeight: FontWeight.w600,
                               ),
                               maxLines: 1,
@@ -349,18 +347,16 @@ class CobroPendienteCard extends StatelessWidget {
                       formatClp(
                         tieneAbonoInicial
                             ? montoAbonoInicial
-                            : (orden.abonoPrevio > 0
-                                  ? (orden.saldoPendiente > 0
-                                        ? orden.saldoPendiente
-                                        : orden.montoACobrar)
-                                  : (orden.saldoPendiente > 0
-                                        ? orden.saldoPendiente
+                            : (orden.saldoPendiente > 0
+                                  ? orden.saldoPendiente
+                                  : (orden.montoACobrar > 0
+                                        ? orden.montoACobrar
                                         : orden.totalOperacion)),
                       ),
                       style: AppTypography.title.copyWith(
                         fontSize: 18,
                         fontWeight: FontWeight.w900,
-                        color: tieneAbonoInicial
+                        color: tieneAbonoInicial || esAbonoActivo
                             ? const Color(0xFF7E22CE)
                             : (isVenta
                                   ? AppPalette.success
