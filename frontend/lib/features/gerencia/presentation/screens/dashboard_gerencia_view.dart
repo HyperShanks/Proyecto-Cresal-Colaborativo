@@ -47,12 +47,18 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
   KpiFinancieroModel? _kpis;
   ResumenPagosModel? _pagos;
   FlujoOperativoModel? _flujo;
-  String _nombreUsuario = AuthService.cachedUser != null && AuthService.cachedUser!.nombres.isNotEmpty
-      ? '${AuthService.cachedUser!.nombres} ${AuthService.cachedUser!.apellidos}'.trim()
+  String _nombreUsuario =
+      AuthService.cachedUser != null &&
+          AuthService.cachedUser!.nombres.isNotEmpty
+      ? '${AuthService.cachedUser!.nombres} ${AuthService.cachedUser!.apellidos}'
+            .trim()
       : 'Gerencia';
   String _emailUsuario = AuthService.cachedUser?.email ?? '';
 
-  VistaGerencia _vistaActiva = VistaGerencia.dashboard;
+  bool _esAuditorSucursal = AuthService.esAuditorSucursalSync;
+  late VistaGerencia _vistaActiva = _esAuditorSucursal
+      ? VistaGerencia.inventario
+      : VistaGerencia.dashboard;
   bool _sidebarOpen = true;
   bool _filtroSinTasar = false;
   bool _bellHovered = false;
@@ -95,6 +101,10 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
   @override
   void initState() {
     super.initState();
+    _esAuditorSucursal = AuthService.esAuditorSucursalSync;
+    if (_esAuditorSucursal) {
+      _vistaActiva = VistaGerencia.inventario;
+    }
     _sucursalSeleccionada = widget.sucursalInicial;
     _spinController = AnimationController(
       vsync: this,
@@ -112,6 +122,12 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
       },
       onPoll: () async {
         if (!mounted) return;
+        if (_esAuditorSucursal) {
+          if (_vistaActiva == VistaGerencia.inventario) {
+            await _inventarioKey.currentState?.refrescarSilencioso();
+          }
+          return;
+        }
         switch (_vistaActiva) {
           case VistaGerencia.dashboard:
             await _cargarDashboard(silent: true);
@@ -152,7 +168,9 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
     super.didPopNext();
     // Solo recargamos si el dashboard quedó marcado como sucio por una mutación
     // y la vista visible es el Dashboard, evitando falsos refrescos al cerrar modales o cancelar diálogos.
-    if (_dashboardDirty && _vistaActiva == VistaGerencia.dashboard) {
+    if (_dashboardDirty &&
+        _vistaActiva == VistaGerencia.dashboard &&
+        !_esAuditorSucursal) {
       _dashboardDirty = false;
       _cargarDashboard(silent: true);
     }
@@ -184,25 +202,34 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
   Future<void> _cargarDatosIniciales() async {
     final nombre = await AuthService.getNombreUsuario();
     final email = await AuthService.getEmailUsuario();
+    final esAuditorSatelite = await AuthService.esAuditorSucursal();
     if (mounted) {
       setState(() {
+        _esAuditorSucursal = esAuditorSatelite;
         if (nombre != null && nombre.trim().isNotEmpty) {
           _nombreUsuario = nombre.trim();
         }
         if (email != null && email.trim().isNotEmpty) {
           _emailUsuario = email.trim();
         }
+        if (esAuditorSatelite) {
+          _vistaActiva = VistaGerencia.inventario;
+        }
       });
     }
-    await Future.wait([
-      _cargarSucursales(),
-      _cargarDashboard(),
-    ]);
+    if (esAuditorSatelite) {
+      await _cargarSucursales();
+    } else {
+      await Future.wait([_cargarSucursales(), _cargarDashboard()]);
+    }
   }
 
   /// Cargo simultáneamente los 3 endpoints analíticos aplicando guardas de montaje.
-  Future<void> _cargarDashboard({bool mostrarToast = false, bool silent = false}) async {
-    if (!mounted) return;
+  Future<void> _cargarDashboard({
+    bool mostrarToast = false,
+    bool silent = false,
+  }) async {
+    if (!mounted || _esAuditorSucursal) return;
 
     debugPrint(
       '📊 [GERENCIA-DASHBOARD] 🔄 Solicitando KPIs, métodos de pago y flujo operativo (Sucursal: ${_sucursalSeleccionada ?? "Todas"})...',
@@ -269,7 +296,9 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
     } catch (e) {
       if (!mounted) return;
       if (silent) {
-        debugPrint('📊 [GERENCIA-DASHBOARD] ⚠️ Error en polling silencioso (ignorado): $e');
+        debugPrint(
+          '📊 [GERENCIA-DASHBOARD] ⚠️ Error en polling silencioso (ignorado): $e',
+        );
         return;
       }
 
@@ -448,16 +477,20 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                     index: _vistaActiva.index,
                     children: [
                       // 0: VistaGerencia.dashboard
-                      _buildDashboardContent(),
+                      _esAuditorSucursal
+                          ? const SizedBox.shrink()
+                          : _buildDashboardContent(),
                       // 1: VistaGerencia.ordenes
-                      Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: OrdenesGerenciaView(
-                          key: _ordenesKey,
-                          idSucursalInicial: _sucursalSeleccionada,
-                          estadoInicial: _filtroEstadoOrdenes,
-                        ),
-                      ),
+                      _esAuditorSucursal
+                          ? const SizedBox.shrink()
+                          : Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: OrdenesGerenciaView(
+                                key: _ordenesKey,
+                                idSucursalInicial: _sucursalSeleccionada,
+                                estadoInicial: _filtroEstadoOrdenes,
+                              ),
+                            ),
                       // 2: VistaGerencia.inventario
                       InventarioGerenciaView(
                         key: _inventarioKey,
@@ -465,16 +498,19 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                         filtroSinTasarInicial: _filtroSinTasar,
                         onStockMutado: () {
                           _dashboardDirty = true;
-                          if (_vistaActiva == VistaGerencia.dashboard) {
+                          if (_vistaActiva == VistaGerencia.dashboard &&
+                              !_esAuditorSucursal) {
                             _cargarDashboard(silent: true);
                           }
                         },
                       ),
                       // 3: VistaGerencia.backorders
-                      BackordersGerenciaView(
-                        key: _backordersKey,
-                        idSucursalInicial: _sucursalSeleccionada,
-                      ),
+                      _esAuditorSucursal
+                          ? const SizedBox.shrink()
+                          : BackordersGerenciaView(
+                              key: _backordersKey,
+                              idSucursalInicial: _sucursalSeleccionada,
+                            ),
                     ],
                   ),
                 ),
@@ -560,10 +596,12 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
+                        children: [
                           Text(
-                            'PANEL EJECUTIVO',
-                            style: TextStyle(
+                            _esAuditorSucursal
+                                ? 'CONSULTA DE STOCK'
+                                : 'PANEL EJECUTIVO',
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 13,
                               fontWeight: FontWeight.w900,
@@ -573,8 +611,10 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                             overflow: TextOverflow.ellipsis,
                           ),
                           Text(
-                            'Control Ejecutivo V1',
-                            style: TextStyle(
+                            _esAuditorSucursal
+                                ? 'Auditoría Satélite'
+                                : 'Control Ejecutivo V1',
+                            style: const TextStyle(
                               color: Color(0xFFBAE6FD),
                               fontSize: 11,
                               fontWeight: FontWeight.w500,
@@ -602,7 +642,9 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                     Padding(
                       padding: const EdgeInsets.only(left: 8, bottom: 8),
                       child: Text(
-                        'SUPERVISIÓN Y CONTROL',
+                        _esAuditorSucursal
+                            ? 'CONSULTA DE STOCK'
+                            : 'SUPERVISIÓN Y CONTROL',
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.5),
                           fontSize: 10,
@@ -612,65 +654,72 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                       ),
                     ),
 
-                  // 1. Dashboard Ejecutivo
-                  _buildSidebarNavItem(
-                    icon: Icons.dashboard_rounded,
-                    label: 'Dashboard Ejecutivo',
-                    isSelected: _vistaActiva == VistaGerencia.dashboard,
-                    onTap: () {
-                      if (_vistaActiva != VistaGerencia.dashboard) {
-                        debugPrint(
-                          '🔀 [GERENCIA-NAV] 📂 Cambiando a pestaña: Dashboard Ejecutivo',
-                        );
-                        final needsHardLoad = _kpis == null || _dashboardDirty;
-                        setState(() {
-                          _vistaActiva = VistaGerencia.dashboard;
-                          _dashboardDirty = false;
-                        });
-                        if (needsHardLoad) {
-                          _cargarDashboard();
+                  if (!_esAuditorSucursal) ...[
+                    // 1. Dashboard Ejecutivo
+                    _buildSidebarNavItem(
+                      icon: Icons.dashboard_rounded,
+                      label: 'Dashboard Ejecutivo',
+                      isSelected: _vistaActiva == VistaGerencia.dashboard,
+                      onTap: () {
+                        if (_vistaActiva != VistaGerencia.dashboard) {
+                          debugPrint(
+                            '🔀 [GERENCIA-NAV] 📂 Cambiando a pestaña: Dashboard Ejecutivo',
+                          );
+                          final needsHardLoad =
+                              _kpis == null || _dashboardDirty;
+                          setState(() {
+                            _vistaActiva = VistaGerencia.dashboard;
+                            _dashboardDirty = false;
+                          });
+                          if (needsHardLoad) {
+                            _cargarDashboard();
+                          } else {
+                            _cargarDashboard(silent: true);
+                          }
                         } else {
-                          _cargarDashboard(silent: true);
+                          // Re-clic en la pestaña activa: refresca intencionalmente
+                          _cargarDashboard(mostrarToast: true);
                         }
-                      } else {
-                        // Re-clic en la pestaña activa: refresca intencionalmente
-                        _cargarDashboard(mostrarToast: true);
-                      }
-                    },
-                  ),
+                      },
+                    ),
 
-                  const SizedBox(height: 6),
+                    const SizedBox(height: 6),
 
-                  // 2. Historial de Órdenes
-                  _buildSidebarNavItem(
-                    icon: Icons.receipt_long_rounded,
-                    label: 'Historial de Órdenes',
-                    isSelected: _vistaActiva == VistaGerencia.ordenes,
-                    onTap: () {
-                      if (_vistaActiva != VistaGerencia.ordenes) {
-                        debugPrint(
-                          '🔀 [GERENCIA-NAV] 📂 Cambiando a pestaña: Historial de Órdenes',
-                        );
-                        setState(() {
-                          _filtroEstadoOrdenes = null;
-                          _vistaActiva = VistaGerencia.ordenes;
-                        });
-                        _ordenesKey.currentState?.refrescarSilencioso();
-                      } else {
-                        // Re-clic en la pestaña activa: refresca intencionalmente
-                        _refrescarVistaActiva(mostrarToast: true);
-                      }
-                    },
-                  ),
+                    // 2. Historial de Órdenes
+                    _buildSidebarNavItem(
+                      icon: Icons.receipt_long_rounded,
+                      label: 'Historial de Órdenes',
+                      isSelected: _vistaActiva == VistaGerencia.ordenes,
+                      onTap: () {
+                        if (_vistaActiva != VistaGerencia.ordenes) {
+                          debugPrint(
+                            '🔀 [GERENCIA-NAV] 📂 Cambiando a pestaña: Historial de Órdenes',
+                          );
+                          setState(() {
+                            _filtroEstadoOrdenes = null;
+                            _vistaActiva = VistaGerencia.ordenes;
+                          });
+                          _ordenesKey.currentState?.refrescarSilencioso();
+                        } else {
+                          // Re-clic en la pestaña activa: refresca intencionalmente
+                          _refrescarVistaActiva(mostrarToast: true);
+                        }
+                      },
+                    ),
 
-                  const SizedBox(height: 6),
+                    const SizedBox(height: 6),
+                  ],
 
                   // 3. Maestro de Inventario y Tasación
                   _buildSidebarNavItem(
                     icon: Icons.inventory_2_rounded,
-                    label: 'Inventario y Tasación',
+                    label: _esAuditorSucursal
+                        ? 'Catálogo e Inventario'
+                        : 'Inventario y Tasación',
                     isSelected: _vistaActiva == VistaGerencia.inventario,
-                    badgeText: (_flujo?.cuellosBotellaPaletizados ?? 0) > 0
+                    badgeText:
+                        !_esAuditorSucursal &&
+                            (_flujo?.cuellosBotellaPaletizados ?? 0) > 0
                         ? '${_flujo!.cuellosBotellaPaletizados}'
                         : null,
                     onTap: () {
@@ -690,29 +739,31 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                     },
                   ),
 
-                  const SizedBox(height: 6),
+                  if (!_esAuditorSucursal) ...[
+                    const SizedBox(height: 6),
 
-                  // 4. Visor Centralizado de Backorders (Ventas en Verde)
-                  _buildSidebarNavItem(
-                    icon: Icons.bookmark_added_rounded,
-                    label: 'Ventas en Verde',
-                    isSelected: _vistaActiva == VistaGerencia.backorders,
-                    badgeText: null,
-                    onTap: () {
-                      if (_vistaActiva != VistaGerencia.backorders) {
-                        debugPrint(
-                          '🔀 [GERENCIA-NAV] 📂 Cambiando a pestaña: Ventas en Verde',
-                        );
-                        setState(() {
-                          _vistaActiva = VistaGerencia.backorders;
-                        });
-                        _backordersKey.currentState?.refrescarSilencioso();
-                      } else {
-                        // Re-clic en la pestaña activa: refresca intencionalmente
-                        _refrescarVistaActiva(mostrarToast: true);
-                      }
-                    },
-                  ),
+                    // 4. Visor Centralizado de Backorders (Ventas en Verde)
+                    _buildSidebarNavItem(
+                      icon: Icons.bookmark_added_rounded,
+                      label: 'Ventas en Verde',
+                      isSelected: _vistaActiva == VistaGerencia.backorders,
+                      badgeText: null,
+                      onTap: () {
+                        if (_vistaActiva != VistaGerencia.backorders) {
+                          debugPrint(
+                            '🔀 [GERENCIA-NAV] 📂 Cambiando a pestaña: Ventas en Verde',
+                          );
+                          setState(() {
+                            _vistaActiva = VistaGerencia.backorders;
+                          });
+                          _backordersKey.currentState?.refrescarSilencioso();
+                        } else {
+                          // Re-clic en la pestaña activa: refresca intencionalmente
+                          _refrescarVistaActiva(mostrarToast: true);
+                        }
+                      },
+                    ),
+                  ],
 
                   const SizedBox(height: 12),
                   const Divider(color: Colors.white12, height: 1),
@@ -724,7 +775,8 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                     label: 'Actualizaciones',
                     isSelected: false,
                     badgeText: null,
-                    onTap: () => AppUpdateChecker.check(context, showIfUpToDate: true),
+                    onTap: () =>
+                        AppUpdateChecker.check(context, showIfUpToDate: true),
                   ),
                 ],
               ),
@@ -977,7 +1029,9 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                                 : _vistaActiva == VistaGerencia.ordenes
                                 ? 'HISTORIAL DE ÓRDENES'
                                 : _vistaActiva == VistaGerencia.inventario
-                                ? 'MAESTRO DE INVENTARIO Y TASACIÓN'
+                                ? (_esAuditorSucursal
+                                      ? 'CATÁLOGO E INVENTARIO'
+                                      : 'MAESTRO DE INVENTARIO Y TASACIÓN')
                                 : 'VENTAS EN VERDE',
                             style: const TextStyle(
                               fontSize: 14,
@@ -995,7 +1049,9 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                                   : _vistaActiva == VistaGerencia.ordenes
                                   ? 'Historial y Auditoría de Órdenes'
                                   : _vistaActiva == VistaGerencia.inventario
-                                  ? 'Control de stock físico, ubicaciones en rack y fijación de precios comerciales'
+                                  ? (_esAuditorSucursal
+                                        ? 'Consulta de stock físico y disponibilidad en Viña del Mar y sucursales'
+                                        : 'Control de stock físico, ubicaciones en rack y fijación de precios comerciales')
                                   : 'Monitoreo de compras en verde',
                               style: const TextStyle(
                                 fontSize: 11,
@@ -1022,8 +1078,10 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                   const SizedBox(width: 8),
 
                   // Icono en Topbar "Guía de Indicadores"
-                  _buildBotonIconoGuiaIndicadores(),
-                  const SizedBox(width: 8),
+                  if (!_esAuditorSucursal) ...[
+                    _buildBotonIconoGuiaIndicadores(),
+                    const SizedBox(width: 8),
+                  ],
 
                   // Botón Refrescar con Spin
                   if (isNarrow)
@@ -1077,180 +1135,183 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                         ),
                       ),
                     ),
-                  const SizedBox(width: 10),
 
                   // Campana de Notificaciones Ejecutivas con Badge y Hover Rectangular
-                  PopupMenuButton<String>(
-                    tooltip: 'Alertas y Notificaciones Ejecutivas',
-                    offset: const Offset(0, 48),
-                    color: Colors.white,
-                    surfaceTintColor: Colors.white,
-                    elevation: 6,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: const BorderSide(color: AppPalette.borderLight),
-                    ),
-                    child: StatefulBuilder(
-                      builder: (context, setBellHover) {
-                        return MouseRegion(
-                          onEnter: (_) =>
-                              setBellHover(() => _bellHovered = true),
-                          onExit: (_) =>
-                              setBellHover(() => _bellHovered = false),
-                          child: Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              Container(
-                                width: 38,
-                                height: 38,
-                                decoration: BoxDecoration(
-                                  color: _bellHovered
-                                      ? const Color(0xFFF1F5F9)
-                                      : Colors.white,
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(
-                                    color: AppPalette.borderLight,
+                  if (!_esAuditorSucursal) ...[
+                    const SizedBox(width: 10),
+                    PopupMenuButton<String>(
+                      tooltip: 'Alertas y Notificaciones Ejecutivas',
+                      offset: const Offset(0, 48),
+                      color: Colors.white,
+                      surfaceTintColor: Colors.white,
+                      elevation: 6,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: const BorderSide(color: AppPalette.borderLight),
+                      ),
+                      child: StatefulBuilder(
+                        builder: (context, setBellHover) {
+                          return MouseRegion(
+                            onEnter: (_) =>
+                                setBellHover(() => _bellHovered = true),
+                            onExit: (_) =>
+                                setBellHover(() => _bellHovered = false),
+                            child: Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                Container(
+                                  width: 38,
+                                  height: 38,
+                                  decoration: BoxDecoration(
+                                    color: _bellHovered
+                                        ? const Color(0xFFF1F5F9)
+                                        : Colors.white,
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: AppPalette.borderLight,
+                                    ),
+                                  ),
+                                  child: const Icon(
+                                    Icons.notifications_outlined,
+                                    color: Color(0xFF0F172A),
+                                    size: 20,
                                   ),
                                 ),
-                                child: const Icon(
-                                  Icons.notifications_outlined,
-                                  color: Color(0xFF0F172A),
-                                  size: 20,
-                                ),
-                              ),
-                              if (cuellosBotella > 0)
-                                Positioned(
-                                  top: -4,
-                                  right: -4,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 5,
-                                      vertical: 2,
-                                    ),
-                                    decoration: const BoxDecoration(
-                                      color: Color(0xFFDC2626),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    constraints: const BoxConstraints(
-                                      minWidth: 18,
-                                      minHeight: 18,
-                                    ),
-                                    alignment: Alignment.center,
-                                    child: Text(
-                                      '$cuellosBotella',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w900,
+                                if (cuellosBotella > 0)
+                                  Positioned(
+                                    top: -4,
+                                    right: -4,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 5,
+                                        vertical: 2,
+                                      ),
+                                      decoration: const BoxDecoration(
+                                        color: Color(0xFFDC2626),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      constraints: const BoxConstraints(
+                                        minWidth: 18,
+                                        minHeight: 18,
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: Text(
+                                        '$cuellosBotella',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w900,
+                                        ),
                                       ),
                                     ),
                                   ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                      itemBuilder: (context) => [
+                        PopupMenuItem<String>(
+                          value: 'tasacion',
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: const Color(
+                                    0xFFFB923C,
+                                  ).withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
+                                child: const Icon(
+                                  Icons.hourglass_top,
+                                  color: Color(0xFFEA580C),
+                                  size: 16,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      '$cuellosBotella repuestos sin tasar',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFF0F172A),
+                                      ),
+                                    ),
+                                    const Text(
+                                      'En espera de fijación de precio en bodega',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: Color(0xFF64748B),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ],
                           ),
-                        );
+                        ),
+                        PopupMenuItem<String>(
+                          value: 'ordenes',
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: const Color(
+                                    0xFFFBBF24,
+                                  ).withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(
+                                  Icons.pending_actions,
+                                  color: Color(0xFFB45309),
+                                  size: 16,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      '$saldoPendiente órdenes con saldo retenido',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFF0F172A),
+                                      ),
+                                    ),
+                                    const Text(
+                                      'Retiro condicionado a liquidación total',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: Color(0xFF64748B),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      onSelected: (val) {
+                        if (_esAuditorSucursal) return;
+                        if (val == 'tasacion') {
+                          _navegarAInventarioSinTasar();
+                        } else if (val == 'ordenes') {
+                          _navegarAOrdenesConEstado('Reservada');
+                        }
                       },
                     ),
-                    itemBuilder: (context) => [
-                      PopupMenuItem<String>(
-                        value: 'tasacion',
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(6),
-                              decoration: BoxDecoration(
-                                color: const Color(
-                                  0xFFFB923C,
-                                ).withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Icon(
-                                Icons.hourglass_top,
-                                color: Color(0xFFEA580C),
-                                size: 16,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    '$cuellosBotella repuestos sin tasar',
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w800,
-                                      color: Color(0xFF0F172A),
-                                    ),
-                                  ),
-                                  const Text(
-                                    'En espera de fijación de precio en bodega',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      color: Color(0xFF64748B),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      PopupMenuItem<String>(
-                        value: 'ordenes',
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(6),
-                              decoration: BoxDecoration(
-                                color: const Color(
-                                  0xFFFBBF24,
-                                ).withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Icon(
-                                Icons.pending_actions,
-                                color: Color(0xFFB45309),
-                                size: 16,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    '$saldoPendiente órdenes con saldo retenido',
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w800,
-                                      color: Color(0xFF0F172A),
-                                    ),
-                                  ),
-                                  const Text(
-                                    'Retiro condicionado a liquidación total',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      color: Color(0xFF64748B),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                    onSelected: (val) {
-                      if (val == 'tasacion') {
-                        _navegarAInventarioSinTasar();
-                      } else if (val == 'ordenes') {
-                        _navegarAOrdenesConEstado('Reservada');
-                      }
-                    },
-                  ),
+                  ],
                 ],
               ),
             ],
@@ -1641,7 +1702,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
           setState(() {
             _sucursalSeleccionada = idNormalizado;
           });
-          if (_vistaActiva == VistaGerencia.dashboard) {
+          if (_vistaActiva == VistaGerencia.dashboard && !_esAuditorSucursal) {
             _cargarDashboard();
           } else {
             _refrescarVistaActiva();
@@ -1989,252 +2050,262 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text(
-                          'CONTROL DE RIESGO',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0.8,
-                            color: Color(0xFF64748B),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: const [
+                          Text(
+                            'CONTROL DE RIESGO',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.8,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            'Alertas Operativas',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF3C7), // Amber 100
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        '${flujo.alertasSaldoPendiente + flujo.cuellosBotellaPaletizados} Activas',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF92400E),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Órdenes con saldo retenido y piezas sin tasar',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                ),
+                const SizedBox(height: 16),
+
+                // Alerta 1: Saldos por Cobrar (Clic para auditar órdenes con saldo pendiente)
+                InkWell(
+                  onTap: () => _navegarAOrdenesConEstado('Reservada'),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFFBEB),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFFDE68A)),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(
+                              0xFFFBBF24,
+                            ).withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.pending_actions,
+                            color: Color(0xFFB45309),
+                            size: 20,
                           ),
                         ),
-                        SizedBox(height: 2),
-                        Text(
-                          'Alertas Operativas',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFF0F172A),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Expanded(
+                                    child: Text(
+                                      'Saldos por Cobrar',
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFF78350F),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    '${flujo.alertasSaldoPendiente} órdenes',
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w900,
+                                      color: Color(0xFFB45309),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              const Text(
+                                'Retiro en mesón condicionado al pago total.',
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF92400E),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
+                ),
+                const SizedBox(height: 12),
+
+                // Alerta 2: Cuellos de Botella de Tasación (Clic para tasar stock)
+                InkWell(
+                  onTap: _navegarAInventarioSinTasar,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFEF3C7), // Amber 100
-                      borderRadius: BorderRadius.circular(20),
+                      color: const Color(0xFFFFF7ED),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFFED7AA)),
                     ),
-                    child: Text(
-                      '${flujo.alertasSaldoPendiente + flujo.cuellosBotellaPaletizados} Activas',
-                      style: const TextStyle(
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(
+                              0xFFFB923C,
+                            ).withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.hourglass_top,
+                            color: Color(0xFFC2410C),
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Expanded(
+                                    child: Text(
+                                      'Cuello de Botella Tasación',
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFF7C2D12),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    '${flujo.cuellosBotellaPaletizados} piezas',
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w900,
+                                      color: Color(0xFFC2410C),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              const Text(
+                                'Paletizados sin precio fijado por Jefe de Ventas.',
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF9A3412),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            // Footer Bento 2: Nivel de Riesgo Operativo dinámico según alertas activas
+            const Divider(height: 16, thickness: 1, color: Color(0xFFF1F5F9)),
+            Builder(
+              builder: (context) {
+                final totalAlertas =
+                    flujo.alertasSaldoPendiente +
+                    flujo.cuellosBotellaPaletizados;
+                final String etiquetaRiesgo;
+                final Color colorRiesgo;
+                if (totalAlertas <= 6) {
+                  etiquetaRiesgo = 'Controlado';
+                  colorRiesgo = AppPalette.success;
+                } else if (totalAlertas <= 12) {
+                  etiquetaRiesgo = 'Moderado';
+                  colorRiesgo = const Color(0xFFD97706);
+                } else {
+                  etiquetaRiesgo = 'Crítico';
+                  colorRiesgo = AppPalette.error;
+                }
+
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Nivel de Riesgo Operativo:',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      etiquetaRiesgo,
+                      style: TextStyle(
                         fontSize: 12,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF92400E),
+                        fontWeight: FontWeight.w800,
+                        color: colorRiesgo,
                       ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                'Órdenes con saldo retenido y piezas sin tasar',
-                style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
-              ),
-              const SizedBox(height: 16),
-
-              // Alerta 1: Saldos por Cobrar (Clic para auditar órdenes con saldo pendiente)
-              InkWell(
-                onTap: () => _navegarAOrdenesConEstado('Reservada'),
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFFBEB),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFFDE68A)),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFBBF24).withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(
-                          Icons.pending_actions,
-                          color: Color(0xFFB45309),
-                          size: 20,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Expanded(
-                                  child: Text(
-                                    'Saldos por Cobrar',
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w800,
-                                      color: Color(0xFF78350F),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  '${flujo.alertasSaldoPendiente} órdenes',
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w900,
-                                    color: Color(0xFFB45309),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 2),
-                            const Text(
-                              'Retiro en mesón condicionado al pago total.',
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: Color(0xFF92400E),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // Alerta 2: Cuellos de Botella de Tasación (Clic para tasar stock)
-              InkWell(
-                onTap: _navegarAInventarioSinTasar,
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF7ED),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFFED7AA)),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFB923C).withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(
-                          Icons.hourglass_top,
-                          color: Color(0xFFC2410C),
-                          size: 20,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Expanded(
-                                  child: Text(
-                                    'Cuello de Botella Tasación',
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w800,
-                                      color: Color(0xFF7C2D12),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  '${flujo.cuellosBotellaPaletizados} piezas',
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w900,
-                                    color: Color(0xFFC2410C),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 2),
-                            const Text(
-                              'Paletizados sin precio fijado por Jefe de Ventas.',
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: Color(0xFF9A3412),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          // Footer Bento 2: Nivel de Riesgo Operativo dinámico según alertas activas
-          const Divider(height: 16, thickness: 1, color: Color(0xFFF1F5F9)),
-          Builder(
-            builder: (context) {
-              final totalAlertas =
-                  flujo.alertasSaldoPendiente + flujo.cuellosBotellaPaletizados;
-              final String etiquetaRiesgo;
-              final Color colorRiesgo;
-              if (totalAlertas <= 6) {
-                etiquetaRiesgo = 'Controlado';
-                colorRiesgo = AppPalette.success;
-              } else if (totalAlertas <= 12) {
-                etiquetaRiesgo = 'Moderado';
-                colorRiesgo = const Color(0xFFD97706);
-              } else {
-                etiquetaRiesgo = 'Crítico';
-                colorRiesgo = AppPalette.error;
-              }
-
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Expanded(
-                    child: Text(
-                      'Nivel de Riesgo Operativo:',
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    etiquetaRiesgo,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                      color: colorRiesgo,
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ],
-      ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2566,8 +2637,10 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                 },
                 borderRadius: BorderRadius.circular(4),
                 child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
                   child: Text(
                     _mostrarDetalleTecnico
                         ? 'Ocultar detalle técnico ▲'

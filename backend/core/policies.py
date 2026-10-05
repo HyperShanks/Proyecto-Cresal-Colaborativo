@@ -29,8 +29,8 @@ from models import Usuario, Activo_Inventariado
 # Zona horaria oficial de operación comercial (Soporta automáticamente horario verano UTC-3 e invierno UTC-4 vía IANA)
 TZ_CHILE = ZoneInfo("America/Santiago")
 
-# Roles exentos de restricción horaria (comerciales 24/7, supervisión, administración, omnicanal y auditoría)
-ROLES_EXENTOS_HORARIO = {2, 4, 5, 6, 7, 8}
+# Roles comerciales y administrativos exentos de restricción horaria (comerciales 24/7, omnicanal y administración)
+ROLES_EXENTOS_HORARIO = {2, 4, 5, 6, 7}
 
 # Horarios estándar de sucursal
 HORA_APERTURA_SEMANA = dtime(8, 30)

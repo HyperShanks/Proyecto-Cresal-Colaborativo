@@ -28,6 +28,7 @@ from models import (
     Despacho,
 )
 from core.security import create_access_token, hash_password
+from routers.gerencia import calcular_limites_temporales_chile
 from conftest import TestingSessionLocal
 
 tz_chile = ZoneInfo("America/Santiago")
@@ -69,6 +70,7 @@ def db_session_gerencia(setup_database):
             Rol(id_rol=3, nombre_rol="Caja"),
             Rol(id_rol=4, nombre_rol="Gerente"),
             Rol(id_rol=5, nombre_rol="Administrador"),
+            Rol(id_rol=8, nombre_rol="Auditor"),
         ]
         for rol in roles:
             if not db.query(Rol).filter_by(id_rol=rol.id_rol).first():
@@ -137,7 +139,31 @@ def db_session_gerencia(setup_database):
             pin_acceso="1001",
             estado="Activo",
         )
-        db.add_all([user_gerente, user_admin, user_vendedor, user_bodeguero])
+        user_auditor = Usuario(
+            id_usuario=uuid.uuid4(),
+            id_rol=8,
+            id_sucursal=101,
+            rut_usuario="13.456.789-0",
+            nombres="Ricardo",
+            apellidos="Crovetto",
+            email="auditor.test@cresal.cl",
+            password_hash=hash_password("auditor123"),
+            pin_acceso="8001",
+            estado="Activo",
+        )
+        user_auditor_limache = Usuario(
+            id_usuario=uuid.uuid4(),
+            id_rol=8,
+            id_sucursal=102,
+            rut_usuario="17.890.123-4",
+            nombres="Auditor",
+            apellidos="Limache",
+            email="auditor.limache@cresal.cl",
+            password_hash=hash_password("limache123"),
+            pin_acceso="8002",
+            estado="Activo",
+        )
+        db.add_all([user_gerente, user_admin, user_vendedor, user_bodeguero, user_auditor, user_auditor_limache])
 
         # 5. Clientes
         cli1 = Cliente(
@@ -317,12 +343,12 @@ def db_session_gerencia(setup_database):
         )
         db.add(pago4_anulado)
 
-        # Pago MTD (debe ser de un día anterior dentro del mes, para no sumarse a las ventas del día)
+        # Pago MTD (debe caer dentro del mes pero antes de hoy para no duplicar ventas del día)
+        inicio_hoy_test_utc, _, _ = calcular_limites_temporales_chile()
         if ahora_chile.day > 1:
-            fecha_mtd = hoy_utc - timedelta(days=1)
+            fecha_mtd = inicio_hoy_test_utc - timedelta(hours=2)
         else:
-            # En día 1 del mes, colocar al inicio del día pero fuera de la ventana horaria si aplica
-            fecha_mtd = hoy_utc.replace(hour=0, minute=1, second=0)
+            fecha_mtd = inicio_hoy_test_utc + timedelta(hours=1)
 
         ord_mtd = Orden_Venta(
             id_orden=uuid.uuid4(),
@@ -352,6 +378,8 @@ def db_session_gerencia(setup_database):
             "user_admin": user_admin,
             "user_vendedor": user_vendedor,
             "user_bodeguero": user_bodeguero,
+            "user_auditor": user_auditor,
+            "user_auditor_limache": user_auditor_limache,
             "sucursal_1": 101,
             "sucursal_2": 102,
         }
@@ -534,3 +562,95 @@ def test_gerencia_operativa_alertas_y_flujo_bodega(
 
     assert data_suc1["cuellos_botella_paletizados"] == 1
     assert data_suc1["alertas_saldo_pendiente"] == 1
+
+
+def test_auditor_zero_trust_read_only_and_mutation_blocked(
+    client, db_session_gerencia
+):
+    """
+    Verifica que el Auditor (id_rol=8):
+    1. Puede consultar los endpoints GET de Gerencia (200 OK).
+    2. Recibe 403 Forbidden estricto si intenta emitir órdenes (POST /api/v1/ordenes).
+    3. Recibe 403 Forbidden estricto si intenta anular órdenes (POST /api/v1/ordenes/{id}/anular).
+    """
+    auditor = db_session_gerencia["user_auditor"]
+    token = create_access_token(
+        data={"sub": str(auditor.id_usuario), "rol": auditor.id_rol}
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. Consulta lectura exitosa
+    resp_kpis = client.get("/api/v1/gerencia/dashboard/kpis", headers=headers)
+    assert resp_kpis.status_code == 200
+
+    # 2. Bloqueo de emisión de orden
+    payload_orden = {
+        "id_sucursal": 101,
+        "consentimiento_legal": True,
+        "cliente": {
+            "rut_cliente": "12.345.678-9",
+            "nombres": "Cliente",
+            "apellidos": "Prueba",
+        },
+        "items": [{"id_activo": str(uuid.uuid4()), "cantidad": 1, "precio_final": 50000}],
+    }
+    resp_crear = client.post("/api/v1/ordenes", json=payload_orden, headers=headers)
+    assert resp_crear.status_code == 403
+    assert "Auditoría no posee permisos" in resp_crear.json()["detail"]
+
+    # 3. Bloqueo de anulación de orden
+    fake_order_id = str(uuid.uuid4())
+    resp_anular = client.post(f"/api/v1/ordenes/{fake_order_id}/anular", headers=headers)
+    assert resp_anular.status_code == 403
+    assert "Auditoría no posee permisos" in resp_anular.json()["detail"]
+
+
+def test_auditor_satelite_limache_aislamiento_estricto(
+    client, db_session_gerencia
+):
+    """
+    Verifica el aislamiento estricto Zero-Trust del Auditor de Sucursal Satélite (Limache, id_rol=8, id_sucursal=102):
+    1. Bloqueo 403 Forbidden a /dashboard/kpis.
+    2. Bloqueo 403 Forbidden a /dashboard/pagos.
+    3. Bloqueo 403 Forbidden a /dashboard/operativa.
+    4. Bloqueo 403 Forbidden a /backorders.
+    5. Bloqueo 403 Forbidden a /api/v1/ordenes (historial de clientes).
+    6. Permiso 200 OK a /api/v1/gerencia/sucursales (para listado de sucursales en selector).
+    7. Permiso 200 OK a /api/v1/inventario/maestro (para consulta de stock de Viña del Mar y Limache).
+    """
+    auditor_limache = db_session_gerencia["user_auditor_limache"]
+    token = create_access_token(
+        data={"sub": str(auditor_limache.id_usuario), "rol": auditor_limache.id_rol}
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. KPIs ejecutivos bloqueados
+    r_kpi = client.get("/api/v1/gerencia/dashboard/kpis", headers=headers)
+    assert r_kpi.status_code == 403
+    assert "sucursal satélite" in r_kpi.json()["detail"].lower()
+
+    # 2. Resumen pagos bloqueado
+    r_pagos = client.get("/api/v1/gerencia/dashboard/pagos", headers=headers)
+    assert r_pagos.status_code == 403
+
+    # 3. Pulso operativo bloqueado
+    r_flujo = client.get("/api/v1/gerencia/dashboard/operativa", headers=headers)
+    assert r_flujo.status_code == 403
+
+    # 4. Backorders bloqueados
+    r_backorders = client.get("/api/v1/gerencia/backorders", headers=headers)
+    assert r_backorders.status_code == 403
+
+    # 5. Historial de órdenes bloqueado
+    r_ordenes = client.get("/api/v1/ordenes", headers=headers)
+    assert r_ordenes.status_code == 403
+    assert "sucursal satélite" in r_ordenes.json()["detail"].lower()
+
+    # 6. Sucursales permitido para selector
+    r_suc = client.get("/api/v1/gerencia/sucursales", headers=headers)
+    assert r_suc.status_code == 200
+    assert len(r_suc.json()) >= 2
+
+    # 7. Maestro de inventario multi-sucursal permitido para chequear stock de Viña del Mar
+    r_inv = client.get("/api/v1/inventario/maestro?id_sucursal=101", headers=headers)
+    assert r_inv.status_code == 200

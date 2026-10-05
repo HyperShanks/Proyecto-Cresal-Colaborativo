@@ -494,8 +494,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
     }
 
     if (valor) {
-      final bool? confirmado =
-          await DialogoAdvertenciaConsumidorFinal.mostrar(context);
+      final bool? confirmado = await DialogoAdvertenciaConsumidorFinal.mostrar(
+        context,
+      );
       if (confirmado != true) {
         return;
       }
@@ -693,14 +694,40 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                 ),
               ),
               const SizedBox(height: 8),
-              Text(
-                'Total Venta: ${CurrencyFormatter.formatCLP(res.totalVenta)}',
-                style: AppTypography.body.copyWith(fontWeight: FontWeight.bold),
-              ),
-              Text(
-                'Monto Pendiente en Caja: ${CurrencyFormatter.formatCLP(res.montoPendiente)}',
-                style: AppTypography.body.copyWith(color: AppPalette.secondary),
-              ),
+              if (res.abonoRequerido > 0) ...[
+                Text(
+                  'Total Venta: ${CurrencyFormatter.formatCLP(res.totalVenta)}',
+                  style: AppTypography.body.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Abono a Pagar Hoy en Caja: ${CurrencyFormatter.formatCLP(res.abonoRequerido)}',
+                  style: AppTypography.body.copyWith(
+                    color: AppPalette.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                if (res.totalVenta - res.abonoRequerido > 0) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Saldo Pendiente: ${CurrencyFormatter.formatCLP(res.totalVenta - res.abonoRequerido)}',
+                    style: AppTypography.body.copyWith(
+                      color: const Color(0xFFFFA726),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ] else ...[
+                Text(
+                  'Total a Pagar en Caja: ${CurrencyFormatter.formatCLP(res.totalVenta)}',
+                  style: AppTypography.body.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppPalette.primary,
+                  ),
+                ),
+              ],
               if (res.reservasGeneradas > 0) ...[
                 const SizedBox(height: 6),
                 Text(
@@ -843,7 +870,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
 
                   // Altura de la barra de navegación flotante inferior (FloatingGlassNavBar) más márgenes y safe area:
                   final navBarHeight = hasBottomNavBar
-                      ? (70.0 + 14.0 + (bottomPadding > 0 ? bottomPadding + 4.0 : 0.0))
+                      ? (70.0 +
+                            14.0 +
+                            (bottomPadding > 0 ? bottomPadding + 4.0 : 0.0))
                       : 0.0;
 
                   // Ubicamos los botones de siguiente/anterior flotando limpiamente por encima del navbar:
@@ -858,7 +887,12 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                     children: [
                       Positioned.fill(
                         child: SingleChildScrollView(
-                          padding: EdgeInsets.fromLTRB(16, 16, 16, scrollBottomPadding),
+                          padding: EdgeInsets.fromLTRB(
+                            16,
+                            16,
+                            16,
+                            scrollBottomPadding,
+                          ),
                           child: _buildCurrentStepContent(),
                         ),
                       ),
@@ -1261,7 +1295,8 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                       if (context.mounted) {
                         GlassSnackbar.mostrar(
                           context,
-                          mensaje: '${r.marcaRequerida} ${r.modeloRequerido} eliminado del carrito',
+                          mensaje:
+                              '${r.marcaRequerida} ${r.modeloRequerido} eliminado del carrito',
                           icono: Icons.delete_outline_rounded,
                           colorIcono: AppPalette.error,
                         );
@@ -1472,7 +1507,8 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                   CatalogoScreen.refreshNotifier.value++;
                   GlassSnackbar.mostrar(
                     context,
-                    mensaje: '${item['descripcion'] ?? 'Repuesto'} eliminado del carrito',
+                    mensaje:
+                        '${item['descripcion'] ?? 'Repuesto'} eliminado del carrito',
                     icono: Icons.delete_outline_rounded,
                     colorIcono: AppPalette.error,
                   );
@@ -2181,16 +2217,17 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               if (_controller.totalAbonos > 0) ...[
                 const SizedBox(height: 8),
                 _buildResumenRow(
-                  'Total Abonos Acordados:',
+                  'Abono Inicial Acordado:',
                   CurrencyFormatter.formatCLP(_controller.totalAbonos),
                   color: AppPalette.textSecondary,
                 ),
-                _buildResumenRow(
-                  'Saldo Pendiente a Cobrar en Caja:',
-                  CurrencyFormatter.formatCLP(_controller.montoPendiente),
-                  isBold: true,
-                  color: AppPalette.primary,
-                ),
+                if (_controller.montoPendiente > 0)
+                  _buildResumenRow(
+                    'Saldo Pendiente:',
+                    CurrencyFormatter.formatCLP(_controller.montoPendiente),
+                    isBold: true,
+                    color: const Color(0xFFFFA726),
+                  ),
               ],
             ],
           ),
@@ -2244,7 +2281,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                   'Descuento aplicado: - ${CurrencyFormatter.formatCLP(_controller.descuento)}',
                   style: AppTypography.small.copyWith(
                     color: const Color(0xFFEF5350),
-                    fontSize: 12,
+                    fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -2312,10 +2349,12 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               if (_controller.totalAbonos > 0) ...[
                 const SizedBox(height: 6),
                 Text(
-                  'El cliente abonará ${CurrencyFormatter.formatCLP(_controller.totalAbonos)} y quedará un saldo de ${CurrencyFormatter.formatCLP(_controller.montoPendiente)} en Caja.',
+                  _controller.montoPendiente > 0
+                      ? 'El cliente abonará ${CurrencyFormatter.formatCLP(_controller.totalAbonos)} hoy en Caja. Quedará un saldo pendiente de ${CurrencyFormatter.formatCLP(_controller.montoPendiente)}.'
+                      : 'El cliente abonará el total de ${CurrencyFormatter.formatCLP(_controller.totalAbonos)} hoy en Caja.',
                   style: AppTypography.small.copyWith(
                     color: AppPalette.secondary,
-                    fontSize: 12,
+                    fontSize: 14,
                   ),
                 ),
               ],
@@ -2486,16 +2525,14 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
-                      colors: [
-                        Color(0xFF2E1A00),
-                        Color(0xFF1A2226),
-                      ],
+                      colors: [Color(0xFF2E1A00), Color(0xFF1A2226)],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: (_idVendedorTitular == null ||
+                      color:
+                          (_idVendedorTitular == null ||
                               _idVendedorTitular!.trim().isEmpty)
                           ? AppPalette.error
                           : AppPalette.secondary,
@@ -2503,7 +2540,8 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: (_idVendedorTitular == null ||
+                        color:
+                            (_idVendedorTitular == null ||
                                 _idVendedorTitular!.trim().isEmpty)
                             ? AppPalette.error.withValues(alpha: 0.25)
                             : AppPalette.secondary.withValues(alpha: 0.2),
@@ -2523,7 +2561,8 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                               vertical: 4,
                             ),
                             decoration: BoxDecoration(
-                              color: (_idVendedorTitular == null ||
+                              color:
+                                  (_idVendedorTitular == null ||
                                       _idVendedorTitular!.trim().isEmpty)
                                   ? AppPalette.error
                                   : AppPalette.secondary,
@@ -2535,7 +2574,8 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                                 Icon(
                                   Icons.assignment_ind,
                                   size: 15,
-                                  color: (_idVendedorTitular == null ||
+                                  color:
+                                      (_idVendedorTitular == null ||
                                           _idVendedorTitular!.trim().isEmpty)
                                       ? Colors.white
                                       : Colors.black87,
@@ -2544,7 +2584,8 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                                 Text(
                                   'VENTA DESIGNADA',
                                   style: TextStyle(
-                                    color: (_idVendedorTitular == null ||
+                                    color:
+                                        (_idVendedorTitular == null ||
                                             _idVendedorTitular!.trim().isEmpty)
                                         ? Colors.white
                                         : Colors.black,
@@ -2579,7 +2620,8 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                       Text(
                         _nombreVendedorTitularSeleccionado,
                         style: TextStyle(
-                          color: (_idVendedorTitular == null ||
+                          color:
+                              (_idVendedorTitular == null ||
                                   _idVendedorTitular!.trim().isEmpty)
                               ? AppPalette.error
                               : AppPalette.secondary,
@@ -2669,20 +2711,59 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               if (_controller.totalAbonos > 0) ...[
                 const SizedBox(height: 6),
                 _buildResumenRow(
-                  'Total Abonos Acordados:',
+                  'Abono a Pagar Hoy en Caja:',
                   CurrencyFormatter.formatCLP(_controller.totalAbonos),
-                  color: AppPalette.textSecondary,
-                ),
-                _buildResumenRow(
-                  'Saldo a Pagar en Caja:',
-                  CurrencyFormatter.formatCLP(_controller.montoPendiente),
                   isBold: true,
                   color: AppPalette.primary,
                 ),
+                if (_controller.montoPendiente > 0)
+                  _buildResumenRow(
+                    'Saldo Pendiente:',
+                    CurrencyFormatter.formatCLP(_controller.montoPendiente),
+                    isBold: true,
+                    color: const Color(0xFFFFA726),
+                  ),
               ],
             ],
           ),
         ),
+        if (_controller.totalAbonos > 0) ...[
+          const SizedBox(height: 12),
+          Container(
+            key: const Key('banner_instruccion_abono_step4'),
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppPalette.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: AppPalette.primary.withValues(alpha: 0.3),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.info_outline_rounded,
+                  color: AppPalette.primary,
+                  size: 20,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    _controller.montoPendiente > 0
+                        ? 'El cliente debe pagar un abono de ${CurrencyFormatter.formatCLP(_controller.totalAbonos)} en caja para formalizar la reserva. Saldo pendiente: ${CurrencyFormatter.formatCLP(_controller.montoPendiente)}.'
+                        : 'El cliente debe cancelar el total de ${CurrencyFormatter.formatCLP(_controller.totalAbonos)} en caja.',
+                    style: AppTypography.small.copyWith(
+                      color: AppPalette.textPrimary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 20),
 
         if (_puedeAsignarVenta &&
@@ -2730,8 +2811,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
           child: ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppPalette.success,
-              disabledBackgroundColor:
-                  AppPalette.success.withValues(alpha: 0.25),
+              disabledBackgroundColor: AppPalette.success.withValues(
+                alpha: 0.25,
+              ),
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
@@ -2751,14 +2833,15 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               _controller.isLoading
                   ? 'Emitiendo Orden...'
                   : (_puedeAsignarVenta &&
-                          _esVentaReferida &&
-                          (_idVendedorTitular == null ||
-                              _idVendedorTitular!.trim().isEmpty)
-                      ? 'SELECCIONA VENDEDOR TITULAR PARA CONTINUAR'
-                      : 'CONFIRMAR Y EMITIR ORDEN'),
+                            _esVentaReferida &&
+                            (_idVendedorTitular == null ||
+                                _idVendedorTitular!.trim().isEmpty)
+                        ? 'SELECCIONA VENDEDOR TITULAR PARA CONTINUAR'
+                        : 'CONFIRMAR Y EMITIR ORDEN'),
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
             ),
-            onPressed: (_controller.isLoading ||
+            onPressed:
+                (_controller.isLoading ||
                     (_puedeAsignarVenta &&
                         _esVentaReferida &&
                         (_idVendedorTitular == null ||
@@ -2885,10 +2968,8 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
         onPressed: _controller.isLoading ? null : _controller.previousStep,
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 250),
-          transitionBuilder: (child, animation) => FadeTransition(
-            opacity: animation,
-            child: child,
-          ),
+          transitionBuilder: (child, animation) =>
+              FadeTransition(opacity: animation, child: child),
           child: isExpanded
               ? const SingleChildScrollView(
                   key: ValueKey('expanded_anterior'),
@@ -2936,8 +3017,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
           backgroundColor: AppPalette.primary,
           foregroundColor: AppPalette.textPrimary,
           disabledBackgroundColor: AppPalette.surface.withValues(alpha: 0.6),
-          disabledForegroundColor:
-              AppPalette.textSecondary.withValues(alpha: 0.6),
+          disabledForegroundColor: AppPalette.textSecondary.withValues(
+            alpha: 0.6,
+          ),
           elevation: puedeAvanzar ? 6 : 0,
           shadowColor: Colors.black.withValues(alpha: 0.5),
           shape: RoundedRectangleBorder(
@@ -2948,10 +3030,8 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
         onPressed: puedeAvanzar ? _ejecutarAvanzarPaso : null,
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 250),
-          transitionBuilder: (child, animation) => FadeTransition(
-            opacity: animation,
-            child: child,
-          ),
+          transitionBuilder: (child, animation) =>
+              FadeTransition(opacity: animation, child: child),
           child: isExpanded
               ? const SingleChildScrollView(
                   key: ValueKey('expanded_siguiente'),
@@ -3013,9 +3093,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
       return 'Mesón General (Todos los vendedores)';
     }
     final v = _vendedoresDisponibles.cast<VendedorModel?>().firstWhere(
-          (v) => v?.idUsuario == _idVendedorAsignado,
-          orElse: () => null,
-        );
+      (v) => v?.idUsuario == _idVendedorAsignado,
+      orElse: () => null,
+    );
     return v != null
         ? '[${v.etiquetaRol}] ${v.nombreCompleto}'
         : 'Responsable Asignado';
@@ -3027,9 +3107,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
       return 'Sin Seleccionar (Obligatorio)';
     }
     final v = _vendedoresDisponibles.cast<VendedorModel?>().firstWhere(
-          (v) => v?.idUsuario == _idVendedorTitular,
-          orElse: () => null,
-        );
+      (v) => v?.idUsuario == _idVendedorTitular,
+      orElse: () => null,
+    );
     return v != null
         ? '[${v.etiquetaRol}] ${v.nombreCompleto}'
         : 'Vendedor Titular Seleccionado';
@@ -3096,7 +3176,8 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                             (v) => v != null && v.esVendedoraOnline,
                             orElse: () => null,
                           );
-                      final titularId = online?.idUsuario ??
+                      final titularId =
+                          online?.idUsuario ??
                           (_vendedoresDisponibles.isNotEmpty
                               ? _vendedoresDisponibles.first.idUsuario
                               : null);
@@ -3131,7 +3212,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                 color: AppPalette.background, // Fondo gris
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: AppPalette.primary.withValues(alpha: 0.5), // Borde celeste
+                  color: AppPalette.primary.withValues(
+                    alpha: 0.5,
+                  ), // Borde celeste
                   width: 1.2,
                 ),
               ),
@@ -3317,7 +3400,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               color: AppPalette.background, // Fondo gris
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: AppPalette.primary.withValues(alpha: 0.5), // Borde celeste
+                color: AppPalette.primary.withValues(
+                  alpha: 0.5,
+                ), // Borde celeste
                 width: 1.2,
               ),
             ),
@@ -3344,9 +3429,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                           decoration: BoxDecoration(
                             color: AppPalette.secondary.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(4),
-                            border: Border.all(
-                              color: AppPalette.secondary,
-                            ),
+                            border: Border.all(color: AppPalette.secondary),
                           ),
                           child: const Text(
                             'MESÓN',
@@ -3444,7 +3527,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
             backgroundColor: AppPalette.surface, // Fondo gris
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
-              side: BorderSide(color: AppPalette.primary.withValues(alpha: 0.4)),
+              side: BorderSide(
+                color: AppPalette.primary.withValues(alpha: 0.4),
+              ),
             ),
             title: Row(
               children: [
@@ -3480,7 +3565,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                     color: AppPalette.background, // Fondo gris
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: AppPalette.primary.withValues(alpha: 0.5), // Borde celeste
+                      color: AppPalette.primary.withValues(
+                        alpha: 0.5,
+                      ), // Borde celeste
                       width: 1.2,
                     ),
                   ),
@@ -3505,7 +3592,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                                   vertical: 2,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: AppPalette.secondary.withValues(alpha: 0.2),
+                                  color: AppPalette.secondary.withValues(
+                                    alpha: 0.2,
+                                  ),
                                   borderRadius: BorderRadius.circular(4),
                                   border: Border.all(
                                     color: AppPalette.secondary,
@@ -3547,7 +3636,9 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                                   ),
                                   decoration: BoxDecoration(
                                     color: v.esJefeDeVentas
-                                        ? AppPalette.primary.withValues(alpha: 0.2)
+                                        ? AppPalette.primary.withValues(
+                                            alpha: 0.2,
+                                          )
                                         : Colors.white.withValues(alpha: 0.08),
                                     borderRadius: BorderRadius.circular(4),
                                     border: Border.all(
@@ -3573,7 +3664,8 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                                     '${v.nombreCompleto} (${v.rut})',
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
-                                      color: AppPalette.primary, // Letras celestes
+                                      color:
+                                          AppPalette.primary, // Letras celestes
                                       fontWeight: FontWeight.w600,
                                       fontSize: 13.5,
                                     ),

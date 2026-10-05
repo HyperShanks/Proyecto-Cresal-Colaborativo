@@ -229,6 +229,7 @@ def require_gerencia_role(
     Valido que el usuario autenticado posea rol de Gerencia (id_rol == 4), Administrador (id_rol == 5)
     o Auditor / Gerente Auditor (id_rol == 8).
     Lanzo 403 Forbidden si el rol no está autorizado para acceder al panel gerencial (HU-5.1).
+    Permite consultas generales como listar sucursales activas.
     """
     if current_user.id_rol not in [4, 5, 8]:
         raise HTTPException(
@@ -238,14 +239,55 @@ def require_gerencia_role(
     return current_user
 
 
+def es_usuario_auditor_central(usuario: Usuario) -> bool:
+    """
+    Determina si un usuario con rol Auditor (8) pertenece a Casa Matriz / Central.
+    En producción id_sucursal == 1, o sucursal con 'matriz' o 'central' en el nombre.
+    """
+    if usuario.id_rol != 8:
+        return False
+    if usuario.id_sucursal == 1:
+        return True
+    if usuario.sucursal and usuario.sucursal.nombre_sucursal:
+        nombre = usuario.sucursal.nombre_sucursal.lower()
+        if "matriz" in nombre or "central" in nombre:
+            return True
+    return False
+
+
+def require_gerencia_o_auditor_central(
+    current_user: Usuario = Depends(get_current_user)
+) -> Usuario:
+    """
+    Valida que el usuario tenga acceso a las métricas ejecutivas financieras, operativas y backorders.
+    Permitido para:
+    - Gerencia General (id_rol == 4)
+    - Administrador (id_rol == 5)
+    - Auditor Central / Casa Matriz (id_rol == 8 con id_sucursal == 1 o Casa Matriz)
+    
+    Bloquea a auditores de sucursales satélites (id_rol == 8 con id_sucursal != 1).
+    """
+    if current_user.id_rol not in [4, 5, 8]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso restringido: Se requieren privilegios gerenciales o de Auditoría Central."
+        )
+    if current_user.id_rol == 8 and not es_usuario_auditor_central(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso restringido: Los auditores de sucursal satélite solo tienen acceso al visor de inventario y catálogo."
+        )
+    return current_user
+
+
 def require_auditoria_or_caja_role(
     current_user: Usuario = Depends(get_current_user)
 ) -> Usuario:
     """
     Valido que el usuario autenticado posea rol de Caja (id_rol == 3),
-    Gerencia General (id_rol == 4), Administrador (id_rol == 5) o Auditor (id_rol == 8) para
+    Gerencia General (id_rol == 4), Administrador (id_rol == 5) o Auditor Central (id_rol == 8 con id_sucursal == 1) para
     acceder al historial y visor de auditoría de órdenes (HU-5.2).
-    Lanzo 403 Forbidden si el rol no está autorizado.
+    Lanzo 403 Forbidden si el rol no está autorizado o si es un auditor satélite.
     """
     if current_user.id_rol not in [3, 4, 5, 8]:
         raise HTTPException(
@@ -254,6 +296,11 @@ def require_auditoria_or_caja_role(
                 "Acceso restringido: Se requieren permisos de "
                 "Auditoría, Gerencia o Caja."
             )
+        )
+    if current_user.id_rol == 8 and not es_usuario_auditor_central(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso restringido: Los auditores de sucursal satélite no tienen acceso al historial de órdenes de clientes."
         )
     return current_user
 
