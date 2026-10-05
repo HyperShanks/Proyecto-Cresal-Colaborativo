@@ -870,10 +870,34 @@ def obtener_mis_ventas(
         )
     )
 
+    # Identificar el ID del usuario comercial Limache para la regla de persistencia de órdenes referidas (Tarea 24)
+    usuario_limache = db.query(Usuario).filter(
+        Usuario.estado == "Activo",
+        or_(
+            func.lower(Usuario.email) == "limache@cresal.cl",
+            func.lower(Usuario.apellidos).like("%limache%"),
+        )
+    ).first()
+    id_limache = usuario_limache.id_usuario if usuario_limache else None
+
+    # Regla de Visibilidad en Mis Órdenes:
+    # 1. Órdenes propias donde current_user es el titular comercial.
+    # 2. Excepción Exclusiva Limache: Órdenes asignadas comercialmente a Limache pero emitidas operativamente por current_user.
+    if id_limache:
+        filtro_vendedor = or_(
+            Orden_Venta.id_vendedor == current_user.id_usuario,
+            and_(
+                Orden_Venta.id_vendedor == id_limache,
+                Orden_Venta.id_vendedor_asignado == current_user.id_usuario,
+            ),
+        )
+    else:
+        filtro_vendedor = (Orden_Venta.id_vendedor == current_user.id_usuario)
+
     if seccion == "por_asignar":
         # Apartado exclusivo: Ventas en verde pagadas que están pendientes de asignación física de activo
         query = db.query(Orden_Venta).filter(
-            Orden_Venta.id_vendedor == current_user.id_usuario,
+            filtro_vendedor,
             Orden_Venta.monto_pendiente == 0,
             Orden_Venta.qr_transaccional_salida.is_(None),
             Orden_Venta.id_orden.in_(subquery_por_asignar),
@@ -899,7 +923,7 @@ def obtener_mis_ventas(
     else:
         # Apartado normal: Excluir estrictamente órdenes pendientes de asignación para evitar duplicidad o botones Ver QR inválidos
         query = db.query(Orden_Venta).filter(
-            Orden_Venta.id_vendedor == current_user.id_usuario,
+            filtro_vendedor,
             ~and_(
                 Orden_Venta.monto_pendiente == 0,
                 Orden_Venta.qr_transaccional_salida.is_(None),
@@ -1123,6 +1147,12 @@ def obtener_mis_ventas(
                 )
             )
 
+        es_limache_asig = bool(
+            id_limache
+            and orden.id_vendedor == id_limache
+            and orden.id_vendedor_asignado == current_user.id_usuario
+        )
+
         resultado.append(
             OrdenHistorialItemResponse(
                 id_orden=orden.id_orden,
@@ -1139,6 +1169,8 @@ def obtener_mis_ventas(
                 cliente=cliente_resumen,
                 despacho=despacho_resumen,
                 detalles=detalles_resumen,
+                id_vendedor_asignado=orden.id_vendedor_asignado,
+                es_asignada_limache=es_limache_asig,
             )
         )
 
@@ -1396,7 +1428,13 @@ def listar_vendedores_sucursal(
         Usuario.id_rol.in_(roles),
     )
     if sucursal_id is not None:
-        query = query.filter(Usuario.id_sucursal == sucursal_id)
+        query = query.filter(
+            or_(
+                Usuario.id_sucursal == sucursal_id,
+                func.lower(Usuario.email) == "limache@cresal.cl",
+                func.lower(Usuario.apellidos).like("%limache%"),
+            )
+        )
     usuarios = query.order_by(Usuario.id_rol.desc(), Usuario.nombres).all()
     return [
         VendedorResumenResponse(
@@ -1406,7 +1444,11 @@ def listar_vendedores_sucursal(
             id_sucursal=u.id_sucursal,
             correo=u.email,
             id_rol=u.id_rol,
-            rol_nombre="Jefe de Ventas" if u.id_rol == 6 else ("Vendedora Online" if u.id_rol == 7 else "Vendedor Mesón"),
+            rol_nombre=(
+                "Vendedor Limache"
+                if (u.email and u.email.lower() == "limache@cresal.cl") or (u.apellidos and "limache" in u.apellidos.lower())
+                else ("Jefe de Ventas" if u.id_rol == 6 else ("Vendedora Online" if u.id_rol == 7 else "Vendedor Mesón"))
+            ),
         )
         for u in usuarios
     ]
@@ -2454,6 +2496,10 @@ def reasignar_vendedor_orden(
     id_anterior = orden.id_vendedor
     orden.id_vendedor = nuevo_vendedor.id_usuario
     orden.fecha_actualizacion = datetime.now(timezone.utc)
+
+    # Si se reasigna al usuario comercial Limache, preservar al usuario actual como emisor/asignado operativo
+    if (nuevo_vendedor.email and nuevo_vendedor.email.lower() == "limache@cresal.cl") or (nuevo_vendedor.apellidos and "limache" in nuevo_vendedor.apellidos.lower()):
+        orden.id_vendedor_asignado = current_user.id_usuario
 
     db.commit()
     db.refresh(orden)

@@ -848,6 +848,8 @@ class OrdenHistorialItemResponse(BaseModel):
     cliente: Optional[ClienteOrdenResumen] = None
     despacho: Optional[DespachoOrdenResumen] = None
     detalles: List[DetalleOrdenItemResponse] = []
+    id_vendedor_asignado: Optional[UUID] = None
+    es_asignada_limache: bool = False
 
 
 class EntregaEnvioItemResponse(BaseModel):
@@ -873,6 +875,7 @@ class EntregaEnvioItemResponse(BaseModel):
     vendedor_nombre: Optional[str] = None
     id_vendedor_asignado: Optional[UUID] = None
     vendedor_asignado_nombre: Optional[str] = None
+    es_asignada_limache: bool = False
     preparacion_lista: bool = False
     todos_preparados: bool = False
 

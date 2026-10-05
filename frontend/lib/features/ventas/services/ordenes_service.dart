@@ -334,6 +334,8 @@ class OrdenHistorialModel {
   final ClienteOrdenResumenModel? cliente;
   final DespachoOrdenResumenModel? despacho;
   final List<DetalleOrdenItemModel> detalles;
+  final String? idVendedorAsignado;
+  final bool esAsignadaLimache;
 
   OrdenHistorialModel({
     required this.idOrden,
@@ -350,6 +352,8 @@ class OrdenHistorialModel {
     this.cliente,
     this.despacho,
     required this.detalles,
+    this.idVendedorAsignado,
+    this.esAsignadaLimache = false,
   });
 
   bool get esReservada => estadoOrden.toLowerCase() == 'reservada';
@@ -392,6 +396,8 @@ class OrdenHistorialModel {
     ClienteOrdenResumenModel? cliente,
     DespachoOrdenResumenModel? despacho,
     List<DetalleOrdenItemModel>? detalles,
+    String? idVendedorAsignado,
+    bool? esAsignadaLimache,
   }) {
     return OrdenHistorialModel(
       idOrden: idOrden ?? this.idOrden,
@@ -410,6 +416,8 @@ class OrdenHistorialModel {
       cliente: cliente ?? this.cliente,
       despacho: despacho ?? this.despacho,
       detalles: detalles ?? this.detalles,
+      idVendedorAsignado: idVendedorAsignado ?? this.idVendedorAsignado,
+      esAsignadaLimache: esAsignadaLimache ?? this.esAsignadaLimache,
     );
   }
 
@@ -500,6 +508,8 @@ class OrdenHistorialModel {
               ?.map((d) => DetalleOrdenItemModel.fromJson(d as Map<String, dynamic>))
               .toList() ??
           [],
+      idVendedorAsignado: json['id_vendedor_asignado']?.toString(),
+      esAsignadaLimache: json['es_asignada_limache'] as bool? ?? false,
     );
   }
 }
@@ -1532,6 +1542,10 @@ class VendedorModel {
     this.rolNombre,
   });
 
+  bool get esLimache =>
+      (correo != null && correo!.toLowerCase() == 'limache@cresal.cl') ||
+      nombreCompleto.toLowerCase().contains('limache');
+
   bool get esJefeDeVentas =>
       idRol == 6 ||
       (rolNombre != null && rolNombre!.toLowerCase().contains('jefe')) ||
@@ -1544,6 +1558,7 @@ class VendedorModel {
       nombreCompleto.toLowerCase().contains('online');
 
   String get etiquetaRol {
+    if (esLimache) return 'Ventas Limache';
     if (esJefeDeVentas) return 'Jefe de Ventas';
     if (esVendedoraOnline) return 'Vendedora Online';
     return 'Vendedor Mesón';

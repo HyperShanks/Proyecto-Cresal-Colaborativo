@@ -3167,28 +3167,34 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                                 vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color: v.esVendedoraOnline
-                                    ? Colors.purple.withValues(alpha: 0.25)
-                                    : (v.esJefeDeVentas
-                                        ? AppPalette.primary.withValues(alpha: 0.2)
-                                        : Colors.white.withValues(alpha: 0.08)),
+                                color: v.esLimache
+                                    ? const Color(0xFFD97706).withValues(alpha: 0.25)
+                                    : (v.esVendedoraOnline
+                                        ? Colors.purple.withValues(alpha: 0.25)
+                                        : (v.esJefeDeVentas
+                                            ? AppPalette.primary.withValues(alpha: 0.2)
+                                            : Colors.white.withValues(alpha: 0.08))),
                                 borderRadius: BorderRadius.circular(4),
                                 border: Border.all(
-                                  color: v.esVendedoraOnline
-                                      ? Colors.purpleAccent
-                                      : (v.esJefeDeVentas
-                                          ? AppPalette.primary
-                                          : Colors.white24),
+                                  color: v.esLimache
+                                      ? const Color(0xFFF59E0B)
+                                      : (v.esVendedoraOnline
+                                          ? Colors.purpleAccent
+                                          : (v.esJefeDeVentas
+                                              ? AppPalette.primary
+                                              : Colors.white24)),
                                 ),
                               ),
                               child: Text(
                                 v.etiquetaRol.toUpperCase(),
                                 style: TextStyle(
-                                  color: v.esVendedoraOnline
-                                      ? Colors.purpleAccent
-                                      : (v.esJefeDeVentas
-                                          ? AppPalette.primary
-                                          : Colors.white70),
+                                  color: v.esLimache
+                                      ? const Color(0xFFF59E0B)
+                                      : (v.esVendedoraOnline
+                                          ? Colors.purpleAccent
+                                          : (v.esJefeDeVentas
+                                              ? AppPalette.primary
+                                              : Colors.white70)),
                                   fontWeight: FontWeight.bold,
                                   fontSize: 10,
                                 ),

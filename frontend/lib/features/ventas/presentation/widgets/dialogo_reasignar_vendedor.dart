@@ -285,7 +285,9 @@ class _DialogoReasignarVendedorState extends State<DialogoReasignarVendedor> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Al transferir esta orden, la titularidad y comisiones pasarán al vendedor seleccionado. Esta venta dejará de figurar en tu listado de "Mis Órdenes".',
+                    _vendedorSeleccionado?.esLimache == true
+                        ? 'Al reasignar esta orden a Limache, la comisión comercial se atribuirá a dicho perfil, pero la orden PERMANECERÁ en tu listado de "Mis Órdenes" con la etiqueta [📍 Asignada a Limache] para tu seguimiento operativo.'
+                        : 'Al transferir esta orden, la titularidad y comisiones pasarán al vendedor seleccionado. Esta venta dejará de figurar en tu listado de "Mis Órdenes".',
                     style: AppTypography.small.copyWith(
                       color: const Color(0xFFFDE68A),
                       fontSize: 12,
@@ -374,13 +376,17 @@ class _DialogoReasignarVendedorState extends State<DialogoReasignarVendedor> {
                                 vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color: AppPalette.secondary.withValues(alpha: 0.15),
+                                color: v.esLimache
+                                    ? const Color(0xFFD97706).withValues(alpha: 0.2)
+                                    : AppPalette.secondary.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
                                 v.etiquetaRol,
-                                style: const TextStyle(
-                                  color: AppPalette.secondary,
+                                style: TextStyle(
+                                  color: v.esLimache
+                                      ? const Color(0xFFF59E0B)
+                                      : AppPalette.secondary,
                                   fontSize: 10,
                                   fontWeight: FontWeight.bold,
                                 ),

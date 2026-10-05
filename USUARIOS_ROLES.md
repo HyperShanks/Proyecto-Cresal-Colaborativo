@@ -13,6 +13,7 @@ Este documento detalla los usuarios activos cargados y sincronizados en la base 
 |:---:|:---|:---|:---:|:---|:---:|:---:|:---:|:---|:---:|
 | **1** | **Bodeguero** | Juan Pablo Bodega Pérez | `16.234.567-8` | `bodega@cresal.cl` | `Password123!` | `1001` | Viña del Mar (1) | PDA Industrial (Sunmi/Zebra) | **Dark Mode** (`ThemeMode.dark`) |
 | **2** | **Vendedor (Mesón)** | Carlos Mendoza Silva | `19.876.543-2` | `carlos.mendoza@cresal.cl` | `Password123!` | `2002` | Viña del Mar (1) | Touch POS / All-in-One | **Light Mode** (`ThemeMode.light`) |
+| **2** | **Vendedor (Limache)** | Ventas Limache | `77.888.999-4` | `limache@cresal.cl` | `Password123!` | `2020` | Limache (2) | Perfil Comercial Inter-Sucursal | **Light Mode** (`ThemeMode.light`) |
 | **3** | **Caja** | Lorena Valenzuela Castro | `15.789.123-4` | `lorena.valenzuela@cresal.cl` | `Password123!` | `3003` | Viña del Mar (1) | Desktop POS (Teclado numérico) | **Light Mode** (`ThemeMode.light`) |
 | **4** | **Gerente** | Roberto Gerente Silva | `14.567.890-1` | `gerente@cresal.cl` | `Password123!` | `4004` | Viña del Mar (1) | Monitor Ejecutivo (Full HD/2K) | **Light Mode** (`ThemeMode.light`) |
 | **5** | **Administrador** | Admin Sistema Cresal | `11.111.111-1` | `admin@cresal.cl` | `Password123!` | `5005` | Viña del Mar (1) | Desktop / Laptop Técnica | **Light Mode** (`ThemeMode.light`) |

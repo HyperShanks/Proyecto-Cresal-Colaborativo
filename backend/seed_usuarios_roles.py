@@ -110,6 +110,17 @@ USUARIOS_A_SEMBRAR = [
         "pin_acceso": "4598",
         "id_sucursal": 1,
         "estado": "Activo"
+    },
+    {
+        "id_rol": 2,
+        "email": "limache@cresal.cl",
+        "rut_usuario": "77.888.999-4",
+        "nombres": "Ventas",
+        "apellidos": "Limache",
+        "password_plano": "Password123!",
+        "pin_acceso": "2020",
+        "id_sucursal": 2,
+        "estado": "Activo"
     }
 ]
 
