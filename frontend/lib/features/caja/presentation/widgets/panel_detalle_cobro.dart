@@ -400,10 +400,10 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                         ],
                       ),
                     ),
-                    if ((orden.abonoRequerido > 0 ||
-                            (orden.montoACobrar > 0 &&
-                                orden.montoACobrar < orden.totalOperacion)) &&
-                        orden.esPrimerAbono) ...[
+                    if (orden.esPrimerAbono &&
+                        (orden.abonoRequerido > 0 ? orden.abonoRequerido : orden.montoACobrar) > 0 &&
+                        (orden.abonoRequerido > 0 ? orden.abonoRequerido : orden.montoACobrar) < orden.totalOperacion &&
+                        orden.saldoPendiente > 0) ...[
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 10,
@@ -1174,44 +1174,53 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppPalette.tertiary.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  _getIconoMetodo(metodoNombre),
-                  size: 20,
-                  color: AppPalette.tertiary,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Canal Activo: $metodoNombre',
-                    style: AppTypography.body.copyWith(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 14,
-                      color: AppPalette.textPrimaryLight,
-                    ),
+          Expanded(
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppPalette.tertiary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Cubre el 100% del monto acordado',
-                    style: AppTypography.small.copyWith(
-                      fontSize: 13,
-                      color: AppPalette.textSecondaryLight,
-                    ),
+                  child: Icon(
+                    _getIconoMetodo(metodoNombre),
+                    size: 20,
+                    color: AppPalette.tertiary,
                   ),
-                ],
-              ),
-            ],
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Canal Activo: $metodoNombre',
+                        style: AppTypography.body.copyWith(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14,
+                          color: AppPalette.textPrimaryLight,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Cubre el 100% del monto acordado',
+                        style: AppTypography.small.copyWith(
+                          fontSize: 13,
+                          color: AppPalette.textSecondaryLight,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
+          const SizedBox(width: 8),
           Text(
             CobroPendienteCard.formatClp(monto),
             style: AppTypography.title.copyWith(
@@ -1874,10 +1883,10 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
           ),
           const SizedBox(height: 14),
 
-          if ((orden.abonoRequerido > 0 ||
-                  (orden.montoACobrar > 0 &&
-                      orden.montoACobrar < orden.totalOperacion)) &&
-              orden.esPrimerAbono) ...[
+          if (orden.esPrimerAbono &&
+              (orden.abonoRequerido > 0 ? orden.abonoRequerido : orden.montoACobrar) > 0 &&
+              (orden.abonoRequerido > 0 ? orden.abonoRequerido : orden.montoACobrar) < orden.totalOperacion &&
+              orden.saldoPendiente > 0) ...[
             Container(
               margin: const EdgeInsets.only(bottom: 12),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

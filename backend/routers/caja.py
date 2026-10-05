@@ -254,11 +254,11 @@ def obtener_cobros_pendientes(
             if orden.monto_pendiente == orden.total_venta:
                 # El cliente no ha pagado nada aún
                 abono_prev = 0
-                if abono_req > 0:
+                if abono_req > 0 and abono_req < orden.total_venta:
                     # Se requiere un abono comercial acordado como sugerencia inicial
                     monto_cobrar = min(abono_req, orden.monto_pendiente)
                 else:
-                    # Venta estándar sin abono: se cobra el total pendiente
+                    # Venta estándar sin abono (o abono que cubre el 100%): se cobra el total pendiente
                     monto_cobrar = orden.monto_pendiente
             else:
                 # El cliente ya abonó previamente
@@ -283,7 +283,7 @@ def obtener_cobros_pendientes(
                 total_operacion=total_op,
                 descuento=getattr(orden, "descuento", 0) or 0,
                 abono_previo=abono_prev,
-                abono_requerido=abono_req,
+                abono_requerido=abono_req if (abono_req > 0 and abono_req < orden.total_venta) else 0,
                 saldo_pendiente=saldo_pendiente,
                 monto_a_cobrar=monto_cobrar,
                 historial_abonos=historial_dto,

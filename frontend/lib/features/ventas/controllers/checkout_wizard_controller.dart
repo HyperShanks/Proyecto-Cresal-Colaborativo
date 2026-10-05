@@ -367,6 +367,9 @@ class CheckoutWizardController extends ChangeNotifier {
           ? resumenNotasPreparacion.join(' • ')
           : _notasGenerales;
 
+      final int abonoFinal = (totalAbonos >= totalVenta) ? 0 : totalAbonos;
+      final int saldoFinal = (totalAbonos >= totalVenta) ? totalVenta : montoPendiente;
+
       final request = CheckoutWizardRequestModel(
         idCliente: _clienteSeleccionado!.idCliente,
         cliente: _clienteSeleccionado,
@@ -376,8 +379,8 @@ class CheckoutWizardController extends ChangeNotifier {
         idVendedorTitular: _idVendedorTitular,
         totalVenta: totalVenta,
         descuento: _descuento,
-        montoPendiente: montoPendiente,
-        montoAbono: totalAbonos,
+        montoPendiente: saldoFinal,
+        montoAbono: abonoFinal,
         instruccionesBodega: bodegaNotas,
         itemsInventariados: _itemsInventariados.map((i) => {
           'id_activo': i['id_activo'].toString(),

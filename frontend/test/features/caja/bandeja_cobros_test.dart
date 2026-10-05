@@ -226,15 +226,13 @@ void main() {
 
       await provider.cargarCobrosPendientes(sucursalId: 1);
 
-      // Por defecto arranca en 'VENTA' (Ventas en Tienda)
-      expect(provider.filtroTipo, 'VENTA');
-      expect(provider.cobros.length, 1);
-      expect(provider.cobros.first.folioDocumento, 'ORD-9780');
+      // Por defecto arranca en 'NUEVAS' (u ordenes frescas por cobrar)
+      expect(provider.cobros.length, 2);
+      expect(provider.cobros.map((c) => c.folioDocumento), containsAll(['ORD-9780', 'RES-5401']));
 
       expect(provider.totalCobros, 3);
-      expect(provider.totalVentasCount, 1);
+      expect(provider.totalNuevasCount, 2);
       expect(provider.totalAbonosCount, 1);
-      expect(provider.totalBackordersCount, 1);
       expect(provider.montoTotalPendiente, 2250000);
 
       // Selección de orden
@@ -242,30 +240,22 @@ void main() {
       expect(provider.ordenSeleccionada?.idReferencia, sampleVenta.idReferencia);
     });
 
-    test('CajaProvider filtra correctamente por VENTA, ABONOS y BACKORDER', () async {
+    test('CajaProvider filtra correctamente por NUEVAS y ABONOS', () async {
       final provider = CajaProvider(cajaService: mockService);
       await provider.cargarCobrosPendientes(sucursalId: 1);
 
-      // Píldora Venta en Tienda
-      provider.setFiltroTipo('VENTA');
+      // Píldora Nuevas por Cobrar
+      provider.setFiltroTipo('NUEVAS');
       await Future.delayed(Duration.zero);
-      expect(provider.filtroTipo, 'VENTA');
-      expect(provider.cobros.length, 1);
-      expect(provider.cobros.first.folioDocumento, 'ORD-9780');
+      expect(provider.cobros.length, 2);
+      expect(provider.cobros.map((c) => c.folioDocumento), containsAll(['ORD-9780', 'RES-5401']));
 
-      // Píldora Abonos Activos
+      // Píldora Saldos y Abonos
       provider.setFiltroTipo('ABONOS');
       await Future.delayed(Duration.zero);
       expect(provider.filtroTipo, 'ABONOS');
       expect(provider.cobros.length, 1);
       expect(provider.cobros.first.folioDocumento, 'ORD-8820');
-
-      // Píldora Ventas en Verde
-      provider.setFiltroTipo('BACKORDER');
-      await Future.delayed(Duration.zero);
-      expect(provider.filtroTipo, 'BACKORDER');
-      expect(provider.cobros.length, 1);
-      expect(provider.cobros.first.folioDocumento, 'RES-5401');
     });
 
     test('CajaProvider búsqueda global encuentra órdenes de cualquier categoría reactivamente', () async {
@@ -289,11 +279,11 @@ void main() {
       expect(provider.cobros.length, 1);
       expect(provider.cobros.first.folioDocumento, 'ORD-8820');
 
-      // Limpiar búsqueda restaura la categoría seleccionada
+      // Limpiar búsqueda restaura la categoría seleccionada (Nuevas por Cobrar con 2 órdenes)
       provider.buscar('');
       await Future.delayed(const Duration(milliseconds: 200));
-      expect(provider.cobros.length, 1);
-      expect(provider.cobros.first.folioDocumento, 'ORD-9780');
+      expect(provider.cobros.length, 2);
+      expect(provider.cobros.map((c) => c.folioDocumento), containsAll(['ORD-9780', 'RES-5401']));
     });
 
     test('CajaProvider maneja errores de red adecuadamente', () async {
@@ -420,17 +410,16 @@ void main() {
       expect(find.text('CAJA'), findsOneWidget);
       expect(find.text('Pagos Pendientes'), findsOneWidget);
       expect(find.text('3 órdenes esperando cobro'), findsOneWidget);
-      expect(find.text('Ventas en Tienda (1)'), findsOneWidget);
-      expect(find.text('Abonos Activos (1)'), findsOneWidget);
-      expect(find.text('Ventas en Verde (1)'), findsOneWidget);
+      expect(find.text('Nuevas por Cobrar (2)'), findsOneWidget);
+      expect(find.text('Saldos y Abonos (1)'), findsOneWidget);
 
-      // Estado inicial en Ventas en Tienda
+      // Estado inicial en Nuevas por Cobrar (ambas órdenes frescas)
       expect(find.text('ORD-9780'), findsOneWidget);
+      expect(find.text('RES-5401'), findsOneWidget);
       expect(find.text('ORD-8820'), findsNothing);
-      expect(find.text('RES-5401'), findsNothing);
 
-      // Tap en píldora Abonos Activos
-      await tester.tap(find.text('Abonos Activos (1)'));
+      // Tap en píldora Saldos y Abonos
+      await tester.tap(find.text('Saldos y Abonos (1)'));
       await tester.pumpAndSettle();
       expect(find.text('ORD-8820'), findsOneWidget);
       expect(find.text('ORD-9780'), findsNothing);
@@ -510,9 +499,7 @@ void main() {
       expect(find.text('Motor MG ZS 1.5 VTi-Tech Completo'), findsWidgets);
       expect(find.text('TOTAL VENTA'), findsOneWidget);
 
-      // Cambiar a pestaña Ventas en Verde y seleccionar RES-5401
-      await tester.tap(find.text('Ventas en Verde (1)'));
-      await tester.pumpAndSettle();
+      // Seleccionar orden de Venta en Verde RES-5401 directamente en Nuevas por Cobrar
       await tester.tap(find.text('RES-5401').first);
       await tester.pumpAndSettle();
 

@@ -59,7 +59,7 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
     _cargarDatosCajera();
 
     _cajaPollingManager = SilentPollingManager(
-      interval: const Duration(seconds: 12),
+      interval: const Duration(seconds: 3),
       debugLabel: 'CajaPolling',
       shouldPause: () {
         if (_selectedNavIndex == 0) {

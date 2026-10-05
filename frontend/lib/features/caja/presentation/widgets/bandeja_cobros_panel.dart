@@ -48,8 +48,8 @@ class _BandejaCobrosPanelState extends State<BandejaCobrosPanel> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _buildHeader(provider),
-          _buildPillFilters(provider),
           _buildSearchBar(provider),
+          _buildPillFilters(provider),
           const SizedBox(height: 4),
           Expanded(child: _buildListContent(provider)),
         ],
@@ -164,8 +164,11 @@ class _BandejaCobrosPanelState extends State<BandejaCobrosPanel> {
   }
 
   Widget _buildPillFilters(CajaProvider provider) {
+    final bool esNuevas = provider.filtroTipo == 'NUEVAS' || provider.filtroTipo == 'VENTA';
+    final bool esAbonos = provider.filtroTipo == 'ABONOS' || provider.filtroTipo == 'ABONO';
+
     return Container(
-      margin: const EdgeInsets.fromLTRB(14, 12, 14, 6),
+      margin: const EdgeInsets.fromLTRB(14, 4, 14, 8),
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: AppPalette.backgroundLight,
@@ -175,24 +178,17 @@ class _BandejaCobrosPanelState extends State<BandejaCobrosPanel> {
       child: Row(
         children: [
           _buildPill(
-            label: 'Ventas en Tienda (${provider.totalVentasCount})',
-            isSelected: provider.filtroTipo == 'VENTA',
-            activeColor: const Color(0xFFB78103),
-            onTap: () => provider.setFiltroTipo('VENTA'),
+            label: 'Nuevas por Cobrar (${provider.totalNuevasCount})',
+            isSelected: esNuevas,
+            activeColor: AppPalette.primary,
+            onTap: () => provider.setFiltroTipo('NUEVAS'),
           ),
           const SizedBox(width: 4),
           _buildPill(
-            label: 'Abonos Activos (${provider.totalAbonosCount})',
-            isSelected: provider.filtroTipo == 'ABONOS' || provider.filtroTipo == 'ABONO',
+            label: 'Saldos y Abonos (${provider.totalAbonosCount})',
+            isSelected: esAbonos,
             activeColor: const Color(0xFF7E22CE),
             onTap: () => provider.setFiltroTipo('ABONOS'),
-          ),
-          const SizedBox(width: 4),
-          _buildPill(
-            label: 'Ventas en Verde (${provider.totalBackordersCount})',
-            isSelected: provider.filtroTipo == 'BACKORDER',
-            activeColor: const Color(0xFF4F46E5),
-            onTap: () => provider.setFiltroTipo('BACKORDER'),
           ),
         ],
       ),

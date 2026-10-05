@@ -2849,6 +2849,10 @@ def checkout_wizard(
         if abono_req_val == 0 and request.reservas:
             abono_req_val = sum((r.abono_requerido if getattr(r, "abono_requerido", None) is not None else r.monto_abonado) for r in request.reservas)
 
+        # Si el abono acordado cubre o supera el total de la venta, es un cobro total estándar
+        if abono_req_val >= request.total_venta:
+            abono_req_val = 0
+
         desc_val = max(0, getattr(request, "descuento", 0) or 0)
         orden = Orden_Venta(
             id_orden=id_orden,

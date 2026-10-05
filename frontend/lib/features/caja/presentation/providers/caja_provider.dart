@@ -45,6 +45,8 @@ class CajaProvider extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   int get totalCobros => _todosLosCobros.length;
 
+  int get totalNuevasCount =>
+      _todosLosCobros.where((c) => c.abonoPrevio == 0).length;
   int get totalVentasCount =>
       _todosLosCobros.where((c) => c.esVenta && c.abonoPrevio == 0).length;
   int get totalAbonosCount =>
@@ -220,8 +222,8 @@ class CajaProvider extends ChangeNotifier {
       }).toList();
     } else {
       // Si no hay búsqueda activa, se aplica el filtro de la píldora seleccionada
-      if (_filtroTipo == 'VENTA') {
-        resultado = resultado.where((c) => c.esVenta && c.abonoPrevio == 0).toList();
+      if (_filtroTipo == 'NUEVAS' || _filtroTipo == 'VENTA') {
+        resultado = resultado.where((c) => c.abonoPrevio == 0).toList();
       } else if (_filtroTipo == 'ABONOS' || _filtroTipo == 'ABONO') {
         resultado = resultado.where((c) => c.abonoPrevio > 0 && c.saldoPendiente > 0).toList();
       } else if (_filtroTipo == 'BACKORDER') {
@@ -256,16 +258,19 @@ class CajaProvider extends ChangeNotifier {
     _ordenSeleccionada = orden;
     _ultimoResultadoCobro = null;
     if (orden != null) {
-      final bool tieneAbonoAcordado = (orden.abonoRequerido > 0 ||
-              (orden.montoACobrar > 0 && orden.montoACobrar < orden.totalOperacion)) &&
-          orden.esPrimerAbono;
       final int abonoInicial =
           orden.abonoRequerido > 0 ? orden.abonoRequerido : orden.montoACobrar;
+      final bool tieneAbonoAcordado = orden.esPrimerAbono &&
+          abonoInicial > 0 &&
+          abonoInicial < orden.totalOperacion &&
+          orden.saldoPendiente > 0;
 
-      if (tieneAbonoAcordado && abonoInicial > 0) {
+      if (tieneAbonoAcordado) {
         _modalidad = 'ABONO';
         _montoDeclarado = abonoInicial;
-      } else if (orden.esPrimerAbono && orden.pisoPrimerAbono > 0) {
+      } else if (orden.esPrimerAbono &&
+          orden.pisoPrimerAbono > 0 &&
+          orden.pisoPrimerAbono < orden.totalOperacion) {
         _modalidad = 'ABONO';
         _montoDeclarado = orden.pisoPrimerAbono;
       } else {
