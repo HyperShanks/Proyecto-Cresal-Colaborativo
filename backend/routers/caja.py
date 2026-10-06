@@ -4,11 +4,12 @@ from typing import Optional, List
 from datetime import datetime, timezone, time, timedelta, date
 from uuid import UUID
 from zoneinfo import ZoneInfo
-from fastapi import APIRouter, Depends, Query, HTTPException, status
+from fastapi import APIRouter, Depends, Query, HTTPException, status, BackgroundTasks
 from sqlalchemy import or_, and_, func, select
 from sqlalchemy.orm import Session, aliased
 
 from database import get_db
+from services.telegram_service import TelegramService
 from models import (
     Usuario,
     Cliente,
@@ -621,6 +622,7 @@ def validar_activo_backorder(
 )
 def registrar_cobro(
     payload: RegistrarCobroRequest,
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_caja_role),
 ):
@@ -1055,6 +1057,74 @@ def registrar_cobro(
                 transacciones_creadas_ids.append(id_transaccion)
 
         db.commit()
+
+        # =========================================================================
+        # NOTIFICACIÓN ASÍNCRONA A GERENCIA VÍA TELEGRAM
+        # =========================================================================
+        try:
+            if nuevo_saldo <= 0:
+                cajera_nombre = f"{current_user.nombres} {current_user.apellidos}".strip()
+                medios_str = ", ".join(dict.fromkeys(p.metodo.value for p in payload.pagos))
+
+                # Caso 1: Venta en Verde (Reserva Backorder pagada al 100%)
+                reserva_obj = None
+                if payload.tipo_operacion == TipoOperacionEnum.BACKORDER and 'reserva' in locals():
+                    reserva_obj = reserva
+                elif 'reserva_vinculada' in locals() and reserva_vinculada is not None:
+                    reserva_obj = reserva_vinculada
+
+                if reserva_obj is not None:
+                    cli_obj = db.query(Cliente).filter(Cliente.id_cliente == reserva_obj.id_cliente).first()
+                    vend_obj = db.query(Usuario).filter(Usuario.id_usuario == reserva_obj.id_vendedor).first()
+                    cat_obj = db.query(Categoria_Activo).filter(Categoria_Activo.id_categoria == reserva_obj.id_categoria_requerida).first() if reserva_obj.id_categoria_requerida else None
+
+                    cli_nom = f"{cli_obj.nombres} {cli_obj.apellidos}".strip() if cli_obj else "Cliente Particular"
+                    cli_rut = cli_obj.rut_cliente if cli_obj else "S/RUT"
+                    cli_tel = cli_obj.telefono if cli_obj and cli_obj.telefono else "Sin teléfono registrado"
+                    vend_nom = f"{vend_obj.nombres} {vend_obj.apellidos}".strip() if vend_obj else "Vendedor"
+                    cat_nom = cat_obj.nombre_categoria if cat_obj else "Repuesto por Encargo"
+                    marca_mod = f"{reserva_obj.marca_requerida or ''} {reserva_obj.modelo_requerido or ''}".strip() or "Genérico"
+
+                    background_tasks.add_task(
+                        TelegramService.notificar_venta_en_verde_pagada,
+                        folio=folio_doc,
+                        cliente_nombre=cli_nom,
+                        rut_cliente=cli_rut,
+                        telefono_contacto=cli_tel,
+                        categoria_requerida=cat_nom,
+                        marca_modelo=marca_mod,
+                        vendedor_nombre=vend_nom,
+                        cajero_nombre=cajera_nombre,
+                        monto_pagado=payload.monto_declarado,
+                        medio_pago=medios_str,
+                    )
+
+                # Caso 2: Venta Regular en Caja (Solo si tiene al menos un repuesto inventariado)
+                elif 'orden' in locals() and orden is not None:
+                    detalles_orden = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == orden.id_orden).all()
+                    items_inv = [d for d in detalles_orden if d.id_activo is not None]
+
+                    if len(items_inv) > 0:
+                        cli_obj = db.query(Cliente).filter(Cliente.id_cliente == orden.id_cliente).first()
+                        vend_obj = db.query(Usuario).filter(Usuario.id_usuario == orden.id_vendedor).first()
+
+                        cli_nom = f"{cli_obj.nombres} {cli_obj.apellidos}".strip() if cli_obj else "Cliente Particular"
+                        cli_rut = cli_obj.rut_cliente if cli_obj else "S/RUT"
+                        vend_nom = f"{vend_obj.nombres} {vend_obj.apellidos}".strip() if vend_obj else "Vendedor"
+
+                        background_tasks.add_task(
+                            TelegramService.notificar_venta_pagada,
+                            folio=folio_doc,
+                            cliente_nombre=cli_nom,
+                            rut_cliente=cli_rut,
+                            vendedor_nombre=vend_nom,
+                            cajero_nombre=cajera_nombre,
+                            total_venta=orden.total_venta,
+                            medio_pago=medios_str,
+                            cantidad_items_inventariados=len(items_inv),
+                        )
+        except Exception as e_notif:
+            print(f"⚠️ [TELEGRAM] Error no bloqueante al preparar notificación: {e_notif}")
 
     except HTTPException:
         db.rollback()

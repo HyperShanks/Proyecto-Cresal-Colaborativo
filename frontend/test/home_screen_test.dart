@@ -120,18 +120,14 @@ void main() {
   });
 
   group('HomeScreen - Cuadrícula de Acciones Frecuentes y Buscador', () {
-    testWidgets('Renderiza Recepción de Vehículo y navega correctamente', (tester) async {
+    testWidgets('Segregación: No renderiza Recepción de Vehículo ni Reingresos y Alertas en Acciones Frecuentes', (tester) async {
       await tester.pumpWidget(_createHomeScreenWrapper());
       await tester.pumpAndSettle();
 
-      expect(find.text('Recepción de Vehículo'), findsOneWidget);
-      expect(find.text('Requiere OCR: Fotografiar el N° de ingreso físico del vehículo'), findsOneWidget);
-      expect(find.byIcon(Icons.local_shipping_outlined), findsOneWidget);
-
-      await tester.tap(find.text('Recepción de Vehículo'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Recepcion Screen Mock'), findsOneWidget);
+      expect(find.text('Recepción de Vehículo'), findsNothing);
+      expect(find.text('Reingresos y Alertas'), findsNothing);
+      expect(find.text('Bandeja de logística inversa y piezas devueltas'), findsNothing);
+      expect(find.byIcon(Icons.assignment_return_rounded), findsNothing);
     });
 
     testWidgets('Renderiza Paletizado de Piezas y navega correctamente', (tester) async {

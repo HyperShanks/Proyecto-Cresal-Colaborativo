@@ -7,11 +7,12 @@ from collections import defaultdict
 from datetime import datetime, time as datetime_time, timezone, timedelta
 from zoneinfo import ZoneInfo
 from typing import List, Optional, Dict
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy import or_, and_, func, cast, String, case
 
 from database import get_db
+from services.telegram_service import TelegramService
 from models import (
     Usuario, Cliente, Region, Comuna, Orden_Venta, Detalle_Orden,
     Despacho, Activo_Inventariado, Estado_Activo,
@@ -876,10 +877,34 @@ def obtener_mis_ventas(
         )
     )
 
+    # Identificar el ID del usuario comercial Limache para la regla de persistencia de órdenes referidas (Tarea 24)
+    usuario_limache = db.query(Usuario).filter(
+        Usuario.estado == "Activo",
+        or_(
+            func.lower(Usuario.email) == "limache@cresal.cl",
+            func.lower(Usuario.apellidos).like("%limache%"),
+        )
+    ).first()
+    id_limache = usuario_limache.id_usuario if usuario_limache else None
+
+    # Regla de Visibilidad en Mis Órdenes:
+    # 1. Órdenes propias donde current_user es el titular comercial.
+    # 2. Excepción Exclusiva Limache: Órdenes asignadas comercialmente a Limache pero emitidas operativamente por current_user.
+    if id_limache:
+        filtro_vendedor = or_(
+            Orden_Venta.id_vendedor == current_user.id_usuario,
+            and_(
+                Orden_Venta.id_vendedor == id_limache,
+                Orden_Venta.id_vendedor_asignado == current_user.id_usuario,
+            ),
+        )
+    else:
+        filtro_vendedor = (Orden_Venta.id_vendedor == current_user.id_usuario)
+
     if seccion == "por_asignar":
         # Apartado exclusivo: Ventas en verde pagadas que están pendientes de asignación física de activo
         query = db.query(Orden_Venta).filter(
-            Orden_Venta.id_vendedor == current_user.id_usuario,
+            filtro_vendedor,
             Orden_Venta.monto_pendiente == 0,
             Orden_Venta.qr_transaccional_salida.is_(None),
             Orden_Venta.id_orden.in_(subquery_por_asignar),
@@ -905,7 +930,7 @@ def obtener_mis_ventas(
     else:
         # Apartado normal: Excluir estrictamente órdenes pendientes de asignación para evitar duplicidad o botones Ver QR inválidos
         query = db.query(Orden_Venta).filter(
-            Orden_Venta.id_vendedor == current_user.id_usuario,
+            filtro_vendedor,
             ~and_(
                 Orden_Venta.monto_pendiente == 0,
                 Orden_Venta.qr_transaccional_salida.is_(None),
@@ -1129,6 +1154,12 @@ def obtener_mis_ventas(
                 )
             )
 
+        es_limache_asig = bool(
+            id_limache
+            and orden.id_vendedor == id_limache
+            and orden.id_vendedor_asignado == current_user.id_usuario
+        )
+
         resultado.append(
             OrdenHistorialItemResponse(
                 id_orden=orden.id_orden,
@@ -1145,6 +1176,8 @@ def obtener_mis_ventas(
                 cliente=cliente_resumen,
                 despacho=despacho_resumen,
                 detalles=detalles_resumen,
+                id_vendedor_asignado=orden.id_vendedor_asignado,
+                es_asignada_limache=es_limache_asig,
             )
         )
 
@@ -1408,7 +1441,13 @@ def listar_vendedores_sucursal(
         Usuario.id_rol.in_(roles),
     )
     if sucursal_id is not None:
-        query = query.filter(Usuario.id_sucursal == sucursal_id)
+        query = query.filter(
+            or_(
+                Usuario.id_sucursal == sucursal_id,
+                func.lower(Usuario.email) == "limache@cresal.cl",
+                func.lower(Usuario.apellidos).like("%limache%"),
+            )
+        )
     usuarios = query.order_by(Usuario.id_rol.desc(), Usuario.nombres).all()
     return [
         VendedorResumenResponse(
@@ -1418,7 +1457,11 @@ def listar_vendedores_sucursal(
             id_sucursal=u.id_sucursal,
             correo=u.email,
             id_rol=u.id_rol,
-            rol_nombre="Jefe de Ventas" if u.id_rol == 6 else ("Vendedora Online" if u.id_rol == 7 else "Vendedor Mesón"),
+            rol_nombre=(
+                "Vendedor Limache"
+                if (u.email and u.email.lower() == "limache@cresal.cl") or (u.apellidos and "limache" in u.apellidos.lower())
+                else ("Jefe de Ventas" if u.id_rol == 6 else ("Vendedora Online" if u.id_rol == 7 else "Vendedor Mesón"))
+            ),
         )
         for u in usuarios
     ]
@@ -2199,6 +2242,7 @@ def pagar_orden(
 def anular_orden_post(
     id_orden: uuid.UUID,
     payload: Optional[AnularOrdenRequest] = None,
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
@@ -2216,6 +2260,21 @@ def anular_orden_post(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No tienes permisos de ventas o administración para anular órdenes."
+        )
+
+    # Validación Poka-Yoke: Motivo y observación obligatoria (>= 10 chars)
+    motivo_final = (payload.motivo or payload.motivo_anulacion) if payload else None
+    observacion_final = (payload.observacion or payload.observacion_anulacion) if payload else None
+
+    if not motivo_final or not motivo_final.strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="El motivo de anulación es obligatorio."
+        )
+    if not observacion_final or len(observacion_final.strip()) < 10:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="La justificación u observación debe contener al menos 10 caracteres explicativos."
         )
 
     orden = db.query(Orden_Venta).filter(Orden_Venta.id_orden == id_orden).first()
@@ -2238,9 +2297,13 @@ def anular_orden_post(
         )
 
     try:
-        # Paso A: Cambiar estado de la orden a 'Anulada'
+        # Paso A: Cambiar estado de la orden a 'Anulada' y persistir auditoría forense
         orden.estado_orden = "Anulada"
         orden.monto_pendiente = 0
+        orden.motivo_anulacion = motivo_final.strip()
+        orden.observacion_anulacion = observacion_final.strip()
+        orden.id_usuario_anulacion = current_user.id_usuario
+        orden.fecha_anulacion = datetime.now(timezone.utc)
         orden.fecha_actualizacion = datetime.now(timezone.utc)
 
         # Paso B: Reversar pagos asociados
@@ -2276,6 +2339,19 @@ def anular_orden_post(
         db.commit()
         db.refresh(orden)
 
+        # Disparar alerta asíncrona a Telegram para Gerencia (no bloqueante)
+        nombre_usuario = f"{current_user.nombres} {current_user.apellidos}".strip()
+        background_tasks.add_task(
+            TelegramService.notificar_orden_anulada,
+            folio=orden.folio,
+            total_venta=orden.total_venta,
+            usuario_nombre=nombre_usuario,
+            rol_nombre=current_user.nombre_rol or "Vendedor",
+            motivo_anulacion=motivo_final,
+            observacion_anulacion=observacion_final,
+            cantidad_items_liberados=activos_afectados,
+        )
+
         mensaje = "Orden anulada, pagos reversados y tareas de reingreso generadas"
         return OrdenAnulacionResponse(
             id_orden=orden.id_orden,
@@ -2285,7 +2361,8 @@ def anular_orden_post(
             activos_liberados=activos_afectados,
             pagos_reversados=pagos_reversados,
             monto_reversado=monto_reversado,
-            motivo_anulacion=payload.motivo_anulacion if payload else None,
+            motivo_anulacion=orden.motivo_anulacion,
+            observacion_anulacion=orden.observacion_anulacion,
         )
 
     except HTTPException:
@@ -2444,6 +2521,10 @@ def reasignar_vendedor_orden(
     id_anterior = orden.id_vendedor
     orden.id_vendedor = nuevo_vendedor.id_usuario
     orden.fecha_actualizacion = datetime.now(timezone.utc)
+
+    # Si se reasigna al usuario comercial Limache, preservar al usuario actual como emisor/asignado operativo
+    if (nuevo_vendedor.email and nuevo_vendedor.email.lower() == "limache@cresal.cl") or (nuevo_vendedor.apellidos and "limache" in nuevo_vendedor.apellidos.lower()):
+        orden.id_vendedor_asignado = current_user.id_usuario
 
     db.commit()
     db.refresh(orden)
@@ -2775,6 +2856,24 @@ def checkout_wizard(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="La orden debe contener al menos un producto inventariado, ítem manual o reserva por encargo."
         )
+
+    # 2.1 Restricción Venta en Verde: Prohibir Consumidor Final y exigir datos de contacto
+    if num_res > 0:
+        rut_cliente_norm = (cliente.rut_cliente or "").replace(".", "").replace("-", "").strip().upper()
+        nombre_cliente_norm = f"{cliente.nombres or ''} {cliente.apellidos or ''}".upper()
+        if (
+            rut_cliente_norm in ["66666666", "6666666", "666666666"]
+            or "CONSUMIDOR FINAL" in nombre_cliente_norm
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Las compras bajo la modalidad de Venta en Verde requieren obligatoriamente la identificación del cliente (RUT, nombres y teléfono de contacto). No se permite asignar a Consumidor Final."
+            )
+        if not cliente.telefono or len(cliente.telefono.strip()) < 8:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Las compras bajo la modalidad de Venta en Verde requieren registrar un teléfono de contacto directo del cliente para coordinar la entrega o retiro."
+            )
 
     # Validar datos de despacho si aplica
     tipo_ent = (request.tipo_entrega or "Retiro").strip()

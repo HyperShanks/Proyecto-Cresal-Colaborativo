@@ -114,6 +114,37 @@ def get_current_user(
     return usuario
 
 
+_bearer_scheme_optional = HTTPBearer(auto_error=False)
+
+
+def get_optional_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer_scheme_optional),
+    db: Session = Depends(get_db),
+) -> Optional[Usuario]:
+    """
+    Dependencia de FastAPI que valida opcionalmente el token JWT:
+    - Si el token es válido y el usuario activo, retorna el modelo Usuario.
+    - Si no se envía token o está expirado, retorna None sin lanzar 401.
+    """
+    if not credentials or not credentials.credentials:
+        return None
+    try:
+        payload = jwt.decode(
+            credentials.credentials,
+            settings.JWT_SECRET_KEY,
+            algorithms=[settings.ALGORITHM],
+        )
+        user_id = payload.get("sub")
+        if user_id:
+            usuario = db.query(Usuario).filter(Usuario.id_usuario == UUID(user_id)).first()
+            if usuario and usuario.estado == "Activo":
+                return usuario
+    except Exception:
+        return None
+    return None
+
+
+
 def verificar_rol_jefe_ventas(
     current_user: Usuario = Depends(get_current_user)
 ) -> Usuario:
@@ -272,5 +303,38 @@ def require_auditoria_or_caja_role(
             detail="Acceso restringido: Los auditores de sucursal satélite no tienen acceso al historial de órdenes de clientes."
         )
     return current_user
+
+
+def require_recepcion_or_admin(
+    current_user: Usuario = Depends(get_current_user)
+) -> Usuario:
+    """
+    Valida que el usuario autenticado posea rol de Recepción (id_rol == 9),
+    Bodeguero (id_rol == 1), Gerencia (id_rol == 4) o Administrador (id_rol == 5).
+    SPEC-22: Recepción Vehicular Patio.
+    """
+    if current_user.id_rol not in [9, 1, 4, 5]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso restringido: Se requieren permisos de Recepción, Bodega o Administración."
+        )
+    return current_user
+
+
+def require_bodega_access(
+    current_user: Usuario = Depends(get_current_user)
+) -> Usuario:
+    """
+    Seguridad RBAC (SPEC-22): El rol Recepción (id_rol == 9) tiene estrictamente
+    denegado el acceso a las funciones logísticas internas de bodega (cubicaje,
+    pallets, picking y despacho). Lanza 403 Forbidden.
+    """
+    if current_user.id_rol == 9:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso restringido: El rol Recepción no tiene permisos para acceder a las operaciones de bodega/WMS."
+        )
+    return current_user
+
 
 

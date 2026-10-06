@@ -20,6 +20,8 @@ from models import (
     Orden_Venta,
     Detalle_Orden,
     Auditoria_Barrera,
+    Detalle_Motor,
+    Detalle_Caja_Cambio,
 )
 from core.security import create_access_token
 
@@ -693,3 +695,76 @@ def test_rechazo_salida_qr_no_impreso(client, db_session, auth_headers_bodeguero
     )
     assert response.status_code == 400
     assert "qr" in response.json()["detail"].lower() and "imprima la etiqueta" in response.json()["detail"].lower()
+
+
+def test_construir_descripcion_repuesto_formato_enriquecido(db_session):
+    """
+    Verifica que la función construir_descripcion_repuesto genere exactamente
+    la estructura: Categoría (Motor o Caja) + Marca + Modelo + Cilindrada + Año.
+    Ejemplo: 'Motor Geely Azkarra 1.5 2020'.
+    """
+    from routers.bodega import construir_descripcion_repuesto
+
+    db = TestingSessionLocal()
+    try:
+        # 1. Crear vehículo
+        veh = Vehiculo_Origen(
+            id_vehiculo=uuid.uuid4(),
+            numero_ingreso="ING-TEST-GEELY",
+            patente="GEEL01",
+            marca="Geely",
+            modelo="Azkarra",
+            anio=2020,
+            estado="Activo",
+        )
+        db.add(veh)
+        db.flush()
+
+        # 2. Crear activo Motor
+        act_motor = Activo_Inventariado(
+            id_activo=uuid.uuid4(),
+            sku_qr_fisico="MOT-GEE-AZK-001",
+            id_categoria=1,
+            id_estado=1,
+            id_sucursal_actual=1,
+            id_vehiculo=veh.id_vehiculo,
+            qr_impreso=True,
+            estado="Activo",
+        )
+        db.add(act_motor)
+        db.flush()
+
+        # 3. Crear detalle motor con cilindrada 1.5
+        det_motor = Detalle_Motor(
+            id_activo=act_motor.id_activo,
+            cilindrada="1.5",
+            combustible="Bencina",
+        )
+        db.add(det_motor)
+        db.flush()
+
+        # 4. Crear activo Caja
+        act_caja = Activo_Inventariado(
+            id_activo=uuid.uuid4(),
+            sku_qr_fisico="CAJ-GEE-AZK-001",
+            id_categoria=2,
+            id_estado=1,
+            id_sucursal_actual=1,
+            id_vehiculo=veh.id_vehiculo,
+            qr_impreso=True,
+            estado="Activo",
+        )
+        db.add(act_caja)
+        db.commit()
+
+        # Validar descripción de Motor
+        desc_motor = construir_descripcion_repuesto(db, act_motor)
+        assert desc_motor == "Motor Geely Azkarra 1.5 2020", f"Esperado 'Motor Geely Azkarra 1.5 2020', obtenido: '{desc_motor}'"
+
+        # Validar descripción de Caja (hereda cilindrada del motor hermano del mismo vehículo)
+        desc_caja = construir_descripcion_repuesto(db, act_caja)
+        assert desc_caja == "Caja Geely Azkarra 1.5 2020", f"Esperado 'Caja Geely Azkarra 1.5 2020', obtenido: '{desc_caja}'"
+
+    finally:
+        db.close()
+

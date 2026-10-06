@@ -248,10 +248,12 @@ class OrdenCard extends StatelessWidget {
         color: AppPalette.surface,
         borderRadius: BorderRadius.circular(12.0),
         border: Border.all(
-          color: orden.esReservada
-              ? AppPalette.secondary.withValues(alpha: 0.25)
-              : Colors.white.withValues(alpha: 0.06),
-          width: 1.0,
+          color: orden.esAsignadaLimache
+              ? const Color(0xFFD97706).withValues(alpha: 0.45)
+              : (orden.esReservada
+                  ? AppPalette.secondary.withValues(alpha: 0.25)
+                  : Colors.white.withValues(alpha: 0.06)),
+          width: orden.esAsignadaLimache ? 1.2 : 1.0,
         ),
       ),
       child: Material(
@@ -431,6 +433,32 @@ class OrdenCard extends StatelessWidget {
                             color: AppPalette.primary,
                             fontFamily: AppTypography.fontFamily,
                           ),
+                        ),
+                      ),
+                    ],
+                    if (orden.esAsignadaLimache) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7.0, vertical: 2.0),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFD97706).withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(4.0),
+                          border: Border.all(color: const Color(0xFFD97706).withValues(alpha: 0.5)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text('📍', style: TextStyle(fontSize: 10.5)),
+                            const SizedBox(width: 4.0),
+                            Text(
+                              'Asignada a Limache',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.bold,
+                                color: const Color(0xFFF59E0B),
+                                fontFamily: AppTypography.fontFamily,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],

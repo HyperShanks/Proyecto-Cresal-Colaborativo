@@ -86,11 +86,13 @@ class VentasService {
   static Future<Map<String, dynamic>> anularOrden(
     String idOrden, {
     String? motivoAnulacion,
+    String? observacionAnulacion,
     http.Client? client,
   }) async {
     return OrdenesService.anularOrden(
       idOrden,
       motivoAnulacion: motivoAnulacion,
+      observacionAnulacion: observacionAnulacion,
       usePost: true,
       client: client,
     );

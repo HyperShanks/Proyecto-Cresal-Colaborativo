@@ -2,12 +2,13 @@ import uuid
 from datetime import datetime, timezone
 from uuid import UUID
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
 from sqlalchemy import or_, func
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from database import get_db
+from services.telegram_service import TelegramService
 from models import (
     Activo_Inventariado,
     Orden_Venta,
@@ -23,6 +24,7 @@ from models import (
     Tracking_Logistico,
     Despacho,
     Reservas_Backorder,
+    Sucursal,
 )
 from schemas import (
     TareaAlertaResponse,
@@ -37,10 +39,14 @@ from schemas import (
     ConfirmarReingresoResponse,
     ResumenAlertasDTO,
 )
-from core.security import get_current_user
+from core.security import get_current_user, require_bodega_access
 from core.policies import validar_horario_operativo_bodega
 
-router = APIRouter(prefix="/api/v1/bodega", tags=["Tablero Operativo"])
+router = APIRouter(
+    prefix="/api/v1/bodega",
+    tags=["Tablero Operativo"],
+    dependencies=[Depends(require_bodega_access)]
+)
 
 # Alias retrocompatible
 TareaAlerta = TareaAlertaResponse
@@ -181,6 +187,64 @@ def _construir_etiqueta_data(
         "pallet": activo.ubicacion_pallet or "",
         "sku_qr_fisico": activo.sku_qr_fisico or "",
     }
+
+
+def construir_descripcion_repuesto(db: Session, activo: Activo_Inventariado) -> str:
+    """
+    Construye la descripción formal de un repuesto según el formato de alertas gerenciales:
+    Categoría (Motor o Caja) + Marca + Modelo + Cilindrada (si aplica) + Año.
+    Ejemplo: 'Motor Geely Azkarra 1.5 2020' o 'Caja Geely Azkarra 2020'
+    """
+    cat_display = "Repuesto"
+    if activo.id_categoria:
+        cat_obj = db.query(Categoria_Activo).filter(Categoria_Activo.id_categoria == activo.id_categoria).first()
+        if cat_obj and cat_obj.nombre_categoria:
+            nom = cat_obj.nombre_categoria.strip()
+            nom_lower = nom.lower()
+            if "motor" in nom_lower:
+                cat_display = "Motor"
+            elif "caja" in nom_lower:
+                cat_display = "Caja"
+            else:
+                cat_display = nom
+
+    vehiculo = None
+    if activo.id_vehiculo:
+        vehiculo = db.query(Vehiculo_Origen).filter(Vehiculo_Origen.id_vehiculo == activo.id_vehiculo).first()
+
+    cilindrada_val = None
+    if activo.id_categoria == 1 or "motor" in cat_display.lower():
+        motor = db.query(Detalle_Motor).filter(Detalle_Motor.id_activo == activo.id_activo).first()
+        if motor and motor.cilindrada:
+            cilindrada_val = motor.cilindrada.strip()
+    elif (activo.id_categoria == 2 or "caja" in cat_display.lower()) and activo.id_vehiculo:
+        motor_hermano = (
+            db.query(Detalle_Motor)
+            .join(Activo_Inventariado, Activo_Inventariado.id_activo == Detalle_Motor.id_activo)
+            .filter(
+                Activo_Inventariado.id_vehiculo == activo.id_vehiculo,
+                Activo_Inventariado.id_categoria == 1,
+            )
+            .first()
+        )
+        if motor_hermano and motor_hermano.cilindrada:
+            cilindrada_val = motor_hermano.cilindrada.strip()
+
+    partes = [cat_display]
+    if vehiculo:
+        if vehiculo.marca and vehiculo.marca.strip():
+            partes.append(vehiculo.marca.strip())
+        if vehiculo.modelo and vehiculo.modelo.strip():
+            partes.append(vehiculo.modelo.strip())
+        if cilindrada_val:
+            partes.append(cilindrada_val)
+        if vehiculo.anio:
+            partes.append(str(vehiculo.anio))
+    elif cilindrada_val:
+        partes.append(cilindrada_val)
+
+    resultado = " ".join(partes).strip()
+    return resultado if resultado else (activo.sku_qr_fisico or "Repuesto")
 
 
 @router.get("/tareas-pendientes", response_model=List[TareaAlertaResponse])
@@ -682,6 +746,7 @@ def verificar_qr_salida(
 )
 def escanear_salida(
     payload: EscanearSalidaRequest,
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
@@ -831,6 +896,30 @@ def escanear_salida(
 
         folio = orden.folio
         print(f"✅ [BARRERA] Orden {folio} completada exitosamente. Total piezas entregadas: {len(skus_entregados_nombres)}.")
+
+        # Disparar alerta asíncrona a Telegram para Gerencia
+        cliente_obj = db.query(Cliente).filter(Cliente.id_cliente == orden.id_cliente).first()
+        cliente_nom = f"{cliente_obj.nombres} {cliente_obj.apellidos}".strip() if cliente_obj else "Cliente Particular"
+        sucursal_obj = db.query(Sucursal).filter(Sucursal.id_sucursal == orden.id_sucursal).first()
+        sucursal_nom = sucursal_obj.nombre_sucursal if sucursal_obj else f"Sucursal {orden.id_sucursal}"
+        bodeguero_nom = f"{current_user.nombres} {current_user.apellidos}".strip()
+
+        # Construir descripción rica de piezas entregadas: Categoría (Motor o Caja) + Marca + Modelo + Cilindrada + Año
+        descripciones_piezas = [construir_descripcion_repuesto(db, act) for act in activos_requeridos]
+        if not descripciones_piezas:
+            descripciones_piezas = [d.descripcion_manual for d in detalles if d.descripcion_manual]
+        repuestos_str = ", ".join(descripciones_piezas) if descripciones_piezas else "Repuesto(s)"
+        skus_str = ", ".join(skus_entregados_nombres) if skus_entregados_nombres else "S/SKU"
+
+        background_tasks.add_task(
+            TelegramService.notificar_entrega_barrera,
+            folio=folio,
+            cliente_nombre=cliente_nom,
+            descripcion_pieza=repuestos_str,
+            sku=skus_str,
+            bodeguero_nombre=bodeguero_nom,
+            sucursal_nombre=sucursal_nom,
+        )
 
         return EscanearSalidaResponse(
             id_orden=orden.id_orden,

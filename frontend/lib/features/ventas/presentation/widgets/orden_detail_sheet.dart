@@ -388,6 +388,63 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (_orden.esAsignadaLimache) ...[
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 14.0),
+                      padding: const EdgeInsets.all(12.0),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFD97706).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10.0),
+                        border: Border.all(
+                          color: const Color(0xFFD97706).withValues(alpha: 0.45),
+                          width: 1.2,
+                        ),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6.0),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFD97706).withValues(alpha: 0.25),
+                              borderRadius: BorderRadius.circular(8.0),
+                            ),
+                            child: const Icon(
+                              Icons.location_on_rounded,
+                              size: 18.0,
+                              color: Color(0xFFF59E0B),
+                            ),
+                          ),
+                          const SizedBox(width: 10.0),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Venta Asignada a Limache',
+                                  style: AppTypography.small.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: const Color(0xFFF59E0B),
+                                    fontSize: 13.0,
+                                  ),
+                                ),
+                                const SizedBox(height: 3.0),
+                                Text(
+                                  'La comisión y métrica comercial están imputadas a Limache. Como emisor en Viña del Mar, mantienes visibilidad operativa para cobro, preparación y entrega.',
+                                  style: AppTypography.small.copyWith(
+                                    fontSize: 12.0,
+                                    color: AppPalette.textSecondary,
+                                    height: 1.3,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+
                   // ── Sección 1: Datos del Cliente ───────────────────────
                   Container(
                     padding: const EdgeInsets.all(12.0),
@@ -999,7 +1056,7 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Orden Entregada / Completada',
+                                  'Orden Completada',
                                   style: AppTypography.title.copyWith(
                                     color: AppPalette.primary,
                                     fontSize: 14.0,
@@ -1008,7 +1065,7 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                                 ),
                                 const SizedBox(height: 4.0),
                                 Text(
-                                  'El ciclo operativo de esta venta se encuentra cerrado y validado.',
+                                  'Los repuestos fueron validados y entregados exitosamente en barrera de bodega.',
                                   style: AppTypography.small.copyWith(
                                     color: AppPalette.textSecondary,
                                     fontSize: 12.0,
@@ -1033,7 +1090,8 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                     // Botón Editar Instrucciones a Bodega (solo para órdenes Reservadas con repuestos inventariados)
                     if (_orden.esReservada &&
                         (_orden.contieneMotorOCaja ||
-                            _orden.detalles.any((d) => d.esInventariado))) ...[
+                            _orden.detalles.any((d) => d.esInventariado) ||
+                            _orden.detalles.isEmpty)) ...[
                       SizedBox(
                         width: double.infinity,
                         height: 48.0,

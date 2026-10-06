@@ -26,7 +26,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ? '${AuthService.cachedUser!.nombres} ${AuthService.cachedUser!.apellidos}'.trim()
       : null;
   int? _userSucursalId = AuthService.cachedUser?.idSucursal;
-  DateTime? _pausedTime;
 
   final TextEditingController _paletizadoIngresoController =
       TextEditingController();
@@ -638,30 +637,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildFrequentActionsGrid(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: _buildActionCard(
-            context: context,
-            title: 'Recepción de Vehículo',
-            subtitle:
-                'Requiere OCR: Fotografiar el N° de ingreso físico del vehículo',
-            icon: Icons.local_shipping_outlined,
-            onTap: () => Navigator.pushNamed(context, '/recepcion'),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildActionCard(
-            context: context,
-            title: 'Buscador de Inventario',
-            subtitle: 'Consulta rápida por SKU, QR, Pasillo o Modelo',
-            icon: Icons.search_rounded,
-            onTap: () => Navigator.pushNamed(context, '/buscador'),
-          ),
-        ),
-      ],
+    return _buildActionCard(
+      context: context,
+      title: 'Buscador de Inventario',
+      subtitle: 'Consulta rápida por SKU, QR, Pasillo o Modelo',
+      icon: Icons.search_rounded,
+      onTap: () => Navigator.pushNamed(context, '/buscador'),
     );
   }
 
@@ -862,7 +843,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           onTap();
         },
         child: Container(
-          height: 160,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
@@ -871,45 +851,52 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               width: 1.2,
             ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: Row(
             children: [
               Container(
-                width: 44,
-                height: 44,
+                width: 48,
+                height: 48,
                 decoration: BoxDecoration(
                   color: AppPalette.primary.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(icon, color: AppPalette.primary, size: 24),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    title,
-                    style: AppTypography.title.copyWith(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      height: 1.2,
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: AppTypography.title.copyWith(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        height: 1.2,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: AppTypography.small.copyWith(
-                      fontSize: 11,
-                      color: AppPalette.textSecondary,
-                      height: 1.2,
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: AppTypography.small.copyWith(
+                        fontSize: 12,
+                        color: AppPalette.textSecondary,
+                        height: 1.2,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(
+                Icons.arrow_forward_ios_rounded,
+                color: AppPalette.textSecondary,
+                size: 16,
               ),
             ],
           ),

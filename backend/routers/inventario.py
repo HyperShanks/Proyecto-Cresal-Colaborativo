@@ -2,11 +2,12 @@ import asyncio
 import uuid
 from datetime import datetime, timezone
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_, case, update
 from typing import Dict, List, Optional
 from core.storage import supabase
+from services.telegram_service import TelegramService
 
 from database import get_db
 from models import (
@@ -19,6 +20,7 @@ from models import (
     Estado_Activo,
     Sucursal,
     Usuario,
+    Bitacora_Movimiento_Inventario,
 )
 from core.security import (
     get_current_user,
@@ -35,6 +37,7 @@ from schemas import (
     AsignarPrecioResponse,
     EditarActivoRequest,
     EditarActivoResponse,
+    DespaletizarActivoRequest,
 )
 from routers.carrito import limpiar_reservas_expiradas
 
@@ -1342,9 +1345,11 @@ def editar_activo_inventariado(
             vehiculo_obj = db.query(Vehiculo_Origen).filter(Vehiculo_Origen.id_vehiculo == activo_existente.id_vehiculo).first()
         elif any(v is not None for v in [payload.marca, payload.modelo, payload.anio, payload.traccion]):
             # Si el activo no tenía vehículo asociado pero se ingresaron datos vehiculares, creamos el Vehiculo_Origen
+            num_ingreso_temp = f"ING-{uuid.uuid4().hex[:6].upper()}"
             nuevo_vehiculo = Vehiculo_Origen(
                 id_vehiculo=uuid.uuid4(),
-                numero_ingreso=f"ING-{uuid.uuid4().hex[:6].upper()}",
+                numero_ingreso=num_ingreso_temp,
+                patente=f"SPPU-{num_ingreso_temp}",
                 marca=payload.marca.strip() if payload.marca else "Desconocida",
                 modelo=payload.modelo.strip() if payload.modelo else "Desconocido",
                 anio=payload.anio if payload.anio is not None else 2000,
@@ -1742,6 +1747,8 @@ def buscar_activo_por_numero_ingreso(
 )
 def despaletizar_activo(
     id_activo: UUID,
+    payload: Optional[DespaletizarActivoRequest] = None,
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_bodeguero_or_admin),
 ):
@@ -1788,7 +1795,24 @@ def despaletizar_activo(
     id_estado_desarme = estado_desarme.id_estado if estado_desarme else 5
 
     try:
-        # 3. Transacción atómica de reversión
+        # 3. Transacción atómica de reversión y captura de ubicación anterior
+        ubicacion_anterior = f"Galpón {activo.ubicacion_galpon or 'S/G'} | Pasillo {activo.ubicacion_pasillo or 'S/P'} | Pallet {activo.ubicacion_pallet or 'S/P'}"
+        motivo = payload.motivo if payload else "Reversión a desarme"
+        observacion = payload.observacion if payload else "Despaletizado operativo sin justificación detallada"
+
+        # Registrar trazabilidad en Bitacora_Movimiento_Inventario
+        bitacora = Bitacora_Movimiento_Inventario(
+            id_activo=activo.id_activo,
+            id_usuario=current_user.id_usuario,
+            tipo_evento="DESPALETIZADO",
+            ubicacion_anterior=ubicacion_anterior,
+            ubicacion_nueva="En Desarme / Sin Pallet",
+            motivo=motivo,
+            observacion=observacion,
+            fecha_registro=datetime.now(timezone.utc),
+        )
+        db.add(bitacora)
+
         activo.id_estado = id_estado_desarme
         activo.ubicacion_galpon = None
         activo.ubicacion_pasillo = None
@@ -1799,7 +1823,7 @@ def despaletizar_activo(
 
         # Nota de auditoría en observacion_estado
         nombre_completo = f"{current_user.nombres} {current_user.apellidos}".strip()
-        nota_reversion = f"[Despaletizado por {nombre_completo} el {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')}]"
+        nota_reversion = f"[Despaletizado por {nombre_completo} el {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')}: {motivo}]"
         if activo.observacion_estado:
             activo.observacion_estado = f"{activo.observacion_estado} | {nota_reversion}"
         else:
@@ -1831,6 +1855,21 @@ def despaletizar_activo(
         db.commit()
         db.refresh(activo)
 
+        # Obtener descripción enriquecida de pieza para mensaje gerencial (Categoría + Marca + Modelo + Cilindrada + Año)
+        from routers.bodega import construir_descripcion_repuesto
+        pieza_desc = construir_descripcion_repuesto(db, activo)
+
+        # Disparar alerta asíncrona a Telegram para Gerencia
+        background_tasks.add_task(
+            TelegramService.notificar_repuesto_despaletizado,
+            sku=activo.sku_qr_fisico,
+            pieza_nombre=pieza_desc,
+            ubicacion_anterior=ubicacion_anterior,
+            bodeguero_nombre=nombre_completo,
+            motivo_despaletizado=motivo,
+            observacion_despaletizado=observacion,
+        )
+
         return {
             "id_activo": str(activo.id_activo),
             "sku_qr_fisico": activo.sku_qr_fisico,
@@ -1841,6 +1880,8 @@ def despaletizar_activo(
             "ubicacion_galpon": activo.ubicacion_galpon,
             "ubicacion_pasillo": activo.ubicacion_pasillo,
             "ubicacion_pallet": activo.ubicacion_pallet,
+            "ubicacion_anterior": ubicacion_anterior,
+            "motivo": motivo,
         }
 
     except HTTPException:

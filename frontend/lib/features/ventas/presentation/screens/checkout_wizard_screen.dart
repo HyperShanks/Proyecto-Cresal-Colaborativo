@@ -78,6 +78,25 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
   bool _esVentaReferida = false;
   String? _idVendedorTitular;
 
+  bool get _tieneVentaEnVerde => _controller.tieneVentaEnVerde;
+
+  void _verificarYDesmarcarConsumidorFinalSiAplica() {
+    if (_tieneVentaEnVerde && _esClienteAnonimo) {
+      _esClienteAnonimo = false;
+      if (_rutController.text.trim() == '6.666.666-6' ||
+          _clienteNombresController.text.trim().toUpperCase() == 'CONSUMIDOR') {
+        _rutController.clear();
+        _clienteNombresController.clear();
+        _clienteApellidosController.clear();
+        _clienteTelefonoController.clear();
+        _clienteEmailController.clear();
+        _regionCliente = null;
+        _comunaCliente = null;
+        _controller.setCliente(null);
+      }
+    }
+  }
+
   // Controladores Paso 4 (Comercial / Abonos / Descuentos)
   final _montoAbonoController = TextEditingController();
   final _descuentoController = TextEditingController();
@@ -326,9 +345,11 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
             'Debes agregar al menos un artículo o servicio para proceder.') {
       _controller.clearErrorMessage();
     }
+    _verificarYDesmarcarConsumidorFinalSiAplica();
   }
 
   void _onControllerUpdate() {
+    _verificarYDesmarcarConsumidorFinalSiAplica();
     if (mounted) setState(() {});
   }
 
@@ -455,6 +476,23 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
   }
 
   Future<void> _toggleClienteAnonimo(bool valor) async {
+    if (_tieneVentaEnVerde) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: AppPalette.error,
+            behavior: SnackBarBehavior.floating,
+            content: Text(
+              'Las compras en verde requieren obligatoriamente registrar los datos del cliente para la coordinación y entrega del repuesto.',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
     if (valor) {
       final bool? confirmado = await DialogoAdvertenciaConsumidorFinal.mostrar(
         context,
@@ -585,6 +623,23 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
         const SnackBar(
           content: Text(
             'Debes seleccionar al vendedor al cual se atribuirá la venta antes de confirmar la orden.',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+          backgroundColor: AppPalette.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    if (_tieneVentaEnVerde &&
+        (_esClienteAnonimo ||
+            _controller.clienteSeleccionado == null ||
+            _rutController.text.trim().isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Las órdenes con Venta en Verde requieren registrar obligatoriamente los datos de contacto del cliente.',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
           ),
           backgroundColor: AppPalette.error,
@@ -1626,11 +1681,43 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
         ),
         const SizedBox(height: 12),
 
+        if (_tieneVentaEnVerde) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
+            decoration: BoxDecoration(
+              color: const Color(0xFF2E7D32).withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10.0),
+              border: Border.all(
+                color: const Color(0xFF2E7D32).withValues(alpha: 0.4),
+                width: 1.2,
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.eco_rounded, size: 22, color: Color(0xFF81C784)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Venta en Verde activa: Por trazabilidad y coordinación de entrega, es obligatorio registrar los datos de contacto del cliente (RUT, nombre, teléfono y correo).',
+                    style: AppTypography.small.copyWith(
+                      color: const Color(0xFFC8E6C9),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+
         // Botón Interactivo Consumidor Final (Sin RUT) - Clickable en toda el área
         Material(
-          color: _esClienteAnonimo
-              ? AppPalette.secondary.withValues(alpha: 0.15)
-              : AppPalette.surface,
+          color: _tieneVentaEnVerde
+              ? AppPalette.surface.withValues(alpha: 0.5)
+              : _esClienteAnonimo
+                  ? AppPalette.secondary.withValues(alpha: 0.15)
+                  : AppPalette.surface,
           borderRadius: BorderRadius.circular(10.0),
           child: InkWell(
             borderRadius: BorderRadius.circular(10.0),
@@ -1643,10 +1730,12 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(10.0),
                 border: Border.all(
-                  color: _esClienteAnonimo
-                      ? AppPalette.secondary
-                      : Colors.white12,
-                  width: _esClienteAnonimo ? 1.5 : 1.0,
+                  color: _tieneVentaEnVerde
+                      ? Colors.white10
+                      : _esClienteAnonimo
+                          ? AppPalette.secondary
+                          : Colors.white12,
+                  width: _esClienteAnonimo && !_tieneVentaEnVerde ? 1.5 : 1.0,
                 ),
               ),
               child: Row(
@@ -1658,9 +1747,11 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                         Icon(
                           Icons.no_accounts_outlined,
                           size: 22,
-                          color: _esClienteAnonimo
-                              ? AppPalette.secondary
-                              : AppPalette.textSecondary,
+                          color: _tieneVentaEnVerde
+                              ? AppPalette.textSecondary.withValues(alpha: 0.5)
+                              : _esClienteAnonimo
+                                  ? AppPalette.secondary
+                                  : AppPalette.textSecondary,
                         ),
                         const SizedBox(width: 10),
                         Expanded(
@@ -1672,15 +1763,21 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                                 style: AppTypography.body.copyWith(
                                   fontSize: 14,
                                   fontWeight: FontWeight.bold,
-                                  color: _esClienteAnonimo
-                                      ? AppPalette.secondary
-                                      : AppPalette.textPrimary,
+                                  color: _tieneVentaEnVerde
+                                      ? AppPalette.textSecondary.withValues(alpha: 0.6)
+                                      : _esClienteAnonimo
+                                          ? AppPalette.secondary
+                                          : AppPalette.textPrimary,
                                 ),
                               ),
                               Text(
-                                'Toca aquí para venta rápida sin registrar datos',
+                                _tieneVentaEnVerde
+                                    ? 'No disponible en Venta en Verde (se requieren datos de contacto)'
+                                    : 'Toca aquí para venta rápida sin registrar datos',
                                 style: AppTypography.small.copyWith(
-                                  color: AppPalette.textSecondary,
+                                  color: _tieneVentaEnVerde
+                                      ? AppPalette.error.withValues(alpha: 0.8)
+                                      : AppPalette.textSecondary,
                                   fontSize: 13,
                                 ),
                               ),
@@ -1692,9 +1789,11 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                   ),
                   Switch(
                     key: const Key('switch_cliente_anonimo'),
-                    value: _esClienteAnonimo,
+                    value: !_tieneVentaEnVerde && _esClienteAnonimo,
                     activeThumbColor: AppPalette.secondary,
-                    onChanged: (val) => _toggleClienteAnonimo(val),
+                    onChanged: _tieneVentaEnVerde
+                        ? (_) => _toggleClienteAnonimo(true)
+                        : (val) => _toggleClienteAnonimo(val),
                   ),
                 ],
               ),
@@ -3151,32 +3250,34 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                                 vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color: v.esVendedoraOnline
-                                    ? Colors.purple.withValues(alpha: 0.25)
-                                    : (v.esJefeDeVentas
-                                          ? AppPalette.primary.withValues(
-                                              alpha: 0.2,
-                                            )
-                                          : Colors.white.withValues(
-                                              alpha: 0.08,
-                                            )),
+                                color: v.esLimache
+                                    ? const Color(0xFFD97706).withValues(alpha: 0.25)
+                                    : (v.esVendedoraOnline
+                                        ? Colors.purple.withValues(alpha: 0.25)
+                                        : (v.esJefeDeVentas
+                                            ? AppPalette.primary.withValues(alpha: 0.2)
+                                            : Colors.white.withValues(alpha: 0.08))),
                                 borderRadius: BorderRadius.circular(4),
                                 border: Border.all(
-                                  color: v.esVendedoraOnline
-                                      ? Colors.purpleAccent
-                                      : (v.esJefeDeVentas
-                                            ? AppPalette.primary
-                                            : Colors.white24),
+                                  color: v.esLimache
+                                      ? const Color(0xFFF59E0B)
+                                      : (v.esVendedoraOnline
+                                          ? Colors.purpleAccent
+                                          : (v.esJefeDeVentas
+                                              ? AppPalette.primary
+                                              : Colors.white24)),
                                 ),
                               ),
                               child: Text(
                                 v.etiquetaRol.toUpperCase(),
                                 style: TextStyle(
-                                  color: v.esVendedoraOnline
-                                      ? Colors.purpleAccent
-                                      : (v.esJefeDeVentas
-                                            ? AppPalette.primary
-                                            : Colors.white70),
+                                  color: v.esLimache
+                                      ? const Color(0xFFF59E0B)
+                                      : (v.esVendedoraOnline
+                                          ? Colors.purpleAccent
+                                          : (v.esJefeDeVentas
+                                              ? AppPalette.primary
+                                              : Colors.white70)),
                                   fontWeight: FontWeight.bold,
                                   fontSize: 10,
                                 ),

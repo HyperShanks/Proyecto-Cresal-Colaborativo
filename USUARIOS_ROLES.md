@@ -13,12 +13,14 @@ Este documento detalla los usuarios activos cargados y sincronizados en la base 
 |:---:|:---|:---|:---:|:---|:---:|:---:|:---:|:---|:---:|
 | **1** | **Bodeguero** | Juan Pablo Bodega Pérez | `16.234.567-8` | `bodega@cresal.cl` | `Password123!` | `1001` | Viña del Mar (1) | PDA Industrial (Sunmi/Zebra) | **Dark Mode** (`ThemeMode.dark`) |
 | **2** | **Vendedor (Mesón)** | Carlos Mendoza Silva | `19.876.543-2` | `carlos.mendoza@cresal.cl` | `Password123!` | `2002` | Viña del Mar (1) | Touch POS / All-in-One | **Light Mode** (`ThemeMode.light`) |
+| **2** | **Vendedor (Limache)** | Ventas Limache | `77.888.999-4` | `limache@cresal.cl` | `Password123!` | `2020` | Limache (2) | Perfil Comercial Inter-Sucursal | **Light Mode** (`ThemeMode.light`) |
 | **3** | **Caja** | Lorena Valenzuela Castro | `15.789.123-4` | `lorena.valenzuela@cresal.cl` | `Password123!` | `3003` | Viña del Mar (1) | Desktop POS (Teclado numérico) | **Light Mode** (`ThemeMode.light`) |
 | **4** | **Gerente** | Roberto Gerente Silva | `14.567.890-1` | `gerente@cresal.cl` | `Password123!` | `4004` | Viña del Mar (1) | Monitor Ejecutivo (Full HD/2K) | **Light Mode** (`ThemeMode.light`) |
 | **5** | **Administrador** | Admin Sistema Cresal | `11.111.111-1` | `admin@cresal.cl` | `Password123!` | `5005` | Viña del Mar (1) | Desktop / Laptop Técnica | **Light Mode** (`ThemeMode.light`) |
 | **6** | **Jefe de Ventas** | Gastón Marcelo Zamora Herrera | `21.337.385-4` | `gastonzamoracc@gmail.com` | `Password123!` | `6006` | Viña del Mar (1) | Laptop / Monitor de Ventas | **Light Mode** (`ThemeMode.light`) |
 | **7** | **Vendedor Online** | Marcela Online Soto | `12.345.678-9` | `marcela.online@cresal.cl` | `Password123!` | `7007` | Viña del Mar (1) | Desktop Omnicanal | **Light Mode** (`ThemeMode.light`) |
 | **8** | **Auditor** *(Gerente Solo Lectura)* | Carlos Gerente Auditor | `13.456.789-0` | `gerenteauditor@cresal.cl` | `Password123!` | `8008` | Viña del Mar (1) | Desktop / Monitor Ejecutivo | **Light Mode** (`ThemeMode.light`) |
+| **9** | **Recepción (Patio)** | Gloria Recepción Patio | `20.999.888-7` | `gloria@cresal.cl` | `RecepcionApp2026-16` | `4598` | Viña del Mar (1) | Teléfono / Móvil Patio | **Dark Mode** (`ThemeMode.dark`) |
 
 ---
 
@@ -148,6 +150,25 @@ En la industria de software logístico y retail automotriz, la asignación de te
   - ❌ **Sin permisos de tasación**: No puede fijar ni actualizar precios comerciales de repuestos (`verificar_rol_tasacion` emite `403 Forbidden`). En la interfaz se ocultan automáticamente los botones de "Tasar" y "Precio".
   - ❌ **Sin anulación de ventas ni emisiones**: No puede anular órdenes de venta ni registrar transacciones operativas.
   - ❌ **Sin operaciones de bodega ni caja**: No puede liberar repuestos ni registrar cobros físicos.
+
+---
+
+### 9. Recepción (Patio - `id_rol = 9`)
+- **Usuario**: `gloria@cresal.cl`
+- **PIN**: `4598`
+- **Contraseña**: `RecepcionApp2026-16`
+- **RUT**: `20.999.888-7`
+- **UUID (`id_usuario`)**: `07e2069f-da72-4e88-b673-d1f97104bf32`
+- **Ruta Principal**: `/recepcion`
+- **Tema Visual**: Dark Mode (`ThemeMode.dark`)
+- **Módulos y Rutas Habilitadas**:
+  - `/recepcion`: Panel y bandeja de recepción vehicular de patio (correlativo en vivo, bandeja de entradas recientes y exportación de matriz A-M).
+  - `/recepcion/registro`: Formulario de ingreso de vehículos donantes con OCR asistido, switch S/PPU y chips inteligentes.
+  - `/tickets`: Soporte técnico y mesa de ayuda interna.
+- **Restricciones Explícitas de Seguridad (Principio de Menor Privilegio)**:
+  - ❌ **Sin acceso a Bodega / WMS**: No puede ingresar a `/paletizado`, `/etiqueta-preview`, `/alertas`, `/buscador` ni `/reingresos`.
+  - ❌ **Bloqueo a nivel API**: Los endpoints `/api/v1/bodega/*` rechazan las llamadas del token con `HTTP 403 Forbidden`.
+  - ❌ **Sin operaciones comerciales ni de caja**: No tiene acceso a cotizaciones, ventas, catálogo ni cobros.
 
 ---
 

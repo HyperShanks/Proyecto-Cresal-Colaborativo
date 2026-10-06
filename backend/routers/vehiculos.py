@@ -6,21 +6,375 @@ from sqlalchemy.orm import Session
 from database import SessionLocal, get_db
 import schemas
 from services.vehiculo_service import procesar_patente_y_guardar
-from sqlalchemy import func, cast, Integer
-from models import Vehiculo_Origen, Activo_Inventariado, Detalle_Motor, Detalle_Caja_Cambio
+from sqlalchemy import func, cast, Integer, or_
+from models import Vehiculo_Origen, Activo_Inventariado, Detalle_Motor, Detalle_Caja_Cambio, Estado_Activo
 from google.cloud import vision
 import json # <-- Importante para traducir el texto a JSON
 import models
 from dotenv import load_dotenv # Para cargar el .env
 from typing import List, Optional # Para definir la lista de imágenes en FastAPI
-from core.security import get_current_user
+from datetime import datetime, date
+from core.security import get_current_user, require_recepcion_or_admin, get_optional_user
 from core.storage import supabase
+import re
 
 # Instanciamos el enrutador con su prefijo oficial (Sub-tarea A)
 router = APIRouter(
     prefix="/api/v1/vehiculos",
     tags=["Autocompletado de Vehículos"]
 )
+
+# ==========================================
+# 0. RUTAS DE RECEPCIÓN VEHICULAR DE PATIO (SPEC-22)
+# ==========================================
+
+@router.get("/recepcion/siguiente-ingreso", status_code=200)
+def obtener_siguiente_ingreso_recepcion(
+    db: Session = Depends(get_db),
+    usuario_logeado: Optional[models.Usuario] = Depends(get_optional_user)
+):
+    """
+    Retorna el siguiente número correlativo para la recepción vehicular en patio.
+    Accesible para roles: Recepción (9), Bodeguero (1), Gerencia (4) y Administrador (5).
+    """
+    resultado = db.query(func.max(cast(Vehiculo_Origen.numero_ingreso, Integer))).scalar()
+    siguiente = 1 if resultado is None else resultado + 1
+    return {"siguiente_ingreso": str(siguiente)}
+
+
+
+@router.get("/recepcion/recientes", response_model=schemas.VehiculoRecepcionRecientesResponse, status_code=200)
+def listar_ingresos_recientes(
+    limite: int = 50,
+    busqueda: Optional[str] = None,
+    db: Session = Depends(get_db),
+    usuario_logeado: models.Usuario = Depends(require_recepcion_or_admin)
+):
+    """
+    Lista los vehículos recientemente ingresados con soporte de búsqueda
+    para evitar duplicados antes de descargar el vehículo de la grúa.
+    """
+    query = db.query(Vehiculo_Origen)
+    if busqueda and busqueda.strip():
+        termino = f"%{busqueda.strip().upper()}%"
+        query = query.filter(
+            or_(
+                Vehiculo_Origen.patente.ilike(termino),
+                Vehiculo_Origen.numero_ingreso.ilike(termino),
+                Vehiculo_Origen.marca.ilike(termino),
+                Vehiculo_Origen.modelo.ilike(termino),
+                Vehiculo_Origen.grua.ilike(termino),
+                Vehiculo_Origen.factura.ilike(termino)
+            )
+        )
+    total = query.count()
+    vehiculos = query.order_by(
+        cast(Vehiculo_Origen.numero_ingreso, Integer).desc()
+    ).limit(limite).all()
+    return schemas.VehiculoRecepcionRecientesResponse(
+        total=total,
+        items=vehiculos
+    )
+
+
+@router.post("/recepcion/registro", response_model=schemas.VehiculoRecepcionItem, status_code=201)
+def registrar_ingreso_vehicular(
+    payload: schemas.VehiculoRecepcionCreate,
+    db: Session = Depends(get_db),
+    usuario_logeado: models.Usuario = Depends(require_recepcion_or_admin)
+):
+    """
+    Registra un vehículo donante en patio según la Matriz de 13 Columnas (A-M).
+    Permite ingreso con patente o S/PPU automático (SPPU-{numero_ingreso}).
+    Crea los activos base pendientes de desarme para integración con bodega.
+    """
+    # 1. Asignación / Validación de correlativo de ingreso
+    if not payload.numero_ingreso or not str(payload.numero_ingreso).strip():
+        resultado = db.query(func.max(cast(Vehiculo_Origen.numero_ingreso, Integer))).scalar()
+        num_ingreso = str(1 if resultado is None else resultado + 1)
+    else:
+        num_ingreso = str(payload.numero_ingreso).strip()
+
+    # Validar que el número de ingreso no esté duplicado
+    existe_num = db.query(Vehiculo_Origen).filter(Vehiculo_Origen.numero_ingreso == num_ingreso).first()
+    if existe_num:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"El número de ingreso N° {num_ingreso} ya se encuentra registrado (Vehículo: {existe_num.marca} {existe_num.modelo} - {existe_num.patente})."
+        )
+
+    # 2. Asignación de Patente o clave S/PPU
+    patente_raw = (payload.patente or "").strip().upper()
+    if payload.es_sppu or not patente_raw or patente_raw in ["S/PPU", "SPPU", "S/P", "SIN PATENTE", "S/PATENTE"]:
+        patente_final = f"SPPU-{num_ingreso}"
+    else:
+        patente_final = patente_raw
+        # Verificar duplicidad de patente
+        existe_pat = db.query(Vehiculo_Origen).filter(Vehiculo_Origen.patente == patente_final).first()
+        if existe_pat:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"La patente '{patente_final}' ya existe en el sistema asociada al ingreso N° {existe_pat.numero_ingreso}."
+            )
+
+    # 3. Fecha de ingreso
+    if payload.fecha_ingreso and payload.fecha_ingreso.strip():
+        try:
+            fecha_ingreso_dt = datetime.strptime(payload.fecha_ingreso.strip(), "%Y-%m-%d").date()
+        except ValueError:
+            fecha_ingreso_dt = datetime.now().date()
+    else:
+        fecha_ingreso_dt = datetime.now().date()
+
+    # 4. Instanciar Vehiculo_Origen con las 13 columnas
+    id_vehiculo = uuid.uuid4()
+    nuevo_vehiculo = Vehiculo_Origen(
+        id_vehiculo=id_vehiculo,
+        numero_ingreso=num_ingreso,
+        patente=patente_final,
+        vin=None,
+        factura=payload.factura.strip() if payload.factura else None,
+        fecha_ingreso=fecha_ingreso_dt,
+        origen=payload.origen.strip().upper() if payload.origen else None,
+        marca=payload.marca.strip().upper(),
+        modelo=payload.modelo.strip().upper(),
+        anio=payload.anio,
+        color=payload.color.strip().upper() if payload.color else None,
+        numero_motor=payload.numero_motor.strip().upper() if payload.numero_motor else None,
+        destino=payload.destino.strip().upper() if payload.destino else "DESARME",
+        grua=payload.grua.strip().upper() if payload.grua else None,
+        observaciones=payload.observaciones.strip() if payload.observaciones else None,
+        traccion=payload.traccion.strip() if payload.traccion else None,
+        estado="Activo",
+        fecha_creacion=datetime.now()
+    )
+    db.add(nuevo_vehiculo)
+    db.flush()
+
+    # 5. Si el destino es DESARME, instanciar los activos base (Motor y Caja) en estado 'En Desarme'
+    if nuevo_vehiculo.destino == "DESARME":
+        sucursal_id = usuario_logeado.id_sucursal if usuario_logeado.id_sucursal else 1
+        estado_desarme = db.query(Estado_Activo).filter(Estado_Activo.nombre_estado == "Desarme").first()
+        id_estado_desarme = estado_desarme.id_estado if estado_desarme else 5
+
+        # Motor (Categoría 1)
+        id_motor = uuid.uuid4()
+        activo_motor = Activo_Inventariado(
+            id_activo=id_motor,
+            sku_qr_fisico=f"MOT-{num_ingreso}",
+            id_categoria=1,
+            id_estado=id_estado_desarme,
+            id_sucursal_actual=sucursal_id,
+            id_vehiculo=id_vehiculo,
+            estado="Activo",
+            fecha_creacion=datetime.now(),
+            qr_impreso=False,
+            version_lock=1
+        )
+        db.add(activo_motor)
+
+        # Detalle Motor
+        det_motor = Detalle_Motor(
+            id_activo=id_motor,
+            cilindrada=payload.cilindrada or "S/A",
+            combustible=payload.combustible or "Gasolina",
+            transmision_tipo=payload.transmision or "Mecánica"
+        )
+        db.add(det_motor)
+
+        # Caja de Cambios (Categoría 2)
+        id_caja = uuid.uuid4()
+        activo_caja = Activo_Inventariado(
+            id_activo=id_caja,
+            sku_qr_fisico=f"CAJ-{num_ingreso}",
+            id_categoria=2,
+            id_estado=id_estado_desarme,
+            id_sucursal_actual=sucursal_id,
+            id_vehiculo=id_vehiculo,
+            estado="Activo",
+            fecha_creacion=datetime.now(),
+            qr_impreso=False,
+            version_lock=1
+        )
+        db.add(activo_caja)
+
+        det_caja = Detalle_Caja_Cambio(
+            id_activo=id_caja,
+            transmision_tipo=payload.transmision or "Mecánica"
+        )
+        db.add(det_caja)
+
+    db.commit()
+    db.refresh(nuevo_vehiculo)
+    return nuevo_vehiculo
+
+
+@router.get("/recepcion/exportar-matriz", response_model=schemas.VehiculoRecepcionExportarResponse, status_code=200)
+def exportar_matriz_vehicular(
+    limite: int = 100,
+    db: Session = Depends(get_db),
+    usuario_logeado: models.Usuario = Depends(require_recepcion_or_admin)
+):
+    """
+    Exporta los registros estructurados en las 13 columnas exactas de la Matriz Central
+    y provee el texto en formato TSV (Tab-Separated Values) compatible con pegado directo en Excel.
+    """
+    vehiculos = db.query(Vehiculo_Origen).order_by(
+        cast(Vehiculo_Origen.numero_ingreso, Integer).desc()
+    ).limit(limite).all()
+
+    # Columnas: A: N° Ingreso, B: Patente, C: Factura, D: Fecha ingreso, E: Origen,
+    # F: Marca, G: Modelo, H: Año, I: Color, J: N° Motor, K: Destino, L: GRUA, M: OBSERVACIONES
+    encabezados = [
+        "N° Ingreso", "Patente", "Factura", "Fecha ingreso", "Origen",
+        "Marca", "Modelo", "Año", "Color", "N° Motor", "Destino", "GRUA", "OBSERVACIONES"
+    ]
+    lineas = ["\t".join(encabezados)]
+
+    for v in vehiculos:
+        fila = [
+            str(v.numero_ingreso or ""),
+            str(v.patente or ""),
+            str(v.factura or ""),
+            v.fecha_ingreso.strftime("%Y-%m-%d") if v.fecha_ingreso else "",
+            str(v.origen or ""),
+            str(v.marca or ""),
+            str(v.modelo or ""),
+            str(v.anio or ""),
+            str(v.color or ""),
+            str(v.numero_motor or ""),
+            str(v.destino or "DESARME"),
+            str(v.grua or ""),
+            str(v.observaciones or "").replace("\t", " ").replace("\n", " ")
+        ]
+        lineas.append("\t".join(fila))
+
+    tsv_completo = "\n".join(lineas)
+    return schemas.VehiculoRecepcionExportarResponse(
+        total=len(vehiculos),
+        tsv=tsv_completo,
+        items=vehiculos
+    )
+
+
+@router.post("/ocr-padron", status_code=200)
+async def procesar_ocr_padron(
+    file: UploadFile = File(...),
+    usuario_logeado: Optional[models.Usuario] = Depends(get_optional_user)
+):
+    """
+    [SPEC-22] OCR Inteligente para escaneo de Padrón Vehicular (Certificado de Inscripción).
+    Extrae automáticamente datos para pre-llenar los 4 pasos del formulario:
+    - Patente (Paso 1)
+    - Marca, Modelo, Año, N° Motor, Color (Paso 2)
+    - Resumen (Paso 4)
+    """
+    try:
+        contenido = await file.read()
+        if not contenido:
+            raise HTTPException(status_code=400, detail="El archivo de imagen está vacío.")
+
+        client = vision.ImageAnnotatorClient()
+        image = vision.Image(content=contenido)
+        response = client.text_detection(image=image)
+
+        if response.error.message:
+            raise HTTPException(status_code=500, detail=f"Google Vision: {response.error.message}")
+
+        if not response.text_annotations:
+            return {
+                "exito": False,
+                "mensaje": "No se detectó texto en la fotografía.",
+                "patente": None,
+                "marca": None,
+                "modelo": None,
+                "anio": None,
+                "numero_motor": None,
+                "color": None
+            }
+
+        texto_crudo = response.text_annotations[0].description
+        texto_upper = texto_crudo.upper()
+
+        patente_detectada = None
+        marca_detectada = None
+        modelo_detectado = None
+        anio_detectado = None
+        motor_detectado = None
+        color_detectado = None
+
+        # 1. Patente Chilena (4 letras + 2 dígitos o 2 letras + 4 dígitos)
+        patente_match = re.search(r'\b([A-Z]{4})[\s\.\-]*([0-9]{2})\b', texto_upper)
+        if patente_match:
+            patente_detectada = f"{patente_match.group(1)}{patente_match.group(2)}"
+        else:
+            patente_match_antigua = re.search(r'\b([A-Z]{2})[\s\.\-]*([0-9]{4})\b', texto_upper)
+            if patente_match_antigua:
+                patente_detectada = f"{patente_match_antigua.group(1)}{patente_match_antigua.group(2)}"
+
+        # 2. Marcas automotrices más frecuentes en Chile
+        marcas_conocidas = [
+            "TOYOTA", "CHEVROLET", "HYUNDAI", "NISSAN", "SUZUKI", "KIA", "PEUGEOT",
+            "FORD", "VOLKSWAGEN", "MITSUBISHI", "MAZDA", "RENAULT", "FIAT", "HONDA",
+            "JEEP", "CHERY", "MG", "SUBARU", "CITROEN", "DODGE", "BMW", "MERCEDES-BENZ",
+            "GREAT WALL", "CHANGAN", "JAC", "HAVAL", "RAM", "AUDI", "VOLVO", "SSANGYONG"
+        ]
+        for m in marcas_conocidas:
+            if re.search(r'\b' + re.escape(m) + r'\b', texto_upper):
+                marca_detectada = m
+                break
+
+        # 3. Año (1980 - 2029)
+        anio_match = re.search(r'(?:A[ÑN]O|FABRICACI[OÓ]N|MODELO)?\s*[:\.]?\s*(20[0-2][0-9]|19[89][0-9])\b', texto_upper)
+        if anio_match:
+            try:
+                anio_detectado = int(anio_match.group(1))
+            except (ValueError, TypeError):
+                pass
+
+        # 4. Color de carrocería
+        colores_conocidos = [
+            "BLANCO", "GRIS", "PLATA", "NEGRO", "ROJO", "AZUL", "VERDE",
+            "AMARILLO", "BEIGE", "DORADO", "CAFE", "BURDEO", "NARANJA"
+        ]
+        for c in colores_conocidos:
+            if re.search(r'\b' + re.escape(c) + r'\b', texto_upper):
+                color_detectado = c
+                break
+
+        # 5. Número de Motor
+        motor_match = re.search(r'(?:MOTOR|N[°ºRO\.]*\s*MOTOR)\s*[:\.]?\s*([A-Z0-9]{5,22})', texto_upper)
+        if motor_match:
+            motor_detectado = motor_match.group(1).strip()
+
+        # 6. Modelo del vehículo
+        modelo_match = re.search(r'MODELO\s*[:\.]?\s*([A-Z0-9\s\.\-]{2,25})', texto_upper)
+        if modelo_match:
+            modelo_detectado = modelo_match.group(1).strip()
+
+        return {
+            "exito": True,
+            "patente": patente_detectada,
+            "marca": marca_detectada,
+            "modelo": modelo_detectado,
+            "anio": anio_detectado,
+            "numero_motor": motor_detectado,
+            "color": color_detectado,
+            "texto_detectado": texto_crudo[:200]
+        }
+    except Exception as e:
+        print(f"⚠️ Error en OCR Padrón: {e}")
+        return {
+            "exito": False,
+            "mensaje": f"No se pudo procesar la imagen: {str(e)}",
+            "patente": None,
+            "marca": None,
+            "modelo": None,
+            "anio": None,
+            "numero_motor": None,
+            "color": None
+        }
+
 
 # ==========================================
 # 1. RUTAS ESTÁTICAS (Van primero)
@@ -161,22 +515,23 @@ async def registrar_ingreso_vehiculo(
         raise HTTPException(status_code=422, detail="Error al leer los datos del vehículo")
 
     # ==========================================
-    # 1.5 NORMALIZACIÓN Y PRE-VALIDACIÓN (HU-2.2)
+    # 1.5 NORMALIZACIÓN Y PRE-VALIDACIÓN (HU-2.2 / SPEC-22)
     # ==========================================
-    # Limpiamos espacios y forzamos mayúsculas
-    patente_normalizada = vehiculo_in.patente.strip().upper() if vehiculo_in.patente else None
+    patente_raw = (vehiculo_in.patente or "").strip().upper()
+    es_sppu = vehiculo_in.es_sppu or not patente_raw or patente_raw in ["S/PPU", "SPPU", "S/P", "SIN PATENTE", "S/PATENTE"]
 
-    # Verificamos si la patente ya existe para devolver un error amigable antes de subir la foto
-    if patente_normalizada:
+    if not es_sppu and patente_raw:
+        patente_normalizada = patente_raw
         vehiculo_existente = db.query(models.Vehiculo_Origen).filter(
             models.Vehiculo_Origen.patente == patente_normalizada
         ).first()
-        
         if vehiculo_existente:
             raise HTTPException(
                 status_code=400, 
                 detail=f"La patente {patente_normalizada} ya se encuentra registrada en el sistema."
             )
+    else:
+        patente_normalizada = None
 
     # ==========================================
     # 2. ADUANA POKA-YOKE (GOOGLE CLOUD VISION REAL)
@@ -233,18 +588,36 @@ async def registrar_ingreso_vehiculo(
         # 3.1 Calcular el correlativo definitivo y bloquearlo
         max_ingreso = db.query(func.max(cast(models.Vehiculo_Origen.numero_ingreso, Integer))).scalar()
         nuevo_numero_ingreso = str(1000) if max_ingreso is None else str(max_ingreso + 1)
+        patente_final = f"SPPU-{nuevo_numero_ingreso}" if not patente_normalizada else patente_normalizada
 
-        # 3.2 Crear la "Cabecera" (El Vehículo)
+        fecha_ingreso_dt = datetime.now().date()
+        if vehiculo_in.fecha_ingreso and vehiculo_in.fecha_ingreso.strip():
+            try:
+                fecha_ingreso_dt = datetime.strptime(vehiculo_in.fecha_ingreso.strip(), "%Y-%m-%d").date()
+            except ValueError:
+                pass
+
+        # 3.2 Crear la "Cabecera" (El Vehículo con las 13 columnas completas)
         nuevo_vehiculo = models.Vehiculo_Origen(
             numero_ingreso=nuevo_numero_ingreso,
-            patente=patente_normalizada, # <-- Usamos la patente normalizada
-            marca=vehiculo_in.marca,
-            modelo=vehiculo_in.modelo,
+            patente=patente_final,
+            factura=vehiculo_in.factura.strip() if vehiculo_in.factura else None,
+            fecha_ingreso=fecha_ingreso_dt,
+            origen=vehiculo_in.origen.strip().upper() if vehiculo_in.origen else None,
+            marca=vehiculo_in.marca.strip() if vehiculo_in.marca else "",
+            modelo=vehiculo_in.modelo.strip() if vehiculo_in.modelo else "",
             anio=vehiculo_in.anio,
-            traccion=vehiculo_in.traccion
+            color=vehiculo_in.color.strip().upper() if vehiculo_in.color else None,
+            numero_motor=vehiculo_in.numero_motor.strip().upper() if vehiculo_in.numero_motor else None,
+            destino=vehiculo_in.destino.strip().upper() if vehiculo_in.destino else "DESARME",
+            grua=vehiculo_in.grua.strip().upper() if vehiculo_in.grua else None,
+            observaciones=vehiculo_in.observaciones.strip() if vehiculo_in.observaciones else None,
+            traccion=vehiculo_in.traccion,
+            estado="Activo",
+            fecha_creacion=datetime.now()
         )
         db.add(nuevo_vehiculo)
-        db.flush() 
+        db.flush()  
 
         # --- A. MOTOR ---
         activo_motor = models.Activo_Inventariado(
@@ -305,9 +678,11 @@ def registrar_ingreso_vehiculo_manual(
     [Fallback Contingencia] Permite el registro manual de un vehículo
     tras confirmación explícita del operario ante fallas de Google Vision u OCR.
     """
-    patente_normalizada = vehiculo_in.patente.strip().upper() if vehiculo_in.patente else None
+    patente_raw = (vehiculo_in.patente or "").strip().upper()
+    es_sppu = vehiculo_in.es_sppu or not patente_raw or patente_raw in ["S/PPU", "SPPU", "S/P", "SIN PATENTE", "S/PATENTE"]
 
-    if patente_normalizada:
+    if not es_sppu and patente_raw:
+        patente_normalizada = patente_raw
         vehiculo_existente = db.query(models.Vehiculo_Origen).filter(
             models.Vehiculo_Origen.patente == patente_normalizada
         ).first()
@@ -316,6 +691,8 @@ def registrar_ingreso_vehiculo_manual(
                 status_code=400,
                 detail=f"La patente {patente_normalizada} ya se encuentra registrada en el sistema.",
             )
+    else:
+        patente_normalizada = None
 
     try:
         max_ingreso = db.query(func.max(cast(models.Vehiculo_Origen.numero_ingreso, Integer))).scalar()
@@ -323,15 +700,34 @@ def registrar_ingreso_vehiculo_manual(
         if vehiculo_in.correlativo_ingreso and vehiculo_in.correlativo_ingreso != "Cargando...":
             nuevo_numero_ingreso = vehiculo_in.correlativo_ingreso.strip()
 
+        patente_final = f"SPPU-{nuevo_numero_ingreso}" if not patente_normalizada else patente_normalizada
+
+        fecha_ingreso_dt = datetime.now().date()
+        if vehiculo_in.fecha_ingreso and vehiculo_in.fecha_ingreso.strip():
+            try:
+                fecha_ingreso_dt = datetime.strptime(vehiculo_in.fecha_ingreso.strip(), "%Y-%m-%d").date()
+            except ValueError:
+                pass
+
         nuevo_vehiculo_id = uuid.uuid4()
         nuevo_vehiculo = models.Vehiculo_Origen(
             id_vehiculo=nuevo_vehiculo_id,
             numero_ingreso=nuevo_numero_ingreso,
-            patente=patente_normalizada,
-            marca=vehiculo_in.marca,
-            modelo=vehiculo_in.modelo,
+            patente=patente_final,
+            factura=vehiculo_in.factura.strip() if vehiculo_in.factura else None,
+            fecha_ingreso=fecha_ingreso_dt,
+            origen=vehiculo_in.origen.strip().upper() if vehiculo_in.origen else None,
+            marca=vehiculo_in.marca.strip() if vehiculo_in.marca else "",
+            modelo=vehiculo_in.modelo.strip() if vehiculo_in.modelo else "",
             anio=vehiculo_in.anio,
+            color=vehiculo_in.color.strip().upper() if vehiculo_in.color else None,
+            numero_motor=vehiculo_in.numero_motor.strip().upper() if vehiculo_in.numero_motor else None,
+            destino=vehiculo_in.destino.strip().upper() if vehiculo_in.destino else "DESARME",
+            grua=vehiculo_in.grua.strip().upper() if vehiculo_in.grua else None,
+            observaciones=vehiculo_in.observaciones.strip() if vehiculo_in.observaciones else None,
             traccion=vehiculo_in.traccion,
+            estado="Activo",
+            fecha_creacion=datetime.now(),
         )
         db.add(nuevo_vehiculo)
         db.flush()
