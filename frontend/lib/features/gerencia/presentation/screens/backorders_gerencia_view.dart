@@ -10,6 +10,7 @@ import '../../../../core/services/api_service.dart';
 import '../../models/backorder_gerencia_models.dart';
 import '../../services/gerencia_service.dart';
 import '../widgets/kpi_card_widget.dart';
+import '../../../../core/widgets/cresal_filter_dropdown.dart';
 
 /// Visor Centralizado de Reservas y Backorders (HU-5.4).
 /// Panel gerencial para la auditoría y monitoreo de compras por encargo en verde,
@@ -443,59 +444,26 @@ class BackordersGerenciaViewState extends State<BackordersGerenciaView> {
             ),
           ),
 
-          // Dropdown de Estado de Ciclo de Reserva
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppPalette.borderLight),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: _filtroEstado,
-                dropdownColor: Colors.white,
-                isDense: true,
-                icon: const Icon(
-                  Icons.arrow_drop_down,
-                  size: 20,
-                  color: Color(0xFF64748B),
-                ),
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1E293B),
-                ),
-                items: const [
-                  DropdownMenuItem(
-                    value: 'todos',
-                    child: Text('Estado: Todos'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'Pendiente',
-                    child: Text('Pendiente (Sin Abono)'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'Confirmada',
-                    child: Text('Confirmada (Abonada en Caja / Activa)'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'Completada',
-                    child: Text('Completada (Pieza Vinculada)'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'Anulada',
-                    child: Text('Anulada (Cancelada)'),
-                  ),
-                ],
-                onChanged: (val) {
-                  if (val != null && val != _filtroEstado) {
-                    setState(() => _filtroEstado = val);
-                    _cargarBackorders();
-                  }
-                },
-              ),
-            ),
+          // Selector de Estado de Ciclo de Reserva (MenuAnchor - 1 solo clic)
+          CresalFilterDropdown<String>(
+            height: 38,
+            value: _filtroEstado,
+            backgroundColor: Colors.white,
+            borderColor: AppPalette.borderLight,
+            isExpanded: false,
+            items: const [
+              CresalFilterDropdownItem(value: 'todos', label: 'Estado: Todos'),
+              CresalFilterDropdownItem(value: 'Pendiente', label: 'Pendiente (Sin Abono)'),
+              CresalFilterDropdownItem(value: 'Confirmada', label: 'Confirmada (Abonada en Caja / Activa)'),
+              CresalFilterDropdownItem(value: 'Completada', label: 'Completada (Pieza Vinculada)'),
+              CresalFilterDropdownItem(value: 'Anulada', label: 'Anulada (Cancelada)'),
+            ],
+            onChanged: (val) {
+              if (val != _filtroEstado) {
+                setState(() => _filtroEstado = val);
+                _cargarBackorders();
+              }
+            },
           ),
 
           // Botón Limpiar Filtros

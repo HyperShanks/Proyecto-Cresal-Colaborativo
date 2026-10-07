@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../../core/widgets/cresal_filter_dropdown.dart';
 
 /// Barra de filtros multidimensionales de alta densidad para el visor de órdenes (HU-5.2).
 /// Diseñé este widget inspirándome en la barra unificada de `prototipo_gerencia_v1.html`,
@@ -225,152 +226,74 @@ class PanelFiltrosAvanzados extends StatelessWidget {
   }
 
   Widget _buildDropdownEstado() {
-    final estados = [
-      {'value': 'todos', 'label': 'Estado: Todos'},
-      {'value': 'Reservada', 'label': 'Reservada'},
-      {'value': 'Pagada', 'label': 'Pagada'},
-      {'value': 'Completada', 'label': 'Completada'},
-      {'value': 'Despachada', 'label': 'Despachada'},
-      {'value': 'Anulada', 'label': 'Anulada'},
+    final estados = const [
+      CresalFilterDropdownItem(value: 'todos', label: 'Estado: Todos'),
+      CresalFilterDropdownItem(value: 'Reservada', label: 'Reservada'),
+      CresalFilterDropdownItem(value: 'Pagada', label: 'Pagada'),
+      CresalFilterDropdownItem(value: 'Completada', label: 'Completada'),
+      CresalFilterDropdownItem(value: 'Despachada', label: 'Despachada'),
+      CresalFilterDropdownItem(value: 'Anulada', label: 'Anulada'),
     ];
 
-    final effectiveValue = estados.any((e) => e['value'] == estadoSeleccionado)
+    final effectiveValue = estados.any((e) => e.value == estadoSeleccionado)
         ? estadoSeleccionado
         : 'todos';
 
-    return Container(
+    return CresalFilterDropdown<String>(
       height: 32,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppPalette.borderLight),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: effectiveValue,
-          dropdownColor: Colors.white,
-          icon: const Icon(
-            Icons.expand_more,
-            size: 16,
-            color: Color(0xFF64748B),
-          ),
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: Color(0xFF334155),
-          ),
-          items: estados.map((e) {
-            return DropdownMenuItem<String>(
-              value: e['value'],
-              child: Text(e['label']!),
-            );
-          }).toList(),
-          onChanged: (val) {
-            if (val != null) onEstadoChanged(val);
-          },
-        ),
-      ),
+      value: effectiveValue,
+      backgroundColor: Colors.white,
+      borderColor: AppPalette.borderLight,
+      isExpanded: false,
+      items: estados,
+      onChanged: onEstadoChanged,
     );
   }
 
   Widget _buildDropdownMetodoPago() {
-    final metodos = [
-      {'value': 'todos', 'label': 'Método: Todos'},
-      {'value': 'Transferencia', 'label': 'Transferencia'},
-      {'value': 'Débito', 'label': 'Débito'},
-      {'value': 'Crédito', 'label': 'Crédito'},
-      {'value': 'Efectivo', 'label': 'Efectivo'},
-      {'value': 'Cheque', 'label': 'Cheque'},
+    final metodos = const [
+      CresalFilterDropdownItem(value: 'todos', label: 'Método: Todos'),
+      CresalFilterDropdownItem(value: 'Transferencia', label: 'Transferencia'),
+      CresalFilterDropdownItem(value: 'Débito', label: 'Débito'),
+      CresalFilterDropdownItem(value: 'Crédito', label: 'Crédito'),
+      CresalFilterDropdownItem(value: 'Efectivo', label: 'Efectivo'),
+      CresalFilterDropdownItem(value: 'Cheque', label: 'Cheque'),
     ];
 
-    final effectiveValue = metodos.any((m) => m['value'] == metodoPagoSeleccionado)
+    final effectiveValue = metodos.any((m) => m.value == metodoPagoSeleccionado)
         ? metodoPagoSeleccionado
         : 'todos';
 
-    return Container(
+    return CresalFilterDropdown<String>(
       height: 32,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppPalette.borderLight),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: effectiveValue,
-          dropdownColor: Colors.white,
-          icon: const Icon(
-            Icons.expand_more,
-            size: 16,
-            color: Color(0xFF64748B),
-          ),
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: Color(0xFF334155),
-          ),
-          items: metodos.map((m) {
-            return DropdownMenuItem<String>(
-              value: m['value'],
-              child: Text(m['label']!),
-            );
-          }).toList(),
-          onChanged: (val) {
-            if (val != null) onMetodoPagoChanged(val);
-          },
-        ),
-      ),
+      value: effectiveValue,
+      backgroundColor: Colors.white,
+      borderColor: AppPalette.borderLight,
+      isExpanded: false,
+      items: metodos,
+      onChanged: onMetodoPagoChanged,
     );
   }
 
   Widget _buildDropdownTipoActivo() {
-    final tipos = [
-      {'value': 'todos', 'label': 'Tipo: Todos'},
-      {'value': 'MOTORES_CAJAS', 'label': '⚙️ Solo Motores y Cajas'},
+    final tipos = const [
+      CresalFilterDropdownItem(value: 'todos', label: 'Tipo: Todos'),
+      CresalFilterDropdownItem(value: 'MOTORES_CAJAS', label: '⚙️ Solo Motores y Cajas'),
     ];
 
-    final effectiveValue = tipos.any((t) => t['value'] == tipoActivoSeleccionado)
+    final effectiveValue = tipos.any((t) => t.value == tipoActivoSeleccionado)
         ? tipoActivoSeleccionado
         : 'todos';
     final isActive = effectiveValue != 'todos';
 
-    return Container(
+    return CresalFilterDropdown<String>(
       height: 32,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: BoxDecoration(
-        color: isActive ? const Color(0xFFEEF2FF) : Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: isActive ? const Color(0xFF6366F1) : AppPalette.borderLight,
-          width: isActive ? 1.4 : 1.0,
-        ),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: effectiveValue,
-          dropdownColor: Colors.white,
-          icon: Icon(
-            Icons.expand_more,
-            size: 16,
-            color: isActive ? const Color(0xFF4338CA) : const Color(0xFF64748B),
-          ),
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-            color: isActive ? const Color(0xFF4338CA) : const Color(0xFF334155),
-          ),
-          items: tipos.map((t) {
-            return DropdownMenuItem<String>(
-              value: t['value'],
-              child: Text(t['label']!),
-            );
-          }).toList(),
-          onChanged: (val) {
-            if (val != null) onTipoActivoChanged(val);
-          },
-        ),
-      ),
+      value: effectiveValue,
+      backgroundColor: isActive ? const Color(0xFFEEF2FF) : Colors.white,
+      borderColor: isActive ? const Color(0xFF6366F1) : AppPalette.borderLight,
+      isExpanded: false,
+      items: tipos,
+      onChanged: onTipoActivoChanged,
     );
   }
 

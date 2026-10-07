@@ -410,16 +410,16 @@ void main() {
       expect(find.text('CAJA'), findsOneWidget);
       expect(find.text('Pagos Pendientes'), findsOneWidget);
       expect(find.text('3 órdenes esperando cobro'), findsOneWidget);
-      expect(find.text('Nuevas por Cobrar (2)'), findsOneWidget);
-      expect(find.text('Saldos y Abonos (1)'), findsOneWidget);
+      expect(find.text('Ordenes Nuevas (2)'), findsOneWidget);
+      expect(find.text('Ordenes Abonadas (1)'), findsOneWidget);
 
-      // Estado inicial en Nuevas por Cobrar (ambas órdenes frescas)
+      // Estado inicial en Ordenes Nuevas (ambas órdenes frescas)
       expect(find.text('ORD-9780'), findsOneWidget);
       expect(find.text('RES-5401'), findsOneWidget);
       expect(find.text('ORD-8820'), findsNothing);
 
-      // Tap en píldora Saldos y Abonos
-      await tester.tap(find.text('Saldos y Abonos (1)'));
+      // Tap en píldora Ordenes Abonadas
+      await tester.tap(find.text('Ordenes Abonadas (1)'));
       await tester.pumpAndSettle();
       expect(find.text('ORD-8820'), findsOneWidget);
       expect(find.text('ORD-9780'), findsNothing);
