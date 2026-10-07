@@ -97,7 +97,7 @@ def evaluar_horario_sucursal(ahora_local: Optional[datetime] = None) -> dict:
     return {
         "abierto": False,
         "en_gracia": False,
-        "motivo": "Fuera de horario comercial (Atención: Lunes a Viernes 08:30 a 18:30)."
+        "motivo": "Fuera de horario comercial (Atención: Lunes a Viernes 08:30 a 18:30).."
     }
 
 
