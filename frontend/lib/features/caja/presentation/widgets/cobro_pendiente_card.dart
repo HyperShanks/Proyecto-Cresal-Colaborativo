@@ -218,7 +218,7 @@ class CobroPendienteCard extends StatelessWidget {
                                 'Sin datos',
                                 style: AppTypography.small.copyWith(
                                   color: AppPalette.textSecondaryLight,
-                                  fontSize: 12,
+                                  fontSize: 14,
                                   fontStyle: FontStyle.italic,
                                 ),
                               ),
@@ -235,7 +235,7 @@ class CobroPendienteCard extends StatelessWidget {
                                 'Vendedor: ${orden.vendedorNombre}',
                                 style: AppTypography.small.copyWith(
                                   color: AppPalette.textSecondaryLight,
-                                  fontSize: 12,
+                                  fontSize: 14,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -376,7 +376,7 @@ class CobroPendienteCard extends StatelessWidget {
                               'Total: ${formatClp(orden.totalOperacion)} • Abonado: ${formatClp(orden.abonoPrevio)}',
                               style: AppTypography.small.copyWith(
                                 color: AppPalette.textSecondaryLight,
-                                fontSize: 11,
+                                fontSize: 13,
                                 fontWeight: FontWeight.w600,
                               ),
                               maxLines: 1,

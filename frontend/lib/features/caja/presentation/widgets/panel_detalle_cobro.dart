@@ -401,8 +401,14 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                       ),
                     ),
                     if (orden.esPrimerAbono &&
-                        (orden.abonoRequerido > 0 ? orden.abonoRequerido : orden.montoACobrar) > 0 &&
-                        (orden.abonoRequerido > 0 ? orden.abonoRequerido : orden.montoACobrar) < orden.totalOperacion &&
+                        (orden.abonoRequerido > 0
+                                ? orden.abonoRequerido
+                                : orden.montoACobrar) >
+                            0 &&
+                        (orden.abonoRequerido > 0
+                                ? orden.abonoRequerido
+                                : orden.montoACobrar) <
+                            orden.totalOperacion &&
                         orden.saldoPendiente > 0) ...[
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -460,12 +466,19 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
               const SizedBox(width: 8),
               Builder(
                 builder: (context) {
-                  final rutLimpio = orden.clienteRut.replaceAll(RegExp(r'[^0-9kK]'), '');
-                  final esClienteGenerico = rutLimpio.isEmpty ||
+                  final rutLimpio = orden.clienteRut.replaceAll(
+                    RegExp(r'[^0-9kK]'),
+                    '',
+                  );
+                  final esClienteGenerico =
+                      rutLimpio.isEmpty ||
                       rutLimpio.startsWith('666666') ||
                       orden.clienteRut == '6.666.666-6' ||
-                      orden.clienteNombre.trim().toLowerCase().contains('consumidor final');
-                  final nombreMostrar = (orden.clienteNombre.trim().isEmpty || esClienteGenerico)
+                      orden.clienteNombre.trim().toLowerCase().contains(
+                        'consumidor final',
+                      );
+                  final nombreMostrar =
+                      (orden.clienteNombre.trim().isEmpty || esClienteGenerico)
                       ? 'Consumidor Final'
                       : orden.clienteNombre;
                   final textoCliente = esClienteGenerico
@@ -1575,17 +1588,17 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                       Text(
                         'Abonos Previos Realizados:',
                         style: AppTypography.small.copyWith(
-                          fontSize: 12,
+                          fontSize: 15,
                           fontWeight: FontWeight.w600,
-                          color: AppPalette.secondary,
+                          color: const Color.fromARGB(255, 253, 143, 0),
                         ),
                       ),
                       Text(
                         '- ${CobroPendienteCard.formatClp(orden.abonoPrevio)}',
                         style: AppTypography.small.copyWith(
-                          fontSize: 12,
+                          fontSize: 15,
                           fontWeight: FontWeight.w800,
-                          color: AppPalette.secondary,
+                          color: const Color.fromARGB(255, 253, 143, 0),
                         ),
                       ),
                     ],
@@ -1900,8 +1913,14 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
           const SizedBox(height: 14),
 
           if (orden.esPrimerAbono &&
-              (orden.abonoRequerido > 0 ? orden.abonoRequerido : orden.montoACobrar) > 0 &&
-              (orden.abonoRequerido > 0 ? orden.abonoRequerido : orden.montoACobrar) < orden.totalOperacion &&
+              (orden.abonoRequerido > 0
+                      ? orden.abonoRequerido
+                      : orden.montoACobrar) >
+                  0 &&
+              (orden.abonoRequerido > 0
+                      ? orden.abonoRequerido
+                      : orden.montoACobrar) <
+                  orden.totalOperacion &&
               orden.saldoPendiente > 0) ...[
             Container(
               margin: const EdgeInsets.only(bottom: 12),
