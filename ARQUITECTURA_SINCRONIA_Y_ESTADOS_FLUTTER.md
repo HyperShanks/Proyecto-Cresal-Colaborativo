@@ -120,3 +120,4 @@ En esta base de código se implementó el **Patrón A (Caché Sincrónica en RAM
 
 ### 5.4 Pruebas Unitarias (`frontend/test/login_test.dart`)
 * Se agregaron pruebas deterministas validando que `AuthService.esAuditorSucursalSync` resuelva instantáneamente en RAM según el rol y la sucursal del usuario sin requerir acceso a disco.
+.
