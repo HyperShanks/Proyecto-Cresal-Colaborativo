@@ -42,7 +42,7 @@ HORA_CIERRE_SABADO = dtime(14, 0)
 HORA_GRACIA_SABADO = dtime(14, 30)
 
 # Switch de desarrollo: poner en True para operar 24/7 en pruebas locales fuera de horario comercial
-BYPASS_HORARIO_DESARROLLO = True
+BYPASS_HORARIO_DESARROLLO = False
 
 
 def evaluar_horario_sucursal(ahora_local: Optional[datetime] = None) -> dict:
