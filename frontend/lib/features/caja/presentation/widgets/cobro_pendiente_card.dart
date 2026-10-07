@@ -44,7 +44,8 @@ class CobroPendienteCard extends StatelessWidget {
     final int montoAbonoInicial = orden.abonoRequerido > 0
         ? orden.abonoRequerido
         : orden.montoACobrar;
-    final bool tieneAbonoInicial = orden.esPrimerAbono &&
+    final bool tieneAbonoInicial =
+        orden.esPrimerAbono &&
         montoAbonoInicial > 0 &&
         montoAbonoInicial < orden.totalOperacion &&
         orden.saldoPendiente > 0;
@@ -55,26 +56,22 @@ class CobroPendienteCard extends StatelessWidget {
     final badgeBg = !isVenta
         ? const Color(0xFF4F46E5).withValues(alpha: 0.12)
         : (esAbonoTienda
-            ? const Color(0xFFF3E8FF)
-            : AppPalette.secondary.withValues(alpha: 0.15));
+              ? const Color(0xFFF3E8FF)
+              : AppPalette.secondary.withValues(alpha: 0.15));
     final badgeBorder = !isVenta
         ? const Color(0xFF4F46E5).withValues(alpha: 0.4)
         : (esAbonoTienda
-            ? const Color(0xFFC084FC)
-            : AppPalette.secondary.withValues(alpha: 0.5));
+              ? const Color(0xFFC084FC)
+              : AppPalette.secondary.withValues(alpha: 0.5));
     final badgeColor = !isVenta
         ? const Color(0xFF4F46E5)
-        : (esAbonoTienda
-            ? const Color(0xFF7E22CE)
-            : const Color(0xFFB78103));
+        : (esAbonoTienda ? const Color(0xFF7E22CE) : const Color(0xFFB78103));
     final badgeText = !isVenta
         ? 'Ventas en Verde'
         : (esAbonoTienda ? 'Abono Activo' : 'Venta en Tienda');
     final badgeIcon = !isVenta
         ? Icons.directions_boat_filled_outlined
-        : (esAbonoTienda
-            ? Icons.savings_rounded
-            : Icons.storefront_rounded);
+        : (esAbonoTienda ? Icons.savings_rounded : Icons.storefront_rounded);
 
     final borderColor = isSelected
         ? AppPalette.primary
@@ -85,8 +82,8 @@ class CobroPendienteCard extends StatelessWidget {
 
     final DateTime fechaReferencia =
         (esAbonoActivo && orden.historialAbonos.isNotEmpty)
-            ? orden.historialAbonos.last.fechaPago
-            : orden.fechaEmision;
+        ? orden.historialAbonos.last.fechaPago
+        : orden.fechaEmision;
     final relativeTime = _calcTiempoRelativo(fechaReferencia);
 
     return Container(
@@ -164,47 +161,91 @@ class CobroPendienteCard extends StatelessWidget {
                 const SizedBox(height: 8),
 
                 // ── FILA 2: Cliente destacado, RUT y Vendedor ──
-                Text(
-                  orden.clienteNombre,
-                  style: AppTypography.body.copyWith(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 16,
-                    color: AppPalette.textPrimaryLight,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    if (orden.clienteRut.isNotEmpty) ...[
-                      Text(
-                        'RUT: ${orden.clienteRut}',
-                        style: AppTypography.small.copyWith(
-                          color: AppPalette.textSecondaryLight,
-                          fontSize: 14,
+                Builder(
+                  builder: (context) {
+                    final rutLimpio = orden.clienteRut.replaceAll(
+                      RegExp(r'[^0-9kK]'),
+                      '',
+                    );
+                    final esClienteGenerico =
+                        rutLimpio.isEmpty ||
+                        rutLimpio.startsWith('666666') ||
+                        orden.clienteRut == '6.666.666-6' ||
+                        orden.clienteNombre.trim().toLowerCase().contains(
+                          'consumidor final',
+                        );
+                    final nombreMostrar =
+                        (orden.clienteNombre.trim().isEmpty ||
+                            esClienteGenerico)
+                        ? 'Consumidor Final'
+                        : orden.clienteNombre;
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          nombreMostrar,
+                          style: AppTypography.body.copyWith(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 16,
+                            color: AppPalette.textPrimaryLight,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                      Text(
-                        ' • ',
-                        style: AppTypography.small.copyWith(
-                          color: AppPalette.textSecondaryLight,
-                          fontSize: 12,
+                        const SizedBox(height: 2),
+                        Row(
+                          children: [
+                            if (!esClienteGenerico &&
+                                orden.clienteRut.isNotEmpty) ...[
+                              Text(
+                                'RUT: ${orden.clienteRut}',
+                                style: AppTypography.small.copyWith(
+                                  color: AppPalette.textSecondaryLight,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              Text(
+                                ' • ',
+                                style: AppTypography.small.copyWith(
+                                  color: AppPalette.textSecondaryLight,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ] else if (esClienteGenerico) ...[
+                              Text(
+                                'Sin datos',
+                                style: AppTypography.small.copyWith(
+                                  color: AppPalette.textSecondaryLight,
+                                  fontSize: 12,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                              Text(
+                                ' • ',
+                                style: AppTypography.small.copyWith(
+                                  color: AppPalette.textSecondaryLight,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                            Expanded(
+                              child: Text(
+                                'Vendedor: ${orden.vendedorNombre}',
+                                style: AppTypography.small.copyWith(
+                                  color: AppPalette.textSecondaryLight,
+                                  fontSize: 12,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
-                    Expanded(
-                      child: Text(
-                        'Vendedor: ${orden.vendedorNombre}',
-                        style: AppTypography.small.copyWith(
-                          color: AppPalette.textSecondaryLight,
-                          fontSize: 12,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
+                      ],
+                    );
+                  },
                 ),
 
                 // ── FILA 3: Divisor sutil + Fecha/Hora y Tiempo Relativo ──
@@ -229,7 +270,8 @@ class CobroPendienteCard extends StatelessWidget {
                           const SizedBox(width: 4),
                           Flexible(
                             child: Text(
-                              (esAbonoActivo && orden.historialAbonos.isNotEmpty)
+                              (esAbonoActivo &&
+                                      orden.historialAbonos.isNotEmpty)
                                   ? 'Último abono: ${orden.historialAbonos.last.fechaPagoFormateada} • ${orden.historialAbonos.last.horaPagoFormateada}'
                                   : '${orden.fechaEmisionFormateada} • ${orden.horaEmisionFormateada}',
                               style: AppTypography.small.copyWith(
@@ -237,7 +279,9 @@ class CobroPendienteCard extends StatelessWidget {
                                     ? const Color(0xFF7E22CE)
                                     : AppPalette.textSecondaryLight,
                                 fontSize: 13,
-                                fontWeight: esAbonoActivo ? FontWeight.w600 : FontWeight.w400,
+                                fontWeight: esAbonoActivo
+                                    ? FontWeight.w600
+                                    : FontWeight.w400,
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),

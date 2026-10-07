@@ -228,14 +228,28 @@ class ResultadoCobroDialog extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.right,
                     ),
-                    Text(
-                      'RUT: ${orden.clienteRut}',
-                      style: AppTypography.small.copyWith(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                        color: AppPalette.textSecondaryLight,
-                      ),
-                      textAlign: TextAlign.right,
+                    Builder(
+                      builder: (context) {
+                        final rutLimpio = orden.clienteRut.replaceAll(RegExp(r'[^0-9kK]'), '');
+                        final esClienteGenerico = rutLimpio.isEmpty ||
+                            rutLimpio.startsWith('666666') ||
+                            orden.clienteRut == '6.666.666-6' ||
+                            orden.clienteNombre.trim().toLowerCase().contains('consumidor final');
+                        final rutTexto = esClienteGenerico
+                            ? 'Sin RUT registrado'
+                            : 'RUT: ${orden.clienteRut}';
+
+                        return Text(
+                          rutTexto,
+                          style: AppTypography.small.copyWith(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                            color: AppPalette.textSecondaryLight,
+                            fontStyle: esClienteGenerico ? FontStyle.italic : FontStyle.normal,
+                          ),
+                          textAlign: TextAlign.right,
+                        );
+                      },
                     ),
                   ],
                 ),

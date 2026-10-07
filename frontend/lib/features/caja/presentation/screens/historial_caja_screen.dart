@@ -11,6 +11,7 @@ import '../widgets/detalle_auditoria_dialog.dart';
 import '../widgets/filtro_rango_fechas_dialog.dart';
 
 /// Pantalla principal para el Historial de Órdenes y Auditoría de Caja con Filtros (SPEC-HU-4.5 / CRES-217).
+/// Diseño responsivo optimizado para pantallas POS, tablets y monitores de escritorio.
 class HistorialCajaScreen extends StatefulWidget {
   final HistorialCajaProvider? provider;
   final int? sucursalId;
@@ -79,7 +80,7 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen>
     final sucursalId = await AuthService.getSucursalId();
     if (!mounted) return;
     if (sucursalId != null && sucursalId != _provider.sucursalId) {
-      // Re-instanciar con la sucursal del token
+      // Re-instanciar con la sucursal del token si es necesario
     }
     _provider.cargarHistorial();
   }
@@ -117,101 +118,124 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen>
       builder: (context, _) {
         final state = _provider.state;
 
-        return Container(
-          color: AppPalette.backgroundLight,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // ── 1. CABECERA CON TÍTULO, SUBTÍTULOS Y SELECTOR DE PERÍODOS ──
-              _buildCabecera(state),
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final isNarrow = constraints.maxWidth < 768;
 
-              // ── 2. ÁREA DE CONTENIDO (Métricas, Filtros y Tabla de Órdenes) ──
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 20,
+            return Container(
+              color: AppPalette.backgroundLight,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // ── 1. CABECERA CON TÍTULO, SUBTÍTULOS Y SELECTOR DE PERÍODOS ──
+                  _buildCabecera(state),
+
+                  // ── 2. ÁREA DE CONTENIDO (Métricas, Filtros y Tabla de Órdenes) ──
+                  Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isNarrow ? 12 : 24,
+                        vertical: isNarrow ? 12 : 20,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // ── 2.1 BARRA DE BÚSQUEDA Y FILTROS DESPLEGABLES ──
+                          _buildBarraBusquedaFiltros(state),
+                          const SizedBox(height: 16),
+
+                          // ── 2.2 PANEL DE MÉTRICAS DE ARQUEO / CUADRE ──
+                          if (state.data != null)
+                            HistorialMetricasPanel(
+                              resumen: state.data!.resumenCuadre,
+                            ),
+                          const SizedBox(height: 16),
+
+                          // ── 2.3 CONTENIDO PRINCIPAL (TABLA / LOADING / ERROR / ZERO STATE) ──
+                          Expanded(child: _buildCuerpoPrincipal(state)),
+                        ],
+                      ),
+                    ),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // ── 2.1 BARRA DE BÚSQUEDA Y FILTROS DESPLEGABLES ──
-                      _buildBarraBusquedaFiltros(state),
-                      const SizedBox(height: 16),
-
-                      // ── 2.2 PANEL DE MÉTRICAS DE ARQUEO / CUADRE ──
-                      if (state.data != null)
-                        HistorialMetricasPanel(
-                          resumen: state.data!.resumenCuadre,
-                        ),
-                      const SizedBox(height: 16),
-
-                      // ── 2.3 CONTENIDO PRINCIPAL (TABLA / LOADING / ERROR / ZERO STATE) ──
-                      Expanded(child: _buildCuerpoPrincipal(state)),
-                    ],
-                  ),
-                ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
   }
 
   Widget _buildCabecera(HistorialCajaState state) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      decoration: const BoxDecoration(
-        color: AppPalette.surfaceLight,
-        border: Border(bottom: BorderSide(color: AppPalette.borderLight)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Título, Tag de Categoría y Subtítulo
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'AUDITORÍA Y CIERRE',
-                  style: AppTypography.small.copyWith(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.1,
-                    color: AppPalette.textSecondaryLight,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Historial de Órdenes',
-                  style: AppTypography.title.copyWith(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: AppPalette.textPrimaryLight,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Control de cobros, arqueo de turno y trazabilidad de ventas',
-                  style: AppTypography.small.copyWith(
-                    fontSize: 14,
-                    fontWeight: FontWeight.normal,
-                    color: AppPalette.textSecondaryLight,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < 860;
 
-          // Selector Segmentado de Períodos en Cápsula
-          _buildBarraPeriodos(state),
-        ],
-      ),
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          decoration: const BoxDecoration(
+            color: AppPalette.surfaceLight,
+            border: Border(bottom: BorderSide(color: AppPalette.borderLight)),
+          ),
+          child: isCompact
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildTituloCabecera(),
+                    const SizedBox(height: 12),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: _buildBarraPeriodos(state),
+                    ),
+                  ],
+                )
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(child: _buildTituloCabecera()),
+                    const SizedBox(width: 16),
+                    _buildBarraPeriodos(state),
+                  ],
+                ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTituloCabecera() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'AUDITORÍA Y CIERRE',
+          style: AppTypography.small.copyWith(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.1,
+            color: AppPalette.textSecondaryLight,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          'Historial de Órdenes',
+          style: AppTypography.title.copyWith(
+            fontSize: 20,
+            fontWeight: FontWeight.w800,
+            color: AppPalette.textPrimaryLight,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          'Control de cobros, arqueo de turno y trazabilidad de ventas',
+          style: AppTypography.small.copyWith(
+            fontSize: 14,
+            fontWeight: FontWeight.normal,
+            color: AppPalette.textSecondaryLight,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
     );
   }
 
@@ -317,140 +341,220 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen>
   }
 
   Widget _buildBarraBusquedaFiltros(HistorialCajaState state) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppPalette.surfaceLight,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppPalette.neutral.withValues(alpha: 0.18)),
-      ),
-      child: Row(
-        children: [
-          // Buscador con debounce
-          Expanded(
-            flex: 5,
-            child: TextField(
-              controller: _searchController,
-              style: AppTypography.body.copyWith(
-                fontSize: 13,
-                color: AppPalette.textPrimaryLight,
-              ),
-              onChanged: (val) => _provider.actualizarBusqueda(val),
-              decoration: InputDecoration(
-                hintText: 'Buscar por Folio (ORD-), RUT, Cliente, Vendedor...',
-                hintStyle: AppTypography.small.copyWith(
-                  color: AppPalette.textSecondaryLight,
-                  fontSize: 15,
-                ),
-                prefixIcon: const Icon(
-                  Icons.search_rounded,
-                  size: 18,
-                  color: AppPalette.textSecondaryLight,
-                ),
-                suffixIcon: _searchController.text.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.close_rounded, size: 16),
-                        onPressed: () {
-                          _searchController.clear();
-                          _provider.limpiarBusqueda();
-                        },
-                      )
-                    : null,
-                filled: true,
-                fillColor: AppPalette.backgroundLight,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(
-                    color: AppPalette.neutral.withValues(alpha: 0.2),
-                  ),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(
-                    color: AppPalette.neutral.withValues(alpha: 0.2),
-                  ),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(
-                    color: AppPalette.primary,
-                    width: 1.5,
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < 950;
 
-          // Filtro de Estado
-          Expanded(
-            flex: 3,
-            child: _buildDropdown(
-              label: 'Estado:',
-              value: state.estadoOrden,
-              items: [
-                _buildDropdownItem('TODOS', 'Todos los Estados'),
-                _buildDropdownItem('Pagada', 'Pagada'),
-                _buildDropdownItem('Completada', 'Completada'),
-                _buildDropdownItem('Reservada', 'Reservada (Abonada)'),
-                _buildDropdownItem('Anulada', 'Anulada'),
-              ],
-              onChanged: (val) {
-                if (val != null) _provider.cambiarFiltroEstado(val);
-              },
-            ),
-          ),
-          const SizedBox(width: 12),
-
-          // Filtro de Método de Pago
-          Expanded(
-            flex: 3,
-            child: _buildDropdown(
-              label: 'Método:',
-              value: state.metodoPago,
-              items: [
-                _buildDropdownItem('TODOS', 'Todos los Métodos'),
-                _buildDropdownItem('Efectivo', 'Efectivo'),
-                _buildDropdownItem('Débito', 'Débito'),
-                _buildDropdownItem('Crédito', 'Crédito'),
-                _buildDropdownItem('Transferencia', 'Transferencia'),
-                _buildDropdownItem('Cheque', 'Cheque'),
-              ],
-              onChanged: (val) {
-                if (val != null) _provider.cambiarFiltroMetodo(val);
-              },
-            ),
-          ),
-          const SizedBox(width: 10),
-
-          // Botón Limpiar Filtros con indicador y contador
-          _buildBotonLimpiarFiltros(state),
-          const SizedBox(width: 10),
-
-          // Botón de Sincronización / Refresco
-          Container(
+        if (isCompact) {
+          return Container(
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: AppPalette.surfaceLight,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: AppPalette.neutral.withValues(alpha: 0.25),
+                color: AppPalette.neutral.withValues(alpha: 0.18),
               ),
             ),
-            child: IconButton(
-              icon: const Icon(
-                Icons.refresh_rounded,
-                size: 20,
-                color: AppPalette.neutral,
-              ),
-              tooltip: 'Actualizar historial',
-              onPressed: () => _provider.cargarHistorial(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: _buildCampoBusqueda()),
+                    const SizedBox(width: 8),
+                    _buildBotonLimpiarFiltros(state),
+                    const SizedBox(width: 8),
+                    _buildBotonRefresh(),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildDropdown(
+                        label: 'Estado:',
+                        value: state.estadoOrden,
+                        items: [
+                          _buildDropdownItem('TODOS', 'Todos los Estados'),
+                          _buildDropdownItem('Pagada', 'Pagada'),
+                          _buildDropdownItem('Completada', 'Completada'),
+                          _buildDropdownItem('Reservada', 'Reservada (Abonada)'),
+                          _buildDropdownItem('Anulada', 'Anulada'),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) _provider.cambiarFiltroEstado(val);
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _buildDropdown(
+                        label: 'Método:',
+                        value: state.metodoPago,
+                        items: [
+                          _buildDropdownItem('TODOS', 'Todos los Métodos'),
+                          _buildDropdownItem('Efectivo', 'Efectivo'),
+                          _buildDropdownItem('Débito', 'Débito'),
+                          _buildDropdownItem('Crédito', 'Crédito'),
+                          _buildDropdownItem('Transferencia', 'Transferencia'),
+                          _buildDropdownItem('Cheque', 'Cheque'),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) _provider.cambiarFiltroMetodo(val);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
+          );
+        }
+
+        return Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppPalette.surfaceLight,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppPalette.neutral.withValues(alpha: 0.18)),
           ),
-        ],
+          child: Row(
+            children: [
+              // Buscador con debounce
+              Expanded(
+                flex: 5,
+                child: _buildCampoBusqueda(),
+              ),
+              const SizedBox(width: 12),
+
+              // Filtro de Estado
+              Expanded(
+                flex: 3,
+                child: _buildDropdown(
+                  label: 'Estado:',
+                  value: state.estadoOrden,
+                  items: [
+                    _buildDropdownItem('TODOS', 'Todos los Estados'),
+                    _buildDropdownItem('Pagada', 'Pagada'),
+                    _buildDropdownItem('Completada', 'Completada'),
+                    _buildDropdownItem('Reservada', 'Reservada (Abonada)'),
+                    _buildDropdownItem('Anulada', 'Anulada'),
+                  ],
+                  onChanged: (val) {
+                    if (val != null) _provider.cambiarFiltroEstado(val);
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+
+              // Filtro de Método de Pago
+              Expanded(
+                flex: 3,
+                child: _buildDropdown(
+                  label: 'Método:',
+                  value: state.metodoPago,
+                  items: [
+                    _buildDropdownItem('TODOS', 'Todos los Métodos'),
+                    _buildDropdownItem('Efectivo', 'Efectivo'),
+                    _buildDropdownItem('Débito', 'Débito'),
+                    _buildDropdownItem('Crédito', 'Crédito'),
+                    _buildDropdownItem('Transferencia', 'Transferencia'),
+                    _buildDropdownItem('Cheque', 'Cheque'),
+                  ],
+                  onChanged: (val) {
+                    if (val != null) _provider.cambiarFiltroMetodo(val);
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+
+              // Botón Limpiar Filtros con indicador y contador
+              _buildBotonLimpiarFiltros(state),
+              const SizedBox(width: 10),
+
+              // Botón de Sincronización / Refresco
+              _buildBotonRefresh(),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCampoBusqueda() {
+    return TextField(
+      controller: _searchController,
+      style: AppTypography.body.copyWith(
+        fontSize: 13,
+        color: AppPalette.textPrimaryLight,
+      ),
+      onChanged: (val) => _provider.actualizarBusqueda(val),
+      decoration: InputDecoration(
+        hintText: 'Buscar por Folio (ORD-), RUT, Cliente, Vendedor...',
+        hintStyle: AppTypography.small.copyWith(
+          color: AppPalette.textSecondaryLight,
+          fontSize: 15,
+        ),
+        prefixIcon: const Icon(
+          Icons.search_rounded,
+          size: 18,
+          color: AppPalette.textSecondaryLight,
+        ),
+        suffixIcon: _searchController.text.isNotEmpty
+            ? IconButton(
+                icon: const Icon(Icons.close_rounded, size: 16),
+                onPressed: () {
+                  _searchController.clear();
+                  _provider.limpiarBusqueda();
+                },
+              )
+            : null,
+        filled: true,
+        fillColor: AppPalette.backgroundLight,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 8,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(
+            color: AppPalette.neutral.withValues(alpha: 0.2),
+          ),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(
+            color: AppPalette.neutral.withValues(alpha: 0.2),
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(
+            color: AppPalette.primary,
+            width: 1.5,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBotonRefresh() {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppPalette.surfaceLight,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: AppPalette.neutral.withValues(alpha: 0.25),
+        ),
+      ),
+      child: IconButton(
+        icon: const Icon(
+          Icons.refresh_rounded,
+          size: 20,
+          color: AppPalette.neutral,
+        ),
+        tooltip: 'Actualizar historial',
+        onPressed: () => _provider.cargarHistorial(),
       ),
     );
   }

@@ -458,16 +458,32 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                 color: AppPalette.textSecondaryLight,
               ),
               const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  '${orden.clienteNombre}  •  RUT: ${orden.clienteRut}',
-                  style: AppTypography.body.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: AppPalette.textPrimaryLight,
-                    fontSize: 16,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
+              Builder(
+                builder: (context) {
+                  final rutLimpio = orden.clienteRut.replaceAll(RegExp(r'[^0-9kK]'), '');
+                  final esClienteGenerico = rutLimpio.isEmpty ||
+                      rutLimpio.startsWith('666666') ||
+                      orden.clienteRut == '6.666.666-6' ||
+                      orden.clienteNombre.trim().toLowerCase().contains('consumidor final');
+                  final nombreMostrar = (orden.clienteNombre.trim().isEmpty || esClienteGenerico)
+                      ? 'Consumidor Final'
+                      : orden.clienteNombre;
+                  final textoCliente = esClienteGenerico
+                      ? '$nombreMostrar  •  Sin RUT registrado'
+                      : '$nombreMostrar  •  RUT: ${orden.clienteRut}';
+
+                  return Expanded(
+                    child: Text(
+                      textoCliente,
+                      style: AppTypography.body.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: AppPalette.textPrimaryLight,
+                        fontSize: 16,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  );
+                },
               ),
             ],
           ),

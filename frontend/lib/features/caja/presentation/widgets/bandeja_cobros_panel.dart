@@ -120,7 +120,7 @@ class _BandejaCobrosPanelState extends State<BandejaCobrosPanel> {
                   ordenesTexto,
                   style: AppTypography.small.copyWith(
                     color: AppPalette.textSecondaryLight,
-                    fontSize: 12,
+                    fontSize: 14,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -164,8 +164,10 @@ class _BandejaCobrosPanelState extends State<BandejaCobrosPanel> {
   }
 
   Widget _buildPillFilters(CajaProvider provider) {
-    final bool esNuevas = provider.filtroTipo == 'NUEVAS' || provider.filtroTipo == 'VENTA';
-    final bool esAbonos = provider.filtroTipo == 'ABONOS' || provider.filtroTipo == 'ABONO';
+    final bool esNuevas =
+        provider.filtroTipo == 'NUEVAS' || provider.filtroTipo == 'VENTA';
+    final bool esAbonos =
+        provider.filtroTipo == 'ABONOS' || provider.filtroTipo == 'ABONO';
 
     return Container(
       margin: const EdgeInsets.fromLTRB(14, 4, 14, 8),
@@ -178,14 +180,14 @@ class _BandejaCobrosPanelState extends State<BandejaCobrosPanel> {
       child: Row(
         children: [
           _buildPill(
-            label: 'Nuevas por Cobrar (${provider.totalNuevasCount})',
+            label: 'Ordenes Nuevas (${provider.totalNuevasCount})',
             isSelected: esNuevas,
             activeColor: AppPalette.primary,
             onTap: () => provider.setFiltroTipo('NUEVAS'),
           ),
           const SizedBox(width: 4),
           _buildPill(
-            label: 'Saldos y Abonos (${provider.totalAbonosCount})',
+            label: 'Ordenes Abonadas (${provider.totalAbonosCount})',
             isSelected: esAbonos,
             activeColor: const Color(0xFF7E22CE),
             onTap: () => provider.setFiltroTipo('ABONOS'),

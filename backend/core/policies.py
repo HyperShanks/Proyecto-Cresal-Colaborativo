@@ -41,12 +41,23 @@ HORA_APERTURA_SABADO = dtime(9, 0)
 HORA_CIERRE_SABADO = dtime(14, 0)
 HORA_GRACIA_SABADO = dtime(14, 30)
 
+# Switch de desarrollo: poner en True para operar 24/7 en pruebas locales fuera de horario comercial
+BYPASS_HORARIO_DESARROLLO = True
+
 
 def evaluar_horario_sucursal(ahora_local: Optional[datetime] = None) -> dict:
     """
     Evalúa si la fecha/hora proporcionada se encuentra dentro del horario comercial,
     dentro del periodo de gracia, o fuera de operación.
     """
+    # Bypass para desarrollo y pruebas fuera de horario comercial (solo cuando es llamada en vivo sin fecha fija)
+    if ahora_local is None and (BYPASS_HORARIO_DESARROLLO or os.getenv("BYPASS_HORARIO_OPERATIVO", "false").lower() in ("true", "1", "yes")):
+        return {
+            "abierto": True,
+            "en_gracia": False,
+            "motivo": "Bypass operativo activo para pruebas en desarrollo."
+        }
+
     if ahora_local is None:
         ahora_local = datetime.now(TZ_CHILE)
     elif ahora_local.tzinfo is None:

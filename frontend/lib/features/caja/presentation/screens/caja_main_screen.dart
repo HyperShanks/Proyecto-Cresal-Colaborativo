@@ -15,7 +15,7 @@ import '../../../../core/widgets/update_dialog.dart';
 import '../../../../core/services/app_update_service.dart';
 
 /// Contenedor principal de escritorio para el Módulo de Caja (CRES-213 / CRES-214).
-/// Implementa Sidebar Dinámico Colapsable (256px / 80px) y Grid 4/12 + 8/12 Master-Detail.
+/// Implementa Sidebar Dinámico Colapsable (265px / 68px) y Grid 4/12 + 8/12 Master-Detail.
 class CajaMainScreen extends StatefulWidget {
   final CajaProvider? provider;
 
@@ -247,7 +247,7 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
           body: SafeArea(
             child: Row(
               children: [
-                // ── 1. SIDEBAR DINÁMICO COLAPSABLE (256px / 80px) ──
+                // ── 1. SIDEBAR DINÁMICO COLAPSABLE (265px / 68px) ──
                 _buildSidebar(),
 
                 // ── 2. ÁREA DE CONTENIDO PRINCIPAL ──
@@ -277,14 +277,17 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
   }
 
   Widget _buildSidebar() {
-    final width = _sidebarOpen ? 256.0 : 80.0;
+    final width = _sidebarOpen ? 265.0 : 68.0;
 
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 220),
+      duration: const Duration(milliseconds: 200),
       curve: Curves.easeInOut,
       width: width,
       clipBehavior: Clip.hardEdge,
-      color: AppPalette.tertiary,
+      decoration: const BoxDecoration(
+        color: AppPalette.tertiary,
+        border: Border(right: BorderSide(color: Colors.white12, width: 1)),
+      ),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         physics: const NeverScrollableScrollPhysics(),
@@ -292,138 +295,143 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
           width: width,
           child: Column(
             children: [
-              // Logo CRESAL
+              // Header del Sidebar
               Container(
-                padding: EdgeInsets.fromLTRB(
-                  _sidebarOpen ? 20 : 12,
-                  24,
-                  _sidebarOpen ? 20 : 12,
-                  20,
+                height: 64,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: Colors.white12)),
                 ),
-            alignment: _sidebarOpen ? Alignment.centerLeft : Alignment.center,
-            child: _sidebarOpen
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 5,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppPalette.primary,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              'CRESAL',
-                              style: AppTypography.headline.copyWith(
-                                fontWeight: FontWeight.w900,
-                                fontSize: 16,
-                                letterSpacing: 2,
+                child: Row(
+                  children: [
+                    const CresalLogo(
+                      size: 38,
+                      showGlow: false,
+                    ),
+                    if (_sidebarOpen) ...[
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'MÓDULO DE CAJA',
+                              style: TextStyle(
                                 color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.4,
                               ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'MÓDULO DE CAJA',
-                        style: AppTypography.small.copyWith(
-                          color: Colors.white.withValues(alpha: 0.7),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.2,
+                            Text(
+                              'Terminal POS & Cobros',
+                              style: const TextStyle(
+                                color: Color(0xFFBAE6FD),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
                         ),
                       ),
                     ],
-                  )
-                : const CresalLogo(
-                    size: 40,
-                    showGlow: false,
+                  ],
+                ),
+              ),
+
+              // Navegación Vertical
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 16,
+                    horizontal: 10,
                   ),
-          ),
-
-          Divider(
-            color: Colors.white.withValues(alpha: 0.15),
-            height: 1,
-          ),
-
-          // Navegación Vertical
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 10),
-              children: [
-                _buildSidebarItem(
-                  icon: Icons.point_of_sale_rounded,
-                  title: 'Caja',
-                  subtitle: 'Bandeja de Cobros',
-                  isSelected: _selectedNavIndex == 0,
-                  onTap: () {
-                    setState(() {
-                      _selectedNavIndex = 0;
-                    });
-                    if (_cajaProvider.cobros.isEmpty) {
-                      _cajaProvider.cargarCobrosPendientes(sucursalId: _idSucursal);
-                    } else {
-                      _cajaProvider.cargarCobrosPendientesSilencioso(sucursalId: _idSucursal);
-                    }
-                  },
+                  children: [
+                    if (_sidebarOpen)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8, bottom: 8),
+                        child: Text(
+                          'OPERACIONES DE CAJA',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.5),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                      ),
+                    _buildSidebarItem(
+                      icon: Icons.point_of_sale_rounded,
+                      title: 'Caja',
+                      subtitle: 'Bandeja de Cobros',
+                      isSelected: _selectedNavIndex == 0,
+                      onTap: () {
+                        setState(() {
+                          _selectedNavIndex = 0;
+                        });
+                        if (_cajaProvider.cobros.isEmpty) {
+                          _cajaProvider.cargarCobrosPendientes(
+                            sucursalId: _idSucursal,
+                          );
+                        } else {
+                          _cajaProvider.cargarCobrosPendientesSilencioso(
+                            sucursalId: _idSucursal,
+                          );
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 6),
+                    _buildSidebarItem(
+                      icon: Icons.history_rounded,
+                      title: 'Historial',
+                      subtitle: 'Historial de Pagos',
+                      isSelected: _selectedNavIndex == 1,
+                      onTap: () {
+                        setState(() {
+                          _selectedNavIndex = 1;
+                        });
+                        _historialKey.currentState?.refrescarSilencioso();
+                      },
+                    ),
+                    const SizedBox(height: 6),
+                    _buildSidebarItem(
+                      icon: Icons.contact_support_rounded,
+                      title: 'Soporte',
+                      subtitle: 'Tickets de Soporte',
+                      isSelected: _selectedNavIndex == 2,
+                      onTap: () {
+                        setState(() {
+                          _selectedNavIndex = 2;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 6),
+                    _buildSidebarItem(
+                      icon: Icons.system_update_alt_rounded,
+                      title: 'Actualizar',
+                      subtitle: 'Buscar Actualizaciones',
+                      isSelected: false,
+                      onTap: () {
+                        AppUpdateChecker.check(context, showIfUpToDate: true);
+                      },
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 6),
-                _buildSidebarItem(
-                  icon: Icons.history_rounded,
-                  title: 'Historial',
-                  subtitle: 'Historial de Pagos',
-                  isSelected: _selectedNavIndex == 1,
-                  onTap: () {
-                    setState(() {
-                      _selectedNavIndex = 1;
-                    });
-                    _historialKey.currentState?.refrescarSilencioso();
-                  },
-                ),
-                const SizedBox(height: 6),
-                _buildSidebarItem(
-                  icon: Icons.contact_support_rounded,
-                  title: 'Soporte',
-                  subtitle: 'Tickets de Soporte',
-                  isSelected: _selectedNavIndex == 2,
-                  onTap: () {
-                    setState(() {
-                      _selectedNavIndex = 2;
-                    });
-                  },
-                ),
-                const SizedBox(height: 6),
-                _buildSidebarItem(
-                  icon: Icons.system_update_alt_rounded,
-                  title: 'Actualizar',
-                  subtitle: 'Buscar Actualizaciones',
-                  isSelected: false,
-                  onTap: () {
-                    AppUpdateChecker.check(context, showIfUpToDate: true);
-                  },
-                ),
-              ],
-            ),
-          ),
+              ),
 
-          Divider(
-            color: Colors.white.withValues(alpha: 0.15),
-            height: 1,
+              // Footer de Cajera & Logout
+              _buildSidebarFooter(),
+            ],
           ),
-
-            // Footer de Cajera & Logout
-            _buildSidebarFooter(),
-          ],
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildSidebarItem({
     required IconData icon,
@@ -433,61 +441,46 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
     required VoidCallback onTap,
   }) {
     final itemContent = Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: _sidebarOpen ? 14 : 0,
-        vertical: 12,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
         color: isSelected
-            ? Colors.white.withValues(alpha: 0.18)
+            ? Colors.white.withValues(alpha: 0.2)
             : Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
-        border: isSelected
-            ? Border.all(
-                color: Colors.white.withValues(alpha: 0.35),
-                width: 1,
-              )
-            : null,
+        borderRadius: BorderRadius.circular(8),
       ),
-      child: _sidebarOpen
-          ? Row(
-              children: [
-                Icon(
-                  icon,
-                  color: isSelected
-                      ? Colors.white
-                      : Colors.white.withValues(alpha: 0.75),
-                  size: 20,
+      child: Row(
+        mainAxisAlignment:
+            _sidebarOpen ? MainAxisAlignment.start : MainAxisAlignment.center,
+        children: [
+          Icon(
+            icon,
+            size: 20,
+            color: isSelected ? const Color(0xFF7DD3FC) : Colors.white70,
+          ),
+          if (_sidebarOpen) ...[
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: AppTypography.body.copyWith(
-                      color: Colors.white,
-                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                      fontSize: 14,
-                    ),
-                  ),
-                ),
-              ],
-            )
-          : Center(
-              child: Icon(
-                icon,
-                color: isSelected
-                    ? Colors.white
-                    : Colors.white.withValues(alpha: 0.75),
-                size: 22,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
+          ],
+        ],
+      ),
     );
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(8),
         child: _sidebarOpen
             ? itemContent
             : Tooltip(
@@ -499,138 +492,105 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
   }
 
   Widget _buildSidebarFooter() {
-    final displayName = _cajeraNombre.startsWith('Caja')
-        ? _cajeraNombre
-        : 'Caja 01 - $_cajeraNombre';
-
-    if (!_sidebarOpen) {
-      return Container(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        child: Column(
-          children: [
-            Tooltip(
-              message: '$displayName\nOperario de Caja',
-              child: Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: AppPalette.primary,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(
-                  Icons.person_rounded,
-                  color: Colors.white,
-                  size: 20,
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Tooltip(
-              message: 'Cerrar Sesión',
-              child: IconButton(
-                icon: const Icon(
-                  Icons.logout_rounded,
-                  color: Colors.white,
-                  size: 20,
-                ),
-                onPressed: _handleLogout,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
+    final displayName = _cajeraNombre;
+    final initialLetter = _cajeraNombre.isNotEmpty
+        ? _cajeraNombre[0].toUpperCase()
+        : 'C';
 
     return Container(
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: AppPalette.primary,
-                  borderRadius: BorderRadius.circular(8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: Colors.white12)),
+        color: Colors.black12,
+      ),
+      child: _sidebarOpen
+          ? Row(
+              children: [
+                CircleAvatar(
+                  radius: 16,
+                  backgroundColor: Colors.white24,
+                  child: Text(
+                    initialLetter,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 13,
+                    ),
+                  ),
                 ),
-                child: const Icon(
-                  Icons.person_rounded,
-                  color: Colors.white,
-                  size: 20,
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        displayName,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const Text(
+                        'Operario de Caja',
+                        style: TextStyle(
+                          color: Color(0xFFBAE6FD),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      FutureBuilder<String>(
+                        future: AppUpdateService().getCurrentVersion(),
+                        builder: (context, snapshot) {
+                          return Text(
+                            'v${snapshot.data ?? "..."}',
+                            style: const TextStyle(
+                              color: Colors.white38,
+                              fontSize: 9,
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      displayName,
-                      style: AppTypography.small.copyWith(
+                IconButton(
+                  icon: const Icon(
+                    Icons.logout_rounded,
+                    color: Color(0xFFFCA5A5),
+                    size: 18,
+                  ),
+                  tooltip: 'Cerrar sesión',
+                  onPressed: _handleLogout,
+                ),
+              ],
+            )
+          : Center(
+              child: Tooltip(
+                message: 'Cerrar sesión ($displayName)',
+                child: InkWell(
+                  onTap: _handleLogout,
+                  borderRadius: BorderRadius.circular(16),
+                  child: CircleAvatar(
+                    radius: 16,
+                    backgroundColor: Colors.white24,
+                    child: Text(
+                      initialLetter,
+                      style: const TextStyle(
                         color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    Text(
-                      'Operario de Caja',
-                      style: AppTypography.small.copyWith(
-                        color: Colors.white.withValues(alpha: 0.7),
-                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 13,
                       ),
                     ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: TextButton.icon(
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                foregroundColor: Colors.white,
-                backgroundColor: AppPalette.error.withValues(alpha: 0.25),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: BorderSide(
-                    color: AppPalette.error.withValues(alpha: 0.5),
-                    width: 1,
                   ),
                 ),
               ),
-              icon: const Icon(Icons.logout_rounded, size: 16, color: Colors.white),
-              label: Text(
-                'CERRAR SESIÓN',
-                style: AppTypography.button.copyWith(
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.5,
-                  fontSize: 12,
-                  color: Colors.white,
-                ),
-              ),
-              onPressed: _handleLogout,
             ),
-          ),
-          const SizedBox(height: 10),
-          FutureBuilder<String>(
-            future: AppUpdateService().getCurrentVersion(),
-            builder: (context, snapshot) {
-              return Text(
-                'Cresal App v${snapshot.data ?? "..."}',
-                style: AppTypography.small.copyWith(
-                  color: Colors.white.withValues(alpha: 0.5),
-                  fontSize: 10,
-                ),
-              );
-            },
-          ),
-        ],
-      ),
     );
   }
 
