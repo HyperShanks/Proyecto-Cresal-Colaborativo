@@ -360,18 +360,7 @@ class CobroPendienteCard extends StatelessWidget {
                               fontWeight: FontWeight.w700,
                             ),
                           ),
-                          if (tieneAbonoInicial) ...[
-                            Text(
-                              'Saldo: ${formatClp(orden.totalOperacion - montoAbonoInicial)} • Total: ${formatClp(orden.totalOperacion)}',
-                              style: AppTypography.small.copyWith(
-                                color: AppPalette.textSecondaryLight,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ] else if (esAbonoActivo) ...[
+                          if (esAbonoActivo) ...[
                             Text(
                               'Total: ${formatClp(orden.totalOperacion)} • Abonado: ${formatClp(orden.abonoPrevio)}',
                               style: AppTypography.small.copyWith(
