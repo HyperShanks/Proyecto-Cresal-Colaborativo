@@ -207,7 +207,29 @@ void main() {
   });
 
   group('SPEC-HU-TAREA-18: Bug 4 - Navegación Intuitiva al Agregar al Carrito desde Detalle', () {
-    testWidgets('Tocar Agregar al Carrito en DetalleActivoScreen hace pop de la pantalla', (tester) async {
+    testWidgets('Tocar Agregar al Carrito en DetalleActivoScreen reserva en backend, agrega a CartController y hace pop', (tester) async {
+      bool reservaLlamada = false;
+      final mockClient = MockClient((request) async {
+        if (request.url.path.contains('/api/v1/carrito/reservar')) {
+          reservaLlamada = true;
+          final body = jsonDecode(request.body);
+          expect(body['id_activo'], equals('act-99'));
+          expect(body['version_lock_esperado'], equals(1));
+          return http.Response(
+            jsonEncode({
+              'id_activo': 'act-99',
+              'version_lock': 2,
+              'reservado_por': 'usr-test',
+              'reserva_expira_en': '2026-10-08T18:00:00Z',
+              'mensaje': 'Reserva temporal creada.',
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        return http.Response('Not found', 404);
+      });
+
       const catalogoItem = CatalogoItem(
         idActivo: 'act-99',
         skuQrFisico: 'SKU-TEST-99',
@@ -220,6 +242,7 @@ void main() {
         anio: 2022,
         precioReferencia: 150000,
         estadoActivo: 'Disponible',
+        versionLock: 1,
       );
 
       await tester.pumpWidget(
@@ -231,9 +254,10 @@ void main() {
                 onPressed: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => const DetalleActivoScreen(
+                      builder: (_) => DetalleActivoScreen(
                         item: catalogoItem,
                         vendedorSucursalId: 1,
+                        httpClient: mockClient,
                       ),
                     ),
                   );
@@ -257,12 +281,85 @@ void main() {
       await tester.tap(btnAgregar);
       await tester.pumpAndSettle();
 
+      // Verificar que se llamó al backend para reservar
+      expect(reservaLlamada, isTrue);
+
       // Verificar que DetalleActivoScreen hizo pop y volvimos a la pantalla anterior
       expect(find.byType(DetalleActivoScreen), findsNothing);
       expect(find.byKey(const Key('btn_ir_detalle')), findsOneWidget);
 
-      // Verificar que el ítem está en el carrito
+      // Verificar que el ítem está en el carrito con versionLock actualizado
       expect(CartController.instance.totalItems, equals(1));
+      final cartItem = CartController.instance.items.first as InventariadoCartItem;
+      expect(cartItem.catalogoItem.versionLock, equals(2));
+    });
+
+    testWidgets('Tocar Agregar al Carrito en DetalleActivoScreen con conflicto 409 muestra SnackBar y no hace pop', (tester) async {
+      final mockClient = MockClient((request) async {
+        if (request.url.path.contains('/api/v1/carrito/reservar')) {
+          return http.Response(
+            jsonEncode({
+              'detail': '¡Lo sentimos! Este repuesto acaba de ser reservado por otro vendedor hace un instante.',
+            }),
+            409,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        return http.Response('Not found', 404);
+      });
+
+      const catalogoItem = CatalogoItem(
+        idActivo: 'act-conflict',
+        skuQrFisico: 'SKU-CONFLICT',
+        idCategoria: 1,
+        nombreCategoria: 'Eléctrico',
+        idSucursalActual: 1,
+        nombreSucursal: 'Viña del Mar',
+        marca: 'Bosch',
+        modelo: 'Hilux',
+        anio: 2022,
+        precioReferencia: 150000,
+        estadoActivo: 'Disponible',
+        versionLock: 1,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: ElevatedButton(
+                key: const Key('btn_ir_detalle'),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => DetalleActivoScreen(
+                        item: catalogoItem,
+                        vendedorSucursalId: 1,
+                        httpClient: mockClient,
+                      ),
+                    ),
+                  );
+                },
+                child: const Text('Ir a detalle'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byKey(const Key('btn_ir_detalle')));
+      await tester.pumpAndSettle();
+
+      final btnAgregar = find.byKey(const Key('btn_agregar_carrito_detalle'));
+      await tester.tap(btnAgregar);
+      await tester.pumpAndSettle();
+
+      // No debe hacer pop
+      expect(find.byType(DetalleActivoScreen), findsOneWidget);
+      // No debe haberse agregado al carrito
+      expect(CartController.instance.totalItems, equals(0));
+      // Debe mostrar el SnackBar de error
+      expect(find.byType(SnackBar), findsOneWidget);
     });
   });
 
