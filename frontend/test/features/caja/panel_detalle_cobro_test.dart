@@ -300,11 +300,22 @@ void main() {
     await tester.pumpWidget(createTestWidget(PanelDetalleCobro(provider: provider)));
     await tester.pumpAndSettle();
 
-    // Presionar botón de cobro
+    // Presionar botón de cobro (abre modal de confirmación por tener abonos previos)
     await tester.tap(find.text('CONFIRMAR Y PROCESAR COBRO'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Confirmar Liquidación Total'), findsOneWidget);
+    expect(find.textContaining('¿Estás seguro que no es un abono?'), findsOneWidget);
+
+    // Marcar checkbox obligatorio
+    await tester.tap(find.byType(Checkbox));
+    await tester.pumpAndSettle();
+
+    // Confirmar liquidación
+    await tester.tap(find.text('Confirmar'));
     await tester.pump();
-    await tester.pump(); // Procesa la reanudación del async gap
-    await tester.pump(const Duration(milliseconds: 500)); // Renderiza el diálogo modal
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500)); // Renderiza el diálogo modal de resultado
 
     expect(mockService.registrarCobroLlamado, isTrue);
     expect(mockService.ultimoRequest, isNotNull);
@@ -433,5 +444,112 @@ void main() {
     expect(find.textContaining('Patente'), findsNothing);
     expect(find.textContaining('Galpón'), findsNothing);
     expect(find.textContaining('Pallet'), findsNothing);
+  });
+
+  testWidgets(
+      'Control Preventivo: Orden con abono inicial obligatorio bloquea Liquidación Total en primer cobro',
+      (tester) async {
+    setDesktopViewport(tester);
+
+    final ordenConAbonoInicial = CobroPendienteModel(
+      idReferencia: 'ord-abono-inicial-001',
+      folioDocumento: 'ORD-5555',
+      tipoOperacion: 'VENTA',
+      estadoDocumento: 'Reservada',
+      clienteNombre: 'Ignacio Morales',
+      clienteRut: '15.678.901-2',
+      vendedorNombre: 'Juaquin Leiva',
+      fechaEmision: DateTime.now(),
+      fechaEmisionFormateada: '22/08/2026',
+      horaEmisionFormateada: '10:00',
+      totalOperacion: 1000000,
+      abonoPrevio: 0,
+      abonoRequerido: 300000,
+      saldoPendiente: 1000000,
+      montoACobrar: 300000,
+      articulos: [],
+    );
+
+    provider.seleccionarOrden(ordenConAbonoInicial);
+
+    // Debe detectar el bloqueo de liquidación para el cobro inicial
+    expect(provider.tieneBloqueoLiquidacionInicial, isTrue);
+    expect(provider.modalidad, 'ABONO');
+    expect(provider.montoDeclarado, 300000);
+
+    // Intentar forzar liquidación no surte efecto por protección
+    provider.setModalidad('LIQUIDACION');
+    expect(provider.modalidad, 'ABONO');
+
+    await tester.pumpWidget(createTestWidget(PanelDetalleCobro(provider: provider)));
+    await tester.pumpAndSettle();
+
+    // Renderiza el banner informativo y candado
+    expect(find.byIcon(Icons.lock_outline_rounded), findsWidgets);
+    expect(
+      find.textContaining('La liquidación total no está permitida en este primer pago'),
+      findsOneWidget,
+    );
+    expect(find.text('Liquidación Total'), findsOneWidget);
+    expect(find.text('Abono Personalizado'), findsOneWidget);
+
+    // Tocar Liquidación Total no cambia la modalidad
+    await tester.tap(find.text('Liquidación Total'));
+    await tester.pumpAndSettle();
+    expect(provider.modalidad, 'ABONO');
+  });
+
+  testWidgets(
+      'Control Preventivo: Cancelar en diálogo de confirmación no procesa cobro y mantiene saldo intacto',
+      (tester) async {
+    setDesktopViewport(tester);
+    provider.seleccionarOrden(sampleVenta);
+
+    await tester.pumpWidget(createTestWidget(PanelDetalleCobro(provider: provider)));
+    await tester.pumpAndSettle();
+
+    // Presionar botón de cobro
+    await tester.tap(find.text('CONFIRMAR Y PROCESAR COBRO'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Confirmar Liquidación Total'), findsOneWidget);
+
+    // Cancelar la operación en el diálogo
+    await tester.tap(find.text('Cancelar / Volver'));
+    await tester.pumpAndSettle();
+
+    // No se ejecutó la llamada al backend y la orden sigue seleccionada
+    expect(mockService.registrarCobroLlamado, isFalse);
+    expect(find.text('ORD-9780'), findsOneWidget);
+    expect(find.text('CONFIRMAR Y PROCESAR COBRO'), findsOneWidget);
+  });
+
+  testWidgets(
+      'Control Preventivo: Botón Confirmar permanece deshabilitado hasta marcar casilla',
+      (tester) async {
+    setDesktopViewport(tester);
+    provider.seleccionarOrden(sampleVenta);
+
+    await tester.pumpWidget(createTestWidget(PanelDetalleCobro(provider: provider)));
+    await tester.pumpAndSettle();
+
+    // Abrir diálogo de confirmación
+    await tester.tap(find.text('CONFIRMAR Y PROCESAR COBRO'));
+    await tester.pumpAndSettle();
+
+    final btnConfirmarFinder = find.widgetWithText(ElevatedButton, 'Confirmar');
+    expect(btnConfirmarFinder, findsOneWidget);
+
+    // Casilla no marcada -> Botón deshabilitado (onPressed == null)
+    final btnDeshabilitado = tester.widget<ElevatedButton>(btnConfirmarFinder);
+    expect(btnDeshabilitado.onPressed, isNull);
+
+    // Marcar checkbox
+    await tester.tap(find.byType(Checkbox));
+    await tester.pumpAndSettle();
+
+    // Casilla marcada -> Botón habilitado (onPressed != null)
+    final btnHabilitado = tester.widget<ElevatedButton>(btnConfirmarFinder);
+    expect(btnHabilitado.onPressed, isNotNull);
   });
 }

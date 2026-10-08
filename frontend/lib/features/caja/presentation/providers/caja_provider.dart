@@ -290,10 +290,32 @@ class CajaProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Indica si la orden seleccionada requiere obligatoriamente un abono inicial y tiene bloqueada la liquidación directa en el primer cobro.
+  bool get tieneBloqueoLiquidacionInicial {
+    if (_ordenSeleccionada == null) return false;
+    final o = _ordenSeleccionada!;
+    final abonoInicial = o.abonoRequerido > 0
+        ? o.abonoRequerido
+        : (o.pisoPrimerAbono > 0
+            ? o.pisoPrimerAbono
+            : (o.montoACobrar > 0 && o.montoACobrar < o.totalOperacion
+                ? o.montoACobrar
+                : 0));
+    return o.esPrimerAbono &&
+        abonoInicial > 0 &&
+        abonoInicial < o.totalOperacion &&
+        o.saldoPendiente > 0;
+  }
+
   /// Cambia la modalidad de cobro ('LIQUIDACION' | 'ABONO').
   void setModalidad(String nuevaModalidad) {
     final modNorm = nuevaModalidad.toUpperCase();
     if (_modalidad == modNorm) return;
+
+    if (modNorm == 'LIQUIDACION' && tieneBloqueoLiquidacionInicial) {
+      // Bloqueo preventivo: orden con abono inicial obligatorio no permite liquidación en el primer cobro
+      return;
+    }
 
     _modalidad = modNorm;
 
