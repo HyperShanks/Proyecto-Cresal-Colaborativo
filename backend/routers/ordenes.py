@@ -1484,10 +1484,14 @@ def listar_entregas_envios(
     busqueda_vendedor: Optional[str] = Query(None, description="Filtro por Vendedor creador o asignado"),
     busqueda: Optional[str] = Query(None, description="Término general de búsqueda"),
     estado_pago: Optional[str] = Query(None, description="Filtro de pago: 'todos', 'pagados', 'pendientes'"),
+    solo_activas: Optional[bool] = Query(True, description="Filtra exclusivamente órdenes de la jornada operativa pendientes de entrega/despacho"),
+    limit: Optional[int] = Query(None, description="Límite de registros para carga progresiva"),
+    offset: int = Query(0, description="Offset de inicio para paginación"),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
     tipo_filtro = (tipo.strip().lower() if tipo else None)
+    estados_filtro = ["Reservada", "Pagada"] if (solo_activas is not False) else ["Reservada", "Pagada", "Completada", "Despachada"]
 
     ordenes_resultado = []
 
@@ -1498,7 +1502,7 @@ def listar_entregas_envios(
             .outerjoin(Despacho, Orden_Venta.id_orden == Despacho.id_orden)
             .filter(
                 Orden_Venta.id_sucursal == sucursal_id,
-                Orden_Venta.estado_orden.in_(["Reservada", "Pagada"]),
+                Orden_Venta.estado_orden.in_(estados_filtro),
                 Despacho.id_despacho == None,
             )
         )
@@ -1522,7 +1526,7 @@ def listar_entregas_envios(
             .join(Despacho, Orden_Venta.id_orden == Despacho.id_orden)
             .filter(
                 Orden_Venta.id_sucursal == sucursal_id,
-                Orden_Venta.estado_orden.in_(["Reservada", "Pagada"]),
+                Orden_Venta.estado_orden.in_(estados_filtro),
             )
         )
         for o, desp in q_despachos.all():
@@ -1764,6 +1768,11 @@ def listar_entregas_envios(
             )
         )
 
+    if limit is not None:
+        return items_response[offset : offset + limit]
+    elif offset > 0:
+        return items_response[offset:]
+
     return items_response
 
 
@@ -1789,9 +1798,14 @@ def confirmar_entrega_tienda(
         )
 
     if orden.estado_orden in ["Despachada", "Completada"]:
-        raise HTTPException(
-            status_code=400,
-            detail=f"La orden ya fue entregada anteriormente (Estado: {orden.estado_orden})."
+        folio = orden.folio
+        return EntregaConfirmacionResponse(
+            id_orden=orden.id_orden,
+            folio=folio,
+            estado_orden=orden.estado_orden,
+            mensaje=f"¡Entrega ya confirmada previamente! (Estado: {orden.estado_orden})",
+            activos_finalizados=0,
+            fecha_entrega=datetime.now().isoformat(),
         )
 
     detalles = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == orden.id_orden).all()
@@ -1881,6 +1895,19 @@ def marcar_despacho_enviado(
     orden = db.query(Orden_Venta).filter(Orden_Venta.id_orden == despacho.id_orden).first()
     if not orden:
         raise HTTPException(status_code=404, detail="Orden asociada al despacho no encontrada.")
+
+    if despacho.estado_despacho == "Enviado" or orden.estado_orden == "Despachada":
+        folio = orden.folio
+        return DespachoEnvioResponse(
+            id_despacho=despacho.id_despacho,
+            id_orden=orden.id_orden,
+            folio=folio,
+            estado_despacho=despacho.estado_despacho,
+            estado_orden=orden.estado_orden,
+            mensaje=f"¡Despacho #{str(despacho.id_despacho)[:8].upper()} ya se encontraba marcado como Enviado!",
+            activos_finalizados=0,
+            fecha_envio=datetime.now().isoformat(),
+        )
 
     detalles = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == orden.id_orden).all()
     activos_sin_imprimir = []
@@ -1989,6 +2016,18 @@ def actualizar_estado_despacho(
         raise HTTPException(
             status_code=400,
             detail=f"Estado de despacho '{nuevo_estado}' no válido. Opciones permitidas: 'Por Enviar', 'Enviado'."
+        )
+
+    if despacho.estado_despacho == estado_normalizado:
+        folio = orden.folio
+        return DespachoActualizarEstadoResponse(
+            id_despacho=despacho.id_despacho,
+            id_orden=orden.id_orden,
+            folio=folio,
+            estado_despacho=despacho.estado_despacho,
+            estado_orden=orden.estado_orden,
+            mensaje=f"Estado de despacho ya se encontraba como '{despacho.estado_despacho}'.",
+            fecha_actualizacion=datetime.now().isoformat(),
         )
 
     try:

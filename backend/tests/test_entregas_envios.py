@@ -1220,5 +1220,141 @@ def test_orden_venta_online_con_responsable_meson_es_visible_para_todos(client):
         db.close()
 
 
+def test_entregas_envios_offline_resilience_paginacion_e_idempotencia(client, auth_headers):
+    """
+    SPEC-HU-RETIRO-ENVIOS:
+    Valida:
+    1. Carga ligera con limit y offset (paginación progresiva).
+    2. Idempotencia en confirmar_entrega_tienda (reintento silencioso devuelve 200).
+    3. Idempotencia en marcar_despacho_enviado (reintento silencioso devuelve 200).
+    """
+    db = TestingSessionLocal()
+    try:
+        # 1. Crear cliente
+        cli = models.Cliente(
+            id_cliente=uuid.uuid4(),
+            rut_cliente="22.222.222-2",
+            nombres="Cliente",
+            apellidos="Resiliente",
+            correo="resiliente@cresal.cl",
+            telefono="+56911223344",
+        )
+        db.add(cli)
+
+        # 2. Crear activo con QR impreso
+        act1 = models.Activo_Inventariado(
+            id_activo=uuid.uuid4(),
+            sku_qr_fisico="RESIL-01",
+            id_categoria=1,
+            id_sucursal_actual=1,
+            id_estado=1,
+            qr_impreso=True,
+        )
+        act2 = models.Activo_Inventariado(
+            id_activo=uuid.uuid4(),
+            sku_qr_fisico="RESIL-02",
+            id_categoria=1,
+            id_sucursal_actual=1,
+            id_estado=1,
+            qr_impreso=True,
+        )
+        db.add_all([act1, act2])
+        db.commit()
+
+        # 3. Crear orden de retiro
+        user = db.query(models.Usuario).first()
+        ord_ret = models.Orden_Venta(
+            id_orden=uuid.uuid4(),
+            numero_orden=801,
+            id_cliente=cli.id_cliente,
+            id_vendedor=user.id_usuario,
+            id_sucursal=1,
+            total_venta=50000,
+            monto_pendiente=0,
+            estado_orden="Pagada",
+            qr_transaccional_salida="QR-RESIL-01",
+        )
+        db.add(ord_ret)
+        db.flush()
+
+        det1 = models.Detalle_Orden(
+            id_detalle=uuid.uuid4(),
+            id_orden=ord_ret.id_orden,
+            id_activo=act1.id_activo,
+            cantidad=1,
+            precio_final=50000,
+            estado_preparacion="Listo",
+        )
+        db.add(det1)
+
+        # 4. Crear orden de despacho
+        ord_desp = models.Orden_Venta(
+            id_orden=uuid.uuid4(),
+            numero_orden=802,
+            id_cliente=cli.id_cliente,
+            id_vendedor=user.id_usuario,
+            id_sucursal=1,
+            total_venta=70000,
+            monto_pendiente=0,
+            estado_orden="Pagada",
+            qr_transaccional_salida="QR-RESIL-02",
+        )
+        db.add(ord_desp)
+        db.flush()
+
+        det2 = models.Detalle_Orden(
+            id_detalle=uuid.uuid4(),
+            id_orden=ord_desp.id_orden,
+            id_activo=act2.id_activo,
+            cantidad=1,
+            precio_final=70000,
+            estado_preparacion="Listo",
+        )
+        db.add(det2)
+
+        desp = models.Despacho(
+            id_despacho=uuid.uuid4(),
+            id_orden=ord_desp.id_orden,
+            id_comuna_destino=1,
+            direccion_envio="Av Libertad 123",
+            receptor_nombres="Receptor Resiliente",
+            receptor_rut="22.222.222-2",
+            receptor_telefono="+56911223344",
+            empresa_transporte="Chilexpress",
+            estado_despacho="Por Enviar",
+        )
+        db.add(desp)
+        db.commit()
+
+        # 5. Probar paginación en listar_entregas_envios
+        res_pag1 = client.get("/api/v1/ordenes/entregas-envios?sucursal_id=1&limit=1&offset=0", headers=auth_headers)
+        assert res_pag1.status_code == 200
+        assert len(res_pag1.json()) == 1
+
+        # 6. Probar entrega y reintento idempotente
+        res_entregar_1 = client.patch(f"/api/v1/ordenes/{ord_ret.id_orden}/entregar", headers=auth_headers)
+        assert res_entregar_1.status_code == 200
+        assert res_entregar_1.json()["estado_orden"] == "Completada"
+
+        # Reintento por desconexión/microcorte
+        res_entregar_reintento = client.patch(f"/api/v1/ordenes/{ord_ret.id_orden}/entregar", headers=auth_headers)
+        assert res_entregar_reintento.status_code == 200
+        assert "ya confirmada previamente" in res_entregar_reintento.json()["mensaje"].lower()
+
+        # 7. Probar despacho y reintento idempotente
+        res_desp_1 = client.patch(f"/api/v1/despachos/{desp.id_despacho}/enviar", headers=auth_headers)
+        assert res_desp_1.status_code == 200
+        assert res_desp_1.json()["estado_despacho"] == "Enviado"
+
+        # Reintento de despacho
+        res_desp_reintento = client.patch(f"/api/v1/despachos/{desp.id_despacho}/enviar", headers=auth_headers)
+        assert res_desp_reintento.status_code == 200
+        assert "ya se encontraba marcado como enviado" in res_desp_reintento.json()["mensaje"].lower()
+
+    finally:
+        db.close()
+
+
+
 
 

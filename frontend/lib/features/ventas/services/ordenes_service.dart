@@ -184,6 +184,15 @@ class ClienteOrdenResumenModel {
       comuna: json['comuna']?.toString(),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'rut_cliente': rutCliente,
+    'nombres': nombres,
+    'apellidos': apellidos,
+    if (telefono != null) 'telefono': telefono,
+    if (correo != null) 'correo': correo,
+    if (comuna != null) 'comuna': comuna,
+  };
 }
 
 /// Resumen del despacho asociado a una orden en el historial (HU-3.5).
@@ -197,6 +206,7 @@ class DespachoOrdenResumenModel {
   final int costoEnvio;
   final String estadoDespacho;
   final String? comunaDestino;
+  final String? numeroSeguimiento;
 
   const DespachoOrdenResumenModel({
     required this.idDespacho,
@@ -208,6 +218,7 @@ class DespachoOrdenResumenModel {
     this.costoEnvio = 0,
     required this.estadoDespacho,
     this.comunaDestino,
+    this.numeroSeguimiento,
   });
 
   String get costoEnvioFormateado {
@@ -226,8 +237,22 @@ class DespachoOrdenResumenModel {
       costoEnvio: json['costo_envio'] as int? ?? 0,
       estadoDespacho: json['estado_despacho']?.toString() ?? 'Enviado',
       comunaDestino: json['comuna_destino']?.toString(),
+      numeroSeguimiento: json['numero_seguimiento']?.toString(),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id_despacho': idDespacho,
+    'direccion_envio': direccionEnvio,
+    'receptor_nombres': receptorNombres,
+    'receptor_rut': receptorRut,
+    'receptor_telefono': receptorTelefono,
+    if (empresaTransporte != null) 'empresa_transporte': empresaTransporte,
+    'costo_envio': costoEnvio,
+    'estado_despacho': estadoDespacho,
+    if (comunaDestino != null) 'comuna_destino': comunaDestino,
+    if (numeroSeguimiento != null) 'numero_seguimiento': numeroSeguimiento,
+  };
 }
 
 /// Línea de detalle de producto en el historial de órdenes (HU-3.5).
@@ -316,6 +341,24 @@ class DetalleOrdenItemModel {
       estadoPreparacion: json['estado_preparacion']?.toString() ?? 'Pendiente',
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id_detalle': idDetalle,
+    if (idActivo != null) 'id_activo': idActivo,
+    if (idCategoria != null) 'id_categoria': idCategoria,
+    if (nombreCategoria != null) 'nombre_categoria': nombreCategoria,
+    'titulo': titulo,
+    if (skuQrFisico != null) 'sku_qr_fisico': skuQrFisico,
+    if (descripcionManual != null) 'descripcion_manual': descripcionManual,
+    if (notasPreparacion != null) 'notas_preparacion': notasPreparacion,
+    'cantidad': cantidad,
+    if (precioUnitario != null) 'precio_unitario': precioUnitario,
+    'precio_final': precioFinal,
+    'subtotal': subtotal,
+    'es_inventariado': esInventariado,
+    'preparacion_lista': preparacionLista,
+    if (estadoPreparacion != null) 'estado_preparacion': estadoPreparacion,
+  };
 }
 
 /// DTO completo de orden de venta para el historial del vendedor (HU-3.5).
@@ -1294,6 +1337,9 @@ class OrdenesService {
     String? busquedaVendedor,
     String? busqueda,
     String? estadoPago,
+    bool soloActivas = true,
+    int? limit,
+    int? offset,
     http.Client? client,
   }) async {
     final httpClient = client ?? http.Client();
@@ -1309,6 +1355,9 @@ class OrdenesService {
         if (busqueda != null && busqueda.isNotEmpty) 'busqueda': busqueda,
         if (estadoPago != null && estadoPago.isNotEmpty)
           'estado_pago': estadoPago,
+        'solo_activas': soloActivas.toString(),
+        if (limit != null) 'limit': limit.toString(),
+        if (offset != null) 'offset': offset.toString(),
       };
 
       final uri = Uri.parse('${ApiConstants.ordenesEndpoint}/entregas-envios')
@@ -1766,4 +1815,26 @@ class EntregaEnvioModel {
       todosPreparados: json['todos_preparados'] as bool? ?? false,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id_orden': idOrden,
+    if (numeroOrden != null) 'numero_orden': numeroOrden,
+    'folio': folio,
+    'tipo_entrega': tipoEntrega,
+    'estado_orden': estadoOrden,
+    'total_venta': totalVenta,
+    'monto_pendiente': montoPendiente,
+    if (qrTransaccionalSalida != null) 'qr_transaccional_salida': qrTransaccionalSalida,
+    if (fechaCreacion != null) 'fecha_creacion': fechaCreacion,
+    if (fechaActualizacion != null) 'fecha_actualizacion': fechaActualizacion,
+    'total_items': totalItems,
+    if (cliente != null) 'cliente': cliente!.toJson(),
+    if (despacho != null) 'despacho': despacho!.toJson(),
+    'detalles': detalles.map((d) => d.toJson()).toList(),
+    if (vendedorNombre != null) 'vendedor_nombre': vendedorNombre,
+    if (idVendedorAsignado != null) 'id_vendedor_asignado': idVendedorAsignado,
+    if (vendedorAsignadoNombre != null) 'vendedor_asignado_nombre': vendedorAsignadoNombre,
+    'preparacion_lista': preparacionLista,
+    'todos_preparados': todosPreparados,
+  };
 }

@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../../auth/services/auth_service.dart';
 import '../widgets/qr_ticket_dialog.dart';
 import '../../services/ordenes_service.dart';
 import '../../services/ordenes_sync_notifier.dart';
+import '../../services/entregas_envios_storage_service.dart';
+import '../../services/entregas_envios_sync_service.dart';
 import '../../../../core/services/silent_polling_manager.dart';
 
 /// Pantalla colaborativa para el Módulo 'Entregas y Envíos'
@@ -12,8 +15,15 @@ import '../../../../core/services/silent_polling_manager.dart';
 /// trazabilidad de vendedores, tarjetas limpias y modal de detalle exhaustivo.
 class EntregasEnviosScreen extends StatefulWidget {
   final List<EntregaEnvioModel>? initialEntregas;
+  final EntregasEnviosSyncService? syncService;
+  final http.Client? httpClient;
 
-  const EntregasEnviosScreen({super.key, this.initialEntregas});
+  const EntregasEnviosScreen({
+    super.key,
+    this.initialEntregas,
+    this.syncService,
+    this.httpClient,
+  });
 
   @override
   State<EntregasEnviosScreen> createState() => _EntregasEnviosScreenState();
@@ -35,13 +45,16 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
   bool _isLoading = true;
   String? _errorMessage;
   SilentPollingManager? _pollingManager;
+  late EntregasEnviosSyncService _syncService;
 
   @override
   void initState() {
     super.initState();
+    _syncService = widget.syncService ??
+        EntregasEnviosSyncService(client: widget.httpClient);
     OrdenesSyncNotifier.instance.addListener(_onSyncNotification);
     _iniciarAutoRefresh();
-    _verificarPermisosYCargar();
+    _despliegueInmediatoYCarga();
   }
 
   void _iniciarAutoRefresh() {
@@ -68,28 +81,35 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
     }
   }
 
-  Future<void> _cargarDatosSilencioso() async {
-    try {
-      final data = await OrdenesService.obtenerEntregasEnvios(
-        busquedaCliente: _clienteFilterController.text.trim().isNotEmpty
-            ? _clienteFilterController.text.trim()
-            : null,
-        busquedaVendedor: _vendedorFilterController.text.trim().isNotEmpty
-            ? _vendedorFilterController.text.trim()
-            : null,
-      );
-      if (!mounted) return;
+  Future<void> _despliegueInmediatoYCarga() async {
+    // 1. Apertura Inmediata (< 50ms) usando datos en memoria/caché local
+    if (widget.initialEntregas != null) {
       setState(() {
-        _todasEntregas = data;
-        _errorMessage = null;
+        _todasEntregas = List.from(widget.initialEntregas!);
         _isLoading = false;
       });
-    } catch (_) {
-      // Silenciar errores transitorios en segundo plano
+    } else {
+      final cache = await _syncService.storage.cargarCache();
+      if (mounted && cache.isNotEmpty) {
+        setState(() {
+          _todasEntregas = cache;
+          _isLoading = false;
+        });
+      }
+    }
+
+    // 2. Comprobar permisos del usuario
+    await _verificarPermisos();
+
+    // 3. Sincronización en segundo plano (Stale-While-Revalidate) y procesamiento de cola outbox
+    if (mounted && widget.initialEntregas == null) {
+      await _sincronizarConBackend(mostrarLoader: _todasEntregas.isEmpty);
+      // Despachar acciones pendientes que hayan quedado por desconexiones previas
+      _syncService.procesarCola();
     }
   }
 
-  Future<void> _verificarPermisosYCargar() async {
+  Future<void> _verificarPermisos() async {
     final idRol = await AuthService.getIdRol();
     final rol = await AuthService.getRol();
     final esVendedorOnline = idRol == 7 ||
@@ -117,22 +137,57 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
       setState(() {
         _currentUserId = authUser?.idUsuario;
         _currentUserName = nombre ?? authUser?.nombreCompleto;
-        if (widget.initialEntregas != null) {
-          _todasEntregas = List.from(widget.initialEntregas!);
-          _isLoading = false;
-        }
+      });
+    }
+  }
+
+  Future<void> _sincronizarConBackend({bool mostrarLoader = false}) async {
+    if (mostrarLoader) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
       });
     }
 
-    if (widget.initialEntregas == null) {
-      _cargarDatos();
+    try {
+      final data = await _syncService.sincronizarEntregas(
+        busquedaCliente: _clienteFilterController.text.trim().isNotEmpty
+            ? _clienteFilterController.text.trim()
+            : null,
+        busquedaVendedor: _vendedorFilterController.text.trim().isNotEmpty
+            ? _vendedorFilterController.text.trim()
+            : null,
+        soloActivas: true,
+      );
+      if (!mounted) return;
+      setState(() {
+        _todasEntregas = data;
+        _isLoading = false;
+        _errorMessage = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        // Solo mostrar error si no teníamos absolutamente nada en caché
+        if (_todasEntregas.isEmpty) {
+          _errorMessage = e.toString().replaceAll('Exception: ', '');
+        }
+        _isLoading = false;
+      });
     }
+  }
+
+  Future<void> _cargarDatosSilencioso() async {
+    await _sincronizarConBackend(mostrarLoader: false);
   }
 
   @override
   void dispose() {
     _pollingManager?.dispose();
     OrdenesSyncNotifier.instance.removeListener(_onSyncNotification);
+    if (widget.syncService == null) {
+      _syncService.dispose();
+    }
     _searchController.dispose();
     _clienteFilterController.dispose();
     _vendedorFilterController.dispose();
@@ -148,32 +203,7 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
       _tipoEntregaFilter != 'todos';
 
   Future<void> _cargarDatos() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
-    try {
-      final data = await OrdenesService.obtenerEntregasEnvios(
-        busquedaCliente: _clienteFilterController.text.trim().isNotEmpty
-            ? _clienteFilterController.text.trim()
-            : null,
-        busquedaVendedor: _vendedorFilterController.text.trim().isNotEmpty
-            ? _vendedorFilterController.text.trim()
-            : null,
-      );
-      if (!mounted) return;
-      setState(() {
-        _todasEntregas = data;
-        _isLoading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
-        _isLoading = false;
-      });
-    }
+    await _sincronizarConBackend(mostrarLoader: _todasEntregas.isEmpty);
   }
 
   bool _isAsignadaAMi(EntregaEnvioModel e) {
@@ -850,24 +880,142 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
     );
 
     if (confirmar == true) {
-      try {
-        await OrdenesService.confirmarEntregaTienda(orden.idOrden);
-        if (!mounted) return;
+      // 1. Cambio visual inmediato en la interfaz (optimista)
+      setState(() {
+        _todasEntregas.removeWhere((e) => e.idOrden == orden.idOrden);
+      });
 
-        setState(() {
-          _todasEntregas.removeWhere((e) => e.idOrden == orden.idOrden);
-        });
+      // 2. Feedback discreto al operario
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppPalette.surface,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 3),
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle, color: AppPalette.success),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '¡Orden #${orden.folioDisplay} entregada! Procesando sincronización...',
+                  style: const TextStyle(color: AppPalette.textPrimary),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
 
+      // 3. Registro seguro con cola Outbox y reintento resiliente
+      final accion = AccionEntregaEnvio(
+        idAccion: DateTime.now().millisecondsSinceEpoch.toString(),
+        tipo: 'confirmar_entrega',
+        idOrden: orden.idOrden,
+        fecha: DateTime.now().toIso8601String(),
+      );
+      _syncService.ejecutarAccionConCola(accion);
+      OrdenesSyncNotifier.instance.notificarCambio();
+    }
+  }
+
+  /// Registrar despacho externo a transportista (Starken, Chilexpress, etc.) con OT opcional
+  Future<void> _marcarDespachoEnviadoModal(EntregaEnvioModel orden) async {
+    final otCtrl = TextEditingController(text: orden.despacho?.numeroSeguimiento ?? '');
+    final transpCtrl = TextEditingController(
+      text: (orden.despacho?.empresaTransporte != null && orden.despacho!.empresaTransporte!.trim().isNotEmpty)
+          ? orden.despacho!.empresaTransporte!
+          : 'Chilexpress',
+    );
+
+    final bool? confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppPalette.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.local_shipping_outlined, color: AppPalette.secondary, size: 24),
+            const SizedBox(width: 8),
+            const Text('Despachar Mercadería', style: TextStyle(color: AppPalette.textPrimary)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Registra la entrega del bulto al transportista para la orden #${orden.folioDisplay}.',
+              style: const TextStyle(color: AppPalette.textSecondary),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: transpCtrl,
+              style: const TextStyle(color: AppPalette.textPrimary),
+              decoration: InputDecoration(
+                labelText: 'Empresa / Transportista',
+                labelStyle: const TextStyle(color: AppPalette.textSecondary),
+                hintText: 'Starken, Chilexpress, Transportes Norte...',
+                hintStyle: TextStyle(color: AppPalette.textSecondary.withValues(alpha: 0.5)),
+                filled: true,
+                fillColor: AppPalette.background,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: otCtrl,
+              style: const TextStyle(color: AppPalette.textPrimary),
+              decoration: InputDecoration(
+                labelText: 'Nº Orden de Transporte (OT) / Seguimiento',
+                labelStyle: const TextStyle(color: AppPalette.textSecondary),
+                hintText: 'Ej: 994821038 (opcional)',
+                hintStyle: TextStyle(color: AppPalette.textSecondary.withValues(alpha: 0.5)),
+                filled: true,
+                fillColor: AppPalette.background,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('CANCELAR', style: TextStyle(color: AppPalette.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppPalette.secondary,
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('CONFIRMAR DESPACHO', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar == true) {
+      // 1. Cambio visual inmediato optimista
+      setState(() {
+        _todasEntregas.removeWhere((e) => e.idOrden == orden.idOrden);
+      });
+
+      // 2. Feedback discreto
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: AppPalette.surface,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 3),
             content: Row(
               children: [
-                const Icon(Icons.check_circle, color: AppPalette.success),
+                const Icon(Icons.local_shipping, color: AppPalette.secondary),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    '¡Orden #${orden.folioDisplay} entregada exitosamente!',
+                    '¡Despacho #${orden.folioDisplay} registrado! Sincronizando con backend...',
                     style: const TextStyle(color: AppPalette.textPrimary),
                   ),
                 ),
@@ -875,21 +1023,20 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
             ),
           ),
         );
-
-        OrdenesSyncNotifier.instance.notificarCambio();
-        await _cargarDatosSilencioso();
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: AppPalette.surface,
-            content: Text(
-              'Error al confirmar entrega: ${e.toString().replaceAll("Exception: ", "")}',
-              style: const TextStyle(color: AppPalette.error),
-            ),
-          ),
-        );
       }
+
+      // 3. Encolar con reintento resiliente
+      final accion = AccionEntregaEnvio(
+        idAccion: DateTime.now().millisecondsSinceEpoch.toString(),
+        tipo: 'marcar_enviado',
+        idDespacho: orden.despacho?.idDespacho,
+        idOrden: orden.idOrden,
+        numeroSeguimiento: otCtrl.text.trim().isNotEmpty ? otCtrl.text.trim() : null,
+        empresaTransporte: transpCtrl.text.trim().isNotEmpty ? transpCtrl.text.trim() : null,
+        fecha: DateTime.now().toIso8601String(),
+      );
+      _syncService.ejecutarAccionConCola(accion);
+      OrdenesSyncNotifier.instance.notificarCambio();
     }
   }
 
@@ -1435,25 +1582,20 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                           ),
                         ],
                       ] else ...[
-                        // Despacho: Permite visualizar Ticket QR para salida en Barrera de Bodega
+                        // Despacho: Permite visualizar Ticket QR para salida en Barrera de Bodega y Registrar Despacho con OT
                         Expanded(
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: orden.tieneQrDisponible
-                                  ? AppPalette.secondary
-                                  : AppPalette.surface,
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
                               foregroundColor: orden.tieneQrDisponible
-                                  ? Colors.black
+                                  ? AppPalette.secondary
                                   : AppPalette.textSecondary,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                side: BorderSide(
-                                  color: orden.tieneQrDisponible
-                                      ? AppPalette.secondary
-                                      : Colors.white24,
-                                ),
+                              side: BorderSide(
+                                color: orden.tieneQrDisponible
+                                    ? AppPalette.secondary
+                                    : Colors.white24,
                               ),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             ),
                             onPressed: () {
                               if (!orden.tieneQrDisponible) {
@@ -1488,8 +1630,30 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                               size: 18,
                             ),
                             label: Text(
-                              orden.tieneQrDisponible ? 'VER TICKET QR' : 'QR BLOQUEADO',
+                              orden.tieneQrDisponible ? 'TICKET QR' : 'QR BLOQUEADO',
                               style: const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppPalette.secondary,
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            onPressed: () {
+                              Navigator.of(ctx).pop();
+                              _marcarDespachoEnviadoModal(orden);
+                            },
+                            icon: const Icon(Icons.local_shipping, size: 18),
+                            label: const Text(
+                              'DESPACHAR (OT)',
+                              style: TextStyle(fontWeight: FontWeight.bold),
                             ),
                           ),
                         ),
@@ -1588,10 +1752,101 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
               ? _buildErrorView()
               : Column(
                   children: [
+                    _buildSyncStatusBanner(),
                     _buildSearchAndFiltersHeader(),
                     Expanded(child: _buildListaRetirosYEnvios()),
                   ],
                 ),
+    );
+  }
+
+  Widget _buildSyncStatusBanner() {
+    return ValueListenableBuilder<SyncStatus>(
+      valueListenable: _syncService.statusNotifier,
+      builder: (context, status, _) {
+        final int colaPendiente = _syncService.colaPendienteCount;
+
+        if (status.estaAlDia && colaPendiente == 0) {
+          return const SizedBox.shrink();
+        }
+
+        Color bg;
+        Color fg;
+        IconData icon;
+        String mensaje;
+
+        if (status.esInestable) {
+          bg = AppPalette.warning.withValues(alpha: 0.15);
+          fg = AppPalette.warning;
+          icon = Icons.wifi_protected_setup_rounded;
+          mensaje = colaPendiente > 0
+              ? 'Señal débil en patio · Reintentando sincronización ($colaPendiente despachos en cola)...'
+              : (status.mensaje ?? 'Conexión intermitente · Reintentando en segundo plano...');
+        } else if (status.estaSincronizando) {
+          bg = AppPalette.primary.withValues(alpha: 0.15);
+          fg = AppPalette.primary;
+          icon = Icons.sync_rounded;
+          mensaje = colaPendiente > 0
+              ? 'Sincronizando entregas y procesando cola ($colaPendiente pendientes)...'
+              : (status.mensaje ?? 'Actualizando retiros y despachos...');
+        } else if (status.tienePendientes || colaPendiente > 0) {
+          final count = colaPendiente > 0 ? colaPendiente : status.pendientesCount;
+          bg = AppPalette.secondary.withValues(alpha: 0.15);
+          fg = AppPalette.secondary;
+          icon = Icons.pending_actions_rounded;
+          mensaje = '$count despacho(s) registrado(s) localmente pendientes de red';
+        } else {
+          return const SizedBox.shrink();
+        }
+
+        return Container(
+          key: const Key('sync_status_banner'),
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: bg,
+            border: Border(
+              bottom: BorderSide(
+                color: fg.withValues(alpha: 0.3),
+                width: 1,
+              ),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: fg, size: 16),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  mensaje,
+                  style: TextStyle(
+                    color: fg,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              if (status.esInestable)
+                TextButton(
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  onPressed: () => _cargarDatos(),
+                  child: Text(
+                    'REINTENTAR',
+                    style: TextStyle(
+                      color: fg,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -2368,46 +2623,75 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: AppPalette.surface,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.white12),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.qr_code_scanner,
-                              size: 15,
-                              color: esDespacho
-                                  ? AppPalette.secondary
-                                  : (orden.esMixta ? AppPalette.secondary : AppPalette.textSecondary),
-                            ),
-                            const SizedBox(width: 6),
-                            Flexible(
-                              child: Text(
-                                esDespacho
-                                    ? 'Salida en Barrera Bodega'
-                                    : (orden.esMixta ? 'Mixta · Barrera Bodega' : 'Salida en Barrera Bodega'),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                    if (esDespacho) ...[
+                      const SizedBox(width: 8),
+                      InkWell(
+                        onTap: () => _marcarDespachoEnviadoModal(orden),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: AppPalette.secondary.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppPalette.secondary.withValues(alpha: 0.4)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.local_shipping,
+                                size: 15,
+                                color: AppPalette.secondary,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Despachar (OT)',
                                 style: AppTypography.small.copyWith(
-                                  color: esDespacho
-                                      ? AppPalette.secondary
-                                      : (orden.esMixta ? AppPalette.secondary : AppPalette.textSecondary),
-                                  fontWeight: FontWeight.w600,
+                                  color: AppPalette.secondary,
+                                  fontWeight: FontWeight.bold,
                                   fontSize: 11.5,
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
-                    ),
+                    ] else ...[
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: AppPalette.surface,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.white12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.qr_code_scanner,
+                                size: 15,
+                                color: orden.esMixta ? AppPalette.secondary : AppPalette.textSecondary,
+                              ),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  orden.esMixta ? 'Mixta · Barrera Bodega' : 'Salida en Barrera Bodega',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTypography.small.copyWith(
+                                    color: orden.esMixta ? AppPalette.secondary : AppPalette.textSecondary,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 11.5,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ] else ...[
