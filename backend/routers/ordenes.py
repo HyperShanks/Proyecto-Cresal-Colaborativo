@@ -37,6 +37,7 @@ from schemas import (
     GeografiaResponseDTO, RegionGeografiaDTO, ComunaItemDTO,
     AsignarActivoBackorderRequest, AsignarActivoBackorderResponse,
     ValidarActivoBackorderResponse, ActivoDetalleBackorderDTO,
+    ReservaSolicitadaBackorderDTO,
 )
 from core.security import get_current_user, require_auditoria_or_caja_role, require_caja_role
 from core.policies import validar_horario_operativo_ordenes
@@ -1205,6 +1206,13 @@ def validar_activo_backorder_orden(
         raise HTTPException(status_code=404, detail="No se encontró una reserva en verde para esta orden.")
 
     sku_clean = payload.sku_activo.strip().upper()
+    prefijo_cat = "MOT-" if reserva.id_categoria_requerida == 1 else "CAJ-"
+    candidatos_sku = [sku_clean]
+    if not (sku_clean.startswith("MOT-") or sku_clean.startswith("CAJ-")):
+        candidatos_sku.append(f"{prefijo_cat}{sku_clean}")
+
+    print(f"🔍 [BACKORDER-VALIDAR] Validando SKU/Ingreso '{sku_clean}' (Candidatos: {candidatos_sku}) para orden {id_orden} por usuario {current_user.email}...")
+
     activo_raw = (
         db.query(Activo_Inventariado, Vehiculo_Origen, Detalle_Motor, Detalle_Caja_Cambio, Categoria_Activo, Estado_Activo)
         .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
@@ -1212,12 +1220,22 @@ def validar_activo_backorder_orden(
         .outerjoin(Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo)
         .outerjoin(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
         .outerjoin(Estado_Activo, Activo_Inventariado.id_estado == Estado_Activo.id_estado)
-        .filter(func.upper(Activo_Inventariado.sku_qr_fisico) == sku_clean)
+        .filter(
+            or_(
+                func.upper(Activo_Inventariado.sku_qr_fisico).in_(candidatos_sku),
+                and_(
+                    Vehiculo_Origen.numero_ingreso == sku_clean,
+                    Activo_Inventariado.id_categoria == reserva.id_categoria_requerida
+                )
+            )
+        )
         .first()
     )
 
     if not activo_raw:
-        raise HTTPException(status_code=404, detail=f"Activo con SKU '{payload.sku_activo}' no encontrado en inventario.")
+        tipo_esperado = "Motor" if reserva.id_categoria_requerida == 1 else "Caja de Cambios"
+        print(f"⚠️ [BACKORDER-VALIDAR] Repuesto {sku_clean} ({tipo_esperado}) no encontrado en inventario para orden {id_orden}.")
+        raise HTTPException(status_code=404, detail=f"No se encontró un {tipo_esperado} asociado al ingreso o SKU '{payload.sku_activo}' en inventario.")
 
     activo, vehiculo, motor, caja_cambio, categoria, estado_activo = activo_raw
     discrepancias = []
@@ -1227,7 +1245,7 @@ def validar_activo_backorder_orden(
     if nombre_estado_actual.lower() not in estados_validos:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"El repuesto con SKU '{sku_clean}' no está disponible (estado actual: '{nombre_estado_actual}'). Solo se pueden asignar repuestos en estado 'Disponible' o 'Paletizado'."
+            detail=f"El repuesto con SKU '{activo.sku_qr_fisico}' no está disponible (estado actual: '{nombre_estado_actual}'). Solo se pueden asignar repuestos en estado 'Disponible' o 'Paletizado'."
         )
 
     if vehiculo and reserva.marca_requerida and vehiculo.marca.lower() != reserva.marca_requerida.lower():
@@ -1266,6 +1284,10 @@ def validar_activo_backorder_orden(
         ubicacion_partes.append(f"Pallet {activo.ubicacion_pallet}")
     ubicacion_str = " • ".join(ubicacion_partes) if ubicacion_partes else None
 
+    num_motor = (motor.numero_motor if motor and motor.numero_motor else (vehiculo.numero_motor if vehiculo else None))
+    if num_motor and num_motor.strip().upper() == "S/A":
+        num_motor = None
+
     activo_detalle = ActivoDetalleBackorderDTO(
         sku=activo.sku_qr_fisico,
         categoria=categoria.nombre_categoria if categoria else None,
@@ -1282,13 +1304,36 @@ def validar_activo_backorder_orden(
         precio_minimo=activo.precio_minimo,
         precio_maximo=activo.precio_maximo,
         estado_conservacion=estado_activo.nombre_estado if estado_activo else (activo.observacion_estado or activo.estado),
+        numero_motor=num_motor,
+        numero_ingreso=vehiculo.numero_ingreso if vehiculo else None,
     )
+
+    tipo_pieza = "Motor" if reserva.id_categoria_requerida == 1 else "Caja de Cambios"
+    cat_db = db.query(Categoria_Activo).filter(Categoria_Activo.id_categoria == reserva.id_categoria_requerida).first()
+    if cat_db and cat_db.nombre_categoria:
+        tipo_pieza = cat_db.nombre_categoria
+
+    solicitado_detalle = ReservaSolicitadaBackorderDTO(
+        categoria=tipo_pieza,
+        id_categoria=reserva.id_categoria_requerida,
+        marca=reserva.marca_requerida,
+        modelo=reserva.modelo_requerido,
+        anio=reserva.anio_requerido,
+        cilindrada=reserva.cilindrada_requerida,
+        combustible=reserva.combustible_requerido,
+        transmision=reserva.transmision_requerida,
+        notas=reserva.notas_preparacion,
+        precio_acordado=reserva.precio_acordado,
+    )
+
+    print(f"📊 [BACKORDER-VALIDAR] Comparación para orden {id_orden}: Activo={activo.sku_qr_fisico}, Coincide={coincide}, Discrepancias={len(discrepancias)}")
 
     return ValidarActivoBackorderResponse(
         coincide=coincide,
         discrepancias=discrepancias,
         mensaje=mensaje,
-        activo_detalle=activo_detalle
+        activo_detalle=activo_detalle,
+        solicitado_detalle=solicitado_detalle,
     )
 
 
@@ -1325,6 +1370,13 @@ def asignar_activo_backorder(
         raise HTTPException(status_code=400, detail="La orden debe estar totalmente pagada antes de asignar el activo físico.")
 
     sku_clean = payload.sku_activo.strip().upper()
+    prefijo_cat = "MOT-" if reserva.id_categoria_requerida == 1 else "CAJ-"
+    candidatos_sku = [sku_clean]
+    if not (sku_clean.startswith("MOT-") or sku_clean.startswith("CAJ-")):
+        candidatos_sku.append(f"{prefijo_cat}{sku_clean}")
+
+    print(f"📦 [BACKORDER-ASIGNAR] Solicitud de asignación orden {id_orden} con input '{sku_clean}' (Candidatos: {candidatos_sku}) por usuario {current_user.email} (Forzado: {payload.forzar_atribucion})...")
+
     activo_raw = (
         db.query(Activo_Inventariado, Vehiculo_Origen, Detalle_Motor, Detalle_Caja_Cambio, Categoria_Activo, Estado_Activo)
         .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
@@ -1332,12 +1384,22 @@ def asignar_activo_backorder(
         .outerjoin(Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo)
         .outerjoin(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
         .outerjoin(Estado_Activo, Activo_Inventariado.id_estado == Estado_Activo.id_estado)
-        .filter(func.upper(Activo_Inventariado.sku_qr_fisico) == sku_clean)
+        .filter(
+            or_(
+                func.upper(Activo_Inventariado.sku_qr_fisico).in_(candidatos_sku),
+                and_(
+                    Vehiculo_Origen.numero_ingreso == sku_clean,
+                    Activo_Inventariado.id_categoria == reserva.id_categoria_requerida
+                )
+            )
+        )
         .first()
     )
 
     if not activo_raw:
-        raise HTTPException(status_code=404, detail=f"Activo con SKU '{payload.sku_activo}' no encontrado en inventario.")
+        tipo_esperado = "Motor" if reserva.id_categoria_requerida == 1 else "Caja de Cambios"
+        print(f"❌ [BACKORDER-ASIGNAR] Repuesto {sku_clean} ({tipo_esperado}) no encontrado en inventario para orden {id_orden}.")
+        raise HTTPException(status_code=404, detail=f"No se encontró un {tipo_esperado} asociado al ingreso o SKU '{payload.sku_activo}' en inventario.")
 
     activo, vehiculo, motor, caja_cambio, categoria, estado_activo = activo_raw
 
@@ -1384,6 +1446,7 @@ def asignar_activo_backorder(
     qr_hash = f"TX-QR-{uuid.uuid4()}"
     orden.qr_transaccional_salida = qr_hash
     orden.fecha_actualizacion = now_utc
+    print(f"✅ [BACKORDER-ASIGNAR] Activo {activo.sku_qr_fisico} vinculado exitosamente a orden {id_orden}. QR de salida emitido: {qr_hash}")
 
     # Actualizar línea de Detalle_Orden
     detalles_bo = db.query(Detalle_Orden).filter(

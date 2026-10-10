@@ -435,6 +435,19 @@ class ValidarActivoBackorderRequest(BaseModel):
     sku_activo: str = Field(..., description="SKU del repuesto físico a atribuir")
 
 
+class ReservaSolicitadaBackorderDTO(BaseModel):
+    categoria: Optional[str] = None
+    id_categoria: Optional[int] = None
+    marca: Optional[str] = None
+    modelo: Optional[str] = None
+    anio: Optional[int] = None
+    cilindrada: Optional[str] = None
+    combustible: Optional[str] = None
+    transmision: Optional[str] = None
+    notas: Optional[str] = None
+    precio_acordado: Optional[int] = None
+
+
 class ActivoDetalleBackorderDTO(BaseModel):
     sku: str
     categoria: Optional[str] = None
@@ -451,6 +464,8 @@ class ActivoDetalleBackorderDTO(BaseModel):
     precio_minimo: Optional[int] = None
     precio_maximo: Optional[int] = None
     estado_conservacion: Optional[str] = None
+    numero_motor: Optional[str] = None
+    numero_ingreso: Optional[str] = None
 
 
 class ValidarActivoBackorderResponse(BaseModel):
@@ -458,6 +473,7 @@ class ValidarActivoBackorderResponse(BaseModel):
     discrepancias: List[str] = []
     mensaje: str
     activo_detalle: Optional[ActivoDetalleBackorderDTO] = None
+    solicitado_detalle: Optional[ReservaSolicitadaBackorderDTO] = None
 
 
 class RegistrarCobroResponse(BaseModel):

@@ -546,3 +546,250 @@ def test_mis_ventas_por_asignar_excluye_anuladas(client, auth_headers_vendedor1,
         db.close()
 
 
+def test_validar_activo_backorder_input_flexible_y_ficha_contextual(client, auth_headers_vendedor1, db_session):
+    """Verifica que el endpoint acepte folio numérico sin prefijo ('8888'), complete 'MOT-8888' y devuelva solicitado_detalle."""
+    db = TestingSessionLocal()
+    try:
+        id_orden = uuid.uuid4()
+        id_vehiculo = uuid.uuid4()
+        id_activo = uuid.uuid4()
+
+        orden = Orden_Venta(
+            id_orden=id_orden,
+            id_cliente=db_session["orden_1"].id_cliente,
+            id_vendedor=db_session["vendedor_1"].id_usuario,
+            id_sucursal=1,
+            estado_orden="Pagada",
+            total_venta=650000,
+            monto_pendiente=0,
+            qr_transaccional_salida=None,
+        )
+        reserva = Reservas_Backorder(
+            id_reserva=uuid.uuid4(),
+            id_orden=id_orden,
+            id_cliente=db_session["orden_1"].id_cliente,
+            id_vendedor=db_session["vendedor_1"].id_usuario,
+            id_sucursal_registro=1,
+            id_categoria_requerida=1,  # Motor
+            marca_requerida="Toyota",
+            modelo_requerido="Corolla",
+            anio_requerido=2018,
+            cilindrada_requerida="1.8",
+            combustible_requerido="Bencina",
+            transmision_requerida="Automática",
+            notas_preparacion="Con soporte y alternador",
+            precio_acordado=650000,
+            monto_abonado=650000,
+            estado_reserva="Confirmada",
+        )
+        vehiculo = Vehiculo_Origen(
+            id_vehiculo=id_vehiculo,
+            numero_ingreso="8888",
+            marca="Toyota",
+            modelo="Corolla",
+            anio=2018,
+            numero_motor="2ZR-FE-123456",
+            estado="Activo",
+        )
+        activo = Activo_Inventariado(
+            id_activo=id_activo,
+            sku_qr_fisico="MOT-8888",
+            id_categoria=1,
+            id_estado=1,  # Disponible
+            id_sucursal_actual=1,
+            id_vehiculo=id_vehiculo,
+            ubicacion_galpon="Galpón Central",
+            ubicacion_pasillo="Pasillo C",
+            ubicacion_pallet="Pallet 10",
+            precio_referencia=650000,
+            estado="Activo",
+        )
+        detalle_mot = Detalle_Motor(
+            id_activo=id_activo,
+            numero_motor="2ZR-FE-123456",
+            cilindrada="1.8",
+            combustible="Bencina",
+            transmision_tipo="Automática",
+        )
+        db.add_all([orden, reserva, vehiculo, activo, detalle_mot])
+        db.commit()
+
+        # Enviar solo el número '8888' (sin 'MOT-')
+        response = client.post(
+            f"/api/v1/ordenes/{id_orden}/validar-activo-backorder",
+            json={"sku_activo": "8888"},
+            headers=auth_headers_vendedor1
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["coincide"] is True
+        assert data["discrepancias"] == []
+
+        # Validar ficha contextual del pedido
+        solicitado = data["solicitado_detalle"]
+        assert solicitado["categoria"] == "Motor"
+        assert solicitado["marca"] == "Toyota"
+        assert solicitado["modelo"] == "Corolla"
+        assert solicitado["anio"] == 2018
+        assert solicitado["cilindrada"] == "1.8"
+        assert solicitado["notas"] == "Con soporte y alternador"
+
+        # Validar atributos del activo físico donante
+        activo_res = data["activo_detalle"]
+        assert activo_res["sku"] == "MOT-8888"
+        assert activo_res["numero_motor"] == "2ZR-FE-123456"
+        assert activo_res["numero_ingreso"] == "8888"
+        assert "Galpón Central" in activo_res["ubicacion"]
+    finally:
+        db.close()
+
+
+def test_validar_y_asignar_backorder_con_discrepancias_criterio_comercial(client, auth_headers_vendedor1, db_session):
+    """Verifica que ante discrepancias técnicas no se bloquee el flujo y se permita asignar con forzar_atribucion=True."""
+    db = TestingSessionLocal()
+    try:
+        id_orden = uuid.uuid4()
+        id_vehiculo = uuid.uuid4()
+        id_activo = uuid.uuid4()
+
+        orden = Orden_Venta(
+            id_orden=id_orden,
+            id_cliente=db_session["orden_1"].id_cliente,
+            id_vendedor=db_session["vendedor_1"].id_usuario,
+            id_sucursal=1,
+            estado_orden="Pagada",
+            total_venta=520000,
+            monto_pendiente=0,
+            qr_transaccional_salida=None,
+        )
+        reserva = Reservas_Backorder(
+            id_reserva=uuid.uuid4(),
+            id_orden=id_orden,
+            id_cliente=db_session["orden_1"].id_cliente,
+            id_vendedor=db_session["vendedor_1"].id_usuario,
+            id_sucursal_registro=1,
+            id_categoria_requerida=1,  # Motor
+            marca_requerida="Peugeot",
+            modelo_requerido="206",
+            anio_requerido=2008,
+            cilindrada_requerida="1.4",
+            combustible_requerido="Bencina",
+            transmision_requerida="Manual",
+            precio_acordado=520000,
+            monto_abonado=520000,
+            estado_reserva="Confirmada",
+        )
+        vehiculo = Vehiculo_Origen(
+            id_vehiculo=id_vehiculo,
+            numero_ingreso="8889",
+            marca="Peugeot",
+            modelo="206 XLINE 1.6",  # Discrepancia intencional
+            anio=2008,
+            numero_motor="PSA-TU5JP4",
+            estado="Activo",
+        )
+        activo = Activo_Inventariado(
+            id_activo=id_activo,
+            sku_qr_fisico="MOT-8889",
+            id_categoria=1,
+            id_estado=1,  # Disponible
+            id_sucursal_actual=1,
+            id_vehiculo=id_vehiculo,
+            ubicacion_galpon="Galpón 2",
+            ubicacion_pasillo="Pasillo D",
+            ubicacion_pallet="Pallet 14",
+            precio_referencia=520000,
+            estado="Activo",
+        )
+        detalle_mot = Detalle_Motor(
+            id_activo=id_activo,
+            numero_motor="PSA-TU5JP4",
+            cilindrada="1.6",  # Discrepancia intencional con 1.4
+            combustible="Bencina",
+            transmision_tipo="Manual",
+        )
+        db.add_all([orden, reserva, vehiculo, activo, detalle_mot])
+        db.commit()
+
+        # 1. Validar: Retorna advertencia pero con toda la data
+        val_res = client.post(
+            f"/api/v1/ordenes/{id_orden}/validar-activo-backorder",
+            json={"sku_activo": "MOT-8889"},
+            headers=auth_headers_vendedor1
+        )
+        assert val_res.status_code == 200
+        val_data = val_res.json()
+        assert val_data["coincide"] is False
+        assert len(val_data["discrepancias"]) >= 1
+
+        # 2. Asignar enviando forzar_atribucion: True
+        asig_res = client.post(
+            f"/api/v1/ordenes/{id_orden}/asignar-activo-backorder",
+            json={"sku_activo": "8889", "forzar_atribucion": True},
+            headers=auth_headers_vendedor1
+        )
+        assert asig_res.status_code == 200
+        asig_data = asig_res.json()
+        assert asig_data["success"] is True
+        assert asig_data["sku_asignado"] == "MOT-8889"
+        assert asig_data["qr_transaccional_salida"].startswith("TX-QR-")
+
+        # 3. Comprobar actualización en base de datos
+        db.expire_all()
+        orden_db = db.query(Orden_Venta).filter(Orden_Venta.id_orden == id_orden).first()
+        reserva_db = db.query(Reservas_Backorder).filter(Reservas_Backorder.id_orden == id_orden).first()
+        activo_db = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == id_activo).first()
+
+        assert orden_db.estado_orden == "Pagada"
+        assert orden_db.qr_transaccional_salida == asig_data["qr_transaccional_salida"]
+        assert reserva_db.id_activo_asignado == id_activo
+        assert activo_db.id_estado == 3  # Vendido
+    finally:
+        db.close()
+
+
+def test_validar_activo_backorder_404_mensaje_amigable_sin_codigos_raros(client, auth_headers_vendedor1, db_session):
+    """Verifica que al consultar un ingreso inexistente retorne un 404 claro y entendible para el vendedor."""
+    db = TestingSessionLocal()
+    try:
+        id_orden = uuid.uuid4()
+        orden = Orden_Venta(
+            id_orden=id_orden,
+            id_cliente=db_session["orden_1"].id_cliente,
+            id_vendedor=db_session["vendedor_1"].id_usuario,
+            id_sucursal=1,
+            estado_orden="Pagada",
+            total_venta=400000,
+            monto_pendiente=0,
+            qr_transaccional_salida=None,
+        )
+        reserva = Reservas_Backorder(
+            id_reserva=uuid.uuid4(),
+            id_orden=id_orden,
+            id_cliente=db_session["orden_1"].id_cliente,
+            id_vendedor=db_session["vendedor_1"].id_usuario,
+            id_sucursal_registro=1,
+            id_categoria_requerida=1,  # Motor
+            marca_requerida="Nissan",
+            modelo_requerido="V16",
+            precio_acordado=400000,
+            monto_abonado=400000,
+            estado_reserva="Confirmada",
+        )
+        db.add_all([orden, reserva])
+        db.commit()
+
+        response = client.post(
+            f"/api/v1/ordenes/{id_orden}/validar-activo-backorder",
+            json={"sku_activo": "77777"},
+            headers=auth_headers_vendedor1
+        )
+        assert response.status_code == 404
+        detail = response.json()["detail"]
+        assert "No se encontró un Motor asociado al ingreso o SKU '77777' en inventario." in detail
+    finally:
+        db.close()
+
+
+
+
