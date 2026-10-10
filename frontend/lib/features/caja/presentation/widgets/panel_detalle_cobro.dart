@@ -7,6 +7,7 @@ import '../../models/cobro_pendiente_model.dart';
 import '../../models/cobro_model.dart';
 import '../providers/caja_provider.dart';
 import 'cobro_pendiente_card.dart';
+import 'confirmacion_liquidacion_dialog.dart';
 import 'resultado_cobro_dialog.dart';
 
 /// Panel de Detalle de Cobro con soporte para Pago Único o Dividido (Split Payment).
@@ -128,6 +129,26 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
   Future<void> _handleProcesarCobro() async {
     final orden = widget.provider.ordenSeleccionada;
     if (orden == null) return;
+
+    // Control preventivo: confirmación explícita para liquidar el saldo total en etapas posteriores
+    final esLiquidacionPosterior = widget.provider.esLiquidacionCompleta &&
+        (orden.abonoPrevio > 0 ||
+            orden.historialAbonos.isNotEmpty ||
+            !orden.esPrimerAbono ||
+            orden.esBackorder);
+
+    if (esLiquidacionPosterior) {
+      final confirmado = await ConfirmacionLiquidacionDialog.show(
+        context: context,
+        orden: orden,
+        montoALiquidar: widget.provider.montoDeclarado,
+      );
+      if (!confirmado) {
+        // Cancelación segura: no se procesa cobro y la orden mantiene su saldo intacto
+        return;
+      }
+      if (!mounted) return;
+    }
 
     // Cobro directo (para ventas normales, abonos y ventas en verde)
     // Las ventas en verde se cobran directamente al 100%; la asignación física del motor o caja
@@ -401,8 +422,14 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                       ),
                     ),
                     if (orden.esPrimerAbono &&
-                        (orden.abonoRequerido > 0 ? orden.abonoRequerido : orden.montoACobrar) > 0 &&
-                        (orden.abonoRequerido > 0 ? orden.abonoRequerido : orden.montoACobrar) < orden.totalOperacion &&
+                        (orden.abonoRequerido > 0
+                                ? orden.abonoRequerido
+                                : orden.montoACobrar) >
+                            0 &&
+                        (orden.abonoRequerido > 0
+                                ? orden.abonoRequerido
+                                : orden.montoACobrar) <
+                            orden.totalOperacion &&
                         orden.saldoPendiente > 0) ...[
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -460,12 +487,19 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
               const SizedBox(width: 8),
               Builder(
                 builder: (context) {
-                  final rutLimpio = orden.clienteRut.replaceAll(RegExp(r'[^0-9kK]'), '');
-                  final esClienteGenerico = rutLimpio.isEmpty ||
+                  final rutLimpio = orden.clienteRut.replaceAll(
+                    RegExp(r'[^0-9kK]'),
+                    '',
+                  );
+                  final esClienteGenerico =
+                      rutLimpio.isEmpty ||
                       rutLimpio.startsWith('666666') ||
                       orden.clienteRut == '6.666.666-6' ||
-                      orden.clienteNombre.trim().toLowerCase().contains('consumidor final');
-                  final nombreMostrar = (orden.clienteNombre.trim().isEmpty || esClienteGenerico)
+                      orden.clienteNombre.trim().toLowerCase().contains(
+                        'consumidor final',
+                      );
+                  final nombreMostrar =
+                      (orden.clienteNombre.trim().isEmpty || esClienteGenerico)
                       ? 'Consumidor Final'
                       : orden.clienteNombre;
                   final textoCliente = esClienteGenerico
@@ -849,9 +883,12 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                       ),
                       decoration: BoxDecoration(
                         color: art.tipo == 'RESERVA'
-                            ? AppPalette.warning.withValues(alpha: 0.12)
+                            ? const Color(0xFFF3E8FF)
                             : AppPalette.neutral.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(4),
+                        border: art.tipo == 'RESERVA'
+                            ? Border.all(color: const Color(0xFFC084FC), width: 1)
+                            : null,
                       ),
                       child: Text(
                         art.tipo == 'RESERVA' ? 'Venta en Verde' : 'Misceláneo',
@@ -859,7 +896,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
                           color: art.tipo == 'RESERVA'
-                              ? AppPalette.warningText
+                              ? const Color(0xFF7E22CE)
                               : AppPalette.textSecondaryLight,
                         ),
                       ),
@@ -1575,17 +1612,17 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
                       Text(
                         'Abonos Previos Realizados:',
                         style: AppTypography.small.copyWith(
-                          fontSize: 12,
+                          fontSize: 15,
                           fontWeight: FontWeight.w600,
-                          color: AppPalette.secondary,
+                          color: const Color.fromARGB(255, 253, 143, 0),
                         ),
                       ),
                       Text(
                         '- ${CobroPendienteCard.formatClp(orden.abonoPrevio)}',
                         style: AppTypography.small.copyWith(
-                          fontSize: 12,
+                          fontSize: 15,
                           fontWeight: FontWeight.w800,
-                          color: AppPalette.secondary,
+                          color: const Color.fromARGB(255, 253, 143, 0),
                         ),
                       ),
                     ],
@@ -1863,6 +1900,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
     final modalidad = widget.provider.modalidad;
     final isLiquidacion = modalidad == 'LIQUIDACION';
     final error = widget.provider.errorMontoAbono;
+    final bool bloqueoLiquidacion = widget.provider.tieneBloqueoLiquidacionInicial;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -1899,13 +1937,10 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
           ),
           const SizedBox(height: 14),
 
-          if (orden.esPrimerAbono &&
-              (orden.abonoRequerido > 0 ? orden.abonoRequerido : orden.montoACobrar) > 0 &&
-              (orden.abonoRequerido > 0 ? orden.abonoRequerido : orden.montoACobrar) < orden.totalOperacion &&
-              orden.saldoPendiente > 0) ...[
+          if (bloqueoLiquidacion) ...[
             Container(
               margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
                 color: const Color(0xFFF3E8FF),
                 borderRadius: BorderRadius.circular(8),
@@ -1914,18 +1949,19 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
               child: Row(
                 children: [
                   const Icon(
-                    Icons.info_outline_rounded,
-                    size: 16,
+                    Icons.lock_outline_rounded,
+                    size: 18,
                     color: Color(0xFF7E22CE),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Esta orden fue emitida con un abono acordado de ${CobroPendienteCard.formatClp(orden.abonoRequerido > 0 ? orden.abonoRequerido : orden.montoACobrar)}. Se seleccionó "Abono Personalizado" automáticamente.',
+                      'Esta orden requiere un abono inicial acordado de ${CobroPendienteCard.formatClp(orden.abonoRequerido > 0 ? orden.abonoRequerido : (orden.pisoPrimerAbono > 0 ? orden.pisoPrimerAbono : orden.montoACobrar))}. La liquidación total no está permitida en este primer pago.',
                       style: AppTypography.small.copyWith(
                         color: const Color(0xFF6B21A8),
-                        fontSize: 11.5,
+                        fontSize: 12.5,
                         fontWeight: FontWeight.w600,
+                        height: 1.3,
                       ),
                     ),
                   ),
@@ -1938,57 +1974,98 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
           Row(
             children: [
               Expanded(
-                child: InkWell(
-                  onTap: () {
-                    widget.provider.setModalidad('LIQUIDACION');
-                    _sincronizarControllers();
-                  },
-                  borderRadius: BorderRadius.circular(10),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 14,
-                      horizontal: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isLiquidacion
-                          ? AppPalette.primary
-                          : AppPalette.backgroundLight,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: isLiquidacion
-                            ? AppPalette.primary
-                            : AppPalette.borderLight,
-                        width: 1.5,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.check_circle_rounded,
-                          size: 16,
-                          color: isLiquidacion
-                              ? Colors.white
-                              : AppPalette.textSecondaryLight,
-                        ),
-                        const SizedBox(width: 6),
-                        Flexible(
-                          child: Text(
-                            'Liquidación Total',
-                            style: AppTypography.body.copyWith(
-                              fontWeight: FontWeight.w800,
-                              fontSize: 16,
-                              color: isLiquidacion
-                                  ? Colors.white
-                                  : AppPalette.textPrimaryLight,
+                child: bloqueoLiquidacion
+                    ? Tooltip(
+                        message:
+                            'Esta orden requiere un abono inicial obligatorio. Liquidación total no permitida en el primer pago.',
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 14,
+                            horizontal: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppPalette.backgroundLight,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: AppPalette.borderLight,
+                              width: 1.5,
                             ),
-                            overflow: TextOverflow.ellipsis,
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(
+                                Icons.lock_outline_rounded,
+                                size: 16,
+                                color: AppPalette.textSecondaryLight,
+                              ),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  'Liquidación Total',
+                                  style: AppTypography.body.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 16,
+                                    color: AppPalette.textSecondaryLight,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                ),
+                      )
+                    : InkWell(
+                        onTap: () {
+                          widget.provider.setModalidad('LIQUIDACION');
+                          _sincronizarControllers();
+                        },
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 14,
+                            horizontal: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isLiquidacion
+                                ? AppPalette.primary
+                                : AppPalette.backgroundLight,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: isLiquidacion
+                                  ? AppPalette.primary
+                                  : AppPalette.borderLight,
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.check_circle_rounded,
+                                size: 16,
+                                color: isLiquidacion
+                                    ? Colors.white
+                                    : AppPalette.textSecondaryLight,
+                              ),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  'Liquidación Total',
+                                  style: AppTypography.body.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 16,
+                                    color: isLiquidacion
+                                        ? Colors.white
+                                        : AppPalette.textPrimaryLight,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -2046,6 +2123,40 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
               ),
             ],
           ),
+
+          if (!bloqueoLiquidacion && isLiquidacion && orden.abonoPrevio > 0) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppPalette.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: AppPalette.primary.withValues(alpha: 0.2),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.info_outline_rounded,
+                    size: 16,
+                    color: AppPalette.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Se liquidará el saldo pendiente de ${CobroPendienteCard.formatClp(orden.saldoPendiente > 0 ? orden.saldoPendiente : orden.totalOperacion)}. Se solicitará confirmación al procesar el pago.',
+                      style: AppTypography.small.copyWith(
+                        color: AppPalette.primary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
 
           // Si es Abono Personalizado, desplegamos input para el monto
           if (!isLiquidacion) ...[

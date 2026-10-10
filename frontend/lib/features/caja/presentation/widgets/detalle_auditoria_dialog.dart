@@ -449,24 +449,49 @@ class DetalleAuditoriaDialog extends StatelessWidget {
                               ),
                             )
                           else
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                              decoration: BoxDecoration(
-                                color: art.tipo == 'RESERVA'
-                                    ? AppPalette.warning.withValues(alpha: 0.12)
-                                    : AppPalette.neutral.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                art.tipo == 'RESERVA' ? 'Venta en Verde' : 'Misceláneo',
-                                style: AppTypography.small.copyWith(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                  color: art.tipo == 'RESERVA'
-                                      ? AppPalette.warningText
-                                      : AppPalette.textSecondaryLight,
-                                ),
-                              ),
+                            Builder(
+                              builder: (context) {
+                                final bool esVentaVerde = art.tipo == 'RESERVA' ||
+                                    art.descripcion.toUpperCase().contains('VENTA EN VERDE');
+
+                                if (esVentaVerde) {
+                                  return Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF3E8FF),
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(
+                                        color: const Color(0xFFC084FC),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      'Venta en Verde',
+                                      style: AppTypography.small.copyWith(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        color: const Color(0xFF7E22CE),
+                                      ),
+                                    ),
+                                  );
+                                }
+
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                  decoration: BoxDecoration(
+                                    color: AppPalette.neutral.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    'Misceláneo',
+                                    style: AppTypography.small.copyWith(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppPalette.textSecondaryLight,
+                                    ),
+                                  ),
+                                );
+                              },
                             ),
                         ],
                       ),

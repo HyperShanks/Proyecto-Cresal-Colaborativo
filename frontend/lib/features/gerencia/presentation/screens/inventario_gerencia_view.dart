@@ -14,6 +14,7 @@ import '../../../auth/services/auth_service.dart';
 import '../../services/gerencia_service.dart';
 import '../../../ventas/presentation/widgets/visor_imagen_completa_dialog.dart';
 import '../../../../core/constants/especificaciones_vehiculo.dart';
+import '../../../../core/widgets/cresal_filter_dropdown.dart';
 
 enum ModoVistaStock { tarjetas, tabla }
 
@@ -880,32 +881,31 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
   }) {
     final effectiveValue = items.any((i) => i.value == value)
         ? value
-        : (items.isNotEmpty ? items.first.value : null);
+        : (items.isNotEmpty ? (items.first.value ?? '') : '');
 
-    return Container(
+    final dropdownItems = items.map((i) {
+      String label = i.value ?? '';
+      if (i.child is Text) {
+        label = (i.child as Text).data ?? (i.value ?? '');
+      }
+      return CresalFilterDropdownItem<String>(
+        value: i.value ?? '',
+        label: label,
+      );
+    }).toList();
+
+    return CresalFilterDropdown<String>(
       height: 32,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppPalette.borderLight),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: effectiveValue,
-          dropdownColor: Colors.white,
-          icon: const Icon(Icons.expand_more, size: 16, color: Color(0xFF64748B)),
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: Color(0xFF334155),
-          ),
-          items: items,
-          onChanged: onChanged,
-        ),
-      ),
+      value: effectiveValue,
+      backgroundColor: Colors.white,
+      borderColor: AppPalette.borderLight,
+      isExpanded: false,
+      items: dropdownItems,
+      onChanged: (val) => onChanged(val),
     );
   }
+
+
 
   // =========================================================================
   // 2. MODO 1: VISTA DE TARJETAS (GRID RESPONSIVO ANTI-OVERFLOW)

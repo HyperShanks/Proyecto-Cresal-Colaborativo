@@ -19,10 +19,7 @@ import '../../../../core/services/app_update_service.dart';
 class CajaMainScreen extends StatefulWidget {
   final CajaProvider? provider;
 
-  const CajaMainScreen({
-    super.key,
-    this.provider,
-  });
+  const CajaMainScreen({super.key, this.provider});
 
   @override
   State<CajaMainScreen> createState() => _CajaMainScreenState();
@@ -37,8 +34,11 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
 
   bool _sidebarOpen = true;
   int _selectedNavIndex = 0; // 0: Caja, 1: Historial
-  String _cajeraNombre = AuthService.cachedUser != null && AuthService.cachedUser!.nombres.isNotEmpty
-      ? '${AuthService.cachedUser!.nombres} ${AuthService.cachedUser!.apellidos}'.trim()
+  String _cajeraNombre =
+      AuthService.cachedUser != null &&
+          AuthService.cachedUser!.nombres.isNotEmpty
+      ? '${AuthService.cachedUser!.nombres} ${AuthService.cachedUser!.apellidos}'
+            .trim()
       : 'Operario de Caja';
   String _sucursalNombre = 'Sucursal Activa';
   int _idSucursal = AuthService.cachedUser?.idSucursal ?? 1;
@@ -237,7 +237,9 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
                 if (_cajaProvider.cobros.isEmpty) {
                   _cajaProvider.cargarCobrosPendientes(sucursalId: _idSucursal);
                 } else {
-                  _cajaProvider.cargarCobrosPendientesSilencioso(sucursalId: _idSucursal);
+                  _cajaProvider.cargarCobrosPendientesSilencioso(
+                    sucursalId: _idSucursal,
+                  );
                 }
               } else if (index == 1) {
                 _historialKey.currentState?.refrescarSilencioso();
@@ -304,10 +306,7 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
                 ),
                 child: Row(
                   children: [
-                    const CresalLogo(
-                      size: 38,
-                      showGlow: false,
-                    ),
+                    const CresalLogo(size: 38, showGlow: false),
                     if (_sidebarOpen) ...[
                       const SizedBox(width: 10),
                       Expanded(
@@ -449,8 +448,9 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
-        mainAxisAlignment:
-            _sidebarOpen ? MainAxisAlignment.start : MainAxisAlignment.center,
+        mainAxisAlignment: _sidebarOpen
+            ? MainAxisAlignment.start
+            : MainAxisAlignment.center,
         children: [
           Icon(
             icon,
@@ -483,10 +483,7 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
         borderRadius: BorderRadius.circular(8),
         child: _sidebarOpen
             ? itemContent
-            : Tooltip(
-                message: '$title - $subtitle',
-                child: itemContent,
-              ),
+            : Tooltip(message: '$title - $subtitle', child: itemContent),
       ),
     );
   }
@@ -538,7 +535,7 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
                         'Operario de Caja',
                         style: TextStyle(
                           color: Color(0xFFBAE6FD),
-                          fontSize: 10,
+                          fontSize: 12,
                           fontWeight: FontWeight.w500,
                         ),
                         maxLines: 1,
@@ -616,7 +613,9 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
               color: AppPalette.textPrimaryLight,
               size: 22,
             ),
-            tooltip: _sidebarOpen ? 'Colapsar menú lateral' : 'Expandir menú lateral',
+            tooltip: _sidebarOpen
+                ? 'Colapsar menú lateral'
+                : 'Expandir menú lateral',
             onPressed: () {
               setState(() {
                 _sidebarOpen = !_sidebarOpen;
@@ -629,8 +628,8 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
               _selectedNavIndex == 0
                   ? 'Bandeja de Cobros'
                   : _selectedNavIndex == 1
-                      ? 'Historial de Pagos'
-                      : 'Soporte Técnico',
+                  ? 'Historial de Pagos'
+                  : 'Soporte Técnico',
               style: AppTypography.title.copyWith(
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
@@ -708,23 +707,14 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Columna Izquierda: Bandeja de Cobros (4/12 de ancho)
-        Expanded(
-          flex: 4,
-          child: BandejaCobrosPanel(provider: _cajaProvider),
-        ),
+        Expanded(flex: 4, child: BandejaCobrosPanel(provider: _cajaProvider)),
         // Columna Derecha: Panel de Detalle y Cobro (8/12 de ancho)
-        Expanded(
-          flex: 8,
-          child: PanelDetalleCobro(provider: _cajaProvider),
-        ),
+        Expanded(flex: 8, child: PanelDetalleCobro(provider: _cajaProvider)),
       ],
     );
   }
 
   Widget _buildHistorialPagosView() {
-    return HistorialCajaScreen(
-      key: _historialKey,
-      sucursalId: _idSucursal,
-    );
+    return HistorialCajaScreen(key: _historialKey, sucursalId: _idSucursal);
   }
 }

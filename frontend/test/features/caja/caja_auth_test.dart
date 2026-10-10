@@ -8,6 +8,7 @@ import 'package:frontend/features/auth/presentation/screens/splash_screen.dart';
 import 'package:frontend/features/home/presentation/screens/home_screen.dart';
 import 'package:frontend/features/caja/presentation/screens/caja_main_screen.dart';
 import 'package:frontend/features/caja/presentation/widgets/caja_drawer.dart';
+import 'package:frontend/core/widgets/cresal_logo.dart';
 import 'package:frontend/routes/app_routes.dart';
 
 void main() {
@@ -184,7 +185,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('CRESAL'), findsOneWidget);
+      expect(find.byType(CresalLogo), findsOneWidget);
       expect(find.text('MÓDULO DE CAJA'), findsOneWidget);
       expect(find.text('Caja'), findsWidgets);
       expect(find.text('Historial'), findsWidgets);

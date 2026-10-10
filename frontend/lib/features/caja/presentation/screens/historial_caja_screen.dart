@@ -9,6 +9,7 @@ import '../widgets/historial_metricas_panel.dart';
 import '../widgets/historial_tabla_view.dart';
 import '../widgets/detalle_auditoria_dialog.dart';
 import '../widgets/filtro_rango_fechas_dialog.dart';
+import '../../../../core/widgets/cresal_filter_dropdown.dart';
 
 /// Pantalla principal para el Historial de Órdenes y Auditoría de Caja con Filtros (SPEC-HU-4.5 / CRES-217).
 /// Diseño responsivo optimizado para pantallas POS, tablets y monitores de escritorio.
@@ -371,37 +372,31 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen>
                 Row(
                   children: [
                     Expanded(
-                      child: _buildDropdown(
-                        label: 'Estado:',
+                      child: CresalFilterDropdown<String>(
                         value: state.estadoOrden,
-                        items: [
-                          _buildDropdownItem('TODOS', 'Todos los Estados'),
-                          _buildDropdownItem('Pagada', 'Pagada'),
-                          _buildDropdownItem('Completada', 'Completada'),
-                          _buildDropdownItem('Reservada', 'Reservada (Abonada)'),
-                          _buildDropdownItem('Anulada', 'Anulada'),
+                        items: const [
+                          CresalFilterDropdownItem(value: 'TODOS', label: 'Todos los Estados'),
+                          CresalFilterDropdownItem(value: 'Pagada', label: 'Pagada'),
+                          CresalFilterDropdownItem(value: 'Completada', label: 'Completada'),
+                          CresalFilterDropdownItem(value: 'Reservada', label: 'Reservada (Abonada)'),
+                          CresalFilterDropdownItem(value: 'Anulada', label: 'Anulada'),
                         ],
-                        onChanged: (val) {
-                          if (val != null) _provider.cambiarFiltroEstado(val);
-                        },
+                        onChanged: (val) => _provider.cambiarFiltroEstado(val),
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: _buildDropdown(
-                        label: 'Método:',
+                      child: CresalFilterDropdown<String>(
                         value: state.metodoPago,
-                        items: [
-                          _buildDropdownItem('TODOS', 'Todos los Métodos'),
-                          _buildDropdownItem('Efectivo', 'Efectivo'),
-                          _buildDropdownItem('Débito', 'Débito'),
-                          _buildDropdownItem('Crédito', 'Crédito'),
-                          _buildDropdownItem('Transferencia', 'Transferencia'),
-                          _buildDropdownItem('Cheque', 'Cheque'),
+                        items: const [
+                          CresalFilterDropdownItem(value: 'TODOS', label: 'Todos los Métodos'),
+                          CresalFilterDropdownItem(value: 'Efectivo', label: 'Efectivo'),
+                          CresalFilterDropdownItem(value: 'Débito', label: 'Débito'),
+                          CresalFilterDropdownItem(value: 'Crédito', label: 'Crédito'),
+                          CresalFilterDropdownItem(value: 'Transferencia', label: 'Transferencia'),
+                          CresalFilterDropdownItem(value: 'Cheque', label: 'Cheque'),
                         ],
-                        onChanged: (val) {
-                          if (val != null) _provider.cambiarFiltroMetodo(val);
-                        },
+                        onChanged: (val) => _provider.cambiarFiltroMetodo(val),
                       ),
                     ),
                   ],
@@ -430,19 +425,16 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen>
               // Filtro de Estado
               Expanded(
                 flex: 3,
-                child: _buildDropdown(
-                  label: 'Estado:',
+                child: CresalFilterDropdown<String>(
                   value: state.estadoOrden,
-                  items: [
-                    _buildDropdownItem('TODOS', 'Todos los Estados'),
-                    _buildDropdownItem('Pagada', 'Pagada'),
-                    _buildDropdownItem('Completada', 'Completada'),
-                    _buildDropdownItem('Reservada', 'Reservada (Abonada)'),
-                    _buildDropdownItem('Anulada', 'Anulada'),
+                  items: const [
+                    CresalFilterDropdownItem(value: 'TODOS', label: 'Todos los Estados'),
+                    CresalFilterDropdownItem(value: 'Pagada', label: 'Pagada'),
+                    CresalFilterDropdownItem(value: 'Completada', label: 'Completada'),
+                    CresalFilterDropdownItem(value: 'Reservada', label: 'Reservada (Abonada)'),
+                    CresalFilterDropdownItem(value: 'Anulada', label: 'Anulada'),
                   ],
-                  onChanged: (val) {
-                    if (val != null) _provider.cambiarFiltroEstado(val);
-                  },
+                  onChanged: (val) => _provider.cambiarFiltroEstado(val),
                 ),
               ),
               const SizedBox(width: 12),
@@ -450,20 +442,17 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen>
               // Filtro de Método de Pago
               Expanded(
                 flex: 3,
-                child: _buildDropdown(
-                  label: 'Método:',
+                child: CresalFilterDropdown<String>(
                   value: state.metodoPago,
-                  items: [
-                    _buildDropdownItem('TODOS', 'Todos los Métodos'),
-                    _buildDropdownItem('Efectivo', 'Efectivo'),
-                    _buildDropdownItem('Débito', 'Débito'),
-                    _buildDropdownItem('Crédito', 'Crédito'),
-                    _buildDropdownItem('Transferencia', 'Transferencia'),
-                    _buildDropdownItem('Cheque', 'Cheque'),
+                  items: const [
+                    CresalFilterDropdownItem(value: 'TODOS', label: 'Todos los Métodos'),
+                    CresalFilterDropdownItem(value: 'Efectivo', label: 'Efectivo'),
+                    CresalFilterDropdownItem(value: 'Débito', label: 'Débito'),
+                    CresalFilterDropdownItem(value: 'Crédito', label: 'Crédito'),
+                    CresalFilterDropdownItem(value: 'Transferencia', label: 'Transferencia'),
+                    CresalFilterDropdownItem(value: 'Cheque', label: 'Cheque'),
                   ],
-                  onChanged: (val) {
-                    if (val != null) _provider.cambiarFiltroMetodo(val);
-                  },
+                  onChanged: (val) => _provider.cambiarFiltroMetodo(val),
                 ),
               ),
               const SizedBox(width: 10),
@@ -622,55 +611,7 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen>
     );
   }
 
-  DropdownMenuItem<String> _buildDropdownItem(String value, String text) {
-    return DropdownMenuItem<String>(
-      value: value,
-      child: Text(
-        text,
-        style: AppTypography.body.copyWith(
-          color: AppPalette.textPrimaryLight,
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
-  }
 
-  Widget _buildDropdown<T>({
-    required String label,
-    required T value,
-    required List<DropdownMenuItem<T>> items,
-    required ValueChanged<T?> onChanged,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-      decoration: BoxDecoration(
-        color: AppPalette.surfaceLight,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppPalette.neutral.withValues(alpha: 0.25)),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<T>(
-          value: value,
-          isExpanded: true,
-          dropdownColor: AppPalette.surfaceLight,
-          borderRadius: BorderRadius.circular(8),
-          icon: const Icon(
-            Icons.keyboard_arrow_down_rounded,
-            color: AppPalette.neutral,
-            size: 20,
-          ),
-          style: AppTypography.body.copyWith(
-            color: AppPalette.textPrimaryLight,
-            fontWeight: FontWeight.w600,
-            fontSize: 13,
-          ),
-          items: items,
-          onChanged: onChanged,
-        ),
-      ),
-    );
-  }
 
   Widget _buildCuerpoPrincipal(HistorialCajaState state) {
     if (state.isLoading) {
