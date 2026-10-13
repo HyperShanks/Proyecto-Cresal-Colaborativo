@@ -286,8 +286,9 @@ void main() {
       expect(find.text('—'), findsNWidgets(3));
       expect(find.text('\$50.000'), findsOneWidget);
 
-      // 4. Verificamos distintivos en FOLIO (Opción 1: sólo para motores y cajas)
-      expect(find.text('Motor / Caja'), findsOneWidget);
+      // 4. Verificamos distintivos en FOLIO (despliega SKU exacto MOT-HDI-003, suprimiendo Motor / Caja)
+      expect(find.text('MOT-HDI-003'), findsOneWidget);
+      expect(find.text('Motor / Caja'), findsNothing);
       expect(find.text('Inventariado'), findsNothing);
       expect(find.text('Desarme'), findsNothing);
 
@@ -331,10 +332,11 @@ void main() {
       await tester.tap(find.text('Abrir Modal'));
       await tester.pumpAndSettle();
 
-      // 1. Verificamos cabecera oficial con Folio y Badge de Motor / Caja
+      // 1. Verificamos cabecera oficial con Folio y Badge con SKU físico del Motor (MOT-HDI-003)
       expect(find.text('AUDITORÍA DE VENTA'), findsOneWidget);
       expect(find.text('ORD-AUD-003'), findsOneWidget);
-      expect(find.text('Motor / Caja'), findsOneWidget);
+      expect(find.text('MOT-HDI-003'), findsWidgets);
+      expect(find.text('Motor / Caja'), findsNothing);
 
       // 2. Verificamos tarjeta de Cliente y Responsables
       expect(find.text('CLIENTE'), findsOneWidget);

@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 from typing import List, Optional, Dict
 from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
 from sqlalchemy.orm import Session, aliased
-from sqlalchemy import or_, and_, func, cast, String, case
+from sqlalchemy import or_, and_, not_, func, cast, String, case
 
 from database import get_db
 from services.telegram_service import TelegramService
@@ -592,23 +592,100 @@ def listar_ordenes_auditoria(
     if target_tipo and target_tipo.strip().upper() not in ["TODOS", ""]:
         tipo_act_clean = target_tipo.strip().upper()
         if tipo_act_clean in ["MOTORES_CAJAS", "MOTOR_CAJA", "MOTORES", "CAJAS", "INVENTARIADO", "INVENTARIADOS"]:
+            # Filtro semántico estricto para evitar falsos positivos
+            desc_lower = func.lower(Detalle_Orden.descripcion_manual)
+
+            # Exclusiones estrictas para Motores (accesorios y periféricos secundarios)
+            exclusiones_motor_sql = and_(
+                not_(desc_lower.like("%cremallera%")),
+                not_(desc_lower.like("%partida%")),
+                not_(desc_lower.like("%arranque%")),
+                not_(desc_lower.like("%limpiaparabris%")),
+                not_(desc_lower.like("%limpia parabris%")),
+                not_(desc_lower.like("%limpiavidrio%")),
+                not_(desc_lower.like("%limpia vidrio%")),
+                not_(desc_lower.like("%alzavidrio%")),
+                not_(desc_lower.like("%alza vidrio%")),
+                not_(desc_lower.like("%calefacci%")),
+                not_(desc_lower.like("%ventilador%")),
+                not_(desc_lower.like("%electroventilador%")),
+                not_(desc_lower.like("%soplador%")),
+                not_(desc_lower.like("%blower%")),
+                not_(desc_lower.like("%espejo%")),
+                not_(desc_lower.like("%antena%")),
+                not_(desc_lower.like("%bomba%")),
+                not_(desc_lower.like("%paso a paso%")),
+                not_(desc_lower.like("%ralent%")),
+                not_(desc_lower.like("%sunroof%")),
+                not_(desc_lower.like("%techo%")),
+                not_(desc_lower.like("%actuador%")),
+                not_(desc_lower.like("%regulador%")),
+            )
+
+            # Exclusiones estrictas para Cajas (elementos auxiliares ajenos a la transmisión)
+            exclusiones_caja_sql = and_(
+                not_(desc_lower.like("%fusible%")),
+                not_(desc_lower.like("%fusilera%")),
+                not_(desc_lower.like("%direcci%")),
+                not_(desc_lower.like("%filtro%")),
+                not_(desc_lower.like("%evaporador%")),
+                not_(desc_lower.like("%bateria%")),
+                not_(desc_lower.like("%batería%")),
+                not_(desc_lower.like("%rele%")),
+                not_(desc_lower.like("%relé%")),
+                not_(desc_lower.like("%mariposa%")),
+                not_(desc_lower.like("%termostato%")),
+                not_(desc_lower.like("%herramienta%")),
+            )
+
+            # Condiciones positivas
+            cond_motor_miscelaneo = and_(
+                or_(desc_lower.like("%motor%"), desc_lower.like("%block%")),
+                exclusiones_motor_sql,
+            )
+
+            cond_caja_miscelaneo = and_(
+                or_(
+                    desc_lower.like("%caja de cambio%"),
+                    desc_lower.like("%caja cambio%"),
+                    desc_lower.like("%caja manual%"),
+                    desc_lower.like("%caja mecanica%"),
+                    desc_lower.like("%caja mecánica%"),
+                    desc_lower.like("%caja automatica%"),
+                    desc_lower.like("%caja automática%"),
+                    desc_lower.like("%caja cvt%"),
+                    desc_lower.like("%caja secuencial%"),
+                    desc_lower.like("%transmisi%"),
+                    and_(desc_lower.like("%caja%"), exclusiones_caja_sql),
+                ),
+                exclusiones_caja_sql,
+            )
+
+            cond_verde_backorder = and_(
+                or_(desc_lower.like("%verde%"), desc_lower.like("%backorder%")),
+                exclusiones_motor_sql,
+                exclusiones_caja_sql,
+            )
+
+            cond_activo_inventariado = or_(
+                Activo_Inventariado.id_categoria.in_([1, 2]),
+                func.lower(Categoria_Activo.nombre_categoria).like("%motor%"),
+                func.lower(Categoria_Activo.nombre_categoria).like("%caja%"),
+                func.lower(Categoria_Activo.nombre_categoria).like("%transmisi%"),
+                func.lower(Activo_Inventariado.sku_qr_fisico).like("mot%"),
+                func.lower(Activo_Inventariado.sku_qr_fisico).like("caj%"),
+            )
+
             subq_motores_cajas = (
                 db.query(Detalle_Orden.id_orden)
                 .outerjoin(Activo_Inventariado, Detalle_Orden.id_activo == Activo_Inventariado.id_activo)
                 .outerjoin(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
                 .filter(
                     or_(
-                        Activo_Inventariado.id_categoria.in_([1, 2]),
-                        func.lower(Categoria_Activo.nombre_categoria).like("%motor%"),
-                        func.lower(Categoria_Activo.nombre_categoria).like("%caja%"),
-                        func.lower(Detalle_Orden.descripcion_manual).like("%motor%"),
-                        func.lower(Detalle_Orden.descripcion_manual).like("%caja%"),
-                        func.lower(Detalle_Orden.descripcion_manual).like("%verde%"),
-                        func.lower(Detalle_Orden.descripcion_manual).like("%backorder%"),
-                        func.lower(Detalle_Orden.descripcion_manual).like("%mot-%"),
-                        func.lower(Detalle_Orden.descripcion_manual).like("%caj-%"),
-                        func.lower(Activo_Inventariado.sku_qr_fisico).like("%mot%"),
-                        func.lower(Activo_Inventariado.sku_qr_fisico).like("%caj%"),
+                        cond_activo_inventariado,
+                        cond_motor_miscelaneo,
+                        cond_caja_miscelaneo,
+                        cond_verde_backorder,
                     )
                 )
             )
@@ -687,15 +764,26 @@ def listar_ordenes_auditoria(
             pagos_por_orden[p.id_orden].append(p)
 
         todos_detalles = (
-            db.query(Detalle_Orden, Activo_Inventariado, Vehiculo_Origen, Categoria_Activo)
+            db.query(Detalle_Orden, Activo_Inventariado, Vehiculo_Origen, Categoria_Activo, Detalle_Motor, Detalle_Caja_Cambio)
             .outerjoin(Activo_Inventariado, Detalle_Orden.id_activo == Activo_Inventariado.id_activo)
             .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
             .outerjoin(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
+            .outerjoin(Detalle_Motor, Activo_Inventariado.id_activo == Detalle_Motor.id_activo)
+            .outerjoin(Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo)
             .filter(Detalle_Orden.id_orden.in_(orden_ids))
             .all()
         )
-        for det, act, veh, cat in todos_detalles:
+        for det, act, veh, cat, d_mot, d_caj in todos_detalles:
             sku_val = act.sku_qr_fisico if act else None
+            detalle_tec = None
+            if d_mot:
+                partes_tec = [p for p in [d_mot.cilindrada, d_mot.combustible, d_mot.transmision_tipo] if p]
+                detalle_tec = " ".join(partes_tec) if partes_tec else None
+            elif d_caj and d_caj.transmision_tipo:
+                detalle_tec = d_caj.transmision_tipo
+            elif veh and veh.traccion:
+                detalle_tec = veh.traccion
+
             if det.descripcion_manual:
                 desc = det.descripcion_manual
             elif act:
@@ -716,6 +804,7 @@ def listar_ordenes_auditoria(
                     marca=veh.marca if veh else None,
                     modelo=veh.modelo if veh else None,
                     anio=veh.anio if veh else None,
+                    detalle_tecnico=detalle_tec,
                 )
             )
 

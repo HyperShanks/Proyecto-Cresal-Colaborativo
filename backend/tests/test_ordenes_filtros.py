@@ -577,3 +577,171 @@ def test_ordenes_filtro_por_tipo_activo(client, db_session_auditoria):
         db.commit()
         db.close()
 
+
+def test_ordenes_filtro_motores_cajas_exclusion_falsos_positivos(client, db_session_auditoria):
+    """
+    SPEC CRES-240 / Definition of Done:
+    Valida que los filtros de Gerencia excluyan estrictamente falsos positivos:
+    - «Motor de cremallera», «Motor de partida», «Caja de fusibles» NO se computan como motores/cajas.
+    - Misceláneos genuinos como «Motor Toyota 1.5» o «Caja de cambios 5ta» SÍ se computan.
+    """
+    token_gerente = create_access_token(
+        {"sub": str(db_session_auditoria["gerente"].id_usuario)}
+    )
+
+    db = TestingSessionLocal()
+    ordenes_creadas = []
+    try:
+        # 1. Orden Falsa: Motor de partida
+        o_partida = Orden_Venta(
+            id_orden=uuid.uuid4(),
+            id_sucursal=201,
+            id_cliente=db_session_auditoria["cliente_perez"].id_cliente,
+            id_vendedor=db_session_auditoria["vendedor"].id_usuario,
+            id_cajera=db_session_auditoria["caja"].id_usuario,
+            estado_orden="Pagada",
+            total_venta=45000,
+            monto_pendiente=0,
+            fecha_creacion=datetime.now(timezone.utc).replace(tzinfo=None),
+            qr_transaccional_salida="ORD-FP-PARTIDA",
+        )
+        db.add(o_partida)
+        ordenes_creadas.append(o_partida.id_orden)
+        d_partida = Detalle_Orden(
+            id_detalle=uuid.uuid4(),
+            id_orden=o_partida.id_orden,
+            descripcion_manual="Motor de partida Bosch 12V",
+            cantidad=1,
+            precio_unitario=45000,
+            precio_final=45000,
+        )
+        db.add(d_partida)
+
+        # 2. Orden Falsa: Caja de fusibles
+        o_fusibles = Orden_Venta(
+            id_orden=uuid.uuid4(),
+            id_sucursal=201,
+            id_cliente=db_session_auditoria["cliente_perez"].id_cliente,
+            id_vendedor=db_session_auditoria["vendedor"].id_usuario,
+            id_cajera=db_session_auditoria["caja"].id_usuario,
+            estado_orden="Pagada",
+            total_venta=35000,
+            monto_pendiente=0,
+            fecha_creacion=datetime.now(timezone.utc).replace(tzinfo=None),
+            qr_transaccional_salida="ORD-FP-FUSIBLES",
+        )
+        db.add(o_fusibles)
+        ordenes_creadas.append(o_fusibles.id_orden)
+        d_fusibles = Detalle_Orden(
+            id_detalle=uuid.uuid4(),
+            id_orden=o_fusibles.id_orden,
+            descripcion_manual="Caja de fusibles de cabina",
+            cantidad=1,
+            precio_unitario=35000,
+            precio_final=35000,
+        )
+        db.add(d_fusibles)
+
+        # 3. Orden Falsa: Motor de cremallera
+        o_cremallera = Orden_Venta(
+            id_orden=uuid.uuid4(),
+            id_sucursal=201,
+            id_cliente=db_session_auditoria["cliente_perez"].id_cliente,
+            id_vendedor=db_session_auditoria["vendedor"].id_usuario,
+            id_cajera=db_session_auditoria["caja"].id_usuario,
+            estado_orden="Pagada",
+            total_venta=60000,
+            monto_pendiente=0,
+            fecha_creacion=datetime.now(timezone.utc).replace(tzinfo=None),
+            qr_transaccional_salida="ORD-FP-CREMALLERA",
+        )
+        db.add(o_cremallera)
+        ordenes_creadas.append(o_cremallera.id_orden)
+        d_cremallera = Detalle_Orden(
+            id_detalle=uuid.uuid4(),
+            id_orden=o_cremallera.id_orden,
+            descripcion_manual="Motor de cremallera hidráulica",
+            cantidad=1,
+            precio_unitario=60000,
+            precio_final=60000,
+        )
+        db.add(d_cremallera)
+
+        # 4. Orden Verdadera Miscelánea: Motor principal
+        o_motor_real = Orden_Venta(
+            id_orden=uuid.uuid4(),
+            id_sucursal=201,
+            id_cliente=db_session_auditoria["cliente_perez"].id_cliente,
+            id_vendedor=db_session_auditoria["vendedor"].id_usuario,
+            id_cajera=db_session_auditoria["caja"].id_usuario,
+            estado_orden="Pagada",
+            total_venta=850000,
+            monto_pendiente=0,
+            fecha_creacion=datetime.now(timezone.utc).replace(tzinfo=None),
+            qr_transaccional_salida="ORD-OK-MOTOR-MISC",
+        )
+        db.add(o_motor_real)
+        ordenes_creadas.append(o_motor_real.id_orden)
+        d_motor_real = Detalle_Orden(
+            id_detalle=uuid.uuid4(),
+            id_orden=o_motor_real.id_orden,
+            descripcion_manual="Motor Toyota Yaris 1NZ 1.5 Bencinero Completo",
+            cantidad=1,
+            precio_unitario=850000,
+            precio_final=850000,
+        )
+        db.add(d_motor_real)
+
+        # 5. Orden Verdadera Miscelánea: Caja de cambios
+        o_caja_real = Orden_Venta(
+            id_orden=uuid.uuid4(),
+            id_sucursal=201,
+            id_cliente=db_session_auditoria["cliente_perez"].id_cliente,
+            id_vendedor=db_session_auditoria["vendedor"].id_usuario,
+            id_cajera=db_session_auditoria["caja"].id_usuario,
+            estado_orden="Pagada",
+            total_venta=420000,
+            monto_pendiente=0,
+            fecha_creacion=datetime.now(timezone.utc).replace(tzinfo=None),
+            qr_transaccional_salida="ORD-OK-CAJA-MISC",
+        )
+        db.add(o_caja_real)
+        ordenes_creadas.append(o_caja_real.id_orden)
+        d_caja_real = Detalle_Orden(
+            id_detalle=uuid.uuid4(),
+            id_orden=o_caja_real.id_orden,
+            descripcion_manual="Caja de cambios mecánica 5 velocidades Hyundai Accent",
+            cantidad=1,
+            precio_unitario=420000,
+            precio_final=420000,
+        )
+        db.add(d_caja_real)
+
+        db.commit()
+
+        # Consultar filtro MOTORES_CAJAS
+        res = client.get(
+            "/api/v1/ordenes?tipo_activo=MOTORES_CAJAS",
+            headers={"Authorization": f"Bearer {token_gerente}"},
+        )
+        assert res.status_code == 200
+        data = res.json()
+        folios = [it["folio"] for it in data["items"]]
+
+        # Validaciones de aceptación:
+        # A. Falsos positivos NO deben estar en folios
+        assert "ORD-FP-PARTIDA" not in folios
+        assert "ORD-FP-FUSIBLES" not in folios
+        assert "ORD-FP-CREMALLERA" not in folios
+
+        # B. Misceláneos legítimos de motor y caja SÍ deben estar
+        assert "ORD-OK-MOTOR-MISC" in folios
+        assert "ORD-OK-CAJA-MISC" in folios
+    finally:
+        for ord_id in ordenes_creadas:
+            db.query(Detalle_Orden).filter_by(id_orden=ord_id).delete()
+            db.query(Orden_Venta).filter_by(id_orden=ord_id).delete()
+        db.commit()
+        db.close()
+
+
