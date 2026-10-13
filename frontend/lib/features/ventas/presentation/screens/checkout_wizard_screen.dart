@@ -484,7 +484,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
             backgroundColor: AppPalette.error,
             behavior: SnackBarBehavior.floating,
             content: Text(
-              'Las compras en verde requieren obligatoriamente registrar los datos del cliente para la coordinación y entrega del repuesto.',
+              'Las compras en verde requieren obligatoriamente registrar a un cliente identificado con RUT, nombre y apellido.',
               style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
             ),
           ),
@@ -1698,7 +1698,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Venta en Verde activa: Por trazabilidad y coordinación de entrega, es obligatorio registrar los datos de contacto del cliente (RUT, nombre, teléfono y correo).',
+                    'Venta en Verde activa: Por trazabilidad y reserva formal, es obligatorio registrar al cliente titular (RUT, nombre y apellido). Teléfono y correo son opcionales para coordinación.',
                     style: AppTypography.small.copyWith(
                       color: const Color(0xFFC8E6C9),
                       fontWeight: FontWeight.w600,
@@ -1772,7 +1772,7 @@ class _CheckoutWizardScreenState extends State<CheckoutWizardScreen> {
                               ),
                               Text(
                                 _tieneVentaEnVerde
-                                    ? 'No disponible en Venta en Verde (se requieren datos de contacto)'
+                                    ? 'No disponible en Venta en Verde (se requiere cliente identificado con RUT)'
                                     : 'Toca aquí para venta rápida sin registrar datos',
                                 style: AppTypography.small.copyWith(
                                   color: _tieneVentaEnVerde

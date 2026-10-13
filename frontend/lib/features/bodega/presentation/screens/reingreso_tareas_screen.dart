@@ -35,6 +35,7 @@ class _ReingresoTareasScreenState extends State<ReingresoTareasScreen> {
   }
 
   Future<void> _abrirDialogoConfirmarReingreso(TareaReingresoModel tarea) async {
+    final galponController = TextEditingController(text: tarea.ubicacionGalpon ?? '');
     final pasilloController = TextEditingController(text: tarea.ubicacionPasillo ?? '');
     final palletController = TextEditingController(text: tarea.ubicacionPallet ?? '');
     final skuController = TextEditingController(text: tarea.skuQrFisico);
@@ -122,6 +123,29 @@ class _ReingresoTareasScreenState extends State<ReingresoTareasScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              Text('Galpón:', style: AppTypography.small.copyWith(fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 4),
+                              TextField(
+                                controller: galponController,
+                                enabled: !isSubmitting,
+                                textCapitalization: TextCapitalization.characters,
+                                style: AppTypography.body,
+                                decoration: InputDecoration(
+                                  hintText: 'Ej: 1',
+                                  filled: true,
+                                  fillColor: AppPalette.background,
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.white24)),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
                               Text('Pasillo / Rack:', style: AppTypography.small.copyWith(fontWeight: FontWeight.bold)),
                               const SizedBox(height: 4),
                               TextField(
@@ -140,7 +164,7 @@ class _ReingresoTareasScreenState extends State<ReingresoTareasScreen> {
                             ],
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -216,6 +240,7 @@ class _ReingresoTareasScreenState extends State<ReingresoTareasScreen> {
                             await BodegaService.confirmarReingreso(
                               skuQrFisico: skuEscaneado,
                               idOrdenAnulada: tarea.idOrden,
+                              ubicacionGalpon: galponController.text.trim(),
                               ubicacionPasillo: pasilloController.text.trim(),
                               ubicacionPallet: palletController.text.trim(),
                             );
@@ -237,6 +262,7 @@ class _ReingresoTareasScreenState extends State<ReingresoTareasScreen> {
       },
     );
 
+    galponController.dispose();
     pasilloController.dispose();
     palletController.dispose();
     skuController.dispose();

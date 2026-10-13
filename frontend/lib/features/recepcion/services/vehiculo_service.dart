@@ -6,6 +6,7 @@ import 'package:crypto/crypto.dart'; // ⚠️ NUEVO: Para el cifrado HMAC-SHA25
 import 'package:html/parser.dart' as html_parser; // ⚠️ NUEVO: Para leer el HTML
 
 import '../../../core/constants/api_constants.dart';
+import '../../../core/services/api_service.dart';
 import '../../auth/services/auth_service.dart';
 class VehiculoService {
 
@@ -14,15 +15,14 @@ class VehiculoService {
   // ==========================================
   Future<String> obtenerSiguienteIngreso() async {
     try {
-      final token = await AuthService.getToken();
-      final headers = {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      };
-      final response = await http.get(Uri.parse('${ApiConstants.vehiculosEndpoint}/siguiente-ingreso'), headers: headers);
+      final uri = Uri.parse('${ApiConstants.vehiculosEndpoint}/siguiente-ingreso');
+      final response = await ApiService.get(uri);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return data['siguiente_ingreso'];
+        return data['siguiente_ingreso']?.toString() ?? '1';
+      }
+      if (response.statusCode == 401) {
+        await AuthService.manejarSesionExpirada();
       }
       return "ERROR";
     } catch (e) {
@@ -231,15 +231,23 @@ class VehiculoService {
       );
       request.files.add(multipartFile);
 
-      var streamedResponse = await request.send();
+      var streamedResponse = await ApiService.send(request);
       var response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 401) {
+        await AuthService.manejarSesionExpirada();
+        return {
+          'exito': false,
+          'mensaje': 'Tu sesión ha expirado. Ingresa tu PIN nuevamente.',
+        };
+      }
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         return {'exito': true, 'mensaje': 'Guardado exitoso'};
       } else {
         final errorBody = jsonDecode(response.body);
         final mensajeDetail =
-            errorBody['detail'] ?? 'Error al guardar el ingreso';
+            errorBody['detail'] ?? errorBody['message_user'] ?? 'Error al guardar el ingreso';
         return {'exito': false, 'mensaje': mensajeDetail};
       }
     } catch (e) {
@@ -255,23 +263,25 @@ class VehiculoService {
   ) async {
     try {
       final uri = Uri.parse('${ApiConstants.vehiculosEndpoint}/registro-manual');
-      final token = await AuthService.getToken();
-      final headers = {
-        'Content-Type': 'application/json',
-        if (token != null) 'Authorization': 'Bearer $token',
-      };
-      final response = await http.post(
+      final response = await ApiService.post(
         uri,
-        headers: headers,
         body: jsonEncode(datosVehiculo),
       );
+
+      if (response.statusCode == 401) {
+        await AuthService.manejarSesionExpirada();
+        return {
+          'exito': false,
+          'mensaje': 'Tu sesión ha expirado. Ingresa tu PIN nuevamente.',
+        };
+      }
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         return {'exito': true, 'mensaje': 'Guardado exitoso'};
       } else {
         final errorBody = jsonDecode(response.body);
         final mensajeDetail =
-            errorBody['detail'] ?? 'Error al registrar vehículo manual';
+            errorBody['detail'] ?? errorBody['message_user'] ?? 'Error al registrar vehículo manual';
         return {'exito': false, 'mensaje': mensajeDetail};
       }
     } catch (e) {

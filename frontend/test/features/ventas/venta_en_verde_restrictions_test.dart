@@ -98,7 +98,7 @@ void main() {
       expect(controller.validateStep2(), isFalse);
     });
 
-    test('validateStep2 rechaza teléfono vacío o menor a 8 dígitos en Venta en Verde', () {
+    test('validateStep2 aprueba cliente sin teléfono ni correo en Venta en Verde', () {
       controller.addReservaBackorder(
         const ReservaBackorderModel(
           idCategoriaRequerida: 1,
@@ -109,7 +109,7 @@ void main() {
         ),
       );
 
-      // Teléfono vacío
+      // Teléfono y correo vacíos (son opcionales)
       controller.setCliente(
         const ClienteWizardModel(
           idCliente: 'cli-1',
@@ -117,12 +117,24 @@ void main() {
           nombres: 'Carlos',
           apellidos: 'Pérez',
           telefono: '',
-          correo: 'carlos@test.cl',
+          correo: '',
         ),
       );
-      expect(controller.validateStep2(), isFalse);
+      expect(controller.validateStep2(), isTrue);
+    });
 
-      // Teléfono menor a 8 dígitos
+    test('validateStep2 rechaza teléfono inválido menor a 8 dígitos si se ingresa en Venta en Verde', () {
+      controller.addReservaBackorder(
+        const ReservaBackorderModel(
+          idCategoriaRequerida: 1,
+          categoriaNombre: 'Motor',
+          marcaRequerida: 'Nissan',
+          modeloRequerido: 'Versa',
+          precioAcordado: 800000,
+        ),
+      );
+
+      // Teléfono menor a 8 dígitos cuando no está vacío
       controller.setCliente(
         const ClienteWizardModel(
           idCliente: 'cli-1',
@@ -130,13 +142,13 @@ void main() {
           nombres: 'Carlos',
           apellidos: 'Pérez',
           telefono: '12345',
-          correo: 'carlos@test.cl',
+          correo: '',
         ),
       );
       expect(controller.validateStep2(), isFalse);
     });
 
-    test('validateStep2 rechaza correo electrónico inválido en Venta en Verde', () {
+    test('validateStep2 rechaza correo electrónico inválido si se ingresa en Venta en Verde', () {
       controller.addReservaBackorder(
         const ReservaBackorderModel(
           idCategoriaRequerida: 1,
@@ -232,10 +244,10 @@ void main() {
 
       // Verificar que el banner de Venta en Verde está presente
       expect(find.textContaining('Venta en Verde activa:'), findsOneWidget);
-      expect(find.textContaining('obligatorio registrar los datos de contacto'), findsOneWidget);
+      expect(find.textContaining('obligatorio registrar al cliente titular'), findsOneWidget);
 
       // Verificar subtítulo informativo en la opción de Consumidor Final
-      expect(find.text('No disponible en Venta en Verde (se requieren datos de contacto)'), findsOneWidget);
+      expect(find.text('No disponible en Venta en Verde (se requiere cliente identificado con RUT)'), findsOneWidget);
 
       // Intentar tocar el switch o contenedor de Consumidor Final
       final switchFinder = find.byKey(const Key('switch_cliente_anonimo'));
@@ -245,7 +257,7 @@ void main() {
 
       // Debe mostrar SnackBar con advertencia
       expect(
-        find.text('Las compras en verde requieren obligatoriamente registrar los datos del cliente para la coordinación y entrega del repuesto.'),
+        find.text('Las compras en verde requieren obligatoriamente registrar a un cliente identificado con RUT, nombre y apellido.'),
         findsOneWidget,
       );
 

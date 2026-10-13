@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import '../../../../core/constants/api_constants.dart';
+import '../../../../core/services/api_service.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../auth/services/auth_service.dart';
 import '../../services/recepcion_service.dart';
@@ -207,8 +208,13 @@ class _RegistroVehiculoScreenState extends State<RegistroVehiculoScreen> {
       }
       request.files.add(await http.MultipartFile.fromPath('file', imagen.path));
 
-      final streamedResponse = await request.send().timeout(const Duration(seconds: 25));
+      final streamedResponse = await ApiService.send(request).timeout(const Duration(seconds: 25));
       final res = await http.Response.fromStream(streamedResponse);
+
+      if (res.statusCode == 401) {
+        await AuthService.manejarSesionExpirada();
+        return;
+      }
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);

@@ -1018,6 +1018,7 @@ class ConfirmarReingresoRequest(BaseModel):
     id_orden_anulada: UUID
     ubicacion_pallet: Optional[str] = None
     ubicacion_pasillo: Optional[str] = None
+    ubicacion_galpon: Optional[str] = None
 
 
 class TareaReingresoDTO(BaseModel):
@@ -1028,6 +1029,7 @@ class TareaReingresoDTO(BaseModel):
     sku_qr_fisico: str
     ubicacion_pallet: Optional[str] = None
     ubicacion_pasillo: Optional[str] = None
+    ubicacion_galpon: Optional[str] = None
     descripcion_pieza: str
     folio_orden: Optional[str] = None
     motivo_anulacion: Optional[str] = None
@@ -1042,6 +1044,7 @@ class ConfirmarReingresoResponse(BaseModel):
     nuevo_estado: Optional[str] = None
     ubicacion_pasillo: Optional[str] = None
     ubicacion_pallet: Optional[str] = None
+    ubicacion_galpon: Optional[str] = None
 
 
 class InstruccionesUpdateRequest(BaseModel):

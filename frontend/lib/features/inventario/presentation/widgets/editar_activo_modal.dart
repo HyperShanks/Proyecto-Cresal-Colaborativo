@@ -382,14 +382,59 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
               ),
             ),
 
-            // Formulario Scrollable con Vehículo, Ubicación y Especificaciones Técnicas
+            // Formulario Scrollable con Ubicación, Vehículo y Especificaciones Técnicas
             Flexible(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ── 1. DATOS DEL VEHÍCULO DE ORIGEN ──
+                    // ── 1. UBICACIÓN FÍSICA EN BODEGA (GALPÓN, PASILLO, PALLET) ──
+                    _buildSectionHeader(
+                      title: 'UBICACIÓN FÍSICA EN BODEGA',
+                      subtitle: 'Indica o actualiza la posición física: galpón, pasillo y pallet.',
+                      icon: Icons.warehouse_outlined,
+                    ),
+                    const SizedBox(height: 14),
+
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildTextField(
+                            controller: _galponController,
+                            label: 'Galpón',
+                            hintText: 'Ej. 1',
+                            icon: Icons.warehouse_outlined,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildTextField(
+                            controller: _pasilloController,
+                            label: 'Pasillo',
+                            hintText: 'Ej. A',
+                            icon: Icons.view_column_outlined,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildTextField(
+                            controller: _palletController,
+                            label: 'Pallet',
+                            hintText: 'Ej. P-01',
+                            icon: Icons.layers_outlined,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Sugerencias rápidas de Galpón y Pasillo
+                    _buildQuickLocationSuggestions(),
+
+                    const SizedBox(height: 24),
+
+                    // ── 2. DATOS DEL VEHÍCULO DE ORIGEN ──
                     _buildSectionHeader(
                       title: 'DATOS DEL VEHÍCULO DE ORIGEN',
                       subtitle: 'Marca, modelo, año y tracción del vehículo de procedencia.',
@@ -446,7 +491,7 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
 
                     const SizedBox(height: 24),
 
-                    // ── 2. ESPECIFICACIONES TÉCNICAS (DISPONIBLES PARA TODO ACTIVO) ──
+                    // ── 3. ESPECIFICACIONES TÉCNICAS (DISPONIBLES PARA TODO ACTIVO) ──
                     _buildSectionHeader(
                       title: 'ESPECIFICACIONES TÉCNICAS',
                       subtitle: 'Modifica los datos mecánicos registrados para este activo.',
@@ -492,47 +537,6 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
                       items: OpcionesTransmision.lista,
                       icon: Icons.settings_outlined,
                       onChanged: (val) => setState(() => _transmisionSeleccionada = val),
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    // ── 3. UBICACIÓN FÍSICA EN BODEGA ──
-                    _buildSectionHeader(
-                      title: 'UBICACIÓN FÍSICA EN BODEGA',
-                      subtitle: 'Indica la posición física de almacenamiento del activo.',
-                      icon: Icons.warehouse_outlined,
-                    ),
-                    const SizedBox(height: 14),
-
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildTextField(
-                            controller: _galponController,
-                            label: 'Galpón',
-                            hintText: 'Ej. 1',
-                            icon: Icons.warehouse_outlined,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildTextField(
-                            controller: _pasilloController,
-                            label: 'Pasillo',
-                            hintText: 'Ej. A',
-                            icon: Icons.view_column_outlined,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildTextField(
-                            controller: _palletController,
-                            label: 'Pallet',
-                            hintText: 'Ej. P-01',
-                            icon: Icons.layers_outlined,
-                          ),
-                        ),
-                      ],
                     ),
 
                     const SizedBox(height: 24),
@@ -639,6 +643,116 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildQuickLocationSuggestions() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.flash_on, size: 13, color: AppPalette.primary),
+            const SizedBox(width: 4),
+            Text(
+              'Sugerencias rápidas para Galpón y Pasillo:',
+              style: AppTypography.small.copyWith(
+                color: AppPalette.textSecondary,
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            ...OpcionesUbicacionBodega.galpones.map((g) {
+              final isSelected = _galponController.text.trim() == g;
+              return InkWell(
+                onTap: () {
+                  setState(() {
+                    _galponController.text = g;
+                  });
+                },
+                borderRadius: BorderRadius.circular(6),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? AppPalette.primary.withValues(alpha: 0.25)
+                        : AppPalette.surface,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: isSelected
+                          ? AppPalette.primary
+                          : AppPalette.neutral.withValues(alpha: 0.25),
+                      width: isSelected ? 1.5 : 1.0,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.warehouse_outlined, size: 12, color: isSelected ? AppPalette.primary : AppPalette.textSecondary),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Galpón $g',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                          color: isSelected ? AppPalette.primary : AppPalette.textPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+            ...['A', 'B', 'C', 'D', 'E'].map((p) {
+              final isSelected = _pasilloController.text.trim() == p;
+              return InkWell(
+                onTap: () {
+                  setState(() {
+                    _pasilloController.text = p;
+                  });
+                },
+                borderRadius: BorderRadius.circular(6),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? AppPalette.secondary.withValues(alpha: 0.25)
+                        : AppPalette.surface,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: isSelected
+                          ? AppPalette.secondary
+                          : AppPalette.neutral.withValues(alpha: 0.25),
+                      width: isSelected ? 1.5 : 1.0,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.view_column_outlined, size: 12, color: isSelected ? AppPalette.secondary : AppPalette.textSecondary),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Pasillo $p',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                          color: isSelected ? AppPalette.secondary : AppPalette.textPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ],
+        ),
+      ],
     );
   }
 

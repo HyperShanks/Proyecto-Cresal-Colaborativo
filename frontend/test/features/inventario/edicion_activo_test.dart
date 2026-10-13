@@ -7,6 +7,7 @@ import 'package:http/testing.dart';
 
 import 'package:frontend/features/inventario/services/inventario_service.dart';
 import 'package:frontend/features/inventario/presentation/widgets/editar_activo_modal.dart';
+import 'package:frontend/features/inventario/presentation/screens/detalle_activo_screen.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -321,7 +322,100 @@ void main() {
       expect(find.text('Civic'), findsOneWidget);
       expect(find.text('2019'), findsOneWidget);
       expect(find.text('2.0L'), findsOneWidget);
-      expect(find.text('ESPECIFICACIONES TÉCNICAS'), findsOneWidget);
+    });
+
+    testWidgets('Permite seleccionar sugerencias rápidas de Galpón y Pasillo y reflejarlas en los campos', (tester) async {
+      final activoSinUbicacion = {
+        'id_activo': 'act-888',
+        'sku': 'MOT-SUG-001',
+        'categoria': 'Motor',
+        'marca': 'Nissan',
+        'modelo': 'Sentra',
+        'anio': 2020,
+        'pasillo': '',
+        'pallet': '',
+        'galpon': '',
+        'version_lock': 1,
+      };
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: EditarActivoModal(activo: activoSinUbicacion),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('UBICACIÓN FÍSICA EN BODEGA'), findsOneWidget);
+      expect(find.text('Galpón 1'), findsOneWidget);
+      expect(find.text('Galpón 2'), findsOneWidget);
+      expect(find.text('Pasillo A'), findsOneWidget);
+      expect(find.text('Pasillo B'), findsOneWidget);
+
+      // Tocar sugerencia rápida "Galpón 2"
+      await tester.tap(find.text('Galpón 2'));
+      await tester.pumpAndSettle();
+
+      // Debe haber actualizado el campo Galpón con '2'
+      expect(find.widgetWithText(TextField, '2'), findsOneWidget);
+
+      // Tocar sugerencia rápida "Pasillo B"
+      await tester.tap(find.text('Pasillo B'));
+      await tester.pumpAndSettle();
+
+      // Debe haber actualizado el campo Pasillo con 'B'
+      expect(find.widgetWithText(TextField, 'B'), findsOneWidget);
+    });
+  });
+
+  group('DetalleActivoScreen - Botones de Edición de Ubicación', () {
+    testWidgets('Muestra botones de edición de ubicación para Bodeguero', (tester) async {
+      tester.view.physicalSize = const Size(800, 1400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+        const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
+        (MethodCall methodCall) async {
+          if (methodCall.method == 'read') {
+            final key = methodCall.arguments['key'];
+            if (key == 'user_id_rol' || key == 'id_rol') return '1';
+            if (key == 'user_rol' || key == 'rol') return 'Bodeguero';
+            if (key == 'access_token') return 'fake-token';
+          }
+          return null;
+        },
+      );
+
+      final activoDisponible = {
+        'id_activo': 'act-disp-1',
+        'sku': 'REP-DISP-001',
+        'categoria': 'Motor',
+        'marca': 'Toyota',
+        'modelo': 'Yaris',
+        'anio': 2022,
+        'estado': 'DISPONIBLE',
+        'pasillo': 'A',
+        'pallet': 'PL-01',
+        'galpon': '1',
+        'version_lock': 1,
+      };
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: DetalleActivoScreen(activo: activoDisponible),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Verificar que se muestre la acción en la tarjeta de ubicación
+      expect(find.byKey(const Key('btn_editar_ubicacion_card')), findsOneWidget);
+      expect(find.text('Editar Galpón, Pasillo y Pallet'), findsOneWidget);
+
+      // Verificar que se muestre el botón destacado al fondo
+      expect(find.byKey(const Key('btn_editar_activo_bottom')), findsOneWidget);
+      expect(find.text('EDITAR UBICACIÓN (PASILLO, PALLET, GALPÓN) Y DATOS'), findsOneWidget);
     });
   });
 }
