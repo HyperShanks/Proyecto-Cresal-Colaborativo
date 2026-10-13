@@ -79,6 +79,13 @@ class EntregasEnviosStorageService {
   static const String _keyCache = 'cache_entregas_envios_v1';
   static const String _keyOutbox = 'outbox_entregas_envios_v1';
 
+  static List<EntregaEnvioModel>? _memoriaCache;
+
+  @visibleForTesting
+  static void limpiarCacheMemoria() {
+    _memoriaCache = null;
+  }
+
   final FlutterSecureStorage _storage;
 
   EntregasEnviosStorageService({FlutterSecureStorage? storage})
@@ -86,6 +93,7 @@ class EntregasEnviosStorageService {
 
   /// Guarda en almacenamiento local la lista de entregas y envíos para despliegue instantáneo.
   Future<void> guardarCache(List<EntregaEnvioModel> items) async {
+    _memoriaCache = List.from(items);
     try {
       final rawList = items.map((i) => i.toJson()).toList();
       await _storage.write(key: _keyCache, value: jsonEncode(rawList));
@@ -96,16 +104,21 @@ class EntregasEnviosStorageService {
 
   /// Recupera la última lista cacheada localmente (< 50ms).
   Future<List<EntregaEnvioModel>> cargarCache() async {
+    if (_memoriaCache != null && _memoriaCache!.isNotEmpty) {
+      return List.from(_memoriaCache!);
+    }
     try {
       final jsonStr = await _storage.read(key: _keyCache);
       if (jsonStr == null || jsonStr.trim().isEmpty) return [];
 
       final decoded = jsonDecode(jsonStr);
       if (decoded is List) {
-        return decoded
+        final parsed = decoded
             .map((item) =>
                 EntregaEnvioModel.fromJson(Map<String, dynamic>.from(item as Map)))
             .toList();
+        _memoriaCache = List.from(parsed);
+        return parsed;
       }
     } catch (e) {
       debugPrint('⚠️ [STORAGE] Error al leer caché de entregas: $e');

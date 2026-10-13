@@ -1369,7 +1369,7 @@ class OrdenesService {
       };
 
       final response = await httpClient.get(uri, headers: headers).timeout(
-            const Duration(seconds: 12),
+            const Duration(seconds: 25),
             onTimeout: () => throw Exception(
               'Tiempo de espera agotado al consultar entregas.',
             ),

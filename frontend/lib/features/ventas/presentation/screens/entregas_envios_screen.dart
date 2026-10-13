@@ -158,6 +158,7 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
             ? _vendedorFilterController.text.trim()
             : null,
         soloActivas: true,
+        limit: 100,
       );
       if (!mounted) return;
       setState(() {

@@ -1582,11 +1582,10 @@ def listar_entregas_envios(
     tipo_filtro = (tipo.strip().lower() if tipo else None)
     estados_filtro = ["Reservada", "Pagada"] if (solo_activas is not False) else ["Reservada", "Pagada", "Completada", "Despachada"]
 
-    ordenes_resultado = []
-
     # A. Consulta de Retiros en Tienda (sin registro en Despacho)
+    retiros_raw = []
     if tipo_filtro in [None, "retiro", "traslado", "todos", ""]:
-        q_retiros = (
+        retiros_raw = (
             db.query(Orden_Venta)
             .outerjoin(Despacho, Orden_Venta.id_orden == Despacho.id_orden)
             .filter(
@@ -1594,77 +1593,69 @@ def listar_entregas_envios(
                 Orden_Venta.estado_orden.in_(estados_filtro),
                 Despacho.id_despacho == None,
             )
+            .all()
         )
-        for o in q_retiros.all():
-            tiene_traslado = (
-                db.query(Tracking_Logistico)
-                .filter(Tracking_Logistico.id_orden == o.id_orden)
-                .first() is not None
-            )
-            tipo_label = "Traslado" if tiene_traslado else "Retiro"
-            if tipo_filtro == "retiro" and tiene_traslado:
-                continue
-            if tipo_filtro == "traslado" and not tiene_traslado:
-                continue
-            ordenes_resultado.append((tipo_label, o))
 
     # B. Consulta de Despachos Externos y Traslados (con registro en Despacho)
+    despachos_raw = []
     if tipo_filtro in [None, "despacho", "traslado", "todos", ""]:
-        q_despachos = (
+        despachos_raw = (
             db.query(Orden_Venta, Despacho)
             .join(Despacho, Orden_Venta.id_orden == Despacho.id_orden)
             .filter(
                 Orden_Venta.id_sucursal == sucursal_id,
                 Orden_Venta.estado_orden.in_(estados_filtro),
             )
+            .all()
         )
-        for o, desp in q_despachos.all():
-            es_traslado = (
-                (desp.empresa_transporte or "").lower() == "interno"
-                or "traslado" in (desp.direccion_envio or "").lower()
-                or db.query(Tracking_Logistico).filter(Tracking_Logistico.id_orden == o.id_orden).first() is not None
-            )
-            tipo_label = "Traslado" if es_traslado else "Despacho"
-            if tipo_filtro == "despacho" and es_traslado:
-                continue
-            if tipo_filtro == "traslado" and not es_traslado:
-                continue
-            ordenes_resultado.append((tipo_label, o))
+
+    all_raw_ids = [o.id_orden for o in retiros_raw] + [o.id_orden for o, _ in despachos_raw]
+    if not all_raw_ids:
+        return []
+
+    # Carga por lote de tracking logístico para clasificar Traslado sin queries N+1
+    tracking_set = set(
+        r[0] for r in db.query(Tracking_Logistico.id_orden)
+        .filter(Tracking_Logistico.id_orden.in_(all_raw_ids))
+        .all()
+    )
+
+    ordenes_resultado = []
+    for o in retiros_raw:
+        tiene_traslado = o.id_orden in tracking_set
+        tipo_label = "Traslado" if tiene_traslado else "Retiro"
+        if tipo_filtro == "retiro" and tiene_traslado:
+            continue
+        if tipo_filtro == "traslado" and not tiene_traslado:
+            continue
+        ordenes_resultado.append((tipo_label, o, None))
+
+    for o, desp in despachos_raw:
+        es_traslado = (
+            (desp.empresa_transporte or "").lower() == "interno"
+            or "traslado" in (desp.direccion_envio or "").lower()
+            or o.id_orden in tracking_set
+        )
+        tipo_label = "Traslado" if es_traslado else "Despacho"
+        if tipo_filtro == "despacho" and es_traslado:
+            continue
+        if tipo_filtro == "traslado" and not es_traslado:
+            continue
+        ordenes_resultado.append((tipo_label, o, desp))
 
     # Ordenar cronológicamente descendente
     ordenes_resultado.sort(key=lambda x: x[1].fecha_creacion, reverse=True)
 
-    items_response = []
-    term_busqueda = busqueda.strip().upper() if busqueda and busqueda.strip() else None
-    es_admin_o_jefe = current_user.id_rol in [1, 5, 6]
+    if not ordenes_resultado:
+        return []
 
-    for tipo_entrega_item, orden in ordenes_resultado:
+    es_admin_o_jefe = current_user.id_rol in [1, 5, 6]
+    candidatos_filtrados = []
+    for tipo_entrega_item, orden, desp in ordenes_resultado:
         # 1. Regla de Privacidad y Visibilidad:
-        # - Admin/Jefe: ve todo.
-        # - id_vendedor_asignado IS NULL (Mesón General / Presencial): visible para toda la sucursal.
-        # - id_vendedor_asignado IS NOT NULL (Venta Online asignada): visible para el asignado o el creador.
         if not es_admin_o_jefe and orden.id_vendedor_asignado is not None:
             if orden.id_vendedor_asignado != current_user.id_usuario and orden.id_vendedor != current_user.id_usuario:
                 continue
-
-        # 1.1 Regla de Venta en Verde:
-        # Las órdenes de ventas en verde que aún no están pagadas (monto_pendiente > 0)
-        # o que no cuentan con QR transaccional asignado no se pueden entregar, por ende no deben listarse.
-        tiene_reserva_verde = (
-            db.query(Reservas_Backorder)
-            .filter(Reservas_Backorder.id_orden == orden.id_orden)
-            .first() is not None
-        )
-        if not tiene_reserva_verde:
-            detalles_check = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == orden.id_orden).all()
-            tiene_reserva_verde = any(
-                "[RESERVA EN VERDE]" in (d.descripcion_manual or "").upper() or
-                "VENTA EN VERDE" in (d.descripcion_manual or "").upper()
-                for d in detalles_check
-            )
-
-        if tiene_reserva_verde and (orden.monto_pendiente > 0 or not orden.qr_transaccional_salida):
-            continue
 
         # 2. Filtro por Estado de Pago
         if estado_pago:
@@ -1674,15 +1665,98 @@ def listar_entregas_envios(
             elif ep in ["pendientes", "con saldo pendiente"] and orden.monto_pendiente == 0:
                 continue
 
+        candidatos_filtrados.append((tipo_entrega_item, orden, desp))
+
+    if not candidatos_filtrados:
+        return []
+
+    candidatos_ids = [orden.id_orden for _, orden, _ in candidatos_filtrados]
+
+    # Carga por lotes (Batch Loading) de todas las entidades relacionadas para rendimiento < 300ms
+    reservas = db.query(Reservas_Backorder).filter(Reservas_Backorder.id_orden.in_(candidatos_ids)).all()
+    reservas_map = {r.id_orden: r for r in reservas}
+    reserva_ids_set = set(reservas_map.keys())
+
+    detalles = (
+        db.query(Detalle_Orden)
+        .filter(Detalle_Orden.id_orden.in_(candidatos_ids))
+        .order_by(Detalle_Orden.id_detalle.asc())
+        .all()
+    )
+    detalles_by_orden = defaultdict(list)
+    for d in detalles:
+        detalles_by_orden[d.id_orden].append(d)
+
+    cliente_ids = list({orden.id_cliente for _, orden, _ in candidatos_filtrados if orden.id_cliente})
+    clientes_map: Dict[uuid.UUID, Cliente] = {}
+    if cliente_ids:
+        clientes = db.query(Cliente).filter(Cliente.id_cliente.in_(cliente_ids)).all()
+        clientes_map = {c.id_cliente: c for c in clientes}
+
+    despachos_map: Dict[uuid.UUID, Despacho] = {
+        orden.id_orden: desp for _, orden, desp in candidatos_filtrados if desp is not None
+    }
+
+    comuna_ids = set()
+    for c in clientes_map.values():
+        if c.id_comuna:
+            comuna_ids.add(c.id_comuna)
+    for d in despachos_map.values():
+        if d.id_comuna_destino:
+            comuna_ids.add(d.id_comuna_destino)
+
+    comunas_map: Dict[int, str] = {}
+    if comuna_ids:
+        comunas = db.query(Comuna).filter(Comuna.id_comuna.in_(comuna_ids)).all()
+        comunas_map = {c.id_comuna: c.nombre_comuna for c in comunas}
+
+    usuario_ids = set()
+    for _, orden, _ in candidatos_filtrados:
+        if orden.id_vendedor:
+            usuario_ids.add(orden.id_vendedor)
+        if orden.id_vendedor_asignado:
+            usuario_ids.add(orden.id_vendedor_asignado)
+
+    usuarios_map: Dict[uuid.UUID, Usuario] = {}
+    if usuario_ids:
+        usuarios = db.query(Usuario).filter(Usuario.id_usuario.in_(usuario_ids)).all()
+        usuarios_map = {u.id_usuario: u for u in usuarios}
+
+    activo_ids = list({d.id_activo for d in detalles if d.id_activo})
+    activos_map = {}
+    if activo_ids:
+        activos_info = (
+            db.query(Activo_Inventariado, Vehiculo_Origen, Categoria_Activo)
+            .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
+            .join(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
+            .filter(Activo_Inventariado.id_activo.in_(activo_ids))
+            .all()
+        )
+        for act, veh, cat in activos_info:
+            activos_map[act.id_activo] = (act, veh, cat)
+
+    items_response = []
+    term_busqueda = busqueda.strip().upper() if busqueda and busqueda.strip() else None
+
+    for tipo_entrega_item, orden, desp in candidatos_filtrados:
+        detalles_db = detalles_by_orden.get(orden.id_orden, [])
+        reserva_asociada = reservas_map.get(orden.id_orden)
+
+        # Regla de Venta en Verde:
+        tiene_reserva_verde = (orden.id_orden in reserva_ids_set) or any(
+            "[RESERVA EN VERDE]" in (d.descripcion_manual or "").upper() or
+            "VENTA EN VERDE" in (d.descripcion_manual or "").upper()
+            for d in detalles_db
+        )
+
+        if tiene_reserva_verde and (orden.monto_pendiente > 0 or not orden.qr_transaccional_salida):
+            continue
+
         # Cliente
-        cliente_db = db.query(Cliente).filter(Cliente.id_cliente == orden.id_cliente).first()
+        cliente_db = clientes_map.get(orden.id_cliente)
         cliente_resumen = None
         if cliente_db:
-            comuna_nombre = None
-            if cliente_db.id_comuna:
-                c_obj = db.query(Comuna).filter(Comuna.id_comuna == cliente_db.id_comuna).first()
-                if c_obj:
-                    comuna_nombre = c_obj.nombre_comuna
+            comuna_nombre = comunas_map.get(cliente_db.id_comuna) if cliente_db.id_comuna else None
             cliente_resumen = ClienteOrdenResumen(
                 rut_cliente=cliente_db.rut_cliente,
                 nombres=cliente_db.nombres,
@@ -1693,14 +1767,10 @@ def listar_entregas_envios(
             )
 
         # Despacho
-        despacho_db = db.query(Despacho).filter(Despacho.id_orden == orden.id_orden).first()
+        despacho_db = despachos_map.get(orden.id_orden)
         despacho_resumen = None
         if despacho_db:
-            comuna_dest_nombre = None
-            if despacho_db.id_comuna_destino:
-                c_dest = db.query(Comuna).filter(Comuna.id_comuna == despacho_db.id_comuna_destino).first()
-                if c_dest:
-                    comuna_dest_nombre = c_dest.nombre_comuna
+            comuna_dest_nombre = comunas_map.get(despacho_db.id_comuna_destino) if despacho_db.id_comuna_destino else None
             despacho_resumen = DespachoOrdenResumen(
                 id_despacho=despacho_db.id_despacho,
                 direccion_envio=despacho_db.direccion_envio,
@@ -1713,27 +1783,18 @@ def listar_entregas_envios(
                 comuna_destino=comuna_dest_nombre,
             )
 
-        # Detalles (repuestos inventariados + misceláneos)
-        reserva_asociada = db.query(Reservas_Backorder).filter(Reservas_Backorder.id_orden == orden.id_orden).first()
-        detalles_db = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == orden.id_orden).all()
-
+        # Detalles
         detalles_resumen = []
         for d in detalles_db:
             sku_fisico = None
             titulo_item = d.descripcion_manual or "Repuesto Misceláneo"
             es_inv = False
-
             id_cat = None
             nom_cat = None
+
             if d.id_activo:
                 es_inv = True
-                activo_db = (
-                    db.query(Activo_Inventariado, Vehiculo_Origen, Categoria_Activo)
-                    .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
-                    .join(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
-                    .filter(Activo_Inventariado.id_activo == d.id_activo)
-                    .first()
-                )
+                activo_db = activos_map.get(d.id_activo)
                 if activo_db:
                     act, veh, cat = activo_db
                     sku_fisico = act.sku_qr_fisico
@@ -1768,7 +1829,7 @@ def listar_entregas_envios(
             )
 
         # Vendedor Responsable (Creador)
-        vendedor_db = db.query(Usuario).filter(Usuario.id_usuario == orden.id_vendedor).first()
+        vendedor_db = usuarios_map.get(orden.id_vendedor)
         vendedor_nombre = (
             f"{vendedor_db.nombres} {vendedor_db.apellidos or ''}".strip()
             if vendedor_db
@@ -1778,7 +1839,7 @@ def listar_entregas_envios(
         # Vendedor Asignado
         vendedor_asignado_nombre = "Mesón General (Todos)"
         if orden.id_vendedor_asignado:
-            v_asig_db = db.query(Usuario).filter(Usuario.id_usuario == orden.id_vendedor_asignado).first()
+            v_asig_db = usuarios_map.get(orden.id_vendedor_asignado)
             if v_asig_db:
                 vendedor_asignado_nombre = f"{v_asig_db.nombres} {v_asig_db.apellidos or ''}".strip()
 
