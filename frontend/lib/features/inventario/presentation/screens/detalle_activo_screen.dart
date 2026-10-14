@@ -301,9 +301,9 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
   }
 
   String _formatearUbicacionHumana() {
-    final pasillo = _activo['pasillo']?.toString().trim() ?? '';
-    final pallet = _activo['pallet']?.toString().trim() ?? '';
-    final galpon = _activo['galpon']?.toString().trim() ?? '';
+    final pasillo = (_activo['pasillo'] ?? _activo['ubicacion_pasillo'])?.toString().trim() ?? '';
+    final pallet = (_activo['pallet'] ?? _activo['ubicacion_pallet'])?.toString().trim() ?? '';
+    final galpon = (_activo['galpon'] ?? _activo['ubicacion_galpon'])?.toString().trim() ?? '';
 
     final bool tienePasillo = pasillo.isNotEmpty && pasillo != 'S/P' && pasillo != 'null';
     final bool tienePallet = pallet.isNotEmpty && pallet != 'S/P' && pallet != 'null';
@@ -686,49 +686,74 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: AppPalette.primary.withValues(alpha: 0.2)),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.center,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'UBICACIÓN ACTUAL',
-                                style: AppTypography.small.copyWith(
-                                  color: AppPalette.textSecondary,
-                                  letterSpacing: 1.2,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'UBICACIÓN ACTUAL',
+                                    style: AppTypography.small.copyWith(
+                                      color: AppPalette.textSecondary,
+                                      letterSpacing: 1.2,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    _formatearUbicacionHumana(),
+                                    style: AppTypography.title.copyWith(
+                                      color: AppPalette.primary,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      height: 1.3,
+                                    ),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(height: 8),
-                              Text(
-                                _formatearUbicacionHumana(),
-                                style: AppTypography.title.copyWith(
-                                  color: AppPalette.primary,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  height: 1.3,
-                                ),
+                            ),
+                            const SizedBox(width: 12),
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: AppPalette.primary.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(10),
                               ),
-                            ],
-                          ),
+                              child: const Icon(
+                                Icons.location_on_rounded,
+                                color: AppPalette.primary,
+                                size: 26,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 12),
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: AppPalette.primary.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(10),
+                        if (_puedeEditar && _esEstadoEditable) ...[
+                          const SizedBox(height: 14),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: OutlinedButton.icon(
+                              key: const Key('btn_editar_ubicacion_card'),
+                              onPressed: _abrirModalEdicion,
+                              icon: const Icon(Icons.edit_location_alt_outlined, size: 16, color: AppPalette.primary),
+                              label: Text(
+                                'Editar Galpón, Pasillo y Pallet',
+                                style: AppTypography.button.copyWith(color: AppPalette.primary, fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                side: BorderSide(color: AppPalette.primary.withValues(alpha: 0.5)),
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                            ),
                           ),
-                          child: const Icon(
-                            Icons.location_on_rounded,
-                            color: AppPalette.primary,
-                            size: 26,
-                          ),
-                        ),
+                        ],
                       ],
                     ),
                   ),
@@ -849,6 +874,28 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
                     ),
                   ),
                   if (_puedeEditar && _esEstadoEditable) ...[
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton.icon(
+                        key: const Key('btn_editar_activo_bottom'),
+                        onPressed: _abrirModalEdicion,
+                        icon: const Icon(Icons.edit_note, color: Colors.white, size: 22),
+                        label: Text(
+                          'EDITAR UBICACIÓN (PASILLO, PALLET, GALPÓN) Y DATOS',
+                          style: AppTypography.button.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppPalette.primary,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 12),
                     SizedBox(
                       width: double.infinity,

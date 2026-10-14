@@ -122,43 +122,241 @@ class AuditoriaTablaView extends StatelessWidget {
     }
   }
 
-  /// Badge distintivo de contenido físico (Opción 1):
-  /// En Cresal, los únicos repuestos inventariados son Motores y Cajas.
-  /// Si la orden incluye un Motor o Caja, muestra el badge ⚙️ Motor / Caja. De lo contrario, retorna null.
-  static Widget? buildBadgeTipoActivo(HistorialOrdenItemModel item) {
-    if (!item.tieneMotorOCaja) {
+  /// Insignias de contenido de alto valor (Motores y Cajas de Cambio):
+  /// - Para repuestos inventariados: despliega el código correlativo físico real (MOT-XXXX o CAJ-XXXX)
+  ///   con Tooltip interactivo que revela el vehículo de origen.
+  /// - Para repuestos misceláneos calificados: despliega la insignia MOTOR o CAJA (excluyendo
+  ///   estrictamente falsos positivos como motor de partida, cremallera, etc.).
+  static Widget? buildBadgesMotorCaja(HistorialOrdenItemModel item, {BuildContext? context}) {
+    final activos = item.activosAuditados;
+    if (activos.isEmpty) {
       return null;
     }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+    return Wrap(
+      spacing: 4,
+      runSpacing: 2,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: activos
+          .map((activo) => buildBadgeActivo(activo, context: context))
+          .toList(),
+    );
+  }
+
+  /// Insignia visual individual para un motor o transmisión clasificada
+  static Widget buildBadgeActivo(ActivoAuditoriaItem activo, {BuildContext? context}) {
+    final Color bgColor;
+    final Color borderColor;
+    final Color textColor;
+    final IconData icon;
+
+    switch (activo.tipo) {
+      case TipoActivoAuditoria.motorInventariado:
+        bgColor = const Color(0xFFEEF2FF);
+        borderColor = const Color(0xFFC7D2FE);
+        textColor = const Color(0xFF4338CA);
+        icon = Icons.settings_rounded;
+        break;
+      case TipoActivoAuditoria.cajaInventariada:
+        bgColor = const Color(0xFFFAF5FF);
+        borderColor = const Color(0xFFE9D5FF);
+        textColor = const Color(0xFF7E22CE);
+        icon = Icons.alt_route_rounded;
+        break;
+      case TipoActivoAuditoria.motorMiscelaneo:
+        bgColor = const Color(0xFFF0F9FF);
+        borderColor = const Color(0xFFBAE6FD);
+        textColor = const Color(0xFF0369A1);
+        icon = Icons.build_circle_outlined;
+        break;
+      case TipoActivoAuditoria.cajaMiscelanea:
+        bgColor = const Color(0xFFFDF4FF);
+        borderColor = const Color(0xFFF5D0FE);
+        textColor = const Color(0xFFA21CAF);
+        icon = Icons.tune_rounded;
+        break;
+      case TipoActivoAuditoria.ninguno:
+        return const SizedBox.shrink();
+    }
+
+    final tooltipMsg = activo.esInventariado
+        ? (activo.vehiculoOrigen != null && activo.vehiculoOrigen!.isNotEmpty
+            ? '🚗 Vehículo Origen: ${activo.vehiculoOrigen}\nCódigo SKU: ${activo.label}'
+            : 'Pieza Inventariada: ${activo.label}\n${activo.descripcion}')
+        : (activo.esMotor
+            ? '⚙️ Venta Mesón Miscelánea (Motor):\n${activo.descripcion}'
+            : '🕹️ Venta Mesón Miscelánea (Transmisión):\n${activo.descripcion}');
+
+    return Tooltip(
+      message: tooltipMsg,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFFEEF2FF),
-        borderRadius: BorderRadius.circular(5),
-        border: Border.all(color: const Color(0xFFC7D2FE), width: 0.8),
+        color: const Color(0xFF0F172A),
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black26,
+            blurRadius: 6,
+            offset: Offset(0, 2),
+          ),
+        ],
       ),
-      child: const Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.settings_rounded, size: 10, color: Color(0xFF4338CA)),
-          SizedBox(width: 3),
-          Flexible(
-            fit: FlexFit.loose,
-            child: Text(
-              'Motor / Caja',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 9.5,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF4338CA),
-                letterSpacing: 0.1,
+      textStyle: const TextStyle(
+        fontSize: 11,
+        color: Colors.white,
+        fontWeight: FontWeight.w500,
+        height: 1.3,
+      ),
+      preferBelow: false,
+      child: InkWell(
+        onTap: () {
+          if (context != null) {
+            _mostrarInfoVehiculoDialog(context, activo);
+          }
+        },
+        borderRadius: BorderRadius.circular(5),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 5.5, vertical: 2),
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(5),
+            border: Border.all(color: borderColor, width: 0.8),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 10.5, color: textColor),
+              const SizedBox(width: 3.5),
+              Text(
+                activo.label,
+                style: TextStyle(
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w800,
+                  color: textColor,
+                  letterSpacing: 0.2,
+                ),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Modal interactivo rápido al hacer clic en el badge para auditar el vehículo donante
+  static void _mostrarInfoVehiculoDialog(BuildContext context, ActivoAuditoriaItem activo) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        titlePadding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
+        contentPadding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(7),
+              decoration: BoxDecoration(
+                color: activo.esMotor ? const Color(0xFFEEF2FF) : const Color(0xFFFAF5FF),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                activo.esMotor ? Icons.settings_rounded : Icons.alt_route_rounded,
+                color: activo.esMotor ? const Color(0xFF4338CA) : const Color(0xFF7E22CE),
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                activo.esInventariado
+                    ? 'Pieza Inventariada: ${activo.label}'
+                    : 'Venta Mesón: ${activo.label}',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (activo.esInventariado && activo.vehiculoOrigen != null) ...[
+              const Text(
+                'VEHÍCULO DONANTE (ORIGEN):',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.5,
+                  color: Color(0xFF64748B),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.directions_car_rounded, size: 20, color: Color(0xFF0284C7)),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        activo.vehiculoOrigen!,
+                        style: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            const Text(
+              'DESCRIPCIÓN DEL ARTÍCULO:',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.5,
+                color: Color(0xFF64748B),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              activo.descripcion,
+              style: const TextStyle(
+                fontSize: 13,
+                color: Color(0xFF334155),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text(
+              'Cerrar',
+              style: TextStyle(fontWeight: FontWeight.w700),
             ),
           ),
         ],
       ),
     );
+  }
+
+  /// Método retrocompatible para llamadas anteriores
+  static Widget? buildBadgeTipoActivo(HistorialOrdenItemModel item, {BuildContext? context}) {
+    return buildBadgesMotorCaja(item, context: context);
   }
 
   /// Formatea la fecha en estilo "Hoy HH:mm" o "dd/MM HH:mm" como en el mockup
@@ -314,9 +512,9 @@ class AuditoriaTablaView extends StatelessWidget {
                       fontSize: 14,
                     ),
                   ),
-                  if (buildBadgeTipoActivo(item) != null) ...[
+                  if (buildBadgesMotorCaja(item, context: context) != null) ...[
                     const SizedBox(height: 3),
-                    buildBadgeTipoActivo(item)!,
+                    buildBadgesMotorCaja(item, context: context)!,
                   ],
                 ],
               ),

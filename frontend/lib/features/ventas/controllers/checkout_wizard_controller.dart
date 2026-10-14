@@ -107,7 +107,7 @@ class CheckoutWizardController extends ChangeNotifier {
     }
     if (_currentStep == 1 && !validateStep2()) {
       _errorMessage = tieneVentaEnVerde
-          ? 'Las compras en verde requieren obligatoriamente registrar los datos del cliente (RUT, nombre, apellido, teléfono y correo válido).'
+          ? 'Las compras en verde requieren obligatoriamente registrar los datos del cliente (RUT, nombre y apellido válidos).'
           : 'Falta identificar al cliente. Por favor, ingresa un RUT válido antes de proceder con la reserva de estos activos.';
       notifyListeners();
       return false;
@@ -152,16 +152,22 @@ class CheckoutWizardController extends ChangeNotifier {
 
       final nom = _clienteSeleccionado!.nombres.trim();
       final ape = _clienteSeleccionado!.apellidos.trim();
+      if (nom.isEmpty || ape.isEmpty) return false;
+
+      // Teléfono es opcional: si se ingresó, debe tener al menos 8 dígitos numéricos
       final tel = _clienteSeleccionado!.telefono?.trim() ?? '';
+      if (tel.isNotEmpty && tel.replaceAll(RegExp(r'\D'), '').length < 8) {
+        return false;
+      }
+
+      // Correo es opcional: si se ingresó, debe tener formato válido
       final email = _clienteSeleccionado!.correo?.trim() ?? '';
       final emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+      if (email.isNotEmpty && !emailRegex.hasMatch(email)) {
+        return false;
+      }
 
-      return nom.isNotEmpty &&
-          ape.isNotEmpty &&
-          tel.isNotEmpty &&
-          tel.replaceAll(RegExp(r'\D'), '').length >= 8 &&
-          email.isNotEmpty &&
-          emailRegex.hasMatch(email);
+      return true;
     }
 
     return true;

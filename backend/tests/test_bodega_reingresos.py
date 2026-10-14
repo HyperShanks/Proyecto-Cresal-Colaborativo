@@ -291,7 +291,8 @@ def test_confirmar_reingreso_exitoso_y_version_lock(client, reingreso_db, auth_b
         "sku_qr_fisico": "MOT-NIS-SEN-001",
         "id_orden_anulada": str(reingreso_db["orden_a_id"]),
         "ubicacion_pasillo": "P-03",
-        "ubicacion_pallet": "PAL-99"
+        "ubicacion_pallet": "PAL-99",
+        "ubicacion_galpon": "1",
     }
 
     response = client.post("/api/v1/bodega/confirmar-reingreso", json=payload, headers=auth_bodeguero)
@@ -303,6 +304,7 @@ def test_confirmar_reingreso_exitoso_y_version_lock(client, reingreso_db, auth_b
     assert data["nuevo_estado"] == "Disponible"
     assert data["ubicacion_pasillo"] == "P-03"
     assert data["ubicacion_pallet"] == "PAL-99"
+    assert data["ubicacion_galpon"] == "1"
 
     # SPEC-HU-TAREA-19: El activo permanece en estado Disponible (1) fijado por ventas,
     # se actualiza su ubicación física en rack y NO se incrementa version_lock en bodega
@@ -312,6 +314,7 @@ def test_confirmar_reingreso_exitoso_y_version_lock(client, reingreso_db, auth_b
         assert act_db.id_estado == 1
         assert act_db.ubicacion_pasillo == "P-03"
         assert act_db.ubicacion_pallet == "PAL-99"
+        assert act_db.ubicacion_galpon == "1"
         assert act_db.version_lock == version_inicial
     finally:
         db.close()

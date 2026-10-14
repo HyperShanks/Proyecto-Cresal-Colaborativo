@@ -1,10 +1,12 @@
 // lib/features/ventas/presentation/screens/detalle_activo_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../controllers/cart_controller.dart';
 import '../../models/catalogo_model.dart';
+import '../../services/carrito_service.dart';
 import '../widgets/visor_imagen_completa_dialog.dart';
 import '../widgets/cart_fly_animation.dart';
 import '../../../../core/widgets/glass_snackbar.dart';
@@ -15,11 +17,13 @@ import '../../../../core/widgets/glass_snackbar.dart';
 class DetalleActivoScreen extends StatefulWidget {
   final CatalogoItem item;
   final int? vendedorSucursalId;
+  final http.Client? httpClient;
 
   const DetalleActivoScreen({
     super.key,
     required this.item,
     this.vendedorSucursalId,
+    this.httpClient,
   });
 
   @override
@@ -29,10 +33,18 @@ class DetalleActivoScreen extends StatefulWidget {
 class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
   final PageController _pageController = PageController();
   int _currentImageIndex = 0;
+  late CatalogoItem _currentItem;
+  bool _isAdding = false;
 
   bool get _esMismaSucursal =>
       widget.vendedorSucursalId != null &&
-      widget.item.idSucursalActual == widget.vendedorSucursalId;
+      _currentItem.idSucursalActual == widget.vendedorSucursalId;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentItem = widget.item;
+  }
 
   @override
   void dispose() {
@@ -40,7 +52,48 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
     super.dispose();
   }
 
-  void _onAddToCart() {
+  Future<void> _onAddToCart() async {
+    if (_isAdding) return;
+
+    if (_currentItem.esReservado) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppPalette.surface,
+          duration: const Duration(seconds: 3),
+          content: Row(
+            children: [
+              const Icon(
+                Icons.warning_amber_rounded,
+                color: AppPalette.error,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '¡Lo sentimos! Este repuesto acaba de ser reservado por otro vendedor hace un instante.',
+                  style: AppTypography.small.copyWith(
+                    color: AppPalette.textPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (CartController.instance.estaEnCarrito(_currentItem.idActivo)) {
+      GlassSnackbar.mostrar(
+        context,
+        mensaje: 'Este activo ya está en el carrito',
+        icono: Icons.info_outline,
+        colorIcono: AppPalette.secondary,
+      );
+      return;
+    }
+
     if (CartController.instance.tieneVentaEnVerde) {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
@@ -55,18 +108,98 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
       return;
     }
 
-    final agregado = CartController.instance.agregarInventariado(widget.item);
-    GlassSnackbar.mostrar(
-      context,
-      mensaje: agregado
-          ? '${widget.item.tituloRepuesto} agregado al carrito'
-          : 'Este activo ya está en el carrito',
-      icono: agregado ? Icons.check_circle_outline_rounded : Icons.info_outline,
-      colorIcono: agregado ? AppPalette.primary : AppPalette.secondary,
-    );
+    setState(() {
+      _isAdding = true;
+    });
 
-    if (agregado && mounted) {
-      Navigator.of(context).pop();
+    try {
+      final reserva = await CarritoService.reservarActivo(
+        _currentItem.idActivo,
+        _currentItem.versionLock,
+        client: widget.httpClient,
+      );
+
+      final updatedItem = _currentItem.copyWith(
+        versionLock: reserva['version_lock'] as int? ?? (_currentItem.versionLock + 1),
+      );
+
+      if (mounted) {
+        setState(() {
+          _currentItem = updatedItem;
+        });
+      }
+
+      final agregado = CartController.instance.agregarInventariado(updatedItem);
+
+      if (!mounted) return;
+
+      GlassSnackbar.mostrar(
+        context,
+        mensaje: agregado
+            ? '${updatedItem.tituloRepuesto} agregado al carrito'
+            : 'Este activo ya está en el carrito',
+        icono: agregado ? Icons.check_circle_outline_rounded : Icons.info_outline,
+        colorIcono: agregado ? AppPalette.primary : AppPalette.secondary,
+      );
+
+      if (agregado && mounted) {
+        Navigator.of(context).pop();
+      }
+    } on CarritoException catch (e) {
+      if (!mounted) return;
+
+      if (e.statusCode == 409 || e.errorCode == 'RESERVATION_COLLISION') {
+        setState(() {
+          _currentItem = _currentItem.copyWith(
+            idEstado: 2,
+            estadoActivo: 'Reservado',
+          );
+        });
+      }
+
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppPalette.surface,
+          duration: const Duration(seconds: 4),
+          content: Row(
+            children: [
+              const Icon(
+                Icons.warning_amber_rounded,
+                color: AppPalette.error,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  e.message,
+                  style: AppTypography.small.copyWith(
+                    color: AppPalette.textPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppPalette.surface,
+          content: Text(
+            e.toString().replaceFirst('Exception: ', ''),
+            style: AppTypography.small.copyWith(color: AppPalette.error),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isAdding = false;
+        });
+      }
     }
   }
 
@@ -367,13 +500,16 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
 
   /// Badge de Disponibilidad
   Widget _buildDisponibilidadBadge() {
-    final estado = widget.item.estadoActivo ?? 'Disponible';
+    final bool esReservado = _currentItem.esReservado;
+    final estado = _currentItem.estadoActivo ?? 'Disponible';
+    final color = esReservado ? const Color(0xFFF59E0B) : AppPalette.success;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 4.0),
       decoration: BoxDecoration(
-        color: AppPalette.success.withValues(alpha: 0.15),
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(20.0),
-        border: Border.all(color: AppPalette.success.withValues(alpha: 0.4)),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -381,8 +517,8 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
           Container(
             width: 8,
             height: 8,
-            decoration: const BoxDecoration(
-              color: AppPalette.success,
+            decoration: BoxDecoration(
+              color: color,
               shape: BoxShape.circle,
             ),
           ),
@@ -390,7 +526,7 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
           Text(
             estado.toUpperCase(),
             style: AppTypography.small.copyWith(
-              color: AppPalette.success,
+              color: color,
               fontWeight: FontWeight.bold,
               fontSize: 11,
             ),
@@ -758,25 +894,44 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
           // Botón Agregar
           Builder(
             builder: (btnContext) {
+              final bool bloqueado = _currentItem.esReservado;
               return SizedBox(
                 height: 42,
                 child: ElevatedButton.icon(
                   key: const Key('btn_agregar_carrito_detalle'),
-                  onPressed: () {
-                    CartFlyAnimation.run(context: btnContext);
-                    _onAddToCart();
-                  },
-                  icon: const Icon(Icons.add_shopping_cart, size: 18),
-                  label: const Text(
-                    'Agregar',
-                    style: TextStyle(
+                  onPressed: (_isAdding || bloqueado)
+                      ? null
+                      : () {
+                          CartFlyAnimation.run(context: btnContext);
+                          _onAddToCart();
+                        },
+                  icon: _isAdding
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Icon(
+                          bloqueado ? Icons.lock_outline : Icons.add_shopping_cart,
+                          size: 18,
+                        ),
+                  label: Text(
+                    _isAdding
+                        ? 'Reservando...'
+                        : (bloqueado ? 'Reservado' : 'Agregar'),
+                    style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 0.5,
                     ),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppPalette.primary,
+                    backgroundColor: bloqueado
+                        ? AppPalette.neutral.withValues(alpha: 0.25)
+                        : AppPalette.primary,
                     foregroundColor: AppPalette.textPrimary,
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(horizontal: 18.0),

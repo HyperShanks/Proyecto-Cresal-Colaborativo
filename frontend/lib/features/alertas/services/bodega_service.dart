@@ -11,6 +11,7 @@ class TareaReingresoModel {
   final String skuQrFisico;
   final String? ubicacionPallet;
   final String? ubicacionPasillo;
+  final String? ubicacionGalpon;
   final String descripcionPieza;
   final String? folioOrden;
   final String? motivoAnulacion;
@@ -21,6 +22,7 @@ class TareaReingresoModel {
     required this.skuQrFisico,
     this.ubicacionPallet,
     this.ubicacionPasillo,
+    this.ubicacionGalpon,
     required this.descripcionPieza,
     this.folioOrden,
     this.motivoAnulacion,
@@ -33,6 +35,7 @@ class TareaReingresoModel {
       skuQrFisico: json['sku_qr_fisico']?.toString() ?? '',
       ubicacionPallet: json['ubicacion_pallet']?.toString(),
       ubicacionPasillo: json['ubicacion_pasillo']?.toString(),
+      ubicacionGalpon: json['ubicacion_galpon']?.toString(),
       descripcionPieza: json['descripcion_pieza']?.toString() ?? 'Repuesto',
       folioOrden: json['folio_orden']?.toString(),
       motivoAnulacion: json['motivo_anulacion']?.toString(),
@@ -45,6 +48,7 @@ class TareaReingresoModel {
     'sku_qr_fisico': skuQrFisico,
     'ubicacion_pallet': ubicacionPallet,
     'ubicacion_pasillo': ubicacionPasillo,
+    'ubicacion_galpon': ubicacionGalpon,
     'descripcion_pieza': descripcionPieza,
     'folio_orden': folioOrden,
     'motivo_anulacion': motivoAnulacion,
@@ -59,6 +63,7 @@ class ConfirmarReingresoResponseModel {
   final String? nuevoEstado;
   final String? ubicacionPasillo;
   final String? ubicacionPallet;
+  final String? ubicacionGalpon;
 
   const ConfirmarReingresoResponseModel({
     required this.msg,
@@ -67,6 +72,7 @@ class ConfirmarReingresoResponseModel {
     this.nuevoEstado,
     this.ubicacionPasillo,
     this.ubicacionPallet,
+    this.ubicacionGalpon,
   });
 
   factory ConfirmarReingresoResponseModel.fromJson(Map<String, dynamic> json) {
@@ -77,6 +83,7 @@ class ConfirmarReingresoResponseModel {
       nuevoEstado: json['nuevo_estado']?.toString(),
       ubicacionPasillo: json['ubicacion_pasillo']?.toString(),
       ubicacionPallet: json['ubicacion_pallet']?.toString(),
+      ubicacionGalpon: json['ubicacion_galpon']?.toString(),
     );
   }
 }
@@ -139,6 +146,7 @@ class BodegaService {
     required String idOrdenAnulada,
     String? ubicacionPasillo,
     String? ubicacionPallet,
+    String? ubicacionGalpon,
     http.Client? client,
   }) async {
     final httpClient = client ?? http.Client();
@@ -159,6 +167,8 @@ class BodegaService {
           'ubicacion_pasillo': ubicacionPasillo.trim().toUpperCase(),
         if (ubicacionPallet != null && ubicacionPallet.trim().isNotEmpty)
           'ubicacion_pallet': ubicacionPallet.trim().toUpperCase(),
+        if (ubicacionGalpon != null && ubicacionGalpon.trim().isNotEmpty)
+          'ubicacion_galpon': ubicacionGalpon.trim().toUpperCase(),
       });
 
       final response = await httpClient

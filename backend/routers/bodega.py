@@ -1028,6 +1028,7 @@ def obtener_reingresos_pendientes(
                 sku_qr_fisico=activo.sku_qr_fisico,
                 ubicacion_pallet=activo.ubicacion_pallet,
                 ubicacion_pasillo=activo.ubicacion_pasillo,
+                ubicacion_galpon=activo.ubicacion_galpon,
                 descripcion_pieza=desc_pieza,
                 folio_orden=folio,
             )
@@ -1106,6 +1107,8 @@ def confirmar_reingreso(
 
     try:
         # Actualizar ubicación física si fue suministrada y válida
+        if payload.ubicacion_galpon is not None and payload.ubicacion_galpon.strip():
+            activo.ubicacion_galpon = payload.ubicacion_galpon.strip().upper()
         if payload.ubicacion_pasillo is not None and payload.ubicacion_pasillo.strip():
             activo.ubicacion_pasillo = payload.ubicacion_pasillo.strip().upper()
         if payload.ubicacion_pallet is not None and payload.ubicacion_pallet.strip():
@@ -1129,6 +1132,7 @@ def confirmar_reingreso(
             nuevo_estado="Disponible",
             ubicacion_pasillo=activo.ubicacion_pasillo,
             ubicacion_pallet=activo.ubicacion_pallet,
+            ubicacion_galpon=activo.ubicacion_galpon,
         )
 
     except HTTPException:

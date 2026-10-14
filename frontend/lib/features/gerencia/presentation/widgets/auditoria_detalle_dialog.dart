@@ -168,9 +168,9 @@ class AuditoriaDetalleDialog extends StatelessWidget {
                                 letterSpacing: -0.5,
                               ),
                             ),
-                            if (AuditoriaTablaView.buildBadgeTipoActivo(orden) != null) ...[
+                            if (AuditoriaTablaView.buildBadgesMotorCaja(orden, context: context) != null) ...[
                               const SizedBox(width: 10),
-                              AuditoriaTablaView.buildBadgeTipoActivo(orden)!,
+                              AuditoriaTablaView.buildBadgesMotorCaja(orden, context: context)!,
                             ],
                           ],
                         ),
@@ -484,14 +484,14 @@ class AuditoriaDetalleDialog extends StatelessWidget {
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                              if (art.sku != null && art.sku!.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 2),
-                                  child: Wrap(
-                                    spacing: 6,
-                                    runSpacing: 2,
-                                    crossAxisAlignment: WrapCrossAlignment.center,
-                                    children: [
+                              Padding(
+                                padding: const EdgeInsets.only(top: 3),
+                                child: Wrap(
+                                  spacing: 6,
+                                  runSpacing: 3,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  children: [
+                                    if (art.sku != null && art.sku!.isNotEmpty) ...[
                                       Text(
                                         'SKU: ${art.sku}',
                                         style: AppTypography.small.copyWith(
@@ -517,8 +517,38 @@ class AuditoriaDetalleDialog extends StatelessWidget {
                                         ),
                                       ),
                                     ],
-                                  ),
+                                    if (art.activoAuditado != null)
+                                      AuditoriaTablaView.buildBadgeActivo(
+                                        art.activoAuditado!,
+                                        context: context,
+                                      ),
+                                    if (art.vehiculoOrigenDisplay != null)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFF1F5F9),
+                                          borderRadius: BorderRadius.circular(4),
+                                          border: Border.all(color: const Color(0xFFE2E8F0), width: 0.8),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(Icons.directions_car_rounded, size: 10, color: Color(0xFF64748B)),
+                                            const SizedBox(width: 3),
+                                            Text(
+                                              art.vehiculoOrigenDisplay!,
+                                              style: const TextStyle(
+                                                fontSize: 9.5,
+                                                fontWeight: FontWeight.w600,
+                                                color: Color(0xFF475569),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                  ],
                                 ),
+                              ),
                             ],
                           ),
                         ),
