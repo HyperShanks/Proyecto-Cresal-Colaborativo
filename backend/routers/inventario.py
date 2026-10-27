@@ -223,6 +223,7 @@ def buscar_inventario(
     # Búsqueda por Texto Libre
     if q and q.strip():
         q_term = f"%{q.strip().upper()}%"
+        q_clean = q.strip().upper().replace("-", "").replace(" ", "")
         query = query.filter(
             or_(
                 func.upper(Activo_Inventariado.sku_qr_fisico).like(q_term),
@@ -230,6 +231,10 @@ def buscar_inventario(
                 func.upper(Vehiculo_Origen.marca).like(q_term),
                 func.upper(Vehiculo_Origen.modelo).like(q_term),
                 func.upper(Vehiculo_Origen.numero_ingreso).like(q_term),
+                func.upper(Detalle_Motor.numero_motor).like(q_term),
+                func.upper(Vehiculo_Origen.numero_motor).like(q_term),
+                func.replace(func.replace(func.upper(Detalle_Motor.numero_motor), "-", ""), " ", "").like(f"%{q_clean}%"),
+                func.replace(func.replace(func.upper(Vehiculo_Origen.numero_motor), "-", ""), " ", "").like(f"%{q_clean}%"),
             )
         )
 
@@ -313,12 +318,12 @@ def buscar_inventario(
             transmision_val = motor.transmision_tipo or "N/A"
             cilindrada_val = motor.cilindrada or "N/A"
             combustible_val = motor.combustible or "N/A"
-            numero_motor_val = motor.numero_motor if cat.id_categoria == 1 else None
+            numero_motor_val = motor.numero_motor or (vehiculo.numero_motor if vehiculo else None)
         else:
             transmision_val = "N/A"
             cilindrada_val = "N/A"
             combustible_val = "N/A"
-            numero_motor_val = None
+            numero_motor_val = vehiculo.numero_motor if vehiculo else None
 
         respuesta.append(
             {
@@ -551,12 +556,17 @@ def obtener_catalogo(
 
     if q and q.strip():
         q_term = f"%{q.strip().upper()}%"
+        q_clean = q.strip().upper().replace("-", "").replace(" ", "")
         query = query.filter(
             or_(
                 func.upper(Activo_Inventariado.sku_qr_fisico).like(q_term),
                 func.upper(Categoria_Activo.nombre_categoria).like(q_term),
                 func.upper(Vehiculo_Origen.marca).like(q_term),
                 func.upper(Vehiculo_Origen.modelo).like(q_term),
+                func.upper(Detalle_Motor.numero_motor).like(q_term),
+                func.upper(Vehiculo_Origen.numero_motor).like(q_term),
+                func.replace(func.replace(func.upper(Detalle_Motor.numero_motor), "-", ""), " ", "").like(f"%{q_clean}%"),
+                func.replace(func.replace(func.upper(Vehiculo_Origen.numero_motor), "-", ""), " ", "").like(f"%{q_clean}%"),
             )
         )
 
@@ -615,7 +625,7 @@ def obtener_catalogo(
             cilindrada_val = motor.cilindrada
             combustible_val = motor.combustible
             transmision_val = motor.transmision_tipo
-            numero_motor_val = motor.numero_motor
+            numero_motor_val = motor.numero_motor or (vehiculo.numero_motor if vehiculo else None)
         elif cat.id_categoria == 2:
             transmision_val = caja.transmision_tipo if caja else None
             if motor_donante:
@@ -627,10 +637,12 @@ def obtener_catalogo(
                 cilindrada_val = motor.cilindrada
                 combustible_val = motor.combustible
                 transmision_val = motor.transmision_tipo
-                if cat.id_categoria == 1:
-                    numero_motor_val = motor.numero_motor
+                numero_motor_val = motor.numero_motor or (vehiculo.numero_motor if vehiculo else None)
             elif caja:
                 transmision_val = caja.transmision_tipo
+                numero_motor_val = vehiculo.numero_motor if vehiculo else None
+            else:
+                numero_motor_val = vehiculo.numero_motor if vehiculo else None
 
         item = CatalogoItemResponse(
             id_activo=activo.id_activo,
@@ -942,6 +954,7 @@ def obtener_maestro_inventario(
 
     if q and q.strip():
         q_term = f"%{q.strip().upper()}%"
+        q_clean = q.strip().upper().replace("-", "").replace(" ", "")
         query = query.filter(
             or_(
                 func.upper(Activo_Inventariado.sku_qr_fisico).like(q_term),
@@ -951,6 +964,10 @@ def obtener_maestro_inventario(
                 func.upper(Vehiculo_Origen.numero_ingreso).like(q_term),
                 func.upper(Activo_Inventariado.ubicacion_pasillo).like(q_term),
                 func.upper(Activo_Inventariado.ubicacion_pallet).like(q_term),
+                func.upper(Detalle_Motor.numero_motor).like(q_term),
+                func.upper(Vehiculo_Origen.numero_motor).like(q_term),
+                func.replace(func.replace(func.upper(Detalle_Motor.numero_motor), "-", ""), " ", "").like(f"%{q_clean}%"),
+                func.replace(func.replace(func.upper(Vehiculo_Origen.numero_motor), "-", ""), " ", "").like(f"%{q_clean}%"),
             )
         )
 
@@ -1017,7 +1034,7 @@ def obtener_maestro_inventario(
             cilindrada_val = motor.cilindrada
             combustible_val = motor.combustible
             transmision_val = motor.transmision_tipo
-            numero_motor_val = motor.numero_motor
+            numero_motor_val = motor.numero_motor or (vehiculo.numero_motor if vehiculo else None)
         elif cat.id_categoria == 2:
             transmision_val = caja.transmision_tipo if caja else None
             if motor_donante:
@@ -1029,10 +1046,12 @@ def obtener_maestro_inventario(
                 cilindrada_val = motor.cilindrada
                 combustible_val = motor.combustible
                 transmision_val = motor.transmision_tipo
-                if cat.id_categoria == 1:
-                    numero_motor_val = motor.numero_motor
+                numero_motor_val = motor.numero_motor or (vehiculo.numero_motor if vehiculo else None)
             elif caja:
                 transmision_val = caja.transmision_tipo
+                numero_motor_val = vehiculo.numero_motor if vehiculo else None
+            else:
+                numero_motor_val = vehiculo.numero_motor if vehiculo else None
 
         item = CatalogoItemResponse(
             id_activo=activo.id_activo,

@@ -9,6 +9,9 @@ class KpiFinancieroModel {
   final int acumuladoMensualMtd;
   final double ticketPromedio;
   final double? margenBruto;
+  final int salidasMotoresHoy;
+  final int salidasCajasHoy;
+  final int totalSalidasHoy;
 
   const KpiFinancieroModel({
     required this.ventasDelDia,
@@ -16,6 +19,9 @@ class KpiFinancieroModel {
     required this.acumuladoMensualMtd,
     required this.ticketPromedio,
     this.margenBruto,
+    this.salidasMotoresHoy = 0,
+    this.salidasCajasHoy = 0,
+    this.totalSalidasHoy = 0,
   });
 
   factory KpiFinancieroModel.fromJson(Map<String, dynamic> json) {
@@ -25,6 +31,9 @@ class KpiFinancieroModel {
       acumuladoMensualMtd: (json['acumulado_mensual_mtd'] as num?)?.toInt() ?? 0,
       ticketPromedio: (json['ticket_promedio'] as num?)?.toDouble() ?? 0.0,
       margenBruto: (json['margen_bruto'] as num?)?.toDouble(),
+      salidasMotoresHoy: (json['salidas_motores_hoy'] as num?)?.toInt() ?? 0,
+      salidasCajasHoy: (json['salidas_cajas_hoy'] as num?)?.toInt() ?? 0,
+      totalSalidasHoy: (json['total_salidas_hoy'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -35,6 +44,9 @@ class KpiFinancieroModel {
       'acumulado_mensual_mtd': acumuladoMensualMtd,
       'ticket_promedio': ticketPromedio,
       'margen_bruto': margenBruto,
+      'salidas_motores_hoy': salidasMotoresHoy,
+      'salidas_cajas_hoy': salidasCajasHoy,
+      'total_salidas_hoy': totalSalidasHoy,
     };
   }
 }

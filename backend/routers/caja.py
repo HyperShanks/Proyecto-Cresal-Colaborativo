@@ -740,7 +740,7 @@ def registrar_cobro(
                         activo.reservado_por = None
                         activo.reserva_expira_en = None
                         reserva_vinculada.id_activo_asignado = activo.id_activo
-                        reserva_vinculada.estado_reserva = "Completada"
+                        reserva_vinculada.estado_reserva = "Completada" if orden.estado_orden == "Completada" else "Confirmada"
 
                         qr_hash = f"TX-QR-{uuid.uuid4()}"
                         orden.qr_transaccional_salida = qr_hash
@@ -893,7 +893,7 @@ def registrar_cobro(
                     activo.reserva_expira_en = None
                     
                     reserva.id_activo_asignado = activo.id_activo
-                    reserva.estado_reserva = "Completada"
+                    reserva.estado_reserva = "Completada" if (orden_existente and orden_existente.estado_orden == "Completada") else "Confirmada"
 
                     qr_hash = f"TX-QR-{uuid.uuid4()}"
 

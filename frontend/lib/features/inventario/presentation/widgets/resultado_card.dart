@@ -175,11 +175,45 @@ class ResultadoCard extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        'SKU: $sku',
-                        style: AppTypography.small.copyWith(
-                          color: AppPalette.textSecondary,
-                        ),
+                      Row(
+                        children: [
+                          Text(
+                            'SKU: $sku',
+                            style: AppTypography.small.copyWith(
+                              color: AppPalette.textSecondary,
+                            ),
+                          ),
+                          if (itemCompleto['numero_motor'] != null &&
+                              itemCompleto['numero_motor'].toString().trim().isNotEmpty) ...[
+                            const SizedBox(width: 8),
+                            Text(
+                              '•',
+                              style: AppTypography.small.copyWith(
+                                color: AppPalette.textSecondary,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: AppPalette.primary.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(
+                                  color: AppPalette.primary.withValues(alpha: 0.3),
+                                  width: 0.8,
+                                ),
+                              ),
+                              child: Text(
+                                'Motor: ${itemCompleto['numero_motor']}',
+                                style: AppTypography.small.copyWith(
+                                  color: AppPalette.primary,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                       const SizedBox(height: 8),
                       if (!tieneUbicacion) ...[

@@ -173,11 +173,15 @@ class CatalogoItemCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
 
-                // ── 2. Fila Intermedia: Badge Sucursal + Observación / Reservado ──
+                // ── 2. Fila Intermedia: Badge Sucursal + Motor + Observación / Reservado ──
                 Row(
                   mainAxisAlignment: MainAxisAlignment.start,
                   children: [
                     _buildSucursalBadge(),
+                    if (item.numeroMotor != null && item.numeroMotor!.trim().isNotEmpty) ...[
+                      const SizedBox(width: 8.0),
+                      _buildMotorBadge(item.numeroMotor!.trim()),
+                    ],
                     if (item.esReservado) ...[
                       const SizedBox(width: 8.0),
                       _buildReservadoBadge(),
@@ -322,6 +326,42 @@ class CatalogoItemCard extends StatelessWidget {
           color: const Color(0xFFF59E0B),
           fontWeight: FontWeight.bold,
         ),
+      ),
+    );
+  }
+
+  /// Badge con número de motor
+  Widget _buildMotorBadge(String motor) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+      decoration: BoxDecoration(
+        color: AppPalette.primary.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(6.0),
+        border: Border.all(
+          color: AppPalette.primary.withValues(alpha: 0.35),
+          width: 1.0,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.speed,
+            size: 13.0,
+            color: AppPalette.primary,
+          ),
+          const SizedBox(width: 5.0),
+          Text(
+            'Motor: $motor',
+            style: AppTypography.small.copyWith(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+              color: AppPalette.primary,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     );
   }

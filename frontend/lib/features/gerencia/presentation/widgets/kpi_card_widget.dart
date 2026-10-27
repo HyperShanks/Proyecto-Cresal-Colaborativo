@@ -11,10 +11,13 @@ class KpiCardWidget extends StatefulWidget {
   final String valor;
   final String? badgeTexto;
   final Color? badgeColor;
+  final Widget? badgeWidget;
   final String subtitulo;
   final Widget? subtituloWidget;
   final IconData? icono;
   final Color? valorColor;
+  final VoidCallback? onTap;
+  final bool isLive;
 
   const KpiCardWidget({
     super.key,
@@ -22,10 +25,13 @@ class KpiCardWidget extends StatefulWidget {
     required this.valor,
     this.badgeTexto,
     this.badgeColor,
+    this.badgeWidget,
     this.subtitulo = '',
     this.subtituloWidget,
     this.icono,
     this.valorColor,
+    this.onTap,
+    this.isLive = false,
   });
 
   @override
@@ -39,7 +45,10 @@ class _KpiCardWidgetState extends State<KpiCardWidget> {
   Widget build(BuildContext context) {
     final effectiveBadgeColor = widget.badgeColor ?? AppPalette.success;
 
-    return MouseRegion(
+    final cardContent = MouseRegion(
+      cursor: widget.onTap != null
+          ? SystemMouseCursors.click
+          : SystemMouseCursors.basic,
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       child: AnimatedContainer(
@@ -79,18 +88,22 @@ class _KpiCardWidgetState extends State<KpiCardWidget> {
                         Icon(
                           widget.icono,
                           size: 16,
-                          color: AppPalette.textSecondaryLight,
+                          color: widget.onTap != null && _isHovered
+                              ? AppPalette.primary
+                              : AppPalette.textSecondaryLight,
                         ),
                         const SizedBox(width: 6),
                       ],
                       Flexible(
                         child: Text(
                           widget.titulo.toUpperCase(),
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w800,
                             letterSpacing: 0.8,
-                            color: Color(0xFF94A3B8), // Slate 400
+                            color: widget.onTap != null && _isHovered
+                                ? AppPalette.primary
+                                : const Color(0xFF94A3B8), // Slate 400
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -98,7 +111,11 @@ class _KpiCardWidgetState extends State<KpiCardWidget> {
                     ],
                   ),
                 ),
-                if (widget.badgeTexto != null &&
+                if (widget.badgeWidget != null)
+                  widget.badgeWidget!
+                else if (widget.isLive)
+                  _buildLiveBadge()
+                else if (widget.badgeTexto != null &&
                     widget.badgeTexto!.trim().isNotEmpty)
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -158,6 +175,49 @@ class _KpiCardWidgetState extends State<KpiCardWidget> {
               const SizedBox(height: 14),
           ],
         ),
+      ),
+    );
+
+    if (widget.onTap != null) {
+      return GestureDetector(
+        onTap: widget.onTap,
+        child: cardContent,
+      );
+    }
+
+    return cardContent;
+  }
+
+  Widget _buildLiveBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: const Color(0xFFECFDF5), // Emerald 50
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFA7F3D0)), // Emerald 200
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 7,
+            height: 7,
+            decoration: const BoxDecoration(
+              color: Color(0xFF10B981), // Emerald 500
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 5),
+          const Text(
+            'EN VIVO',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.6,
+              color: Color(0xFF047857), // Emerald 700
+            ),
+          ),
+        ],
       ),
     );
   }

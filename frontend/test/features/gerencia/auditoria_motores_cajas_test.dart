@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/features/caja/models/historial_caja_model.dart';
 import 'package:frontend/features/gerencia/presentation/widgets/auditoria_tabla_view.dart';
-import 'package:frontend/features/gerencia/presentation/widgets/auditoria_detalle_dialog.dart';
 
 void main() {
   group('SPEC CRES-240: Clasificación y Detección Semántica de Motores y Cajas', () {

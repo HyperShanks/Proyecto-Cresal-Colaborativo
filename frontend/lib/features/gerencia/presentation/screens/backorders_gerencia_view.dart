@@ -10,6 +10,7 @@ import '../../../../core/services/api_service.dart';
 import '../../models/backorder_gerencia_models.dart';
 import '../../services/gerencia_service.dart';
 import '../widgets/kpi_card_widget.dart';
+import '../widgets/backorder_auditoria_dialog.dart';
 import '../../../../core/widgets/cresal_filter_dropdown.dart';
 
 /// Visor Centralizado de Reservas y Backorders (HU-5.4).
@@ -558,7 +559,7 @@ class BackordersGerenciaViewState extends State<BackordersGerenciaView> {
           else
             LayoutBuilder(
               builder: (context, constraints) {
-                final tableWidth = math.max(constraints.maxWidth, 1150.0);
+                final tableWidth = math.max(constraints.maxWidth, 1260.0);
                 return SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: SizedBox(
@@ -589,9 +590,11 @@ class BackordersGerenciaViewState extends State<BackordersGerenciaView> {
                               _buildHeaderCell('SALDO PENDIENTE', flex: 11, alignment: Alignment.centerRight),
                               _buildHeaderCell('ESTADO RESERVA', flex: 12, alignment: Alignment.center),
                               _buildHeaderCell('MATCH / ASIGNACIÓN', flex: 13, alignment: Alignment.center),
+                              _buildHeaderCell('ACCIONES', flex: 11, alignment: Alignment.center),
                             ],
                           ),
                         ),
+
 
                         // Filas de Datos con divisores y alineación proporcional
                         ListView.separated(
@@ -653,14 +656,31 @@ class BackordersGerenciaViewState extends State<BackordersGerenciaView> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
-                  b.folio,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontFamily: 'monospace',
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1E293B),
-                  ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      b.folio,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontFamily: 'monospace',
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1E293B),
+                      ),
+                    ),
+                    if (b.ordenFolio != null && b.ordenFolio!.isNotEmpty) ...[
+                      const SizedBox(width: 4),
+                      Text(
+                        '(${b.ordenFolio})',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontFamily: 'monospace',
+                          color: Color(0xFF64748B),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -836,9 +856,40 @@ class BackordersGerenciaViewState extends State<BackordersGerenciaView> {
               child: _buildMatchBadge(b.idActivoAsignado, b.activoAsignadoSku),
             ),
           ),
+
+          // 10. Acciones / Auditoría
+          Expanded(
+            flex: 11,
+            child: Align(
+              alignment: Alignment.center,
+              child: ElevatedButton.icon(
+                key: Key('btn_auditar_${b.idReserva}'),
+                onPressed: () => BackorderAuditoriaDialog.show(context, b),
+                icon: const Icon(Icons.manage_search_rounded, size: 15),
+                label: const Text('Auditar'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFF0F9FF), // Sky 50
+                  foregroundColor: const Color(0xFF0284C7), // Sky 600
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(6),
+                    side: const BorderSide(color: Color(0xFFBAE6FD)),
+                  ),
+                  textStyle: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
+
   }
 
   // Badge para la categoría requerida (Motor vs Caja de Cambios)

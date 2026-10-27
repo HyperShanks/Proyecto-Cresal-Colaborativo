@@ -24,4 +24,8 @@ from .gerencia_schemas import (
     BackorderGerenciaListResponse,
     BackorderGerenciaKpisDTO,
     SucursalGerenciaDTO,
+    BackorderMovimientoDTO,
+    BackorderPagoDetalleDTO,
+    BackorderAuditoriaResponseDTO,
 )
+

@@ -521,7 +521,7 @@ class _BuscadorScreenState extends State<BuscadorScreen> {
                       onChanged: _onSearchChanged,
                       style: AppTypography.body,
                       decoration: InputDecoration(
-                        hintText: 'Buscar por marca, modelo o SKU...',
+                        hintText: 'Buscar por marca, modelo, SKU o N° motor...',
                         hintStyle: AppTypography.body.copyWith(
                           color: AppPalette.textSecondary,
                           fontSize: 14,

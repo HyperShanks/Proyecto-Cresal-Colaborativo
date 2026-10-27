@@ -30,6 +30,18 @@ class KpiFinancieroDTO(BaseModel):
         default=64.8,
         description="Porcentaje estimado de margen bruto"
     )
+    salidas_motores_hoy: int = Field(
+        default=0,
+        description="Cantidad de motores inventariados (MOT-XXXX) salidos/vendidos hoy"
+    )
+    salidas_cajas_hoy: int = Field(
+        default=0,
+        description="Cantidad de cajas de cambio inventariadas (CAJ-XXXX) salidas/vendidas hoy"
+    )
+    total_salidas_hoy: int = Field(
+        default=0,
+        description="Total de piezas inventariadas (MOT y CAJ) salidas/vendidas hoy"
+    )
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -146,6 +158,8 @@ class BackorderGerenciaItemDTO(BaseModel):
     id_activo_asignado: Optional[str] = Field(default=None, description="UUID del repuesto donante asignado")
     activo_asignado_sku: Optional[str] = Field(default=None, description="SKU QR físico del repuesto asignado")
     id_orden: Optional[str] = Field(default=None, description="UUID de la orden de venta final generada")
+    orden_folio: Optional[str] = Field(default=None, description="Folio comercial de la orden vinculada (ej. ORD-0436)")
+    estado_orden: Optional[str] = Field(default=None, description="Estado operativo de la orden vinculada (Reservada, Pagada, Anulada, Completada)")
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -177,3 +191,90 @@ class SucursalGerenciaDTO(BaseModel):
     es_casa_matriz: bool = Field(default=False, description="Indica si corresponde a la Casa Matriz de Cresal")
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ==========================================
+# DTOs PARA AUDITORÍA Y PERITAJE DE BACKORDERS
+# ==========================================
+
+class BackorderMovimientoDTO(BaseModel):
+    """Hito cronológico con marca temporal y descripción de auditoría forense."""
+    hora: str = Field(description="Fecha y hora del evento (ej: '27/10/26 15:30 hrs')")
+    evento: str = Field(description="Descripción del hito con responsable y detalles")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class BackorderPagoDetalleDTO(BaseModel):
+    """Detalle individual de abono o pago registrado."""
+    id_transaccion: Optional[str] = Field(default=None, description="UUID de la transacción de pago")
+    metodo_pago: str = Field(description="Método de pago: Efectivo, Débito, Crédito, etc.")
+    monto: int = Field(description="Monto liquidado o abonado en CLP")
+    fecha_pago: Optional[str] = Field(default=None, description="Fecha formateada del pago")
+    cajero_nombre: Optional[str] = Field(default=None, description="Nombre de la cajera o cajero receptor")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class BackorderAuditoriaResponseDTO(BaseModel):
+    """
+    DTO exhaustivo para el peritaje y auditoría 360° de una Venta en Verde (Backorder).
+    Estructurado en 3 secciones requeridas:
+    1. Cabecera y Resumen de la Operación (Folios, estado, ficha técnica repuesto, balance financiero).
+    2. Ficha de Identificación del Cliente (Nombre, RUT, Teléfono, Correo).
+    3. Línea de Tiempo y Trazabilidad Cronológica (Timeline secuencial de hitos con responsable).
+    """
+    id_reserva: str = Field(description="UUID de la reserva")
+    folio: str = Field(description="Folio amigable de la reserva (ej. RES-5401)")
+    fecha_creacion: str = Field(description="Fecha amigable o relativa de creación")
+    fecha_creacion_iso: str = Field(description="Estampa temporal ISO UTC")
+    estado_reserva: str = Field(description="Estado operativo actual unificado")
+
+    # Folio y Orden vinculada
+    id_orden: Optional[str] = Field(default=None, description="UUID de la orden vinculada")
+    orden_folio: Optional[str] = Field(default=None, description="Folio comercial ORD-XXXX")
+    estado_orden: Optional[str] = Field(default=None, description="Estado de la orden vinculada")
+
+    # Ficha del Cliente
+    id_cliente: str = Field(description="UUID del cliente")
+    cliente_nombre: str = Field(description="Nombre completo o Razón Social del cliente")
+    cliente_rut: Optional[str] = Field(default=None, description="RUT o Cédula de Identidad")
+    cliente_telefono: Optional[str] = Field(default=None, description="Teléfono de contacto")
+    cliente_correo: Optional[str] = Field(default=None, description="Correo electrónico del cliente")
+
+    # Responsables
+    id_vendedor: str = Field(description="UUID del vendedor")
+    vendedor_nombre: str = Field(description="Nombre del vendedor emisor")
+    id_sucursal: int = Field(description="ID de la sucursal de registro")
+    sucursal_nombre: str = Field(description="Nombre de la sucursal emisora")
+
+    # Ficha Técnica Requerida
+    id_categoria_requerida: int = Field(description="ID de categoría requerida")
+    categoria_nombre: str = Field(description="Nombre de la categoría (Motor, Caja de Cambios)")
+    marca_requerida: str = Field(description="Marca del repuesto")
+    modelo_requerido: str = Field(description="Modelo del vehículo")
+    anio_requerido: Optional[int] = Field(default=None, description="Año del vehículo")
+    cilindrada_requerida: Optional[str] = Field(default=None, description="Cilindrada")
+    combustible_requerido: Optional[str] = Field(default=None, description="Tipo de combustible")
+    transmision_requerida: Optional[str] = Field(default=None, description="Tipo de transmisión")
+    notas_preparacion: Optional[str] = Field(default=None, description="Notas técnicas o de mesón")
+
+    # Desglose Financiero
+    precio_acordado: int = Field(description="Precio comercial pactado con el cliente")
+    descuento: int = Field(default=0, description="Descuento comercial aplicado")
+    monto_abonado: int = Field(description="Monto acumulado recaudado en abonos y señas")
+    saldo_pendiente: int = Field(description="Saldo restante por pagar")
+
+    # Asignación de Pieza Física / Vehículo Donante
+    id_activo_asignado: Optional[str] = Field(default=None, description="UUID del activo asignado")
+    activo_asignado_sku: Optional[str] = Field(default=None, description="SKU QR físico del repuesto")
+    vehiculo_donante_ingreso: Optional[str] = Field(default=None, description="N° de Ingreso del vehículo donante")
+    vehiculo_donante_patente: Optional[str] = Field(default=None, description="Patente del vehículo donante")
+    vehiculo_donante_descripcion: Optional[str] = Field(default=None, description="Marca, modelo y año del donante")
+
+    # Desglose de pagos y línea de tiempo
+    desglose_pagos: List[BackorderPagoDetalleDTO] = Field(default_factory=list, description="Lista de pagos y abonos")
+    movimientos: List[BackorderMovimientoDTO] = Field(default_factory=list, description="Línea de tiempo cronológica de hitos")
+
+    model_config = ConfigDict(from_attributes=True)
+

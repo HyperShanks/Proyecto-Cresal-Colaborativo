@@ -615,7 +615,7 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
       ),
       decoration: InputDecoration(
         isDense: true,
-        hintText: 'Buscar por SKU, Marca, Pasillo (A, B, C), Pallet o N° Ingreso...',
+        hintText: 'Buscar por SKU, Marca, N° Motor, Pasillo, Pallet o N° Ingreso...',
         hintStyle: AppTypography.small.copyWith(
           color: AppPalette.textSecondaryLight.withValues(alpha: 0.7),
           fontSize: 12,
@@ -1087,6 +1087,8 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                       spacing: 6,
                       runSpacing: 4,
                       children: [
+                        if (item.numeroMotor != null && item.numeroMotor!.trim().isNotEmpty)
+                          _buildSpecChip('Motor: ${item.numeroMotor!}'),
                         if (item.combustible != null)
                           _buildSpecChip(item.combustible!),
                         if (item.transmisionTipo != null)
@@ -1654,7 +1656,7 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            '${item.combustible ?? ""} • ${item.transmisionTipo ?? ""}${item.cilindrada != null ? " • ${item.cilindrada!}L" : ""}',
+                            '${item.combustible ?? ""} • ${item.transmisionTipo ?? ""}${item.cilindrada != null ? " • ${item.cilindrada!}L" : ""}${item.numeroMotor != null && item.numeroMotor!.trim().isNotEmpty ? " • Motor: ${item.numeroMotor!}" : ""}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),

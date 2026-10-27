@@ -856,6 +856,12 @@ def escanear_salida(
         orden.estado_orden = "Completada"
         orden.fecha_actualizacion = datetime.now()
 
+        # Si la orden tiene compras en verde / backorders vinculados, marcarlas formalmente como 'Completada' tras la salida física
+        reservas_salida = db.query(Reservas_Backorder).filter(Reservas_Backorder.id_orden == orden.id_orden).all()
+        for r_bo in reservas_salida:
+            r_bo.estado_reserva = "Completada"
+            r_bo.fecha_actualizacion = datetime.now(timezone.utc)
+
         # Si la orden corresponde a un despacho (courier), marcar el despacho como 'Enviado'
         despacho_db = db.query(Despacho).filter(Despacho.id_orden == orden.id_orden).first()
         if despacho_db:

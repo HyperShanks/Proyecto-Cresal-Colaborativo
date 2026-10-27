@@ -575,7 +575,7 @@ class CatalogoScreenState extends State<CatalogoScreen> with RouteAware {
                       onChanged: _onSearchChanged,
                       style: AppTypography.body,
                       decoration: InputDecoration(
-                        hintText: 'Buscar repuesto, marca, modelo o SKU...',
+                        hintText: 'Buscar repuesto, marca, modelo, SKU o N° motor...',
                         hintStyle: AppTypography.body.copyWith(
                           color: AppPalette.textSecondary,
                           fontSize: 14,

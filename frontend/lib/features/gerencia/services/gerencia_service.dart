@@ -457,5 +457,38 @@ class GerenciaService {
       ),
     ];
   }
+
+  /// Consulta la auditoría forense completa de una Venta en Verde (Backorder).
+  /// Retorna ficha de cliente, datos técnicos, orden vinculada, pagos y bitácora cronológica.
+  static Future<BackorderAuditoriaModel> obtenerAuditoriaBackorder(String idReserva) async {
+    try {
+      final uri = Uri.parse('${ApiConstants.gerenciaEndpoint}/backorders/$idReserva/auditoria');
+      final response = await ApiService.get(uri);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        return BackorderAuditoriaModel.fromJson(data);
+      } else {
+        final msg = ApiService.extraerMensajeError(
+          response,
+          fallback: 'No fue posible cargar el detalle de auditoría de la venta en verde.',
+        );
+        throw CustomApiException(
+          messageUser: msg,
+          errorCode: 'BACKORDER_AUDITORIA_DATA_ERROR',
+          statusCode: response.statusCode,
+        );
+      }
+    } on CustomApiException {
+      rethrow;
+    } catch (e) {
+      throw CustomApiException(
+        messageUser: 'Error de red al consultar la auditoría de la venta en verde.',
+        errorCode: 'BACKORDER_AUDITORIA_NETWORK_ERROR',
+        messageDev: e.toString(),
+      );
+    }
+  }
 }
+
 

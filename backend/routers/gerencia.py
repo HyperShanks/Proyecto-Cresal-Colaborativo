@@ -7,9 +7,10 @@ el pulso financiero y la carga operativa de bodega.
 
 from datetime import datetime, time, timezone
 from typing import Optional, List
+import uuid
 from zoneinfo import ZoneInfo
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy import or_, and_, func, cast, String
+from fastapi import APIRouter, Depends, Query, HTTPException
+from sqlalchemy import or_, and_, not_, func, cast, String
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -25,6 +26,8 @@ from models import (
     Sucursal,
     Categoria_Activo,
     Reservas_Backorder,
+    Vehiculo_Origen,
+    Auditoria_Barrera,
 )
 from core.security import require_gerencia_role, require_gerencia_o_auditor_central
 from schemas import (
@@ -36,6 +39,9 @@ from schemas import (
     BackorderGerenciaListResponse,
     BackorderGerenciaKpisDTO,
     SucursalGerenciaDTO,
+    BackorderAuditoriaResponseDTO,
+    BackorderPagoDetalleDTO,
+    BackorderMovimientoDTO,
 )
 
 # Inicializo el router con el prefijo /api/v1/gerencia y tag para Swagger
@@ -195,12 +201,89 @@ def obtener_kpis_financieros(
     pagos_mtd = query_mtd.all()
     acumulado_mensual_mtd = sum(p.monto for p in pagos_mtd)
 
+    # 3. Salidas en Tiempo Real: Motores y Cajas Inventariadas de hoy
+    ordenes_salidas_ids = {
+        p.id_orden for p in pagos_hoy if p.id_orden is not None
+    }
+    query_ordenes_activas_hoy = (
+        db.query(Orden_Venta.id_orden)
+        .filter(
+            Orden_Venta.estado_orden.in_(["Pagada", "Despachada", "Completada"]),
+            func.coalesce(Orden_Venta.fecha_actualizacion, Orden_Venta.fecha_creacion).between(inicio_hoy_utc, fin_hoy_utc),
+            Orden_Venta.estado_orden != "Anulada",
+        )
+    )
+    if id_sucursal is not None:
+        query_ordenes_activas_hoy = query_ordenes_activas_hoy.filter(
+            Orden_Venta.id_sucursal == id_sucursal
+        )
+    for r in query_ordenes_activas_hoy.all():
+        ordenes_salidas_ids.add(r[0])
+
+    salidas_motores_hoy = 0
+    salidas_cajas_hoy = 0
+
+    if ordenes_salidas_ids:
+        detalles_inventariados = (
+            db.query(
+                Detalle_Orden.cantidad,
+                Activo_Inventariado.sku_qr_fisico,
+                Categoria_Activo.nombre_categoria,
+            )
+            .join(Activo_Inventariado, Detalle_Orden.id_activo == Activo_Inventariado.id_activo)
+            .outerjoin(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
+            .filter(Detalle_Orden.id_orden.in_(ordenes_salidas_ids))
+            .all()
+        )
+        for cant, sku, nom_cat in detalles_inventariados:
+            sku_upper = (sku or "").strip().upper()
+            cat_upper = (nom_cat or "").strip().upper()
+            c = cant if (cant and cant > 0) else 1
+            if sku_upper.startswith("MOT-") or "MOTOR" in cat_upper:
+                salidas_motores_hoy += c
+            elif sku_upper.startswith("CAJ-") or "CAJA" in cat_upper or "TRANSMISI" in cat_upper:
+                salidas_cajas_hoy += c
+
+    reservas_pagadas_hoy_ids = {
+        p.id_reserva for p in pagos_hoy if p.id_reserva is not None
+    }
+    if reservas_pagadas_hoy_ids:
+        query_reservas_activos = (
+            db.query(
+                Activo_Inventariado.sku_qr_fisico,
+                Categoria_Activo.nombre_categoria,
+            )
+            .join(Reservas_Backorder, Reservas_Backorder.id_activo_asignado == Activo_Inventariado.id_activo)
+            .outerjoin(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
+            .filter(
+                Reservas_Backorder.id_reserva.in_(reservas_pagadas_hoy_ids),
+                Reservas_Backorder.estado_reserva != "Anulada",
+                or_(
+                    Reservas_Backorder.id_orden.is_(None),
+                    not_(Reservas_Backorder.id_orden.in_(ordenes_salidas_ids)),
+                ),
+            )
+            .all()
+        )
+        for sku, nom_cat in query_reservas_activos:
+            sku_upper = (sku or "").strip().upper()
+            cat_upper = (nom_cat or "").strip().upper()
+            if sku_upper.startswith("MOT-") or "MOTOR" in cat_upper:
+                salidas_motores_hoy += 1
+            elif sku_upper.startswith("CAJ-") or "CAJA" in cat_upper or "TRANSMISI" in cat_upper:
+                salidas_cajas_hoy += 1
+
+    total_salidas_hoy = salidas_motores_hoy + salidas_cajas_hoy
+
     return KpiFinancieroDTO(
         ventas_del_dia=ventas_del_dia,
         transacciones_hoy=transacciones_hoy,
         acumulado_mensual_mtd=acumulado_mensual_mtd,
         ticket_promedio=ticket_promedio,
         margen_bruto=64.8,
+        salidas_motores_hoy=salidas_motores_hoy,
+        salidas_cajas_hoy=salidas_cajas_hoy,
+        total_salidas_hoy=total_salidas_hoy,
     )
 
 
@@ -440,6 +523,12 @@ def format_relative_chile_date(dt: Optional[datetime]) -> str:
         return dt_local.strftime("%d/%m/%Y %H:%M")
 
 
+def format_clp(amount: int) -> str:
+    """Formatea montos enteros a formato moneda chilena ($XX.XXX)."""
+    return f"${amount:,}".replace(",", ".")
+
+
+
 @router.get(
     "/backorders",
     response_model=BackorderGerenciaListResponse,
@@ -476,7 +565,47 @@ def obtener_backorders_gerencia(
         query = query.filter(Reservas_Backorder.id_sucursal_registro == id_sucursal)
 
     if estado and estado.strip() and estado.lower() != "todos":
-        query = query.filter(Reservas_Backorder.estado_reserva == estado.strip())
+        est_val = estado.strip().capitalize()
+        if est_val.lower() == "anulada":
+            query = query.filter(
+                or_(
+                    Reservas_Backorder.estado_reserva == "Anulada",
+                    Orden_Venta.estado_orden == "Anulada",
+                )
+            )
+        elif est_val.lower() == "completada":
+            query = query.filter(
+                or_(
+                    and_(
+                        Reservas_Backorder.estado_reserva == "Completada",
+                        or_(Orden_Venta.estado_orden.is_(None), Orden_Venta.estado_orden == "Completada"),
+                    ),
+                    Orden_Venta.estado_orden == "Completada",
+                ),
+                Reservas_Backorder.estado_reserva != "Anulada",
+                or_(Orden_Venta.estado_orden.is_(None), Orden_Venta.estado_orden != "Anulada"),
+                or_(Orden_Venta.estado_orden.is_(None), ~Orden_Venta.estado_orden.in_(["Reservada", "Pagada"])),
+            )
+        elif est_val.lower() == "confirmada":
+            query = query.filter(
+                or_(
+                    Reservas_Backorder.estado_reserva == "Confirmada",
+                    and_(
+                        Reservas_Backorder.estado_reserva == "Completada",
+                        Orden_Venta.estado_orden.in_(["Reservada", "Pagada"]),
+                    ),
+                ),
+                Reservas_Backorder.estado_reserva != "Anulada",
+                or_(Orden_Venta.estado_orden.is_(None), Orden_Venta.estado_orden != "Anulada"),
+                or_(Orden_Venta.estado_orden.is_(None), Orden_Venta.estado_orden != "Completada"),
+            )
+        elif est_val.lower() == "pendiente":
+            query = query.filter(
+                Reservas_Backorder.estado_reserva == "Pendiente",
+                or_(Orden_Venta.estado_orden.is_(None), Orden_Venta.estado_orden != "Anulada"),
+            )
+        else:
+            query = query.filter(Reservas_Backorder.estado_reserva == est_val)
 
     if q and q.strip():
         term = f"%{q.strip().lower()}%"
@@ -495,8 +624,13 @@ def obtener_backorders_gerencia(
 
     total_count = query.count()
 
+    # Coherencia con reversas financieras: excluir órdenes/reservas anuladas de la recaudación de señas
+    query_senas = query.filter(
+        Reservas_Backorder.estado_reserva != "Anulada",
+        or_(Orden_Venta.estado_orden.is_(None), Orden_Venta.estado_orden != "Anulada"),
+    )
     total_senas = (
-        query.with_entities(func.coalesce(func.sum(Reservas_Backorder.monto_abonado), 0)).scalar()
+        query_senas.with_entities(func.coalesce(func.sum(Reservas_Backorder.monto_abonado), 0)).scalar()
         if total_count > 0 else 0
     )
 
@@ -513,8 +647,21 @@ def obtener_backorders_gerencia(
         cat_nombre = cat.nombre_categoria if cat else "Repuesto"
         sku_fisico = act.sku_qr_fisico if act else None
 
+        # Sincronización y unificación de estado con la orden transaccional vinculada
+        estado_auditoria = res.estado_reserva
+        if ord_vinc:
+            if ord_vinc.estado_orden == "Anulada":
+                estado_auditoria = "Anulada"
+            elif ord_vinc.estado_orden == "Completada":
+                estado_auditoria = "Completada"
+            elif ord_vinc.estado_orden in ["Reservada", "Pagada"] and res.estado_reserva == "Completada":
+                # Regla de completitud validada: si aún no fue entregada formalmente en bodega, figura como Confirmada
+                estado_auditoria = "Confirmada"
+
         desc_val = getattr(ord_vinc, "descuento", 0) or 0 if ord_vinc else 0
-        if ord_vinc and (ord_vinc.estado_orden == "Pagada" or ord_vinc.monto_pendiente == 0):
+        if estado_auditoria == "Anulada":
+            saldo_calc = 0
+        elif ord_vinc and (ord_vinc.estado_orden == "Pagada" or ord_vinc.monto_pendiente == 0):
             saldo_calc = 0
         elif ord_vinc and ord_vinc.monto_pendiente is not None:
             saldo_calc = ord_vinc.monto_pendiente
@@ -547,10 +694,12 @@ def obtener_backorders_gerencia(
             descuento=desc_val,
             monto_abonado=res.monto_abonado or 0,
             saldo_pendiente=saldo_calc,
-            estado_reserva=res.estado_reserva,
+            estado_reserva=estado_auditoria,
             id_activo_asignado=str(res.id_activo_asignado) if res.id_activo_asignado else None,
             activo_asignado_sku=sku_fisico,
             id_orden=str(res.id_orden) if res.id_orden else None,
+            orden_folio=ord_vinc.folio if ord_vinc else None,
+            estado_orden=ord_vinc.estado_orden if ord_vinc else None,
         )
         items.append(item_dto)
 
@@ -571,32 +720,57 @@ def obtener_kpis_backorders_gerencia(
     current_user: Usuario = Depends(require_gerencia_o_auditor_central),
     db: Session = Depends(get_db),
 ):
-    query = db.query(Reservas_Backorder)
+    query = (
+        db.query(Reservas_Backorder)
+        .outerjoin(Orden_Venta, Reservas_Backorder.id_orden == Orden_Venta.id_orden)
+    )
     if id_sucursal is not None:
         query = query.filter(Reservas_Backorder.id_sucursal_registro == id_sucursal)
 
-    # 1. Total Backorders Activos (Pendiente o Confirmada)
-    total_activos = query.filter(
-        Reservas_Backorder.estado_reserva.in_(["Pendiente", "Confirmada"])
+    # Coherencia con reversas financieras: filtrar órdenes y reservas anuladas
+    query_validas = query.filter(
+        Reservas_Backorder.estado_reserva != "Anulada",
+        or_(Orden_Venta.estado_orden.is_(None), Orden_Venta.estado_orden != "Anulada"),
+    )
+
+    # 1. Total Backorders Activos (Pendiente o Confirmada, o Pagada sin entrega formal)
+    total_activos = query_validas.filter(
+        or_(
+            Reservas_Backorder.estado_reserva.in_(["Pendiente", "Confirmada"]),
+            and_(
+                Reservas_Backorder.estado_reserva == "Completada",
+                Orden_Venta.estado_orden.in_(["Reservada", "Pagada"]),
+            ),
+        ),
+        or_(Orden_Venta.estado_orden.is_(None), Orden_Venta.estado_orden != "Completada"),
     ).count()
 
     # 2. Capital Retenido en Abonos (Suma de señas de reservas activas)
     capital_retenido = (
-        query.filter(Reservas_Backorder.estado_reserva.in_(["Pendiente", "Confirmada"]))
+        query_validas.filter(
+            or_(
+                Reservas_Backorder.estado_reserva.in_(["Pendiente", "Confirmada"]),
+                and_(
+                    Reservas_Backorder.estado_reserva == "Completada",
+                    Orden_Venta.estado_orden.in_(["Reservada", "Pagada"]),
+                ),
+            ),
+            or_(Orden_Venta.estado_orden.is_(None), Orden_Venta.estado_orden != "Completada"),
+        )
         .with_entities(func.coalesce(func.sum(Reservas_Backorder.monto_abonado), 0))
         .scalar()
     ) or 0
 
-    # 3. Listos para Liquidar (Activos con match físico asignado)
-    listos_para_liquidar = query.filter(
-        Reservas_Backorder.estado_reserva.in_(["Pendiente", "Confirmada"]),
+    # 3. Listos para Liquidar (Activos con match físico asignado pero aún no completados)
+    listos_para_liquidar = query_validas.filter(
         Reservas_Backorder.id_activo_asignado.isnot(None),
+        or_(Orden_Venta.estado_orden.is_(None), Orden_Venta.estado_orden != "Completada"),
     ).count()
 
     # Totales globales
     total_registrados = query.count()
     total_recaudado_senas = (
-        query.with_entities(func.coalesce(func.sum(Reservas_Backorder.monto_abonado), 0))
+        query_validas.with_entities(func.coalesce(func.sum(Reservas_Backorder.monto_abonado), 0))
         .scalar()
     ) or 0
 
@@ -607,3 +781,252 @@ def obtener_kpis_backorders_gerencia(
         total_registrados=total_registrados,
         total_recaudado_senas=total_recaudado_senas,
     )
+
+
+@router.get(
+    "/backorders/{id_reserva}/auditoria",
+    response_model=BackorderAuditoriaResponseDTO,
+    summary="Auditoría Forense Completa de una Venta en Verde (Backorder)",
+)
+def obtener_auditoria_backorder_gerencia(
+    id_reserva: str,
+    current_user: Usuario = Depends(require_gerencia_o_auditor_central),
+    db: Session = Depends(get_db),
+):
+    try:
+        reserva_uuid = uuid.UUID(id_reserva)
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=400, detail="ID de reserva inválido")
+
+    reserva = (
+        db.query(Reservas_Backorder)
+        .filter(Reservas_Backorder.id_reserva == reserva_uuid)
+        .first()
+    )
+    if not reserva:
+        raise HTTPException(status_code=404, detail="Reserva de backorder no encontrada")
+
+    cliente = db.query(Cliente).filter(Cliente.id_cliente == reserva.id_cliente).first()
+    vendedor = db.query(Usuario).filter(Usuario.id_usuario == reserva.id_vendedor).first()
+    sucursal = db.query(Sucursal).filter(Sucursal.id_sucursal == reserva.id_sucursal_registro).first()
+    categoria = db.query(Categoria_Activo).filter(Categoria_Activo.id_categoria == reserva.id_categoria_requerida).first()
+
+    orden = None
+    cajera = None
+    usuario_anulacion = None
+    if reserva.id_orden:
+        orden = db.query(Orden_Venta).filter(Orden_Venta.id_orden == reserva.id_orden).first()
+        if orden:
+            if orden.id_cajera:
+                cajera = db.query(Usuario).filter(Usuario.id_usuario == orden.id_cajera).first()
+            if orden.id_usuario_anulacion:
+                usuario_anulacion = db.query(Usuario).filter(Usuario.id_usuario == orden.id_usuario_anulacion).first()
+
+    activo = None
+    vehiculo_donante = None
+    if reserva.id_activo_asignado:
+        activo = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == reserva.id_activo_asignado).first()
+        if activo and activo.id_vehiculo:
+            vehiculo_donante = db.query(Vehiculo_Origen).filter(Vehiculo_Origen.id_vehiculo == activo.id_vehiculo).first()
+
+    # Transacciones de pago vinculadas a la reserva o a la orden final
+    filtro_pagos = [Transaccion_Pago.id_reserva == reserva.id_reserva]
+    if orden:
+        filtro_pagos.append(Transaccion_Pago.id_orden == orden.id_orden)
+
+    pagos = (
+        db.query(Transaccion_Pago)
+        .filter(or_(*filtro_pagos))
+        .order_by(Transaccion_Pago.fecha_pago.asc())
+        .all()
+    )
+
+    # Auditoría de barrera de salida
+    auditoria_barrera = None
+    bodeguero_barrera = None
+    if orden:
+        auditoria_barrera = db.query(Auditoria_Barrera).filter(Auditoria_Barrera.id_orden == orden.id_orden).first()
+        if auditoria_barrera and auditoria_barrera.id_bodeguero:
+            bodeguero_barrera = db.query(Usuario).filter(Usuario.id_usuario == auditoria_barrera.id_bodeguero).first()
+
+    # Fechas formateadas
+    res_dt = (reserva.fecha_creacion.replace(tzinfo=timezone.utc) if reserva.fecha_creacion and reserva.fecha_creacion.tzinfo is None else reserva.fecha_creacion or datetime.now(timezone.utc)).astimezone(tz_chile)
+    res_fecha_26 = res_dt.strftime("%d/%m/%y")
+    res_hora = res_dt.strftime("%H:%M")
+    fecha_creacion_formateada = f"{res_fecha_26} {res_hora} hrs"
+    fecha_iso = reserva.fecha_creacion.isoformat() if reserva.fecha_creacion else ""
+
+    folio_str = f"RES-{str(reserva.id_reserva).replace('-', '')[:4].upper()}"
+    cliente_nombre = f"{cliente.nombres or ''} {cliente.apellidos or ''}".strip() if cliente else "Cliente no registrado"
+    vendedor_nombre = f"{vendedor.nombres or ''} {vendedor.apellidos or ''}".strip() if vendedor else "Vendedor no asignado"
+    cajera_nombre = f"{cajera.nombres or ''} {cajera.apellidos or ''}".strip() if cajera else None
+    suc_nombre = sucursal.nombre_sucursal if sucursal else f"Sucursal {reserva.id_sucursal_registro}"
+    cat_nombre = categoria.nombre_categoria if categoria else "Repuesto"
+
+    # Sincronización y unificación de estado con la orden transaccional vinculada
+    estado_auditoria = reserva.estado_reserva
+    if orden:
+        if orden.estado_orden == "Anulada":
+            estado_auditoria = "Anulada"
+        elif orden.estado_orden == "Completada":
+            estado_auditoria = "Completada"
+        elif orden.estado_orden in ["Reservada", "Pagada"] and reserva.estado_reserva == "Completada":
+            estado_auditoria = "Confirmada"
+
+    desc_val = getattr(orden, "descuento", 0) or 0 if orden else 0
+    if estado_auditoria == "Anulada":
+        saldo_calc = 0
+    elif orden and (orden.estado_orden == "Pagada" or orden.monto_pendiente == 0):
+        saldo_calc = 0
+    elif orden and orden.monto_pendiente is not None:
+        saldo_calc = orden.monto_pendiente
+    else:
+        saldo_calc = max(0, reserva.precio_acordado - desc_val - (reserva.monto_abonado or 0))
+
+    # Construir desglose de pagos
+    desglose_pagos_dto: List[BackorderPagoDetalleDTO] = []
+    for p in pagos:
+        p_dt = (p.fecha_pago.replace(tzinfo=timezone.utc) if p.fecha_pago and p.fecha_pago.tzinfo is None else p.fecha_pago or datetime.now(timezone.utc)).astimezone(tz_chile)
+        desglose_pagos_dto.append(
+            BackorderPagoDetalleDTO(
+                id_transaccion=str(p.id_pago) if p.id_pago else None,
+                metodo_pago=p.metodo_pago,
+                monto=p.monto,
+                fecha_pago=f"{p_dt.strftime('%d/%m/%y')} {p_dt.strftime('%H:%M')} hrs",
+                cajero_nombre=cajera_nombre,
+            )
+        )
+
+    # Construir línea de tiempo cronológica de hitos
+    movimientos: List[BackorderMovimientoDTO] = [
+        BackorderMovimientoDTO(
+            hora=fecha_creacion_formateada,
+            evento=f"Reserva de Venta en Verde emitida en Mesón por {vendedor_nombre} ({suc_nombre})",
+        )
+    ]
+
+    # Hitos de pagos y abonos
+    if pagos:
+        for idx, p in enumerate(pagos):
+            p_dt = (p.fecha_pago.replace(tzinfo=timezone.utc) if p.fecha_pago and p.fecha_pago.tzinfo is None else p.fecha_pago or datetime.now(timezone.utc)).astimezone(tz_chile)
+            p_hora_str = f"{p_dt.strftime('%d/%m/%y')} {p_dt.strftime('%H:%M')} hrs"
+            es_ultimo = (idx == len(pagos) - 1)
+            caj_txt = f" por {cajera_nombre}" if cajera_nombre else ""
+            if orden and orden.estado_orden in ["Pagada", "Completada"] and es_ultimo and saldo_calc == 0:
+                evento_str = f"Liquidación final en ventanilla: {p.metodo_pago} ({format_clp(p.monto)}){caj_txt}"
+            else:
+                evento_str = f"Abono de seña registrado en ventanilla: {p.metodo_pago} ({format_clp(p.monto)}){caj_txt}"
+            movimientos.append(BackorderMovimientoDTO(hora=p_hora_str, evento=evento_str))
+    elif reserva.monto_abonado and reserva.monto_abonado > 0:
+        movimientos.append(
+            BackorderMovimientoDTO(
+                hora=fecha_creacion_formateada,
+                evento=f"Abono inicial de seña registrado en caja por {format_clp(reserva.monto_abonado)}",
+            )
+        )
+
+    # Hito de Match físico asignado
+    if activo:
+        act_dt = (reserva.fecha_actualizacion or reserva.fecha_creacion or datetime.now(timezone.utc))
+        act_dt = (act_dt.replace(tzinfo=timezone.utc) if act_dt.tzinfo is None else act_dt).astimezone(tz_chile)
+        act_hora_str = f"{act_dt.strftime('%d/%m/%y')} {act_dt.strftime('%H:%M')} hrs"
+        sku_str = activo.sku_qr_fisico
+        if vehiculo_donante:
+            v_desc = f"N° Ingreso {vehiculo_donante.numero_ingreso} [{vehiculo_donante.patente}] ({vehiculo_donante.marca} {vehiculo_donante.modelo})"
+            evento_act = f"Pieza física asignada (SKU: {sku_str}) desde vehículo donante {v_desc}"
+        else:
+            evento_act = f"Pieza física asignada en inventario de desarme (SKU: {sku_str})"
+        movimientos.append(BackorderMovimientoDTO(hora=act_hora_str, evento=evento_act))
+
+    # Hito de orden de venta vinculada y emisión de QR transaccional
+    if orden:
+        ord_dt = (orden.fecha_creacion.replace(tzinfo=timezone.utc) if orden.fecha_creacion and orden.fecha_creacion.tzinfo is None else orden.fecha_creacion or datetime.now(timezone.utc)).astimezone(tz_chile)
+        ord_hora_str = f"{ord_dt.strftime('%d/%m/%y')} {ord_dt.strftime('%H:%M')} hrs"
+        movimientos.append(
+            BackorderMovimientoDTO(
+                hora=ord_hora_str,
+                evento=f"Orden de venta vinculada {orden.folio} generada en mesón para liquidación",
+            )
+        )
+
+        if orden.qr_transaccional_salida:
+            qr_dt = (orden.fecha_actualizacion or orden.fecha_creacion or datetime.now(timezone.utc))
+            qr_dt = (qr_dt.replace(tzinfo=timezone.utc) if qr_dt.tzinfo is None else qr_dt).astimezone(tz_chile)
+            movimientos.append(
+                BackorderMovimientoDTO(
+                    hora=f"{qr_dt.strftime('%d/%m/%y')} {qr_dt.strftime('%H:%M')} hrs",
+                    evento="QR Transaccional generado para retiro y escaneo en barrera de salida",
+                )
+            )
+
+    # Hito de entrega y validación en barrera
+    if auditoria_barrera:
+        b_dt = (auditoria_barrera.fecha_escaneo.replace(tzinfo=timezone.utc) if auditoria_barrera.fecha_escaneo and auditoria_barrera.fecha_escaneo.tzinfo is None else auditoria_barrera.fecha_escaneo or datetime.now(timezone.utc)).astimezone(tz_chile)
+        b_hora_str = f"{b_dt.strftime('%d/%m/%y')} {b_dt.strftime('%H:%M')} hrs"
+        bod_nom = f"{bodeguero_barrera.nombres or ''} {bodeguero_barrera.apellidos or ''}".strip() if bodeguero_barrera else "Bodega"
+        movimientos.append(
+            BackorderMovimientoDTO(
+                hora=b_hora_str,
+                evento=f"Pieza retirada y validada en barrera de salida por {bod_nom}",
+            )
+        )
+
+    # Hito de anulación con motivo y responsable
+    if estado_auditoria == "Anulada":
+        anul_dt_raw = (orden.fecha_anulacion if orden and orden.fecha_anulacion else (orden.fecha_actualizacion if orden and orden.fecha_actualizacion else (reserva.fecha_actualizacion or reserva.fecha_creacion)))
+        anul_dt = (anul_dt_raw.replace(tzinfo=timezone.utc) if anul_dt_raw and anul_dt_raw.tzinfo is None else anul_dt_raw or datetime.now(timezone.utc)).astimezone(tz_chile)
+        anul_hora_str = f"{anul_dt.strftime('%d/%m/%y')} {anul_dt.strftime('%H:%M')} hrs"
+        usr_anul_nom = f"{usuario_anulacion.nombres or ''} {usuario_anulacion.apellidos or ''}".strip() if usuario_anulacion else "Operador"
+        motivo_str = orden.motivo_anulacion if orden and orden.motivo_anulacion else "Anulación solicitada"
+        obs_str = f" ({orden.observacion_anulacion})" if orden and orden.observacion_anulacion else ""
+        movimientos.append(
+            BackorderMovimientoDTO(
+                hora=anul_hora_str,
+                evento=f"Operación anulada en el sistema por {usr_anul_nom}. Motivo: {motivo_str}{obs_str}",
+            )
+        )
+
+    donante_desc = None
+    if vehiculo_donante:
+        donante_desc = f"{vehiculo_donante.marca} {vehiculo_donante.modelo} ({vehiculo_donante.anio or 'S/A'})"
+
+    return BackorderAuditoriaResponseDTO(
+        id_reserva=str(reserva.id_reserva),
+        folio=folio_str,
+        fecha_creacion=fecha_creacion_formateada,
+        fecha_creacion_iso=fecha_iso,
+        estado_reserva=estado_auditoria,
+        id_orden=str(orden.id_orden) if orden else None,
+        orden_folio=orden.folio if orden else None,
+        estado_orden=orden.estado_orden if orden else None,
+        id_cliente=str(cliente.id_cliente) if cliente else str(reserva.id_cliente),
+        cliente_nombre=cliente_nombre,
+        cliente_rut=cliente.rut_cliente if cliente else None,
+        cliente_telefono=cliente.telefono if cliente else None,
+        cliente_correo=cliente.correo if cliente else None,
+        id_vendedor=str(reserva.id_vendedor),
+        vendedor_nombre=vendedor_nombre,
+        id_sucursal=reserva.id_sucursal_registro,
+        sucursal_nombre=suc_nombre,
+        id_categoria_requerida=reserva.id_categoria_requerida,
+        categoria_nombre=cat_nombre,
+        marca_requerida=reserva.marca_requerida,
+        modelo_requerido=reserva.modelo_requerido,
+        anio_requerido=reserva.anio_requerido,
+        cilindrada_requerida=reserva.cilindrada_requerida,
+        combustible_requerido=reserva.combustible_requerido,
+        transmision_requerida=reserva.transmision_requerida,
+        notas_preparacion=reserva.notas_preparacion,
+        precio_acordado=reserva.precio_acordado,
+        descuento=desc_val,
+        monto_abonado=reserva.monto_abonado or 0,
+        saldo_pendiente=saldo_calc,
+        id_activo_asignado=str(reserva.id_activo_asignado) if reserva.id_activo_asignado else None,
+        activo_asignado_sku=activo.sku_qr_fisico if activo else None,
+        vehiculo_donante_ingreso=vehiculo_donante.numero_ingreso if vehiculo_donante else None,
+        vehiculo_donante_patente=vehiculo_donante.patente if vehiculo_donante else None,
+        vehiculo_donante_descripcion=donante_desc,
+        desglose_pagos=desglose_pagos_dto,
+        movimientos=movimientos,
+    )
+

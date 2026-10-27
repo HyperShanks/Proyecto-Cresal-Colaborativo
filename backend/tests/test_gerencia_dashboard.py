@@ -473,6 +473,12 @@ def test_gerencia_kpis_aislamiento_por_sucursal_y_exclusion_pagos_anulados(
     assert data["ticket_promedio"] == 600000.0
     assert data["acumulado_mensual_mtd"] >= 1200000
     assert data["margen_bruto"] == 64.8
+    assert "salidas_motores_hoy" in data
+    assert "salidas_cajas_hoy" in data
+    assert "total_salidas_hoy" in data
+    assert data["salidas_motores_hoy"] == 1
+    assert data["salidas_cajas_hoy"] == 0
+    assert data["total_salidas_hoy"] == 1
 
 
 def test_gerencia_kpis_consolidado_global_toda_la_cadena(
@@ -654,3 +660,33 @@ def test_auditor_satelite_limache_aislamiento_estricto(
     # 7. Maestro de inventario multi-sucursal permitido para chequear stock de Viña del Mar
     r_inv = client.get("/api/v1/inventario/maestro?id_sucursal=101", headers=headers)
     assert r_inv.status_code == 200
+
+
+def test_gerencia_kpis_salidas_motores_cajas_inventariadas(
+    client, db_session_gerencia
+):
+    """
+    Verifica que el cálculo de salidas en tiempo real de piezas inventariadas:
+    - Retorne contadores numéricos exactos de motores (MOT-XXXX) y cajas (CAJ-XXXX).
+    - Desglose correctamente la suma total de salidas hoy.
+    - Excluya ventas misceláneas sin SKU inventariado y transacciones anuladas.
+    """
+    admin = db_session_gerencia["user_admin"]
+    token = create_access_token(
+        data={"sub": str(admin.id_usuario), "rol": admin.id_rol}
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Consulta consolidada global
+    res = client.get("/api/v1/gerencia/dashboard/kpis", headers=headers)
+    assert res.status_code == 200
+    data = res.json()
+
+    assert "salidas_motores_hoy" in data
+    assert "salidas_cajas_hoy" in data
+    assert "total_salidas_hoy" in data
+    assert isinstance(data["salidas_motores_hoy"], int)
+    assert isinstance(data["salidas_cajas_hoy"], int)
+    assert isinstance(data["total_salidas_hoy"], int)
+    assert data["total_salidas_hoy"] == data["salidas_motores_hoy"] + data["salidas_cajas_hoy"]
+

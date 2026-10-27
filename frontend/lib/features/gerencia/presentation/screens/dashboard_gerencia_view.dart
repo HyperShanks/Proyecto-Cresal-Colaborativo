@@ -28,8 +28,13 @@ enum VistaGerencia { dashboard, ordenes, inventario, backorders }
 /// métodos de pago, alertas operativas y flujo de despacho de bodega.
 class DashboardGerenciaView extends StatefulWidget {
   final int? sucursalInicial;
+  final KpiFinancieroModel? kpisIniciales;
 
-  const DashboardGerenciaView({super.key, this.sucursalInicial});
+  const DashboardGerenciaView({
+    super.key,
+    this.sucursalInicial,
+    this.kpisIniciales,
+  });
 
   @override
   State<DashboardGerenciaView> createState() => _DashboardGerenciaViewState();
@@ -106,6 +111,9 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
       _vistaActiva = VistaGerencia.inventario;
     }
     _sucursalSeleccionada = widget.sucursalInicial;
+    if (widget.kpisIniciales != null) {
+      _kpis = widget.kpisIniciales;
+    }
     _spinController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
@@ -424,6 +432,15 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _inventarioKey.currentState?.aplicarFiltroSinTasar(true);
+    });
+  }
+
+  void _navegarAOrdenesConTipoActivo(String tipoActivo, {String periodo = 'hoy'}) {
+    setState(() {
+      _vistaActiva = VistaGerencia.ordenes;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _ordenesKey.currentState?.aplicarFiltroTipoActivo(tipoActivo, periodo: periodo);
     });
   }
 
@@ -1911,18 +1928,24 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
           transaccionesHoy: 0,
           acumuladoMensualMtd: 0,
           ticketPromedio: 0,
+          salidasMotoresHoy: 0,
+          salidasCajasHoy: 0,
+          totalSalidasHoy: 0,
         );
 
     final facturacionFmt = CurrencyFormatter.formatCLP(kpis.ventasDelDia);
     final mtdFmt = CurrencyFormatter.formatCLP(kpis.acumuladoMensualMtd);
     final ticketFmt = CurrencyFormatter.formatCLP(kpis.ticketPromedio.toInt());
+    final salidasTotal = kpis.totalSalidasHoy;
+    final salidasMotores = kpis.salidasMotoresHoy;
+    final salidasCajas = kpis.salidasCajasHoy;
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        int crossAxisCount = 3;
+        int crossAxisCount = 4;
         if (constraints.maxWidth < 650) {
           crossAxisCount = 1;
-        } else if (constraints.maxWidth < 950) {
+        } else if (constraints.maxWidth < 1100) {
           crossAxisCount = 2;
         }
 
@@ -1960,6 +1983,52 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
               titulo: 'Ticket Promedio',
               valor: ticketFmt,
               subtitulo: 'Promedio por orden de mesón del día',
+            ),
+
+            // KPI 4: Salidas en Tiempo Real: Motores y Cajas Inventariadas (Live Card con deep link)
+            KpiCardWidget(
+              key: const Key('kpi_card_salidas_motores_cajas'),
+              titulo: 'Salidas en Tiempo Real',
+              icono: Icons.sensors_rounded,
+              valor: '$salidasTotal ${salidasTotal == 1 ? "pieza" : "piezas"}',
+              valorColor: const Color(0xFF1E1B4B),
+              isLive: true,
+              subtituloWidget: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Flexible(
+                    child: Text(
+                      '$salidasMotores MOT • $salidasCajas CAJ',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF4338CA),
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Auditar',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF6366F1),
+                        ),
+                      ),
+                      SizedBox(width: 2),
+                      Icon(
+                        Icons.arrow_forward_rounded,
+                        size: 13,
+                        color: Color(0xFF6366F1),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              onTap: () => _navegarAOrdenesConTipoActivo('MOTORES_CAJAS', periodo: 'hoy'),
             ),
           ],
         );

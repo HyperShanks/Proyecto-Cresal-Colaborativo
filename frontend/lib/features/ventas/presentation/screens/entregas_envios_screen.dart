@@ -208,35 +208,33 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
   }
 
   bool _isAsignadaAMi(EntregaEnvioModel e) {
-    if (_currentUserId != null &&
-        e.idVendedorAsignado != null &&
-        e.idVendedorAsignado!.trim().isNotEmpty &&
-        e.idVendedorAsignado == _currentUserId) {
-      return true;
+    if (_currentUserId != null) {
+      if ((e.idVendedorAsignado != null &&
+              e.idVendedorAsignado!.trim().isNotEmpty &&
+              e.idVendedorAsignado == _currentUserId) ||
+          (e.idVendedor != null &&
+              e.idVendedor!.trim().isNotEmpty &&
+              e.idVendedor == _currentUserId)) {
+        return true;
+      }
     }
     if (_currentUserName != null &&
-        _currentUserName!.trim().isNotEmpty &&
-        e.vendedorAsignadoNombre != null &&
-        e.vendedorAsignadoNombre!.trim().isNotEmpty) {
+        _currentUserName!.trim().isNotEmpty) {
       final userTokens = _currentUserName!
           .toLowerCase()
           .split(' ')
           .where((t) => t.length > 2);
-      final asignadoLower = e.vendedorAsignadoNombre!.toLowerCase();
+      final asignadoLower = (e.vendedorAsignadoNombre ?? '').toLowerCase();
+      final creadorLower = (e.vendedorNombre ?? '').toLowerCase();
       for (final token in userTokens) {
-        if (asignadoLower.contains(token)) return true;
+        if (asignadoLower.contains(token) || creadorLower.contains(token)) return true;
       }
     }
     return false;
   }
 
   List<EntregaEnvioModel> get _ordenesFiltradas {
-    var lista = _todasEntregas.where((e) {
-      if (e.esVentaEnVerde && (!e.estaPagada || !e.tieneQrDisponible)) {
-        return false;
-      }
-      return true;
-    }).toList();
+    var lista = List<EntregaEnvioModel>.from(_todasEntregas);
 
     // 1. Filtro rápido de "Mis Asignadas" (Responsabilidad de entrega física)
     if (_soloMisAsignadas) {
@@ -262,8 +260,9 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
       }
     }
 
-    // 3. Filtro por Estado de Pago
-    if (_estadoPagoFilter != 'todos') {
+    // 3. Filtro por Estado de Pago (si no hay término de búsqueda activo)
+    final q = _searchQuery.trim().toLowerCase();
+    if (_estadoPagoFilter != 'todos' && q.isEmpty) {
       if (_estadoPagoFilter == 'pagados') {
         lista = lista.where((e) => e.estaPagada).toList();
       } else if (_estadoPagoFilter == 'pendientes') {
@@ -272,7 +271,6 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
     }
 
     // 4. Buscador Reactivo Unificado (Folio, Cliente, RUT, Teléfono, Vendedor Online, Vendedor Responsable, Repuesto)
-    final q = _searchQuery.trim().toLowerCase();
     if (q.isNotEmpty) {
       final qSinPuntos = q.replaceAll('.', '').replaceAll('-', '');
       lista = lista.where((e) {
@@ -1852,12 +1850,7 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
   }
 
   Widget _buildSearchAndFiltersHeader() {
-    final validas = _todasEntregas.where((e) {
-      if (e.esVentaEnVerde && (!e.estaPagada || !e.tieneQrDisponible)) {
-        return false;
-      }
-      return true;
-    }).toList();
+    final validas = _todasEntregas;
 
     final misAsignadasCount = validas.where(_isAsignadaAMi).length;
     final pagadasCount = validas.where((e) => e.estaPagada).length;
@@ -2473,7 +2466,25 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        if (orden.esMixta) ...[
+                        if (orden.esVentaEnVerde) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0D9488).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: const Color(0xFF0D9488).withValues(alpha: 0.4)),
+                            ),
+                            child: const Text(
+                              'En Verde',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF2DD4BF),
+                              ),
+                            ),
+                          ),
+                        ] else if (orden.esMixta) ...[
                           const SizedBox(width: 6),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -2558,7 +2569,43 @@ class _EntregasEnviosScreenState extends State<EntregasEnviosScreen> {
               const SizedBox(height: 12),
 
               // Fila 4: Botonera de Acción Rápida (Ticket QR para salida de barrera o Entrega en Mesón)
-              if (esDespacho || orden.contieneMotorOCaja) ...[
+              if (orden.esVentaEnVerde && !orden.tieneQrDisponible) ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Flexible(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: AppPalette.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppPalette.primary.withValues(alpha: 0.3)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.info_outline, size: 14, color: AppPalette.primary),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                saldoPendiente
+                                    ? 'Abonos Pendientes (N° Folio: ${orden.folioDisplay})'
+                                    : 'Sin Asignación Física (Pendiente)',
+                                style: const TextStyle(
+                                  color: AppPalette.primary,
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ] else if (esDespacho || orden.contieneMotorOCaja) ...[
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [

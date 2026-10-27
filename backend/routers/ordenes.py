@@ -992,10 +992,9 @@ def obtener_mis_ventas(
         filtro_vendedor = (Orden_Venta.id_vendedor == current_user.id_usuario)
 
     if seccion == "por_asignar":
-        # Apartado exclusivo: Ventas en verde pagadas que están pendientes de asignación física de activo
+        # Apartado exclusivo: Ventas en verde pendientes de asignación física de activo (para abonos o asignación)
         query = db.query(Orden_Venta).filter(
             filtro_vendedor,
-            Orden_Venta.monto_pendiente == 0,
             Orden_Venta.qr_transaccional_salida.is_(None),
             Orden_Venta.id_orden.in_(subquery_por_asignar),
             func.lower(Orden_Venta.estado_orden).notin_(["anulada", "cancelada"])
@@ -1018,11 +1017,10 @@ def obtener_mis_ventas(
             except ValueError:
                 pass
     else:
-        # Apartado normal: Excluir estrictamente órdenes pendientes de asignación para evitar duplicidad o botones Ver QR inválidos
+        # Apartado normal: Excluir órdenes pendientes de asignación para evitar duplicidad
         query = db.query(Orden_Venta).filter(
             filtro_vendedor,
             ~and_(
-                Orden_Venta.monto_pendiente == 0,
                 Orden_Venta.qr_transaccional_salida.is_(None),
                 Orden_Venta.id_orden.in_(subquery_por_asignar)
             )
@@ -1526,9 +1524,9 @@ def asignar_activo_backorder(
     activo.reserva_expira_en = None
     activo.fecha_actualizacion = now_utc
 
-    # Asignar a la reserva y marcarla como completada
+    # Asignar a la reserva
     reserva.id_activo_asignado = activo.id_activo
-    reserva.estado_reserva = "Completada"
+    reserva.estado_reserva = "Completada" if orden.estado_orden == "Completada" else "Confirmada"
     reserva.fecha_actualizacion = now_utc
 
     # Generar QR transaccional para la orden
@@ -1812,9 +1810,6 @@ def listar_entregas_envios(
             for d in detalles_db
         )
 
-        if tiene_reserva_verde and (orden.monto_pendiente > 0 or not orden.qr_transaccional_salida):
-            continue
-
         # Cliente
         cliente_db = clientes_map.get(orden.id_cliente)
         cliente_resumen = None
@@ -1966,6 +1961,7 @@ def listar_entregas_envios(
                 total_venta=orden.total_venta,
                 descuento=getattr(orden, "descuento", 0) or 0,
                 monto_pendiente=orden.monto_pendiente,
+                abono_requerido=reserva_asociada.abono_requerido if reserva_asociada else (getattr(orden, "abono_requerido", 0) or 0),
                 qr_transaccional_salida=orden.qr_transaccional_salida,
                 fecha_creacion=orden.fecha_creacion.isoformat() if orden.fecha_creacion else None,
                 fecha_actualizacion=orden.fecha_actualizacion.isoformat() if orden.fecha_actualizacion else None,
@@ -1973,6 +1969,7 @@ def listar_entregas_envios(
                 cliente=cliente_resumen,
                 despacho=despacho_resumen,
                 detalles=detalles_resumen,
+                id_vendedor=orden.id_vendedor,
                 vendedor_nombre=vendedor_nombre,
                 id_vendedor_asignado=orden.id_vendedor_asignado,
                 vendedor_asignado_nombre=vendedor_asignado_nombre,
@@ -2039,6 +2036,12 @@ def confirmar_entrega_tienda(
         # Actualizar Orden a 'Completada'
         orden.estado_orden = "Completada"
         orden.fecha_actualizacion = datetime.now()
+
+        # Si la orden tiene reservas backorder asociadas, completarlas formalmente tras entrega física
+        reservas_entrega = db.query(Reservas_Backorder).filter(Reservas_Backorder.id_orden == orden.id_orden).all()
+        for r_bo in reservas_entrega:
+            r_bo.estado_reserva = "Completada"
+            r_bo.fecha_actualizacion = datetime.now(timezone.utc)
 
         # Obtener o crear estado 'Entregado' / 'Finalizado'
         estado_final = db.query(Estado_Activo).filter(
@@ -2558,6 +2561,13 @@ def anular_orden_post(
         orden.fecha_anulacion = datetime.now(timezone.utc)
         orden.fecha_actualizacion = datetime.now(timezone.utc)
 
+        # Sincronización atómica de Reservas_Backorder (Ventas en Verde) vinculadas
+        reservas_anular = db.query(Reservas_Backorder).filter(Reservas_Backorder.id_orden == id_orden).all()
+        for r_bo in reservas_anular:
+            r_bo.estado_reserva = "Anulada"
+            r_bo.id_activo_asignado = None
+            r_bo.fecha_actualizacion = datetime.now(timezone.utc)
+
         # Paso B: Reversar pagos asociados
         pagos = db.query(Transaccion_Pago).filter(Transaccion_Pago.id_orden == id_orden).all()
         pagos_reversados = 0
@@ -2673,6 +2683,13 @@ def anular_orden_patch(
         orden.estado_orden = "Anulada"
         orden.monto_pendiente = 0
         orden.fecha_actualizacion = datetime.now(timezone.utc)
+
+        # Sincronización atómica de Reservas_Backorder (Ventas en Verde) vinculadas
+        reservas_anular_patch = db.query(Reservas_Backorder).filter(Reservas_Backorder.id_orden == id_orden).all()
+        for r_bo in reservas_anular_patch:
+            r_bo.estado_reserva = "Anulada"
+            r_bo.id_activo_asignado = None
+            r_bo.fecha_actualizacion = datetime.now(timezone.utc)
 
         estado_disponible = db.query(Estado_Activo).filter(Estado_Activo.nombre_estado == "Disponible").first()
         if not estado_disponible:

@@ -888,6 +888,7 @@ class EntregaEnvioItemResponse(BaseModel):
     cliente: Optional[ClienteOrdenResumen] = None
     despacho: Optional[DespachoOrdenResumen] = None
     detalles: List[DetalleOrdenItemResponse] = []
+    id_vendedor: Optional[UUID] = None
     vendedor_nombre: Optional[str] = None
     id_vendedor_asignado: Optional[UUID] = None
     vendedor_asignado_nombre: Optional[str] = None
@@ -1520,6 +1521,9 @@ class KpiFinancieroDTO(BaseModel):
     acumulado_mensual_mtd: int = Field(description="Suma acumulada de facturación del mes actual")
     ticket_promedio: float = Field(description="Monto promedio recaudado por transacción de venta")
     margen_bruto: Optional[float] = Field(default=64.8, description="Porcentaje estimado de margen bruto")
+    salidas_motores_hoy: int = Field(default=0, description="Cantidad de motores inventariados (MOT-XXXX) salidos/vendidos hoy")
+    salidas_cajas_hoy: int = Field(default=0, description="Cantidad de cajas de cambio inventariadas (CAJ-XXXX) salidas/vendidas hoy")
+    total_salidas_hoy: int = Field(default=0, description="Total de piezas inventariadas (MOT y CAJ) salidas/vendidas hoy")
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -1587,6 +1591,8 @@ class BackorderGerenciaItemDTO(BaseModel):
     id_activo_asignado: Optional[str] = Field(default=None, description="UUID del repuesto donante asignado")
     activo_asignado_sku: Optional[str] = Field(default=None, description="SKU QR físico del repuesto asignado")
     id_orden: Optional[str] = Field(default=None, description="UUID de la orden de venta final generada")
+    orden_folio: Optional[str] = Field(default=None, description="Folio comercial de la orden vinculada (ej. ORD-0436)")
+    estado_orden: Optional[str] = Field(default=None, description="Estado operativo de la orden vinculada (Reservada, Pagada, Anulada, Completada)")
 
     model_config = ConfigDict(from_attributes=True)
 
