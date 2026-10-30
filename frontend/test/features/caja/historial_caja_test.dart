@@ -10,6 +10,17 @@ import 'package:frontend/features/caja/presentation/widgets/detalle_auditoria_di
 import 'package:frontend/features/caja/presentation/screens/historial_caja_screen.dart';
 
 class MockCajaHistorialService implements ICajaService {
+  @override
+  Future<Map<String, dynamic>> editarPago({
+    required String idPago,
+    int? nuevoMonto,
+    String? nuevoMetodo,
+    DateTime? nuevaFechaPago,
+    required String motivo,
+  }) async {
+    return {'success': true};
+  }
+
   HistorialCajaResponseModel? mockResponse;
   bool shouldFail = false;
 

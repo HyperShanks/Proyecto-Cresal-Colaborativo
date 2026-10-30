@@ -1,3 +1,4 @@
+import 'editar_pago_dialog.dart';
 import 'package:flutter/material.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
@@ -13,8 +14,8 @@ class DetalleAuditoriaDialog extends StatelessWidget {
     required this.orden,
   });
 
-  static Future<void> show(BuildContext context, HistorialOrdenItemModel orden) {
-    return showDialog(
+  static Future<bool?> show(BuildContext context, HistorialOrdenItemModel orden) {
+    return showDialog<bool>(
       context: context,
       builder: (context) => DetalleAuditoriaDialog(orden: orden),
     );
@@ -625,6 +626,45 @@ class DetalleAuditoriaDialog extends StatelessWidget {
                           color: AppPalette.success,
                         ),
                       ),
+                      if (orden.estadoOrden != 'Anulada') ...[
+                        const SizedBox(width: 10),
+                        InkWell(
+                          onTap: () async {
+                            final modificado = await EditarPagoDialog.show(
+                              context: context,
+                              orden: orden,
+                              pago: pago,
+                            );
+                            if (modificado == true && context.mounted) {
+                              Navigator.of(context).pop(true);
+                            }
+                          },
+                          borderRadius: BorderRadius.circular(6),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppPalette.primary.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: AppPalette.primary.withValues(alpha: 0.3)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.edit_rounded, size: 14, color: AppPalette.primary),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Corregir',
+                                  style: AppTypography.small.copyWith(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppPalette.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 );

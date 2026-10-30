@@ -14,6 +14,7 @@ from sqlalchemy import or_, and_, not_, func, cast, String, case
 from database import get_db
 from services.telegram_service import TelegramService
 from models import (
+    Auditoria_Edicion_Pago,
     Usuario, Cliente, Region, Comuna, Orden_Venta, Detalle_Orden,
     Despacho, Activo_Inventariado, Estado_Activo,
     Vehiculo_Origen, Categoria_Activo, Transaccion_Pago,
@@ -882,6 +883,33 @@ def listar_ordenes_auditoria(
                 HistorialMovimientoDTO(
                     hora=f"{fecha_creacion_fmt_26} {hora} hrs",
                     evento="QR Transaccional generado para barrera de salida",
+                )
+            )
+
+        auditorias_pago_ord = (
+            db.query(Auditoria_Edicion_Pago, Usuario)
+            .join(Usuario, Auditoria_Edicion_Pago.id_usuario == Usuario.id_usuario)
+            .filter(Auditoria_Edicion_Pago.id_orden == orden.id_orden)
+            .order_by(Auditoria_Edicion_Pago.fecha_edicion.asc())
+            .all()
+        )
+        for aud, usr in auditorias_pago_ord:
+            aud_dt = (aud.fecha_edicion.replace(tzinfo=timezone.utc) if aud.fecha_edicion.tzinfo is None else aud.fecha_edicion).astimezone(tz_chile_ordenes)
+            aud_f = aud_dt.strftime("%d/%m/%y")
+            aud_h = aud_dt.strftime("%H:%M")
+            usr_nom = f"{usr.nombres} {usr.apellidos or ''}".strip()
+            if aud.campo_modificado == "metodo_pago":
+                ev = f"Método de pago corregido de {aud.valor_anterior} a {aud.valor_nuevo} por {usr_nom} (Motivo: {aud.motivo})"
+            elif aud.campo_modificado == "monto":
+                ev = f"Monto de abono modificado de ${int(aud.valor_anterior):,} a ${int(aud.valor_nuevo):,} por {usr_nom} (Motivo: {aud.motivo})".replace(",", ".")
+            elif aud.campo_modificado == "fecha_pago":
+                ev = f"Fecha de imputación ajustada por {usr_nom} (Motivo: {aud.motivo})"
+            else:
+                ev = f"Pago modificado por {usr_nom}: {aud.campo_modificado} (Motivo: {aud.motivo})"
+            movimientos.append(
+                HistorialMovimientoDTO(
+                    hora=f"{aud_f} {aud_h} hrs",
+                    evento=ev,
                 )
             )
 

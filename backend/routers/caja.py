@@ -25,6 +25,7 @@ from models import (
     Detalle_Motor,
     Detalle_Caja_Cambio,
     Despacho,
+    Auditoria_Edicion_Pago,
 )
 from schemas import (
     CajaVerificarAccesoResponse,
@@ -46,8 +47,10 @@ from schemas import (
     ResumenCuadreCajaDTO,
     HistorialOrdenItemResponse,
     HistorialCajaResponse,
+    EditarPagoRequest,
+    EditarPagoResponse,
 )
-from core.security import require_caja_role
+from core.security import require_caja_role, get_current_user
 from core.policies import validar_horario_operativo_caja
 
 router = APIRouter(
@@ -1213,6 +1216,209 @@ def parse_periodo_chile(
     return start_utc, end_utc
 
 
+
+def require_supervisor_or_caja_role(current_user: Usuario = Depends(get_current_user)) -> Usuario:
+    if current_user.id_rol not in [3, 4, 5]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso denegado: Se requieren permisos de Caja, Supervisor o Administrador para editar pagos."
+        )
+    return current_user
+
+
+@router.patch(
+    "/pagos/{id_pago}",
+    response_model=EditarPagoResponse,
+    summary="Editar Registro de Pago o Abono",
+    description="Permite corregir método de pago, monto de abono (en Reservada) o fecha de imputación con auditoría estricta."
+)
+def editar_pago(
+    id_pago: UUID,
+    payload: EditarPagoRequest,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_supervisor_or_caja_role),
+):
+    """
+    Permite a la cajera, supervisor o administrador corregir errores de digitación en un pago:
+    - Método de pago (Efectivo, Débito, Transferencia, etc.)
+    - Monto de abono parcial (solo si la orden está en estado 'Reservada' y el nuevo total < total_venta)
+    - Fecha y hora de imputación (para pagos realizados fuera de horario/fin de semana)
+    Registra el evento detallado en Auditoria_Edicion_Pago.
+    """
+    if not payload.motivo or len(payload.motivo.strip()) < 10:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Debe proporcionar un motivo de corrección detallado (mínimo 10 caracteres)."
+        )
+
+    pago = db.query(Transaccion_Pago).filter(Transaccion_Pago.id_pago == id_pago).first()
+    if not pago:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Transacción de pago con ID {id_pago} no encontrada."
+        )
+
+    if not pago.id_orden:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La transacción de pago no está vinculada a una orden de venta editable."
+        )
+
+    orden = db.query(Orden_Venta).filter(Orden_Venta.id_orden == pago.id_orden).first()
+    if not orden:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No se encontró la orden vinculada al pago."
+        )
+
+    if orden.estado_orden == "Anulada":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se pueden editar pagos de una orden que se encuentra Anulada."
+        )
+
+    monto_anterior = pago.monto
+    metodo_anterior = pago.metodo_pago
+    fecha_anterior = pago.fecha_pago
+
+    cambios_detectados = 0
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    # 1. Modificación de Monto (solo en estado 'Reservada' y manteniendo abono parcial < total_venta)
+    if payload.nuevo_monto is not None and payload.nuevo_monto != pago.monto:
+        if orden.estado_orden in ["Pagada", "Completada", "Despachada"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No se puede modificar el monto en una orden Pagada o Completada. Para órdenes liquidadas por error, debe anular la orden para devolver las piezas al stock de forma segura."
+            )
+
+        if orden.estado_orden != "Reservada":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Solo se puede modificar montos de abonos en órdenes con estado 'Reservada' (estado actual: {orden.estado_orden})."
+            )
+
+        if payload.nuevo_monto <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El nuevo monto del abono debe ser estrictamente mayor a $0."
+            )
+
+        otros_pagos = (
+            db.query(Transaccion_Pago)
+            .filter(
+                Transaccion_Pago.id_orden == orden.id_orden,
+                Transaccion_Pago.id_pago != pago.id_pago
+            )
+            .all()
+        )
+        otros_total = sum(p.monto for p in otros_pagos)
+        nuevo_total_pagos = otros_total + payload.nuevo_monto
+
+        if nuevo_total_pagos >= orden.total_venta:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"El nuevo monto (${payload.nuevo_monto:,}) liquidaría el total de la orden (${orden.total_venta:,}). Para liquidar el saldo pendiente, debe registrar el pago por el módulo normal de cobros en caja."
+            )
+
+        pago.monto = payload.nuevo_monto
+        orden.monto_pendiente = orden.total_venta - nuevo_total_pagos
+
+        reserva = db.query(Reservas_Backorder).filter(Reservas_Backorder.id_orden == orden.id_orden).first()
+        if reserva:
+            reserva.monto_abonado = nuevo_total_pagos
+            reserva.fecha_actualizacion = now_utc
+
+        db.add(
+            Auditoria_Edicion_Pago(
+                id_auditoria=uuid.uuid4(),
+                id_pago=pago.id_pago,
+                id_orden=orden.id_orden,
+                id_usuario=current_user.id_usuario,
+                fecha_edicion=now_utc,
+                campo_modificado="monto",
+                valor_anterior=str(monto_anterior),
+                valor_nuevo=str(pago.monto),
+                motivo=payload.motivo.strip(),
+            )
+        )
+        cambios_detectados += 1
+
+    # 2. Modificación de Método de Pago
+    if payload.nuevo_metodo is not None and payload.nuevo_metodo.value != pago.metodo_pago:
+        pago.metodo_pago = payload.nuevo_metodo.value
+        db.add(
+            Auditoria_Edicion_Pago(
+                id_auditoria=uuid.uuid4(),
+                id_pago=pago.id_pago,
+                id_orden=orden.id_orden,
+                id_usuario=current_user.id_usuario,
+                fecha_edicion=now_utc,
+                campo_modificado="metodo_pago",
+                valor_anterior=metodo_anterior,
+                valor_nuevo=pago.metodo_pago,
+                motivo=payload.motivo.strip(),
+            )
+        )
+        cambios_detectados += 1
+
+    # 3. Modificación de Fecha / Hora de Pago
+    if payload.nueva_fecha_pago is not None:
+        dt_target = payload.nueva_fecha_pago
+        if dt_target.tzinfo is not None:
+            dt_target_utc = dt_target.astimezone(timezone.utc).replace(tzinfo=None)
+        else:
+            dt_target_utc = dt_target
+
+        if dt_target_utc > now_utc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="La fecha de imputación no puede ser futura."
+            )
+
+        if dt_target_utc != pago.fecha_pago:
+            pago.fecha_pago = dt_target_utc
+            db.add(
+                Auditoria_Edicion_Pago(
+                    id_auditoria=uuid.uuid4(),
+                    id_pago=pago.id_pago,
+                    id_orden=orden.id_orden,
+                    id_usuario=current_user.id_usuario,
+                    fecha_edicion=now_utc,
+                    campo_modificado="fecha_pago",
+                    valor_anterior=fecha_anterior.isoformat() if fecha_anterior else "",
+                    valor_nuevo=dt_target_utc.isoformat(),
+                    motivo=payload.motivo.strip(),
+                )
+            )
+            cambios_detectados += 1
+
+    if cambios_detectados == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se indicaron cambios en el monto, método de pago ni fecha de imputación."
+        )
+
+    orden.fecha_actualizacion = now_utc
+    db.commit()
+    db.refresh(orden)
+    db.refresh(pago)
+
+    return EditarPagoResponse(
+        success=True,
+        mensaje="Registro de pago actualizado exitosamente y registrado en la bitácora de auditoría.",
+        id_pago=pago.id_pago,
+        id_orden=orden.id_orden,
+        monto_anterior=monto_anterior,
+        monto_nuevo=pago.monto,
+        metodo_anterior=metodo_anterior,
+        metodo_nuevo=pago.metodo_pago,
+        monto_pendiente_actualizado=orden.monto_pendiente,
+        estado_orden_actualizado=orden.estado_orden,
+        fecha_edicion=now_utc,
+    )
+
+
 @router.get(
     "/historial",
     response_model=HistorialCajaResponse,
@@ -1511,6 +1717,33 @@ def obtener_historial_caja(
                 HistorialMovimientoDTO(
                     hora=f"{anul_fecha_26} {anul_hora} hrs",
                     evento="Orden anulada en el sistema",
+                )
+            )
+
+        auditorias_pago = (
+            db.query(Auditoria_Edicion_Pago, Usuario)
+            .join(Usuario, Auditoria_Edicion_Pago.id_usuario == Usuario.id_usuario)
+            .filter(Auditoria_Edicion_Pago.id_orden == orden.id_orden)
+            .order_by(Auditoria_Edicion_Pago.fecha_edicion.asc())
+            .all()
+        )
+        for aud, usr in auditorias_pago:
+            aud_dt = (aud.fecha_edicion.replace(tzinfo=timezone.utc) if aud.fecha_edicion.tzinfo is None else aud.fecha_edicion).astimezone(tz_chile)
+            aud_f = aud_dt.strftime("%d/%m/%y")
+            aud_h = aud_dt.strftime("%H:%M")
+            usr_nom = f"{usr.nombres} {usr.apellidos or ''}".strip()
+            if aud.campo_modificado == "metodo_pago":
+                ev = f"Método de pago corregido de {aud.valor_anterior} a {aud.valor_nuevo} por {usr_nom} (Motivo: {aud.motivo})"
+            elif aud.campo_modificado == "monto":
+                ev = f"Monto de abono modificado de ${int(aud.valor_anterior):,} a ${int(aud.valor_nuevo):,} por {usr_nom} (Motivo: {aud.motivo})".replace(",", ".")
+            elif aud.campo_modificado == "fecha_pago":
+                ev = f"Fecha de imputación ajustada por {usr_nom} (Motivo: {aud.motivo})"
+            else:
+                ev = f"Pago modificado por {usr_nom}: {aud.campo_modificado} (Motivo: {aud.motivo})"
+            movimientos.append(
+                HistorialMovimientoDTO(
+                    hora=f"{aud_f} {aud_h} hrs",
+                    evento=ev,
                 )
             )
 

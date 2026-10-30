@@ -8,6 +8,17 @@ import 'package:frontend/features/caja/presentation/providers/caja_provider.dart
 import 'package:frontend/features/caja/presentation/widgets/panel_detalle_cobro.dart';
 
 class MockCajaService implements ICajaService {
+  @override
+  Future<Map<String, dynamic>> editarPago({
+    required String idPago,
+    int? nuevoMonto,
+    String? nuevoMetodo,
+    DateTime? nuevaFechaPago,
+    required String motivo,
+  }) async {
+    return {'success': true};
+  }
+
   List<CobroPendienteModel> dummyItems = [];
   bool registrarCobroLlamado = false;
   RegistrarCobroRequestModel? ultimoRequest;

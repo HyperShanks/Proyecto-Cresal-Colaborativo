@@ -420,6 +420,29 @@ class TransaccionPagoItemSchema(BaseModel):
     monto: int = Field(gt=0, description="El monto por método debe ser mayor a 0 y sin decimales")
 
 
+
+
+class EditarPagoRequest(BaseModel):
+    nuevo_monto: Optional[int] = Field(None, gt=0, description="Nuevo monto recaudado en el abono (solo permitido en estado Reservada)")
+    nuevo_metodo: Optional[MetodoPagoEnum] = Field(None, description="Nuevo método de pago (Efectivo, Debito, Credito, Transferencia, Cheque)")
+    nueva_fecha_pago: Optional[datetime] = Field(None, description="Nueva marca de tiempo para imputación contable")
+    motivo: str = Field(..., min_length=10, description="Justificación obligatoria de la corrección del pago")
+
+
+class EditarPagoResponse(BaseModel):
+    success: bool
+    mensaje: str
+    id_pago: UUID
+    id_orden: UUID
+    monto_anterior: int
+    monto_nuevo: int
+    metodo_anterior: str
+    metodo_nuevo: str
+    monto_pendiente_actualizado: int
+    estado_orden_actualizado: str
+    fecha_edicion: datetime
+
+
 class RegistrarCobroRequest(BaseModel):
     tipo_operacion: TipoOperacionEnum
     id_documento: UUID

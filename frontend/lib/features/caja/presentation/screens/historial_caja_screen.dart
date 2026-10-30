@@ -666,7 +666,17 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen>
       onVerDetalle: (orden) async {
         _isModalAbierto = true;
         try {
-          await DetalleAuditoriaDialog.show(context, orden);
+          final actualizado = await DetalleAuditoriaDialog.show(context, orden);
+          if (actualizado == true && mounted) {
+            _provider.cargarHistorialSilencioso();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Pago corregido exitosamente. Balances y arqueo actualizados.'),
+                backgroundColor: AppPalette.success,
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
         } finally {
           _isModalAbierto = false;
         }

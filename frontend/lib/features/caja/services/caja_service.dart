@@ -35,6 +35,14 @@ abstract class ICajaService {
     int pagina = 1,
     int limite = 20,
   });
+  Future<Map<String, dynamic>> editarPago({
+    required String idPago,
+    int? nuevoMonto,
+    String? nuevoMetodo,
+    DateTime? nuevaFechaPago,
+    required String motivo,
+  });
+
 }
 
 class CajaService implements ICajaService {
@@ -203,6 +211,48 @@ class CajaService implements ICajaService {
       return HistorialCajaResponseModel.fromJson(data);
     } else {
       String mensaje = 'Error al obtener historial de auditoría (${response.statusCode})';
+      try {
+        final errJson = json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        if (errJson.containsKey('detail')) {
+          mensaje = errJson['detail'].toString();
+        }
+      } catch (_) {}
+      throw Exception(mensaje);
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>> editarPago({
+    required String idPago,
+    int? nuevoMonto,
+    String? nuevoMetodo,
+    DateTime? nuevaFechaPago,
+    required String motivo,
+  }) async {
+    final uri = Uri.parse('$_endpoint/pagos/$idPago');
+    final Map<String, dynamic> body = {
+      'motivo': motivo,
+    };
+    if (nuevoMonto != null) {
+      body['nuevo_monto'] = nuevoMonto;
+    }
+    if (nuevoMetodo != null) {
+      body['nuevo_metodo'] = nuevoMetodo;
+    }
+    if (nuevaFechaPago != null) {
+      body['nueva_fecha_pago'] = nuevaFechaPago.toUtc().toIso8601String();
+    }
+
+    final response = await ApiService.patch(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(body),
+    );
+
+    if (response.statusCode == 200) {
+      return json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+    } else {
+      String mensaje = 'Error al editar el pago (${response.statusCode})';
       try {
         final errJson = json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
         if (errJson.containsKey('detail')) {

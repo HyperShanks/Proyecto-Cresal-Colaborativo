@@ -10,6 +10,17 @@ import 'package:frontend/features/caja/presentation/widgets/bandeja_cobros_panel
 import 'package:frontend/features/caja/presentation/screens/caja_main_screen.dart';
 
 class MockCajaService implements ICajaService {
+  @override
+  Future<Map<String, dynamic>> editarPago({
+    required String idPago,
+    int? nuevoMonto,
+    String? nuevoMetodo,
+    DateTime? nuevaFechaPago,
+    required String motivo,
+  }) async {
+    return {'success': true};
+  }
+
   List<CobroPendienteModel> dummyItems = [];
   bool shouldFail = false;
 

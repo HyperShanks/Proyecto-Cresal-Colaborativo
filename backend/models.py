@@ -403,3 +403,24 @@ class Notificacion_Sistema(Base):
     ultimo_error = Column(Text, nullable=True)
     fecha_creacion = Column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
     fecha_envio = Column(DateTime(timezone=True), nullable=True)
+
+# ==========================================
+# AUDITORÍA DE EDICIÓN DE PAGOS Y ABONOS
+# ==========================================
+
+class Auditoria_Edicion_Pago(Base):
+    __tablename__ = "Auditoria_Edicion_Pago"
+
+    id_auditoria = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id_pago = Column(UUID(as_uuid=True), ForeignKey("Transaccion_Pago.id_pago"), nullable=False)
+    id_orden = Column(UUID(as_uuid=True), ForeignKey("Orden_Venta.id_orden"), nullable=False)
+    id_usuario = Column(UUID(as_uuid=True), ForeignKey("Usuario.id_usuario"), nullable=False)
+    fecha_edicion = Column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    campo_modificado = Column(String(50), nullable=False)
+    valor_anterior = Column(String(255), nullable=False)
+    valor_nuevo = Column(String(255), nullable=False)
+    motivo = Column(Text, nullable=False)
+
+    pago = relationship("Transaccion_Pago")
+    orden = relationship("Orden_Venta")
+    usuario = relationship("Usuario")
