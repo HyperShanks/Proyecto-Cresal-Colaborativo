@@ -385,10 +385,18 @@ class AuthService {
   static Future<String?> getToken() => _readSafe(_tokenKey);
 
   /// Recupera el rol textual almacenado (ej. "Bodeguero", "Vendedor", "Caja", "Jefe de Ventas").
-  static Future<String?> getRol() => _readSafe(_rolKey);
+  static Future<String?> getRol() async {
+    if (_currentUserCache != null && _currentUserCache!.nombreRol.isNotEmpty) {
+      return _currentUserCache!.nombreRol;
+    }
+    return _readSafe(_rolKey);
+  }
 
   /// Recupera el ID numérico del rol del usuario (ej. 1=Bodega, 2=Ventas, 3=Caja, 5=Admin, 6=Jefe).
   static Future<int?> getIdRol() async {
+    if (_currentUserCache != null) {
+      return _currentUserCache!.idRol;
+    }
     final val = await _readSafe(_idRolKey);
     return val != null ? int.tryParse(val) : null;
   }
@@ -457,6 +465,18 @@ class AuthService {
     return rLower == 'gerente' || rLower == 'administrador' || rLower == 'admin' || rLower == 'jefe de ventas';
   }
 
+  /// Verifica si el usuario actual tiene permisos para editar activos y datos vehiculares en inventario (HU-24).
+  /// Disponible para Bodeguero (1) y Gerencia General (4). El Administrador (5) no puede editar.
+  static Future<bool> puedeEditarInventario() async {
+    final idRol = await getIdRol();
+    if (idRol != null) return idRol == 1 || idRol == 4;
+    final rol = await getRol();
+    final rLower = rol?.toLowerCase() ?? '';
+    return rLower == 'bodeguero' ||
+        rLower == 'gerente' ||
+        rLower == 'gerencia';
+  }
+
   /// Verifica si el usuario actual pertenece al módulo de ventas (Vendedor [2], Jefe de Ventas [6], Vendedor Online [7]).
   static Future<bool> esModuloVentas() async {
     final idRol = await getIdRol();
@@ -489,6 +509,9 @@ class AuthService {
 
   /// Recupera el ID de sucursal del usuario autenticado (para Radar de Stock).
   static Future<int?> getSucursalId() async {
+    if (_currentUserCache != null) {
+      return _currentUserCache!.idSucursal;
+    }
     final val = await _readSafe(_sucursalKey);
     return val != null ? int.tryParse(val) : null;
   }

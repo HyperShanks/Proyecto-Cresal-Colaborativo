@@ -222,6 +222,22 @@ def require_bodeguero_or_admin(
     return current_user
 
 
+def require_inventario_editor(
+    current_user: Usuario = Depends(get_current_user)
+) -> Usuario:
+    """
+    Valida que el usuario autenticado posea permisos de Bodeguero (id_rol == 1)
+    o Gerencia (id_rol == 4) para editar piezas y especificaciones de inventario.
+    El rol Administrador (id_rol == 5) tiene explícitamente denegada la edición de piezas.
+    """
+    if current_user.id_rol not in [1, 4]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso restringido: Se requieren permisos de Bodeguero o Gerencia para editar piezas e inventario."
+        )
+    return current_user
+
+
 def require_gerencia_role(
     current_user: Usuario = Depends(get_current_user)
 ) -> Usuario:

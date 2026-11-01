@@ -176,6 +176,7 @@ def registrar_ingreso_vehicular(
         # Detalle Motor
         det_motor = Detalle_Motor(
             id_activo=id_motor,
+            numero_motor=payload.numero_motor.strip().upper() if payload.numero_motor else None,
             cilindrada=payload.cilindrada or "S/A",
             combustible=payload.combustible or "Gasolina",
             transmision_tipo=payload.transmision or "Mecánica"

@@ -1,4 +1,5 @@
 import asyncio
+import re
 import uuid
 from datetime import datetime, timezone
 from uuid import UUID
@@ -28,7 +29,19 @@ from core.security import (
     verificar_rol_tasacion,
     require_inventario_maestro_read,
     require_bodeguero_or_admin,
+    require_inventario_editor,
 )
+
+
+def extraer_siglas_motor(numero_motor: Optional[str]) -> str:
+    """Extrae las primeras 4 siglas/caracteres alfanuméricos en mayúsculas de un número de motor."""
+    if not numero_motor:
+        return ""
+    limpio = re.sub(r'[^A-Za-z0-9]', '', str(numero_motor)).strip().upper()
+    if not limpio or limpio in ["SA", "SN", "NULL", "NA", "NONE"]:
+        return ""
+    return limpio[:4]
+
 from schemas import (
     CatalogoItemResponse,
     PaginatedCatalogoResponse,
@@ -780,6 +793,13 @@ def obtener_pendientes_precio(
         else:
             titulo = f"{nombre_cat} ({activo.sku_qr_fisico})"
 
+        # Si es motor, agregar siglas entre corchetes si posee número de motor
+        if cat and (cat.id_categoria == 1 or "motor" in cat.nombre_categoria.lower()):
+            num_mot_val = (motor.numero_motor if motor else None) or (vehiculo.numero_motor if vehiculo else None)
+            sigla = extraer_siglas_motor(num_mot_val)
+            if sigla:
+                titulo = f"{titulo} [{sigla}]"
+
         item = ActivoPendientePrecioResponse(
             id_activo=activo.id_activo,
             sku_qr_fisico=activo.sku_qr_fisico,
@@ -1280,15 +1300,15 @@ def obtener_detalle_activo(
 @router.patch(
     "/{id_activo}",
     response_model=EditarActivoResponse,
-    summary="Edición Directa de Activo Inventariado (HU-11)",
-    description="Permite a operarios de Bodega y Administradores actualizar ubicación física "
+    summary="Edición Directa de Activo Inventariado (HU-11 / HU-5.3)",
+    description="Permite a operarios de Bodega, Gerencia y Administradores actualizar ubicación física "
                 "y notas técnicas con control de concurrencia optimista (version_lock).",
 )
 def editar_activo_inventariado(
     id_activo: UUID,
     payload: EditarActivoRequest,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_bodeguero_or_admin),
+    current_user: Usuario = Depends(require_inventario_editor),
 ):
     # 1. Verificar existencia previa
     activo_existente = (
@@ -1302,8 +1322,9 @@ def editar_activo_inventariado(
             detail=f"Activo inventariado con ID '{id_activo}' no encontrado.",
         )
 
-    # 2. Regla de Negocio: Solo activos en estado 'Disponible' o 'Paletizado' pueden editar su ubicación
-    # id_estado: 1 = Disponible, 7 = Paletizado
+    # 2. Regla de Negocio:
+    # Bodeguero (1) y Gerencia (4) solo pueden editar repuestos en estado 'Disponible' o 'Paletizado'.
+    # Administrador (5) no tiene permisos de edición.
     estado_obj = (
         db.query(Estado_Activo)
         .filter(Estado_Activo.id_estado == activo_existente.id_estado)
@@ -1389,6 +1410,8 @@ def editar_activo_inventariado(
                 vehiculo_obj.modelo = payload.modelo.strip()
             if payload.anio is not None:
                 vehiculo_obj.anio = payload.anio
+            if payload.numero_motor is not None:
+                vehiculo_obj.numero_motor = payload.numero_motor.strip() if payload.numero_motor else None
             vehiculo_obj.fecha_actualizacion = datetime.now(timezone.utc).replace(tzinfo=None)
 
             traccion_actualizada = vehiculo_obj.traccion

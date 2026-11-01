@@ -44,18 +44,10 @@ class _DetalleActivoScreenState extends State<DetalleActivoScreen> {
   }
 
   Future<void> _verificarRolUsuario() async {
-    final idRol = await AuthService.getIdRol();
-    final rol = await AuthService.getRol();
-    final rLower = rol?.toLowerCase() ?? '';
-    final esBodegueroOAdmin = idRol == 1 ||
-        idRol == 5 ||
-        rLower == 'bodeguero' ||
-        rLower == 'administrador' ||
-        rLower == 'admin';
-
+    final puede = await AuthService.puedeEditarInventario();
     if (mounted) {
       setState(() {
-        _puedeEditar = esBodegueroOAdmin;
+        _puedeEditar = puede;
       });
     }
   }

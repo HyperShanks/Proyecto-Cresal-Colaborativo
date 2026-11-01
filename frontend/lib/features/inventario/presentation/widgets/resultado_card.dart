@@ -147,10 +147,25 @@ class ResultadoCard extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Expanded(
-                            child: Text(
-                              '${itemCompleto['categoria'] ?? 'Activo'} $marca $modelo',
-                              style: AppTypography.title.copyWith(fontSize: 15),
-                              overflow: TextOverflow.ellipsis,
+                            child: Builder(
+                              builder: (_) {
+                                final cat = (itemCompleto['categoria'] ?? 'Activo').toString();
+                                final esMotor = (itemCompleto['id_categoria'] == 1) || cat.toLowerCase().trim() == 'motor';
+                                final numMot = (itemCompleto['numero_motor'] ?? itemCompleto['numeroMotor'])?.toString();
+                                String sigla = '';
+                                if (esMotor && numMot != null) {
+                                  final limpio = numMot.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').trim().toUpperCase();
+                                  if (limpio.isNotEmpty && limpio != 'SA' && limpio != 'SN' && limpio != 'NULL' && limpio != 'NA' && limpio != 'NONE') {
+                                    sigla = limpio.length > 4 ? limpio.substring(0, 4) : limpio;
+                                  }
+                                }
+                                final sufijo = sigla.isNotEmpty ? ' [$sigla]' : '';
+                                return Text(
+                                  '$cat $marca $modelo$sufijo',
+                                  style: AppTypography.title.copyWith(fontSize: 15),
+                                  overflow: TextOverflow.ellipsis,
+                                );
+                              },
                             ),
                           ),
                           Container(

@@ -308,21 +308,25 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    final categoria = widget.activo['categoria']?.toString() ?? 'Repuesto';
+    final categoria = widget.activo['categoria']?.toString() ??
+        widget.activo['nombre_categoria']?.toString() ??
+        'Repuesto';
     final sku = widget.activo['sku']?.toString() ?? widget.activo['sku_qr_fisico']?.toString() ?? 'S/N';
 
     return SafeArea(
-      child: Container(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.90,
-        ),
-        padding: EdgeInsets.only(bottom: bottomInset),
-        decoration: const BoxDecoration(
-          color: AppPalette.background,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+      child: Center(
+        child: Container(
+          constraints: BoxConstraints(
+            maxWidth: 680,
+            maxHeight: MediaQuery.of(context).size.height * 0.90,
+          ),
+          padding: EdgeInsets.only(bottom: bottomInset),
+          decoration: const BoxDecoration(
+            color: AppPalette.background,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
           children: [
             // Cabecera Modal
             Container(
@@ -384,196 +388,283 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
 
             // Formulario Scrollable con Ubicación, Vehículo y Especificaciones Técnicas
             Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // ── 1. UBICACIÓN FÍSICA EN BODEGA (GALPÓN, PASILLO, PALLET) ──
-                    _buildSectionHeader(
-                      title: 'UBICACIÓN FÍSICA EN BODEGA',
-                      subtitle: 'Indica o actualiza la posición física: galpón, pasillo y pallet.',
-                      icon: Icons.warehouse_outlined,
-                    ),
-                    const SizedBox(height: 14),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final isNarrow = constraints.maxWidth < 460;
+                  final isUltraNarrow = constraints.maxWidth < 360;
+                  final formPadding = isNarrow ? 14.0 : 20.0;
 
-                    Row(
+                  return SingleChildScrollView(
+                    padding: EdgeInsets.all(formPadding),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: _buildTextField(
-                            controller: _galponController,
-                            label: 'Galpón',
-                            hintText: 'Ej. 1',
-                            icon: Icons.warehouse_outlined,
-                          ),
+                        // ── 1. UBICACIÓN FÍSICA EN BODEGA (GALPÓN, PASILLO, PALLET) ──
+                        _buildSectionHeader(
+                          title: 'UBICACIÓN FÍSICA EN BODEGA',
+                          subtitle: 'Indica o actualiza la posición física: galpón, pasillo y pallet.',
+                          icon: Icons.warehouse_outlined,
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildTextField(
-                            controller: _pasilloController,
-                            label: 'Pasillo',
-                            hintText: 'Ej. A',
-                            icon: Icons.view_column_outlined,
+                        const SizedBox(height: 14),
+
+                        if (isNarrow) ...[
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildTextField(
+                                  controller: _galponController,
+                                  label: 'Galpón',
+                                  hintText: 'Ej. 1',
+                                  icon: Icons.warehouse_outlined,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: _buildTextField(
+                                  controller: _pasilloController,
+                                  label: 'Pasillo',
+                                  hintText: 'Ej. A',
+                                  icon: Icons.view_column_outlined,
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildTextField(
+                          const SizedBox(height: 10),
+                          _buildTextField(
                             controller: _palletController,
                             label: 'Pallet',
                             hintText: 'Ej. P-01',
                             icon: Icons.layers_outlined,
                           ),
+                        ] else ...[
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildTextField(
+                                  controller: _galponController,
+                                  label: 'Galpón',
+                                  hintText: 'Ej. 1',
+                                  icon: Icons.warehouse_outlined,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _buildTextField(
+                                  controller: _pasilloController,
+                                  label: 'Pasillo',
+                                  hintText: 'Ej. A',
+                                  icon: Icons.view_column_outlined,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _buildTextField(
+                                  controller: _palletController,
+                                  label: 'Pallet',
+                                  hintText: 'Ej. P-01',
+                                  icon: Icons.layers_outlined,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                        const SizedBox(height: 8),
+
+                        // Sugerencias rápidas de Galpón y Pasillo
+                        _buildQuickLocationSuggestions(),
+
+                        const SizedBox(height: 24),
+
+                        // ── 2. DATOS DEL VEHÍCULO DE ORIGEN ──
+                        _buildSectionHeader(
+                          title: 'DATOS DEL VEHÍCULO DE ORIGEN',
+                          subtitle: 'Marca, modelo, año y tracción del vehículo de procedencia.',
+                          icon: Icons.directions_car_outlined,
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
+                        const SizedBox(height: 14),
 
-                    // Sugerencias rápidas de Galpón y Pasillo
-                    _buildQuickLocationSuggestions(),
-
-                    const SizedBox(height: 24),
-
-                    // ── 2. DATOS DEL VEHÍCULO DE ORIGEN ──
-                    _buildSectionHeader(
-                      title: 'DATOS DEL VEHÍCULO DE ORIGEN',
-                      subtitle: 'Marca, modelo, año y tracción del vehículo de procedencia.',
-                      icon: Icons.directions_car_outlined,
-                    ),
-                    const SizedBox(height: 14),
-
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildTextField(
+                        if (isUltraNarrow) ...[
+                          _buildTextField(
                             controller: _marcaController,
                             label: 'Marca',
                             hintText: 'Ej. Toyota',
                             icon: Icons.branding_watermark_outlined,
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildTextField(
+                          const SizedBox(height: 10),
+                          _buildTextField(
                             controller: _modeloController,
                             label: 'Modelo',
                             hintText: 'Ej. Corolla',
                             icon: Icons.directions_car_outlined,
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildTextField(
+                          const SizedBox(height: 10),
+                          _buildTextField(
                             controller: _anioController,
                             label: 'Año',
                             hintText: 'Ej. 2021',
                             icon: Icons.calendar_today_outlined,
                             keyboardType: TextInputType.number,
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildDropdownField(
+                          const SizedBox(height: 10),
+                          _buildDropdownField(
                             label: 'Tracción',
                             value: _traccionSeleccionada,
                             items: OpcionesTraccion.lista,
                             icon: Icons.swap_calls_outlined,
                             onChanged: (val) => setState(() => _traccionSeleccionada = val),
                           ),
+                        ] else ...[
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildTextField(
+                                  controller: _marcaController,
+                                  label: 'Marca',
+                                  hintText: 'Ej. Toyota',
+                                  icon: Icons.branding_watermark_outlined,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _buildTextField(
+                                  controller: _modeloController,
+                                  label: 'Modelo',
+                                  hintText: 'Ej. Corolla',
+                                  icon: Icons.directions_car_outlined,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildTextField(
+                                  controller: _anioController,
+                                  label: 'Año',
+                                  hintText: 'Ej. 2021',
+                                  icon: Icons.calendar_today_outlined,
+                                  keyboardType: TextInputType.number,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _buildDropdownField(
+                                  label: 'Tracción',
+                                  value: _traccionSeleccionada,
+                                  items: OpcionesTraccion.lista,
+                                  icon: Icons.swap_calls_outlined,
+                                  onChanged: (val) => setState(() => _traccionSeleccionada = val),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+
+                        const SizedBox(height: 24),
+
+                        // ── 3. ESPECIFICACIONES TÉCNICAS (DISPONIBLES PARA TODO ACTIVO) ──
+                        _buildSectionHeader(
+                          title: 'ESPECIFICACIONES TÉCNICAS',
+                          subtitle: 'Modifica los datos mecánicos registrados para este activo.',
+                          icon: Icons.precision_manufacturing_outlined,
                         ),
-                      ],
-                    ),
+                        const SizedBox(height: 14),
 
-                    const SizedBox(height: 24),
+                        _buildTextField(
+                          controller: _numeroMotorController,
+                          label: 'Número de Motor',
+                          hintText: 'Ej. 1NZ-FE-123456',
+                          icon: Icons.tag,
+                        ),
+                        const SizedBox(height: 12),
 
-                    // ── 3. ESPECIFICACIONES TÉCNICAS (DISPONIBLES PARA TODO ACTIVO) ──
-                    _buildSectionHeader(
-                      title: 'ESPECIFICACIONES TÉCNICAS',
-                      subtitle: 'Modifica los datos mecánicos registrados para este activo.',
-                      icon: Icons.precision_manufacturing_outlined,
-                    ),
-                    const SizedBox(height: 14),
-
-                    _buildTextField(
-                      controller: _numeroMotorController,
-                      label: 'Número de Motor',
-                      hintText: 'Ej. 1NZ-FE-123456',
-                      icon: Icons.tag,
-                    ),
-                    const SizedBox(height: 12),
-
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildTextField(
+                        if (isUltraNarrow) ...[
+                          _buildTextField(
                             controller: _cilindradaController,
                             label: 'Cilindrada',
                             hintText: 'Ej. 1.8L',
                             icon: Icons.speed,
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildDropdownField(
+                          const SizedBox(height: 10),
+                          _buildDropdownField(
                             label: 'Combustible',
                             value: _combustibleSeleccionado,
                             items: OpcionesCombustible.lista,
                             icon: Icons.local_gas_station_outlined,
                             onChanged: (val) => setState(() => _combustibleSeleccionado = val),
                           ),
+                        ] else ...[
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildTextField(
+                                  controller: _cilindradaController,
+                                  label: 'Cilindrada',
+                                  hintText: 'Ej. 1.8L',
+                                  icon: Icons.speed,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _buildDropdownField(
+                                  label: 'Combustible',
+                                  value: _combustibleSeleccionado,
+                                  items: OpcionesCombustible.lista,
+                                  icon: Icons.local_gas_station_outlined,
+                                  onChanged: (val) => setState(() => _combustibleSeleccionado = val),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                        const SizedBox(height: 12),
+
+                        _buildDropdownField(
+                          label: 'Transmisión',
+                          value: _transmisionSeleccionada,
+                          items: OpcionesTransmision.lista,
+                          icon: Icons.settings_outlined,
+                          onChanged: (val) => setState(() => _transmisionSeleccionada = val),
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // ── 4. OBSERVACIÓN / ESTADO ──
+                        _buildSectionHeader(
+                          title: 'OBSERVACIÓN DEL ESTADO',
+                          subtitle: 'Detalles visuales, mecánicos o condiciones del repuesto.',
+                          icon: Icons.notes_outlined,
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: _observacionController,
+                          maxLines: 3,
+                          style: AppTypography.body.copyWith(color: AppPalette.textPrimary),
+                          decoration: InputDecoration(
+                            hintText: 'Detalles visuales o mecánicos del repuesto...',
+                            hintStyle: AppTypography.body.copyWith(color: AppPalette.textSecondary.withValues(alpha: 0.5)),
+                            filled: true,
+                            fillColor: AppPalette.surface,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: AppPalette.neutral.withValues(alpha: 0.2)),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: AppPalette.neutral.withValues(alpha: 0.2)),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(color: AppPalette.primary, width: 1.5),
+                            ),
+                          ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-
-                    _buildDropdownField(
-                      label: 'Transmisión',
-                      value: _transmisionSeleccionada,
-                      items: OpcionesTransmision.lista,
-                      icon: Icons.settings_outlined,
-                      onChanged: (val) => setState(() => _transmisionSeleccionada = val),
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    // ── 4. OBSERVACIÓN / ESTADO ──
-                    _buildSectionHeader(
-                      title: 'OBSERVACIÓN DEL ESTADO',
-                      subtitle: 'Detalles visuales, mecánicos o condiciones del repuesto.',
-                      icon: Icons.notes_outlined,
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _observacionController,
-                      maxLines: 3,
-                      style: AppTypography.body.copyWith(color: AppPalette.textPrimary),
-                      decoration: InputDecoration(
-                        hintText: 'Detalles visuales o mecánicos del repuesto...',
-                        hintStyle: AppTypography.body.copyWith(color: AppPalette.textSecondary.withValues(alpha: 0.5)),
-                        filled: true,
-                        fillColor: AppPalette.surface,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: AppPalette.neutral.withValues(alpha: 0.2)),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: AppPalette.neutral.withValues(alpha: 0.2)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: AppPalette.primary, width: 1.5),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                  );
+                },
               ),
             ),
 
@@ -588,63 +679,89 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
                   ),
                 ),
               ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _isSaving ? null : _handleCancelOrClose,
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        side: BorderSide(color: AppPalette.neutral.withValues(alpha: 0.4)),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
+              child: LayoutBuilder(
+                builder: (context, actionConstraints) {
+                  final isCompactActions = actionConstraints.maxWidth < 320;
+                  final btnCancelar = OutlinedButton(
+                    onPressed: _isSaving ? null : _handleCancelOrClose,
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: BorderSide(color: AppPalette.neutral.withValues(alpha: 0.4)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
                       ),
+                    ),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
                       child: Text(
                         'CANCELAR',
                         style: AppTypography.button.copyWith(color: AppPalette.textSecondary),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 2,
-                    child: ElevatedButton.icon(
-                      onPressed: _isSaving ? null : _guardarCambios,
-                      icon: _isSaving
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Icon(Icons.check_rounded, color: Colors.white),
-                      label: Text(
+                  );
+
+                  final btnGuardar = ElevatedButton.icon(
+                    onPressed: _isSaving ? null : _guardarCambios,
+                    icon: _isSaving
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.check_rounded, color: Colors.white),
+                    label: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
                         _isSaving ? 'GUARDANDO...' : 'GUARDAR CAMBIOS',
                         style: AppTypography.button.copyWith(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppPalette.primary,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppPalette.primary,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
                       ),
                     ),
-                  ),
-                ],
+                  );
+
+                  if (isCompactActions) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        btnGuardar,
+                        const SizedBox(height: 8),
+                        btnCancelar,
+                      ],
+                    );
+                  }
+
+                  return Row(
+                    children: [
+                      Expanded(child: btnCancelar),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
+                        child: btnGuardar,
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildQuickLocationSuggestions() {
     return Column(
@@ -654,11 +771,13 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
           children: [
             const Icon(Icons.flash_on, size: 13, color: AppPalette.primary),
             const SizedBox(width: 4),
-            Text(
-              'Sugerencias rápidas para Galpón y Pasillo:',
-              style: AppTypography.small.copyWith(
-                color: AppPalette.textSecondary,
-                fontSize: 11,
+            Expanded(
+              child: Text(
+                'Sugerencias rápidas para Galpón y Pasillo:',
+                style: AppTypography.small.copyWith(
+                  color: AppPalette.textSecondary,
+                  fontSize: 11,
+                ),
               ),
             ),
           ],

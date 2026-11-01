@@ -185,17 +185,40 @@ class CatalogoItem {
     };
   }
 
-  /// Título compuesto para la tarjeta de producto (ej: "Motor - Toyota Yaris 2018")
+  /// Extrae las primeras 4 siglas/caracteres alfanuméricos en mayúsculas del número de motor (SPEC-24).
+  static String extraerSiglasMotor(String? numMotor) {
+    if (numMotor == null) return '';
+    final limpio = numMotor.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').trim().toUpperCase();
+    if (limpio.isEmpty || limpio == 'SA' || limpio == 'SN' || limpio == 'NULL' || limpio == 'NA' || limpio == 'NONE') {
+      return '';
+    }
+    return limpio.length > 4 ? limpio.substring(0, 4) : limpio;
+  }
+
+  /// Título compuesto para la tarjeta de producto (ej: "Motor - Toyota Yaris 2018 [1NZF]")
   String get tituloRepuesto {
     final vehiculoParts = <String>[];
     if (marca != null && marca!.isNotEmpty) vehiculoParts.add(marca!);
     if (modelo != null && modelo!.isNotEmpty) vehiculoParts.add(modelo!);
     if (anio != null) vehiculoParts.add(anio.toString());
 
+    String base;
     if (vehiculoParts.isNotEmpty) {
-      return '$nombreCategoria - ${vehiculoParts.join(' ')}';
+      base = '$nombreCategoria - ${vehiculoParts.join(' ')}';
+    } else {
+      base = nombreCategoria;
     }
-    return nombreCategoria;
+
+    // Regla de Negocio SPEC-24: Únicamente para categoría Motor, si tiene número de motor válido,
+    // incluir al final entre corchetes sus primeras 4 siglas.
+    if (idCategoria == 1 || nombreCategoria.toLowerCase().trim() == 'motor') {
+      final sigla = extraerSiglasMotor(numeroMotor);
+      if (sigla.isNotEmpty) {
+        return '$base [$sigla]';
+      }
+    }
+
+    return base;
   }
 
   /// Título limpio del vehículo donante sin prefijo redundante de categoría (ej: "DODGE RAM QUAD CAB 4X4 5.9 2008")
@@ -205,15 +228,27 @@ class CatalogoItem {
     if (modelo != null && modelo!.isNotEmpty) vehiculoParts.add(modelo!);
     if (anio != null) vehiculoParts.add(anio.toString());
 
+    String joined;
     if (vehiculoParts.isNotEmpty) {
-      final joined = vehiculoParts.join(' ');
+      final rawJoined = vehiculoParts.join(' ');
       final prefijoCat = '${nombreCategoria.toLowerCase()} - ';
-      if (joined.toLowerCase().startsWith(prefijoCat)) {
-        return joined.substring(prefijoCat.length).trim();
+      if (rawJoined.toLowerCase().startsWith(prefijoCat)) {
+        joined = rawJoined.substring(prefijoCat.length).trim();
+      } else {
+        joined = rawJoined;
       }
-      return joined;
+    } else {
+      joined = nombreCategoria;
     }
-    return nombreCategoria;
+
+    if (idCategoria == 1 || nombreCategoria.toLowerCase().trim() == 'motor') {
+      final sigla = extraerSiglasMotor(numeroMotor);
+      if (sigla.isNotEmpty) {
+        return '$joined [$sigla]';
+      }
+    }
+
+    return joined;
   }
 
   /// Ubicación física en bodega formateada con el mismo método de las tareas de bodega (separada con punto)

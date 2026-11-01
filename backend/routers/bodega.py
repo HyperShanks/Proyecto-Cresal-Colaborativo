@@ -41,6 +41,7 @@ from schemas import (
 )
 from core.security import get_current_user, require_bodega_access
 from core.policies import validar_horario_operativo_bodega
+from routers.inventario import extraer_siglas_motor
 
 router = APIRouter(
     prefix="/api/v1/bodega",
@@ -530,6 +531,12 @@ def obtener_tareas_pendientes(
             titulo = f"{cat_nombre} - {vehiculo.marca} {vehiculo.modelo}{anio_str}"
         else:
             titulo = f"{cat_nombre} - {activo.sku_qr_fisico}" if activo.sku_qr_fisico else cat_nombre
+
+        if activo.id_categoria == 1:
+            num_mot = (motor.numero_motor if motor else None) or (vehiculo.numero_motor if vehiculo else None)
+            sigla = extraer_siglas_motor(num_mot)
+            if sigla:
+                titulo = f"{titulo} [{sigla}]"
 
         alertas.append(
             TareaAlertaResponse(

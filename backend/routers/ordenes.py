@@ -13,6 +13,7 @@ from sqlalchemy import or_, and_, not_, func, cast, String, case
 
 from database import get_db
 from services.telegram_service import TelegramService
+from routers.inventario import extraer_siglas_motor
 from models import (
     Auditoria_Edicion_Pago,
     Usuario, Cliente, Region, Comuna, Orden_Venta, Detalle_Orden,
@@ -1230,6 +1231,10 @@ def obtener_mis_ventas(
                         titulo_item = f"{nombre_cat} - {veh.marca} {veh.modelo} {veh.anio or ''}".strip()
                     else:
                         titulo_item = f"{nombre_cat} ({sku_fisico})"
+                    if act.id_categoria == 1 and veh and veh.numero_motor:
+                        sigla = extraer_siglas_motor(veh.numero_motor)
+                        if sigla:
+                            titulo_item = f"{titulo_item} [{sigla}]"
             elif reserva_asociada:
                 cat_bo = categorias_map.get(reserva_asociada.id_categoria_requerida)
                 id_cat = cat_bo.id_categoria if cat_bo else None
@@ -1891,6 +1896,10 @@ def listar_entregas_envios(
                         titulo_item = f"{nombre_cat} - {veh.marca} {veh.modelo} {veh.anio or ''}".strip()
                     else:
                         titulo_item = f"{nombre_cat} ({sku_fisico})"
+                    if act.id_categoria == 1 and veh and veh.numero_motor:
+                        sigla = extraer_siglas_motor(veh.numero_motor)
+                        if sigla:
+                            titulo_item = f"{titulo_item} [{sigla}]"
 
             notas_item = None if (not d.id_activo and not reserva_asociada) else d.notas_preparacion
 
