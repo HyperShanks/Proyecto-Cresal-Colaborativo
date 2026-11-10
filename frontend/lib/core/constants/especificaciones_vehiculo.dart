@@ -98,6 +98,6 @@ class OpcionesUbicacionBodega {
   /// Galpones numéricos: '1', '2', '3'
   static const List<String> galpones = ['1', '2', '3'];
 
-  /// Pasillos alfabéticos: 'A', 'B', 'C', 'D', 'E', 'F', 'G'
-  static const List<String> pasillos = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+  /// Pasillos alfabéticos: 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'
+  static const List<String> pasillos = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
 }

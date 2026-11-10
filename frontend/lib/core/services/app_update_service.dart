@@ -54,9 +54,9 @@ class AppUpdateService {
   AppUpdateService._internal();
 
   /// Versión actual declarada en el código fuente Dart (fuente de verdad)
-  static const String appVersion = '1.0.11';
-  static const String appBuildNumber = '12';
-  static const String appFullVersion = '1.0.11+12';
+  static const String appVersion = '1.2.0';
+  static const String appBuildNumber = '13';
+  static const String appFullVersion = '1.2.0+13';
 
   /// Convierte '1.0.2+3' o 'v1.0.2' en [major, minor, patch, build]
   static List<int> parseVersion(String vStr) {

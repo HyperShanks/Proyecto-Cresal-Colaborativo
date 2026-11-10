@@ -89,9 +89,9 @@ void main() {
       ]);
     });
 
-    test('OpcionesUbicacionBodega define Galpones 1..3 y Pasillos A..G', () {
+    test('OpcionesUbicacionBodega define Galpones 1..3 y Pasillos A..H', () {
       expect(OpcionesUbicacionBodega.galpones, ['1', '2', '3']);
-      expect(OpcionesUbicacionBodega.pasillos, ['A', 'B', 'C', 'D', 'E', 'F', 'G']);
+      expect(OpcionesUbicacionBodega.pasillos, ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']);
     });
   });
 

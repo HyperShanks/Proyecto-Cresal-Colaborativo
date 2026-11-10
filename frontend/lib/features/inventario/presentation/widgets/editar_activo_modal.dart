@@ -828,7 +828,7 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
                 ),
               );
             }),
-            ...['A', 'B', 'C', 'D', 'E'].map((p) {
+            ...OpcionesUbicacionBodega.pasillos.map((p) {
               final isSelected = _pasilloController.text.trim() == p;
               return InkWell(
                 onTap: () {
