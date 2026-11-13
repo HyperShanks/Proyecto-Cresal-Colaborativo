@@ -278,3 +278,119 @@ class BackorderAuditoriaResponseDTO(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+
+# ==========================================
+# DTOs PARA PREDICCIÓN ML DE VENTAS Y STOCK (CRES-281)
+# ==========================================
+
+class MetadataModeloDTO(BaseModel):
+    """Metadatos técnicos de rendimiento y latencia de inferencia del modelo XGBoost."""
+    algoritmo: str = Field(description="Algoritmo productivo utilizado para la inferencia")
+    exactitud_wape_pct: float = Field(description="Exactitud global (100 - WAPE) en validación histórica")
+    wape_promedio_pct: float = Field(description="Error porcentual absoluto ponderado (WAPE) promedio")
+    r2_promedio: float = Field(description="Coeficiente de determinación R2 promedio")
+    id_sucursal_filtro: Optional[int] = Field(default=None, description="ID de sucursal filtrada o None para consolidado")
+    semana_proyectada_inicio: str = Field(description="Fecha de inicio (lunes) de la próxima semana proyectada (ISO YYYY-MM-DD)")
+    tiempo_inferencia_ms: float = Field(description="Latencia total de consulta y predicción en milisegundos")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProyeccionSemanalItemDTO(BaseModel):
+    """Proyección multi-target de demanda y montos CLP para una semana futura."""
+    semana_inicio: str = Field(description="Fecha de inicio (lunes) de la semana proyectada")
+    dias_habiles: int = Field(description="Días hábiles considerados en el ajuste calendario")
+    unidades_motor: float = Field(description="Unidades proyectadas de motores (id_categoria = 1)")
+    monto_motor_clp: int = Field(description="Ingreso proyectado de motores en CLP")
+    unidades_caja: float = Field(description="Unidades proyectadas de cajas de cambio (id_categoria = 2)")
+    monto_caja_clp: int = Field(description="Ingreso proyectado de cajas de cambio en CLP")
+    unidades_accesorio: float = Field(description="Unidades proyectadas de accesorios/manuales (id_categoria = 3)")
+    monto_accesorio_clp: int = Field(description="Ingreso proyectado de accesorios/manuales en CLP")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PrediccionSemanalT1DTO(ProyeccionSemanalItemDTO):
+    """Predicción inmediata para la próxima semana (t+1) con totales y clasificación de régimen."""
+    venta_total_proyectada_clp: int = Field(description="Suma total proyectada de ventas en CLP para t+1")
+    regimen_motor: str = Field(description="Régimen de demanda esperado para motores: Baja, Normal o Alta")
+    regimen_caja: str = Field(description="Régimen de demanda esperado para cajas: Baja, Normal o Alta")
+    regimen_accesorio: str = Field(description="Régimen de demanda esperado para accesorios: Baja, Normal o Alta")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProyeccionMensual4SemanasDTO(BaseModel):
+    """Proyección acumulada recursiva a 4 semanas (~1 mes operativo) con desglose semanal."""
+    unidades_motor: float = Field(description="Total unidades de motores proyectadas en 4 semanas")
+    monto_motor_clp: int = Field(description="Monto acumulado proyectado de motores en CLP (4 semanas)")
+    unidades_caja: float = Field(description="Total unidades de cajas proyectadas en 4 semanas")
+    monto_caja_clp: int = Field(description="Monto acumulado proyectado de cajas en CLP (4 semanas)")
+    unidades_accesorio: float = Field(description="Total unidades de accesorios proyectadas en 4 semanas")
+    monto_accesorio_clp: int = Field(description="Monto acumulado proyectado de accesorios en CLP (4 semanas)")
+    venta_total_proyectada_clp: int = Field(description="Ingreso total proyectado a 4 semanas en CLP")
+    desglose_semanal: List[ProyeccionSemanalItemDTO] = Field(
+        default_factory=list,
+        description="Desglose semana a semana (t+1 a t+4)",
+    )
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MixPorcentualVentasDTO(BaseModel):
+    """Participación porcentual estimada de cada categoría sobre la venta proyectada de t+1."""
+    motor_pct: float = Field(description="Porcentaje de participación de Motores en CLP")
+    caja_pct: float = Field(description="Porcentaje de participación de Cajas de Cambios en CLP")
+    accesorio_pct: float = Field(description="Porcentaje de participación de Accesorios/Manuales en CLP")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CoberturaStockCriticoItemDTO(BaseModel):
+    """Análisis de cobertura entre inventario físico real, backorders pendientes y demanda predicha."""
+    id_categoria: int = Field(description="ID de categoría crítica (1=Motor, 2=Caja de Cambios)")
+    categoria: str = Field(description="Nombre de la categoría")
+    stock_disponible_tasado: int = Field(description="Unidades en estado Disponible con tasación fijada")
+    stock_paletizado_sin_tasar: int = Field(description="Unidades en estado Paletizado en rack pendientes de tasación")
+    stock_total_disponible: int = Field(description="Total físico disponible + paletizado para venta")
+    stock_vina_del_mar: int = Field(description="Stock disponible en Casa Matriz Viña del Mar")
+    stock_limache: int = Field(description="Stock disponible en Sucursal Limache")
+    backorders_pendientes: int = Field(description="Backorders activos sin activo físico asignado aún")
+    demanda_predicha_semanal: float = Field(description="Demanda semanal predicha (t+1) en unidades")
+    demanda_predicha_mensual_4sem: float = Field(description="Demanda acumulada predicha en 4 semanas en unidades")
+    balance_unidades: int = Field(description="Balance neto: stock_total_disponible - (ceil(demanda_semanal) + backorders_pendientes)")
+    semanas_cobertura: float = Field(description="Semanas de inventario estimadas al ritmo de demanda t+1")
+    estado_alerta: str = Field(description="Nivel de alerta: Déficit Crítico, Riesgo de Quiebre u Óptimo")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class HistorialSemanalItemDTO(BaseModel):
+    """Punto semanal histórico (ventana de 8 semanas con Cold-Start padding si aplica)."""
+    semana_inicio: str = Field(description="Fecha de inicio (lunes) de la semana histórica")
+    unidades_motor: float = Field(description="Unidades vendidas de motores")
+    monto_motor_clp: int = Field(description="Monto vendido en CLP de motores")
+    unidades_caja: float = Field(description="Unidades vendidas de cajas de cambio")
+    monto_caja_clp: int = Field(description="Monto vendido en CLP de cajas de cambio")
+    unidades_accesorio: float = Field(description="Unidades vendidas de accesorios/manuales")
+    monto_accesorio_clp: int = Field(description="Monto vendido en CLP de accesorios/manuales")
+    venta_total_clp: int = Field(description="Venta total semanal en CLP")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PrediccionVentasStockResponseDTO(BaseModel):
+    """Respuesta consolidada del endpoint predictivo de Gerencia (CRES-281)."""
+    metadata_modelo: MetadataModeloDTO
+    prediccion_semanal_t1: PrediccionSemanalT1DTO
+    proyeccion_mensual_4_semanas: ProyeccionMensual4SemanasDTO
+    mix_porcentual_ventas: MixPorcentualVentasDTO
+    cobertura_stock_critico: List[CoberturaStockCriticoItemDTO] = Field(default_factory=list)
+    historial_reciente_8_semanas: List[HistorialSemanalItemDTO] = Field(default_factory=list)
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+PrediccionGerenciaResponseDTO = PrediccionVentasStockResponseDTO
+
+

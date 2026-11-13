@@ -42,7 +42,9 @@ from schemas import (
     BackorderAuditoriaResponseDTO,
     BackorderPagoDetalleDTO,
     BackorderMovimientoDTO,
+    PrediccionVentasStockResponseDTO,
 )
+from services.ml_prediction_service import generar_prediccion_ventas_y_stock
 
 # Inicializo el router con el prefijo /api/v1/gerencia y tag para Swagger
 router = APIRouter(
@@ -1029,4 +1031,45 @@ def obtener_auditoria_backorder_gerencia(
         desglose_pagos=desglose_pagos_dto,
         movimientos=movimientos,
     )
+
+
+# ==========================================
+# PREDICCIÓN ML DE VENTAS Y COBERTURA (CRES-281)
+# ==========================================
+
+@router.get(
+    "/dashboard/predicciones",
+    response_model=PrediccionVentasStockResponseDTO,
+    summary="Predicción ML de Ventas y Cobertura de Stock Crítico (CRES-281)",
+    description=(
+        "Ejecuta inferencia con modelos XGBoost multi-target y RobustScaler usando la "
+        "ventana histórica semanal reciente de Supabase (con relleno Cold-Start si aplica) "
+        "y contrasta la demanda proyectada contra el stock disponible y backorders activos."
+    ),
+)
+@router.get(
+    "/predicciones",
+    response_model=PrediccionVentasStockResponseDTO,
+    include_in_schema=False,
+)
+def obtener_predicciones_ventas_y_stock(
+    id_sucursal: Optional[int] = Query(
+        None,
+        description="ID de sucursal (1=Viña del Mar, 2=Limache). Si se omite, consolida toda la cadena.",
+    ),
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_gerencia_o_auditor_central),
+):
+    """
+    Endpoint síncrono para predicción semanal (t+1) y mensual recursiva (4 semanas)
+    de unidades y montos CLP por categoría, mix porcentual y cobertura de stock crítico.
+    """
+    try:
+        return generar_prediccion_ventas_y_stock(db=db, id_sucursal=id_sucursal)
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Servicio de inferencia ML temporalmente no disponible: {str(exc)}",
+        )
+
 

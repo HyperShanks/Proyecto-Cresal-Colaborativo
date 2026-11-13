@@ -1,19 +1,30 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from database import engine, Base
 from routers import vehiculos, auth, tickets, bodega, inventario, ordenes, clientes, despachos, caja, carrito, gerencia, app_update
 from fastapi.middleware.cors import CORSMiddleware
 from core.exceptions import register_exception_handlers
+from services.ml_prediction_service import inicializar_servicio_ml
 import models
 import os
 
 # Le dice a SQLAlchemy que lea models.py y cree las tablas en pgAdmin
 Base.metadata.create_all(bind=engine)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Carga los artefactos XGBoost y RobustScaler en memoria al iniciar FastAPI."""
+    inicializar_servicio_ml()
+    yield
+
+
 # Inicializamos la API de Cresal-SaaS
 app = FastAPI(
     title="API Cresal-SaaS",
     description="Backend transaccional para gestión de inventario y barrera digital",
-    version="1.2.0"
+    version="1.2.0",
+    lifespan=lifespan,
 )
 
 # Registrar Manejadores de Excepciones Globales y Sanitización (SPEC-HU-07)

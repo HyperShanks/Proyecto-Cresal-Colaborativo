@@ -690,3 +690,83 @@ def test_gerencia_kpis_salidas_motores_cajas_inventariadas(
     assert isinstance(data["total_salidas_hoy"], int)
     assert data["total_salidas_hoy"] == data["salidas_motores_hoy"] + data["salidas_cajas_hoy"]
 
+
+def test_gerencia_predicciones_ml_ventas_y_stock(
+    client, db_session_gerencia
+):
+    """
+    Verifica el endpoint predictivo ML (CRES-281):
+    - 200 OK global y filtrado por sucursal (id_sucursal=101) para usuario Administrador/Gerente.
+    - Estructura completa de respuesta (metadata_modelo, t+1, proyección 4 semanas, mix, cobertura crítica 1 y 2, historial 8 semanas).
+    - Bloqueo 403 Forbidden para Auditor de sucursal satélite (Limache) y Vendedor.
+    """
+    admin = db_session_gerencia["user_admin"]
+    headers_admin = {
+        "Authorization": f"Bearer {create_access_token(data={'sub': str(admin.id_usuario), 'rol': admin.id_rol})}"
+    }
+
+    # 1. Consulta consolidada global
+    res_global = client.get("/api/v1/gerencia/dashboard/predicciones", headers=headers_admin)
+    assert res_global.status_code == 200
+    payload = res_global.json()
+
+    assert "metadata_modelo" in payload
+    assert payload["metadata_modelo"]["id_sucursal_filtro"] is None
+    assert payload["metadata_modelo"]["algoritmo"] == "XGBoost Multi-Target (CRISP-DM)"
+    assert payload["metadata_modelo"]["tiempo_inferencia_ms"] >= 0
+
+    assert "prediccion_semanal_t1" in payload
+    t1 = payload["prediccion_semanal_t1"]
+    assert t1["unidades_motor"] >= 0
+    assert t1["monto_motor_clp"] >= 0
+    assert t1["unidades_caja"] >= 0
+    assert t1["monto_caja_clp"] >= 0
+    assert t1["unidades_accesorio"] >= 0
+    assert t1["monto_accesorio_clp"] >= 0
+    assert t1["venta_total_proyectada_clp"] == (
+        t1["monto_motor_clp"] + t1["monto_caja_clp"] + t1["monto_accesorio_clp"]
+    )
+    assert t1["regimen_motor"] in ("Baja", "Normal", "Alta")
+    assert t1["regimen_caja"] in ("Baja", "Normal", "Alta")
+    assert t1["regimen_accesorio"] in ("Baja", "Normal", "Alta")
+
+    assert "proyeccion_mensual_4_semanas" in payload
+    mensual = payload["proyeccion_mensual_4_semanas"]
+    assert len(mensual["desglose_semanal"]) == 4
+
+    assert "mix_porcentual_ventas" in payload
+    mix = payload["mix_porcentual_ventas"]
+    assert abs((mix["motor_pct"] + mix["caja_pct"] + mix["accesorio_pct"]) - 100.0) <= 0.1
+
+    assert "cobertura_stock_critico" in payload
+    cobertura = payload["cobertura_stock_critico"]
+    assert len(cobertura) == 2
+    assert {item["id_categoria"] for item in cobertura} == {1, 2}
+    for item in cobertura:
+        assert item["estado_alerta"] in ("Déficit Crítico", "Riesgo de Quiebre", "Óptimo")
+
+    assert "historial_reciente_8_semanas" in payload
+    assert len(payload["historial_reciente_8_semanas"]) == 8
+
+    # 2. Consulta filtrada por sucursal 101
+    res_suc = client.get("/api/v1/gerencia/dashboard/predicciones?id_sucursal=101", headers=headers_admin)
+    assert res_suc.status_code == 200
+    assert res_suc.json()["metadata_modelo"]["id_sucursal_filtro"] == 101
+
+    # 3. Bloqueo 403 para Auditor satélite (Limache)
+    auditor_limache = db_session_gerencia["user_auditor_limache"]
+    headers_limache = {
+        "Authorization": f"Bearer {create_access_token(data={'sub': str(auditor_limache.id_usuario), 'rol': auditor_limache.id_rol})}"
+    }
+    res_limache = client.get("/api/v1/gerencia/dashboard/predicciones", headers=headers_limache)
+    assert res_limache.status_code == 403
+
+    # 4. Bloqueo 403 para Vendedor
+    vendedor = db_session_gerencia["user_vendedor"]
+    headers_vendedor = {
+        "Authorization": f"Bearer {create_access_token(data={'sub': str(vendedor.id_usuario), 'rol': vendedor.id_rol})}"
+    }
+    res_vendedor = client.get("/api/v1/gerencia/dashboard/predicciones", headers=headers_vendedor)
+    assert res_vendedor.status_code == 403
+
+
