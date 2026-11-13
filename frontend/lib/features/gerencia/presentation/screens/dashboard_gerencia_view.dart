@@ -12,6 +12,9 @@ import '../../models/gerencia_models.dart';
 import '../../services/gerencia_service.dart';
 import '../widgets/kpi_card_widget.dart';
 import '../widgets/metodos_pago_chart.dart';
+import '../widgets/proyeccion_financiera_ia_section.dart';
+import '../widgets/demanda_fisica_activos_section.dart';
+import '../widgets/cobertura_stock_prescriptiva_section.dart';
 import 'inventario_gerencia_view.dart';
 import 'ordenes_gerencia_view.dart';
 import 'backorders_gerencia_view.dart';
@@ -29,11 +32,13 @@ enum VistaGerencia { dashboard, ordenes, inventario, backorders }
 class DashboardGerenciaView extends StatefulWidget {
   final int? sucursalInicial;
   final KpiFinancieroModel? kpisIniciales;
+  final PredictionDashboardModel? prediccionesIniciales;
 
   const DashboardGerenciaView({
     super.key,
     this.sucursalInicial,
     this.kpisIniciales,
+    this.prediccionesIniciales,
   });
 
   @override
@@ -52,6 +57,10 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
   KpiFinancieroModel? _kpis;
   ResumenPagosModel? _pagos;
   FlujoOperativoModel? _flujo;
+  PredictionDashboardModel? _prediccion;
+  bool _cargandoPrediccion = false;
+  String? _errorPrediccion;
+  int _prediccionRequestId = 0;
   String _nombreUsuario =
       AuthService.cachedUser != null &&
           AuthService.cachedUser!.nombres.isNotEmpty
@@ -113,6 +122,9 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
     _sucursalSeleccionada = widget.sucursalInicial;
     if (widget.kpisIniciales != null) {
       _kpis = widget.kpisIniciales;
+    }
+    if (widget.prediccionesIniciales != null) {
+      _prediccion = widget.prediccionesIniciales;
     }
     _spinController = AnimationController(
       vsync: this,
@@ -254,6 +266,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
     }
 
     try {
+      final predFuture = _cargarPredicciones(silent: silent);
       final futures = await Future.wait([
         GerenciaService.obtenerKpis(idSucursal: _sucursalSeleccionada),
         GerenciaService.obtenerResumenPagos(idSucursal: _sucursalSeleccionada),
@@ -261,6 +274,8 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
           idSucursal: _sucursalSeleccionada,
         ),
       ]);
+      // Dispara en paralelo sin bloquear ni propagar errores a las tarjetas principales
+      unawaited(predFuture);
 
       if (!mounted) return;
 
@@ -342,6 +357,49 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
         codigoError: codigoDiag,
         onReintentar: () => _cargarDashboard(),
       );
+    }
+  }
+
+  /// Carga de manera aislada la proyección financiera IA (CRES-282) para
+  /// que errores o latencia ML no afecten las tarjetas principales del dashboard.
+  Future<void> _cargarPredicciones({bool silent = false}) async {
+    if (!mounted || _esAuditorSucursal) return;
+    final reqId = ++_prediccionRequestId;
+    final sucursalSnapshot = _sucursalSeleccionada;
+
+    if (!silent) {
+      setState(() {
+        _cargandoPrediccion = true;
+        _errorPrediccion = null;
+      });
+    }
+
+    try {
+      final resultado = await GerenciaService.obtenerPrediccionesDashboard(
+        idSucursal: sucursalSnapshot,
+      );
+      if (!mounted || reqId != _prediccionRequestId) return;
+
+      setState(() {
+        _prediccion = resultado;
+        _cargandoPrediccion = false;
+        _errorPrediccion = null;
+      });
+    } catch (e) {
+      if (!mounted || reqId != _prediccionRequestId) return;
+      final errorStr = e is CustomApiException
+          ? e.messageUser
+          : ApiService.limpiarMensajeExcepcion(e);
+      debugPrint(
+        '📈 [GERENCIA-ML] ⚠️ Error controlado al cargar predicciones: $errorStr',
+      );
+      if (silent) {
+        return;
+      }
+      setState(() {
+        _cargandoPrediccion = false;
+        _errorPrediccion = errorStr;
+      });
     }
   }
 
@@ -565,6 +623,33 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
 
                   // Bento Trío de Visualizaciones
                   _buildBentoSection(),
+                  const SizedBox(height: 24),
+
+                  // Proyección Financiera IA & Mix de Ingresos (CRES-282)
+                  ProyeccionFinancieraIaSection(
+                    prediccion: _prediccion,
+                    cargando: _cargandoPrediccion,
+                    errorMensaje: _errorPrediccion,
+                    onReintentar: () => _cargarPredicciones(),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Pronóstico de Demanda Física de Motores, Cajas y Accesorios (CRES-283)
+                  DemandaFisicaActivosSection(
+                    prediccion: _prediccion,
+                    cargando: _cargandoPrediccion,
+                    errorMensaje: _errorPrediccion,
+                    onReintentar: () => _cargarPredicciones(),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Alertas Prescriptivas de Cobertura y Adquisición (CRES-284)
+                  CoberturaStockPrescriptivaSection(
+                    prediccion: _prediccion,
+                    cargando: _cargandoPrediccion,
+                    errorMensaje: _errorPrediccion,
+                    onReintentar: () => _cargarPredicciones(),
+                  ),
                 ],
               ),
             ),
@@ -1718,6 +1803,8 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
 
           setState(() {
             _sucursalSeleccionada = idNormalizado;
+            _prediccion = null;
+            _errorPrediccion = null;
           });
           if (_vistaActiva == VistaGerencia.dashboard && !_esAuditorSucursal) {
             _cargarDashboard();

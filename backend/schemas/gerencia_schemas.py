@@ -352,15 +352,45 @@ class CoberturaStockCriticoItemDTO(BaseModel):
     categoria: str = Field(description="Nombre de la categoría")
     stock_disponible_tasado: int = Field(description="Unidades en estado Disponible con tasación fijada")
     stock_paletizado_sin_tasar: int = Field(description="Unidades en estado Paletizado en rack pendientes de tasación")
+    stock_en_desarme: int = Field(default=0, description="Unidades en estado En Desarme en patio")
+    stock_en_proceso_interno: int = Field(default=0, description="Suma de Paletizado + En Desarme en preparación interna")
     stock_total_disponible: int = Field(description="Total físico disponible + paletizado para venta")
     stock_vina_del_mar: int = Field(description="Stock disponible en Casa Matriz Viña del Mar")
     stock_limache: int = Field(description="Stock disponible en Sucursal Limache")
+    stock_disponible_vina: int = Field(default=0, description="Stock en estado Disponible en Viña del Mar")
+    stock_disponible_limache: int = Field(default=0, description="Stock en estado Disponible en Limache")
+    stock_proceso_vina: int = Field(default=0, description="Stock Paletizado + En Desarme en Viña del Mar")
+    stock_proceso_limache: int = Field(default=0, description="Stock Paletizado + En Desarme en Limache")
+    paletizado_vina: int = Field(default=0, description="Stock Paletizado en Viña del Mar")
+    paletizado_limache: int = Field(default=0, description="Stock Paletizado en Limache")
+    desarme_vina: int = Field(default=0, description="Stock En Desarme en Viña del Mar")
+    desarme_limache: int = Field(default=0, description="Stock En Desarme en Limache")
     backorders_pendientes: int = Field(description="Backorders activos sin activo físico asignado aún")
     demanda_predicha_semanal: float = Field(description="Demanda semanal predicha (t+1) en unidades")
     demanda_predicha_mensual_4sem: float = Field(description="Demanda acumulada predicha en 4 semanas en unidades")
-    balance_unidades: int = Field(description="Balance neto: stock_total_disponible - (ceil(demanda_semanal) + backorders_pendientes)")
-    semanas_cobertura: float = Field(description="Semanas de inventario estimadas al ritmo de demanda t+1")
-    estado_alerta: str = Field(description="Nivel de alerta: Déficit Crítico, Riesgo de Quiebre u Óptimo")
+    requerimiento_total: int = Field(default=0, description="Requerimiento semanal: ceil(demanda_semanal) + backorders_pendientes")
+    balance_unidades: int = Field(description="Balance neto en vitrina: stock_disponible_tasado - requerimiento_total")
+    deficit_neto_compra: int = Field(default=0, description="Unidades adicionales requeridas en remates tras considerar stock interno en proceso")
+    semanas_cobertura: float = Field(description="Semanas de inventario en vitrina estimadas al ritmo de demanda t+1")
+    estado_alerta: str = Field(description="Semáforo CRES-284: Cobertura Óptima, Atención / En Proceso o Déficit Crítico")
+    recomendacion_accionable: str = Field(default="", description="Recomendación prescriptiva accionable para horizonte semanal (t+1)")
+    requerimiento_total_mensual_4sem: int = Field(default=0, description="Requerimiento acumulado 4 semanas: ceil(demanda_4sem) + backorders_pendientes")
+    balance_unidades_mensual_4sem: int = Field(default=0, description="Balance neto en vitrina para horizonte de 4 semanas")
+    deficit_neto_compra_mensual_4sem: int = Field(default=0, description="Déficit neto a adquirir en horizonte de 4 semanas")
+    estado_alerta_mensual_4sem: str = Field(default="Cobertura Óptima", description="Semáforo prescriptivo para horizonte mensual (4 semanas)")
+    recomendacion_accionable_mensual_4sem: str = Field(default="", description="Recomendación prescriptiva accionable para horizonte de 4 semanas")
+    precio_referencia_promedio: int = Field(
+        default=0,
+        description="Precio de referencia promedio actual en bodega (CLP) para activos Disponibles o Paletizados con tasación > 0",
+    )
+    precio_referencia_min: int = Field(
+        default=0,
+        description="Precio de referencia mínimo actual en bodega (CLP)",
+    )
+    precio_referencia_max: int = Field(
+        default=0,
+        description="Precio de referencia máximo actual en bodega (CLP)",
+    )
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -379,14 +409,38 @@ class HistorialSemanalItemDTO(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class DesgloseDemandaCategoriaItemDTO(BaseModel):
+    """Desglose de demanda física de las últimas 4 semanas cerradas por categoría (Stock Físico vs. Backorders)."""
+    id_categoria: int = Field(description="ID de categoría (1=Motor, 2=Caja de Cambios, 3=Accesorio / Manual)")
+    categoria: str = Field(description="Nombre legible de la categoría")
+    unidades_stock_fisico: int = Field(
+        default=0,
+        description="Unidades vendidas desde stock físico en los últimos 28 días (nro_pago=1)",
+    )
+    unidades_backorder: int = Field(
+        default=0,
+        description="Unidades originadas en Reservas_Backorder / compras en verde en los últimos 28 días",
+    )
+    unidades_totales_mes: int = Field(
+        default=0,
+        description="Suma total de demanda física del último mes (stock físico + backorders)",
+    )
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class PrediccionVentasStockResponseDTO(BaseModel):
-    """Respuesta consolidada del endpoint predictivo de Gerencia (CRES-281)."""
+    """Respuesta consolidada del endpoint predictivo de Gerencia (CRES-281 / CRES-283)."""
     metadata_modelo: MetadataModeloDTO
     prediccion_semanal_t1: PrediccionSemanalT1DTO
     proyeccion_mensual_4_semanas: ProyeccionMensual4SemanasDTO
     mix_porcentual_ventas: MixPorcentualVentasDTO
     cobertura_stock_critico: List[CoberturaStockCriticoItemDTO] = Field(default_factory=list)
     historial_reciente_8_semanas: List[HistorialSemanalItemDTO] = Field(default_factory=list)
+    desglose_demanda_ultimo_mes: List[DesgloseDemandaCategoriaItemDTO] = Field(
+        default_factory=list,
+        description="Desglose de demanda física de los últimos 28 días: Stock Físico vs. Reservas_Backorder",
+    )
 
     model_config = ConfigDict(from_attributes=True)
 

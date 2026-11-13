@@ -756,7 +756,7 @@ def _consultar_stock_y_backorders(db: Session, id_sucursal: Optional[int] = None
             INNER JOIN "Estado_Activo" ea ON ai.id_estado = ea.id_estado
             WHERE ai.estado = 'Activo'
               AND ai.id_categoria IN (1, 2)
-              AND LOWER(ea.nombre_estado) IN ('disponible', 'paletizado')
+              AND LOWER(ea.nombre_estado) IN ('disponible', 'paletizado', 'en desarme', 'en_desarme')
               {filtro_suc_ai}
             GROUP BY ai.id_categoria, ai.id_sucursal_actual, LOWER(ea.nombre_estado)
         """)
@@ -769,14 +769,32 @@ def _consultar_stock_y_backorders(db: Session, id_sucursal: Optional[int] = None
             LEFT JOIN "Orden_Venta" ov ON rb.id_orden = ov.id_orden
             WHERE rb.id_categoria_requerida IN (1, 2)
               AND rb.id_activo_asignado IS NULL
-              AND LOWER(COALESCE(rb.estado_reserva, '')) IN ('confirmada', 'pendiente', 'en_busqueda')
+              AND LOWER(COALESCE(rb.estado_reserva, '')) IN ('pendiente', 'confirmada', 'en_busqueda', 'en búsqueda', 'reservada')
               AND COALESCE(ov.estado_orden, '') NOT IN ('Anulada', 'Completada')
               {filtro_suc_rb}
             GROUP BY rb.id_categoria_requerida
         """)
 
+        sql_precio = text(f"""
+            SELECT
+                ai.id_categoria,
+                COALESCE(ROUND(AVG(ai.precio_referencia)), 0)::int AS precio_referencia_promedio,
+                COALESCE(MIN(ai.precio_referencia), 0)::int AS precio_referencia_min,
+                COALESCE(MAX(ai.precio_referencia), 0)::int AS precio_referencia_max
+            FROM "Activo_Inventariado" ai
+            INNER JOIN "Estado_Activo" ea ON ai.id_estado = ea.id_estado
+            WHERE ai.estado = 'Activo'
+              AND ai.id_categoria IN (1, 2)
+              AND LOWER(ea.nombre_estado) IN ('disponible', 'paletizado')
+              AND ai.precio_referencia IS NOT NULL
+              AND ai.precio_referencia > 0
+              {filtro_suc_ai}
+            GROUP BY ai.id_categoria
+        """)
+
         res_stock = [dict(r) for r in db.execute(sql_stock, params).mappings().all()]
         res_bo = [dict(r) for r in db.execute(sql_bo, params).mappings().all()]
+        res_precio = [dict(r) for r in db.execute(sql_precio, params).mappings().all()]
     else:
         q_stock = (
             db.query(
@@ -789,7 +807,9 @@ def _consultar_stock_y_backorders(db: Session, id_sucursal: Optional[int] = None
             .filter(
                 Activo_Inventariado.estado == "Activo",
                 Activo_Inventariado.id_categoria.in_([1, 2]),
-                func.lower(Estado_Activo.nombre_estado).in_(["disponible", "paletizado"]),
+                func.lower(Estado_Activo.nombre_estado).in_(
+                    ["disponible", "paletizado", "en desarme", "en_desarme"]
+                ),
             )
         )
         if id_sucursal is not None:
@@ -818,7 +838,7 @@ def _consultar_stock_y_backorders(db: Session, id_sucursal: Optional[int] = None
                 Reservas_Backorder.id_categoria_requerida.in_([1, 2]),
                 Reservas_Backorder.id_activo_asignado.is_(None),
                 func.lower(func.coalesce(Reservas_Backorder.estado_reserva, "")).in_(
-                    ["confirmada", "pendiente", "en_busqueda"]
+                    ["pendiente", "confirmada", "en_busqueda", "en búsqueda", "reservada"]
                 ),
                 func.coalesce(Orden_Venta.estado_orden, "").notin_(["Anulada", "Completada"]),
             )
@@ -830,49 +850,528 @@ def _consultar_stock_y_backorders(db: Session, id_sucursal: Optional[int] = None
             for r in q_bo.group_by(Reservas_Backorder.id_categoria_requerida).all()
         ]
 
+        q_precio = (
+            db.query(
+                Activo_Inventariado.id_categoria.label("id_categoria"),
+                func.round(func.avg(Activo_Inventariado.precio_referencia)).label("precio_referencia_promedio"),
+                func.min(Activo_Inventariado.precio_referencia).label("precio_referencia_min"),
+                func.max(Activo_Inventariado.precio_referencia).label("precio_referencia_max"),
+            )
+            .join(Estado_Activo, Activo_Inventariado.id_estado == Estado_Activo.id_estado)
+            .filter(
+                Activo_Inventariado.estado == "Activo",
+                Activo_Inventariado.id_categoria.in_([1, 2]),
+                func.lower(Estado_Activo.nombre_estado).in_(["disponible", "paletizado"]),
+                Activo_Inventariado.precio_referencia.isnot(None),
+                Activo_Inventariado.precio_referencia > 0,
+            )
+        )
+        if id_sucursal is not None:
+            q_precio = q_precio.filter(Activo_Inventariado.id_sucursal_actual == id_sucursal)
+        res_precio = [
+            {
+                "id_categoria": r.id_categoria,
+                "precio_referencia_promedio": int(round(r.precio_referencia_promedio or 0)),
+                "precio_referencia_min": int(r.precio_referencia_min or 0),
+                "precio_referencia_max": int(r.precio_referencia_max or 0),
+            }
+            for r in q_precio.group_by(Activo_Inventariado.id_categoria).all()
+        ]
+
+    def _crear_estructura_categoria(nombre: str) -> Dict[str, Any]:
+        return {
+            "categoria": nombre,
+            "stock_disponible_tasado": 0,
+            "stock_paletizado_sin_tasar": 0,
+            "stock_en_desarme": 0,
+            "stock_en_proceso_interno": 0,
+            "stock_total_disponible": 0,
+            "stock_vina_del_mar": 0,
+            "stock_limache": 0,
+            "stock_disponible_vina": 0,
+            "stock_disponible_limache": 0,
+            "stock_proceso_vina": 0,
+            "stock_proceso_limache": 0,
+            "paletizado_vina": 0,
+            "paletizado_limache": 0,
+            "desarme_vina": 0,
+            "desarme_limache": 0,
+            "backorders_pendientes": 0,
+            "precio_referencia_promedio": 0,
+            "precio_referencia_min": 0,
+            "precio_referencia_max": 0,
+        }
+
     estructura = {
-        1: {
-            "categoria": "Motor",
-            "stock_disponible_tasado": 0,
-            "stock_paletizado_sin_tasar": 0,
-            "stock_total_disponible": 0,
-            "stock_vina_del_mar": 0,
-            "stock_limache": 0,
-            "backorders_pendientes": 0,
-        },
-        2: {
-            "categoria": "Caja de Cambios",
-            "stock_disponible_tasado": 0,
-            "stock_paletizado_sin_tasar": 0,
-            "stock_total_disponible": 0,
-            "stock_vina_del_mar": 0,
-            "stock_limache": 0,
-            "backorders_pendientes": 0,
-        },
+        1: _crear_estructura_categoria("Motor"),
+        2: _crear_estructura_categoria("Caja de Cambios"),
     }
 
     for r in res_stock:
         cat = int(r["id_categoria"])
         cant = int(r["cantidad"])
-        est = r["estado_nombre"]
+        est = (r["estado_nombre"] or "").strip().lower()
         suc = int(r["id_sucursal_actual"] or 0)
+        es_vina = suc in (1, 101)
+        es_limache = suc in (2, 102)
         if cat in estructura:
-            estructura[cat]["stock_total_disponible"] += cant
+            item_cat = estructura[cat]
             if est == "disponible":
-                estructura[cat]["stock_disponible_tasado"] += cant
+                item_cat["stock_disponible_tasado"] += cant
+                item_cat["stock_total_disponible"] += cant
+                if es_vina:
+                    item_cat["stock_disponible_vina"] += cant
+                    item_cat["stock_vina_del_mar"] += cant
+                elif es_limache:
+                    item_cat["stock_disponible_limache"] += cant
+                    item_cat["stock_limache"] += cant
             elif est == "paletizado":
-                estructura[cat]["stock_paletizado_sin_tasar"] += cant
-            if suc == 1:
-                estructura[cat]["stock_vina_del_mar"] += cant
-            elif suc == 2:
-                estructura[cat]["stock_limache"] += cant
+                item_cat["stock_paletizado_sin_tasar"] += cant
+                item_cat["stock_en_proceso_interno"] += cant
+                item_cat["stock_total_disponible"] += cant
+                if es_vina:
+                    item_cat["paletizado_vina"] += cant
+                    item_cat["stock_proceso_vina"] += cant
+                    item_cat["stock_vina_del_mar"] += cant
+                elif es_limache:
+                    item_cat["paletizado_limache"] += cant
+                    item_cat["stock_proceso_limache"] += cant
+                    item_cat["stock_limache"] += cant
+            elif est in ("en desarme", "en_desarme"):
+                item_cat["stock_en_desarme"] += cant
+                item_cat["stock_en_proceso_interno"] += cant
+                if es_vina:
+                    item_cat["desarme_vina"] += cant
+                    item_cat["stock_proceso_vina"] += cant
+                elif es_limache:
+                    item_cat["desarme_limache"] += cant
+                    item_cat["stock_proceso_limache"] += cant
 
     for r in res_bo:
         cat = int(r["id_categoria"])
         if cat in estructura:
             estructura[cat]["backorders_pendientes"] = int(r["pendientes"])
 
+    for r in res_precio:
+        cat = int(r["id_categoria"])
+        if cat in estructura:
+            estructura[cat]["precio_referencia_promedio"] = int(r.get("precio_referencia_promedio") or 0)
+            estructura[cat]["precio_referencia_min"] = int(r.get("precio_referencia_min") or 0)
+            estructura[cat]["precio_referencia_max"] = int(r.get("precio_referencia_max") or 0)
+
     return estructura
+
+
+def _es_detalle_backorder(
+    detalle: Detalle_Orden,
+    backorders_orden: List[Reservas_Backorder],
+) -> bool:
+    desc_upper = (detalle.descripcion_manual or "").upper()
+    return (
+        "VERDE" in desc_upper
+        or "BACKORDER" in desc_upper
+        or (
+            detalle.id_activo is not None
+            and any(rb.id_activo_asignado == detalle.id_activo for rb in backorders_orden)
+        )
+    )
+
+
+def _consultar_desglose_demanda_ultimo_mes(
+    db: Session,
+    id_sucursal: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Calcula el desglose de demanda física de los últimos 28 días por categoría
+    separando Stock Físico (Orden_Venta sin compra en verde, nro_pago=1)
+    vs. Compras en Verde (Reservas_Backorder, sin doble contabilidad).
+    """
+    dialect_name = db.bind.dialect.name if db.bind is not None else "postgresql"
+    hoy_chile = datetime.now(TZ_CHILE).date()
+    limite_28d = hoy_chile - timedelta(days=28)
+
+    totales = {
+        1: {"id_categoria": 1, "categoria": "Motor", "unidades_stock_fisico": 0, "unidades_backorder": 0},
+        2: {"id_categoria": 2, "categoria": "Caja de Cambios", "unidades_stock_fisico": 0, "unidades_backorder": 0},
+        3: {"id_categoria": 3, "categoria": "Accesorio / Manual", "unidades_stock_fisico": 0, "unidades_backorder": 0},
+    }
+
+    if dialect_name == "postgresql":
+        filtro_sucursal_ov = """
+            AND (
+                CASE
+                    WHEN ov.id_sucursal = 1 AND (
+                        LOWER(COALESCE(u_vend.email, '')) = 'limache@cresal.cl'
+                        OR LOWER(COALESCE(u_vend.apellidos, '')) LIKE '%limache%'
+                    )
+                    THEN 2
+                    ELSE ov.id_sucursal
+                END
+            ) = :id_sucursal
+        """ if id_sucursal is not None else ""
+        filtro_sucursal_rb = "AND rb.id_sucursal_registro = :id_sucursal" if id_sucursal is not None else ""
+        params: Dict[str, Any] = {"limite_28d": limite_28d}
+        if id_sucursal is not None:
+            params["id_sucursal"] = id_sucursal
+
+        sql = text(f"""
+            WITH pagos_resueltos AS (
+                SELECT
+                    tp.id_pago,
+                    COALESCE(tp.id_orden, rb_link.id_orden) AS id_orden_resuelta,
+                    CASE
+                        WHEN COALESCE(tp.id_orden, rb_link.id_orden) IS NULL THEN tp.id_reserva
+                        ELSE NULL
+                    END AS id_reserva_huerfana,
+                    ((tp.fecha_pago::timestamp AT TIME ZONE 'UTC') AT TIME ZONE 'America/Santiago')::date AS fecha_op,
+                    tp.fecha_pago
+                FROM "Transaccion_Pago" tp
+                LEFT JOIN "Reservas_Backorder" rb_link
+                    ON tp.id_reserva = rb_link.id_reserva
+                WHERE tp.estado_pago = 'Procesado'
+                  AND tp.monto > 0
+            ),
+            pagos_orden AS (
+                SELECT
+                    pr.id_orden_resuelta AS id_orden,
+                    pr.fecha_op,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY pr.id_orden_resuelta
+                        ORDER BY pr.fecha_op ASC, pr.fecha_pago ASC, pr.id_pago ASC
+                    ) AS nro_pago
+                FROM pagos_resueltos pr
+                WHERE pr.id_orden_resuelta IS NOT NULL
+            ),
+            ordenes_primer_pago_28d AS (
+                SELECT DISTINCT po.id_orden
+                FROM pagos_orden po
+                INNER JOIN "Orden_Venta" ov ON ov.id_orden = po.id_orden
+                LEFT JOIN "Usuario" u_vend ON ov.id_vendedor = u_vend.id_usuario
+                WHERE po.nro_pago = 1
+                  AND po.fecha_op >= :limite_28d
+                  AND COALESCE(ov.estado_orden, '') NOT IN ('Anulada', 'Cancelada')
+                  {filtro_sucursal_ov}
+            ),
+            lineas_orden AS (
+                SELECT
+                    CASE
+                        WHEN ai.id_categoria IN (1, 2, 3) THEN ai.id_categoria
+                        WHEN LOWER(COALESCE(ai.sku_qr_fisico, '')) LIKE 'mot%' THEN 1
+                        WHEN LOWER(COALESCE(ai.sku_qr_fisico, '')) LIKE 'caj%' THEN 2
+                        WHEN rb.id_categoria_requerida IN (1, 2, 3) THEN rb.id_categoria_requerida
+                        WHEN (
+                            LOWER(COALESCE(d.descripcion_manual, '')) LIKE '%motor%'
+                            OR LOWER(COALESCE(d.descripcion_manual, '')) LIKE '%block%'
+                        )
+                        AND LOWER(COALESCE(d.descripcion_manual, '')) NOT SIMILAR TO
+                            '%(cremallera|partida|arranque|limpiaparabris|limpia parabris|limpiavidrio|limpia vidrio|alzavidrio|alza vidrio|calefacci|ventilador|electroventilador|soplador|blower|espejo|antena|bomba|paso a paso|ralent|sunroof|techo|actuador|regulador|direcci|columna|biela|perno|cubre|tensor|volante|soporte|culata)%'
+                        THEN 1
+                        WHEN (
+                            LOWER(COALESCE(d.descripcion_manual, '')) LIKE '%caja%'
+                            OR LOWER(COALESCE(d.descripcion_manual, '')) LIKE '%transmisi%'
+                        )
+                        AND LOWER(COALESCE(d.descripcion_manual, '')) NOT SIMILAR TO
+                            '%(fusible|fusilera|direcci|filtro|evaporador|bateria|batería|rele|relé|mariposa|termostato|herramienta|soporte|selectora|piola|carcasa|reparac)%'
+                        THEN 2
+                        ELSE 3
+                    END AS id_categoria,
+                    CASE
+                        WHEN UPPER(COALESCE(d.descripcion_manual, '')) LIKE '%VERDE%'
+                          OR UPPER(COALESCE(d.descripcion_manual, '')) LIKE '%BACKORDER%'
+                          OR (d.id_activo IS NOT NULL AND rb.id_activo_asignado IS NOT NULL)
+                        THEN 0
+                        ELSE COALESCE(d.cantidad, 1)
+                    END AS u_fisico,
+                    CASE
+                        WHEN UPPER(COALESCE(d.descripcion_manual, '')) LIKE '%VERDE%'
+                          OR UPPER(COALESCE(d.descripcion_manual, '')) LIKE '%BACKORDER%'
+                          OR (d.id_activo IS NOT NULL AND rb.id_activo_asignado IS NOT NULL)
+                        THEN COALESCE(d.cantidad, 1)
+                        ELSE 0
+                    END AS u_backorder
+                FROM "Detalle_Orden" d
+                INNER JOIN ordenes_primer_pago_28d o28 ON o28.id_orden = d.id_orden
+                LEFT JOIN "Activo_Inventariado" ai ON d.id_activo = ai.id_activo
+                LEFT JOIN LATERAL (
+                    SELECT rb_sub.id_categoria_requerida, rb_sub.id_activo_asignado
+                    FROM "Reservas_Backorder" rb_sub
+                    WHERE rb_sub.id_orden = d.id_orden
+                      AND LOWER(COALESCE(rb_sub.estado_reserva, '')) NOT IN ('anulada', 'cancelada')
+                      AND (
+                          UPPER(COALESCE(d.descripcion_manual, '')) LIKE '%VERDE%'
+                          OR UPPER(COALESCE(d.descripcion_manual, '')) LIKE '%BACKORDER%'
+                          OR (d.id_activo IS NOT NULL AND rb_sub.id_activo_asignado = d.id_activo)
+                      )
+                    ORDER BY
+                        CASE WHEN d.id_activo IS NOT NULL AND rb_sub.id_activo_asignado = d.id_activo THEN 0 ELSE 1 END,
+                        rb_sub.fecha_creacion ASC
+                    LIMIT 1
+                ) rb ON TRUE
+            ),
+            pagos_reserva_huerfana AS (
+                SELECT
+                    pr.id_reserva_huerfana,
+                    pr.fecha_op,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY pr.id_reserva_huerfana
+                        ORDER BY pr.fecha_op ASC, pr.fecha_pago ASC, pr.id_pago ASC
+                    ) AS nro_pago
+                FROM pagos_resueltos pr
+                WHERE pr.id_reserva_huerfana IS NOT NULL
+            ),
+            lineas_backorder_huerfano AS (
+                SELECT
+                    CASE WHEN rb.id_categoria_requerida IN (1, 2, 3) THEN rb.id_categoria_requerida ELSE 3 END AS id_categoria,
+                    0 AS u_fisico,
+                    1 AS u_backorder
+                FROM pagos_reserva_huerfana prh
+                INNER JOIN "Reservas_Backorder" rb ON rb.id_reserva = prh.id_reserva_huerfana
+                WHERE prh.nro_pago = 1
+                  AND prh.fecha_op >= :limite_28d
+                  AND rb.id_orden IS NULL
+                  AND LOWER(COALESCE(rb.estado_reserva, '')) NOT IN ('anulada', 'cancelada')
+                  {filtro_sucursal_rb}
+
+                UNION ALL
+
+                SELECT
+                    CASE WHEN rb.id_categoria_requerida IN (1, 2, 3) THEN rb.id_categoria_requerida ELSE 3 END AS id_categoria,
+                    0 AS u_fisico,
+                    1 AS u_backorder
+                FROM "Reservas_Backorder" rb
+                WHERE rb.id_orden IS NULL
+                  AND LOWER(COALESCE(rb.estado_reserva, '')) IN ('confirmada', 'en bodega', 'lista para entrega', 'completada')
+                  AND ((rb.fecha_creacion::timestamp AT TIME ZONE 'UTC') AT TIME ZONE 'America/Santiago')::date >= :limite_28d
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM "Transaccion_Pago" tp2
+                      WHERE tp2.id_reserva = rb.id_reserva
+                        AND tp2.estado_pago = 'Procesado'
+                        AND tp2.monto > 0
+                  )
+                  {filtro_sucursal_rb}
+            )
+            SELECT
+                id_categoria,
+                COALESCE(SUM(u_fisico), 0)::int AS unidades_stock_fisico,
+                COALESCE(SUM(u_backorder), 0)::int AS unidades_backorder
+            FROM (
+                SELECT id_categoria, u_fisico, u_backorder FROM lineas_orden
+                UNION ALL
+                SELECT id_categoria, u_fisico, u_backorder FROM lineas_backorder_huerfano
+            ) combined
+            GROUP BY id_categoria
+        """)
+
+        for r in db.execute(sql, params).mappings().all():
+            cat_id = int(r["id_categoria"])
+            if cat_id in totales:
+                totales[cat_id]["unidades_stock_fisico"] = int(r["unidades_stock_fisico"] or 0)
+                totales[cat_id]["unidades_backorder"] = int(r["unidades_backorder"] or 0)
+    else:
+        pagos = (
+            db.query(Transaccion_Pago)
+            .filter(
+                Transaccion_Pago.estado_pago == "Procesado",
+                Transaccion_Pago.monto > 0,
+            )
+            .order_by(Transaccion_Pago.fecha_pago.asc(), Transaccion_Pago.id_pago.asc())
+            .all()
+        )
+
+        reserva_ids = {p.id_reserva for p in pagos if p.id_reserva is not None}
+        reservas_map: Dict[Any, Reservas_Backorder] = {}
+        if reserva_ids:
+            for rb in db.query(Reservas_Backorder).filter(Reservas_Backorder.id_reserva.in_(reserva_ids)).all():
+                reservas_map[rb.id_reserva] = rb
+
+        orden_ids: Set[Any] = set()
+        for p in pagos:
+            id_ord = p.id_orden
+            if id_ord is None and p.id_reserva in reservas_map:
+                id_ord = reservas_map[p.id_reserva].id_orden
+            if id_ord is not None:
+                orden_ids.add(id_ord)
+
+        ordenes_map: Dict[Any, Orden_Venta] = {}
+        vendedores_map: Dict[Any, Usuario] = {}
+        detalles_por_orden: Dict[Any, List[Detalle_Orden]] = {}
+        activos_map: Dict[Any, Activo_Inventariado] = {}
+        backorders_por_orden: Dict[Any, List[Reservas_Backorder]] = {}
+
+        if orden_ids:
+            ordenes = db.query(Orden_Venta).filter(Orden_Venta.id_orden.in_(orden_ids)).all()
+            ordenes_map = {o.id_orden: o for o in ordenes}
+            vend_ids = {o.id_vendedor for o in ordenes if o.id_vendedor is not None}
+            if vend_ids:
+                vendedores_map = {
+                    u.id_usuario: u
+                    for u in db.query(Usuario).filter(Usuario.id_usuario.in_(vend_ids)).all()
+                }
+            detalles = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden.in_(orden_ids)).all()
+            act_ids = {d.id_activo for d in detalles if d.id_activo is not None}
+            if act_ids:
+                activos_map = {
+                    a.id_activo: a
+                    for a in db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo.in_(act_ids)).all()
+                }
+            for d in detalles:
+                detalles_por_orden.setdefault(d.id_orden, []).append(d)
+            bos = (
+                db.query(Reservas_Backorder)
+                .filter(
+                    Reservas_Backorder.id_orden.in_(orden_ids),
+                    func.lower(func.coalesce(Reservas_Backorder.estado_reserva, "")).notin_(["anulada", "cancelada"]),
+                )
+                .order_by(Reservas_Backorder.fecha_creacion.asc())
+                .all()
+            )
+            for rb in bos:
+                backorders_por_orden.setdefault(rb.id_orden, []).append(rb)
+
+        vistos_orden: Set[Any] = set()
+        vistos_reserva: Set[Any] = set()
+        reservas_con_pago: Set[Any] = set()
+
+        for p in pagos:
+            if p.id_reserva is not None:
+                reservas_con_pago.add(p.id_reserva)
+            fecha_op = _to_chile_date(p.fecha_pago)
+            if fecha_op is None:
+                continue
+
+            id_ord = p.id_orden
+            if id_ord is None and p.id_reserva in reservas_map:
+                id_ord = reservas_map[p.id_reserva].id_orden
+
+            if id_ord is not None:
+                ov = ordenes_map.get(id_ord)
+                if ov is None or (ov.estado_orden or "") in ("Anulada", "Cancelada"):
+                    continue
+
+                u_vend = vendedores_map.get(ov.id_vendedor)
+                es_limache_ref = (
+                    ov.id_sucursal == 1
+                    and u_vend is not None
+                    and (
+                        (u_vend.email or "").lower() == "limache@cresal.cl"
+                        or "limache" in (u_vend.apellidos or "").lower()
+                    )
+                )
+                suc_efectiva = 2 if es_limache_ref else ov.id_sucursal
+                if id_sucursal is not None and suc_efectiva != id_sucursal:
+                    continue
+
+                es_primer_pago = id_ord not in vistos_orden
+                vistos_orden.add(id_ord)
+                if not es_primer_pago or fecha_op < limite_28d:
+                    continue
+
+                bos_ord = backorders_por_orden.get(id_ord, [])
+                for d in detalles_por_orden.get(id_ord, []):
+                    cant = int(d.cantidad if d.cantidad is not None else 1)
+                    cat_id = _clasificar_categoria_linea(activos_map.get(d.id_activo), bos_ord, d)
+                    if _es_detalle_backorder(d, bos_ord):
+                        totales[cat_id]["unidades_backorder"] += cant
+                    else:
+                        totales[cat_id]["unidades_stock_fisico"] += cant
+
+            elif p.id_reserva is not None:
+                rb = reservas_map.get(p.id_reserva)
+                if rb is None or (rb.estado_reserva or "").lower() in ("anulada", "cancelada"):
+                    continue
+                if id_sucursal is not None and rb.id_sucursal_registro != id_sucursal:
+                    continue
+
+                es_primer_pago = rb.id_reserva not in vistos_reserva
+                vistos_reserva.add(rb.id_reserva)
+                if not es_primer_pago or fecha_op < limite_28d:
+                    continue
+
+                cat_req = rb.id_categoria_requerida if rb.id_categoria_requerida in (1, 2, 3) else 3
+                totales[cat_req]["unidades_backorder"] += 1
+
+        q_bos_directas = db.query(Reservas_Backorder).filter(
+            Reservas_Backorder.id_orden.is_(None),
+            func.lower(func.coalesce(Reservas_Backorder.estado_reserva, "")).in_(
+                ["confirmada", "en bodega", "lista para entrega", "completada"]
+            ),
+        )
+        if id_sucursal is not None:
+            q_bos_directas = q_bos_directas.filter(Reservas_Backorder.id_sucursal_registro == id_sucursal)
+        for rb in q_bos_directas.all():
+            if rb.id_reserva in reservas_con_pago:
+                continue
+            fecha_rb = _to_chile_date(rb.fecha_creacion)
+            if fecha_rb is None or fecha_rb < limite_28d:
+                continue
+            cat_req = rb.id_categoria_requerida if rb.id_categoria_requerida in (1, 2, 3) else 3
+            totales[cat_req]["unidades_backorder"] += 1
+
+    resultado: List[Dict[str, Any]] = []
+    for cat_id in (1, 2, 3):
+        item = totales[cat_id]
+        u_fis = int(item["unidades_stock_fisico"])
+        u_bo = int(item["unidades_backorder"])
+        resultado.append({
+            "id_categoria": cat_id,
+            "categoria": item["categoria"],
+            "unidades_stock_fisico": u_fis,
+            "unidades_backorder": u_bo,
+            "unidades_totales_mes": u_fis + u_bo,
+        })
+    return resultado
+
+
+def _evaluar_cobertura_prescriptiva(
+    *,
+    demanda_proyectada: float,
+    backorders_pendientes: int,
+    stock_disponible_tasado: int,
+    stock_en_proceso_interno: int,
+    stock_proceso_vina: int,
+    stock_proceso_limache: int,
+) -> Dict[str, Any]:
+    """
+    Calcula requerimiento total, balance neto de vitrina, déficit neto de compra
+    y semáforo de 3 estados (CRES-284) evitando duplicar lógica entre horizontes.
+    """
+    demanda_entera = int(np.ceil(max(demanda_proyectada, 0.0)))
+    requerimiento_total = demanda_entera + backorders_pendientes
+    balance_unidades = stock_disponible_tasado - requerimiento_total
+    stock_respaldo = stock_disponible_tasado + stock_en_proceso_interno
+    deficit_neto_compra = max(0, requerimiento_total - stock_respaldo)
+
+    if balance_unidades >= 0:
+        estado_alerta = "Cobertura Óptima"
+        recomendacion = (
+            f"Cobertura óptima: superávit de +{balance_unidades} unidades disponibles en vitrina "
+            "para cubrir la demanda proyectada y reservas activas."
+        )
+    elif stock_respaldo >= requerimiento_total:
+        estado_alerta = "Atención / En Proceso"
+        recomendacion = (
+            f"Atención: faltan {abs(balance_unidades)} unidades disponibles en vitrina, "
+            f"pero existen {stock_en_proceso_interno} activos en estado Paletizado/En Desarme "
+            f"({stock_proceso_vina} en Viña del Mar, {stock_proceso_limache} en Limache). "
+            "Se sugiere priorizar su tasación y preparación."
+        )
+    else:
+        estado_alerta = "Déficit Crítico"
+        recomendacion = (
+            f"Déficit crítico proyectado de {abs(balance_unidades)} unidades. "
+            f"Existen {stock_en_proceso_interno} activos en Paletizado/En Desarme "
+            f"({stock_proceso_vina} en Viña del Mar, {stock_proceso_limache} en Limache); "
+            f"se sugiere priorizar su liberación y adquirir/desarmar {deficit_neto_compra} unidades adicionales en remates."
+        )
+
+    return {
+        "requerimiento_total": requerimiento_total,
+        "balance_unidades": balance_unidades,
+        "deficit_neto_compra": deficit_neto_compra,
+        "estado_alerta": estado_alerta,
+        "recomendacion_accionable": recomendacion,
+    }
 
 
 def generar_prediccion_ventas_y_stock(db: Session, id_sucursal: Optional[int] = None) -> Dict[str, Any]:
@@ -985,35 +1484,67 @@ def generar_prediccion_ventas_y_stock(db: Session, id_sucursal: Optional[int] = 
     for cat_id, target_u in mapa_cat_target.items():
         info = stock_info[cat_id]
         demanda_sem = float(pred_t1[target_u])
-        demanda_entera = int(np.ceil(demanda_sem))
-        stock_disp = info["stock_total_disponible"]
+        demanda_4sem = round(sum(p[target_u] for p in proyecciones_4_semanas), 2)
+        stock_vitrina = info["stock_disponible_tasado"]
+        stock_proceso = info["stock_en_proceso_interno"]
         bo_pend = info["backorders_pendientes"]
 
-        balance = stock_disp - (demanda_entera + bo_pend)
-        semanas_cob = round(stock_disp / max(demanda_sem, 0.1), 2)
-
-        if balance < 0:
-            estado_alerta = "Déficit Crítico"
-        elif balance < 2 or semanas_cob < 1.5:
-            estado_alerta = "Riesgo de Quiebre"
-        else:
-            estado_alerta = "Óptimo"
+        eval_sem = _evaluar_cobertura_prescriptiva(
+            demanda_proyectada=demanda_sem,
+            backorders_pendientes=bo_pend,
+            stock_disponible_tasado=stock_vitrina,
+            stock_en_proceso_interno=stock_proceso,
+            stock_proceso_vina=info["stock_proceso_vina"],
+            stock_proceso_limache=info["stock_proceso_limache"],
+        )
+        eval_4sem = _evaluar_cobertura_prescriptiva(
+            demanda_proyectada=demanda_4sem,
+            backorders_pendientes=bo_pend,
+            stock_disponible_tasado=stock_vitrina,
+            stock_en_proceso_interno=stock_proceso,
+            stock_proceso_vina=info["stock_proceso_vina"],
+            stock_proceso_limache=info["stock_proceso_limache"],
+        )
+        semanas_cob = round(stock_vitrina / max(demanda_sem, 0.1), 2)
 
         cobertura_critica.append({
             "id_categoria": cat_id,
             "categoria": info["categoria"],
-            "stock_disponible_tasado": info["stock_disponible_tasado"],
+            "stock_disponible_tasado": stock_vitrina,
             "stock_paletizado_sin_tasar": info["stock_paletizado_sin_tasar"],
-            "stock_total_disponible": stock_disp,
+            "stock_en_desarme": info["stock_en_desarme"],
+            "stock_en_proceso_interno": stock_proceso,
+            "stock_total_disponible": info["stock_total_disponible"],
             "stock_vina_del_mar": info["stock_vina_del_mar"],
             "stock_limache": info["stock_limache"],
+            "stock_disponible_vina": info["stock_disponible_vina"],
+            "stock_disponible_limache": info["stock_disponible_limache"],
+            "stock_proceso_vina": info["stock_proceso_vina"],
+            "stock_proceso_limache": info["stock_proceso_limache"],
+            "paletizado_vina": info["paletizado_vina"],
+            "paletizado_limache": info["paletizado_limache"],
+            "desarme_vina": info["desarme_vina"],
+            "desarme_limache": info["desarme_limache"],
             "backorders_pendientes": bo_pend,
             "demanda_predicha_semanal": demanda_sem,
-            "demanda_predicha_mensual_4sem": round(sum(p[target_u] for p in proyecciones_4_semanas), 2),
-            "balance_unidades": balance,
+            "demanda_predicha_mensual_4sem": demanda_4sem,
+            "requerimiento_total": eval_sem["requerimiento_total"],
+            "balance_unidades": eval_sem["balance_unidades"],
+            "deficit_neto_compra": eval_sem["deficit_neto_compra"],
             "semanas_cobertura": semanas_cob,
-            "estado_alerta": estado_alerta,
+            "estado_alerta": eval_sem["estado_alerta"],
+            "recomendacion_accionable": eval_sem["recomendacion_accionable"],
+            "requerimiento_total_mensual_4sem": eval_4sem["requerimiento_total"],
+            "balance_unidades_mensual_4sem": eval_4sem["balance_unidades"],
+            "deficit_neto_compra_mensual_4sem": eval_4sem["deficit_neto_compra"],
+            "estado_alerta_mensual_4sem": eval_4sem["estado_alerta"],
+            "recomendacion_accionable_mensual_4sem": eval_4sem["recomendacion_accionable"],
+            "precio_referencia_promedio": info["precio_referencia_promedio"],
+            "precio_referencia_min": info["precio_referencia_min"],
+            "precio_referencia_max": info["precio_referencia_max"],
         })
+
+    desglose_demanda_mes = _consultar_desglose_demanda_ultimo_mes(db, id_sucursal=id_sucursal)
 
     serie_historica = []
     for _, row in df_hist.iterrows():
@@ -1060,4 +1591,5 @@ def generar_prediccion_ventas_y_stock(db: Session, id_sucursal: Optional[int] = 
         "mix_porcentual_ventas": mix_porcentual,
         "cobertura_stock_critico": cobertura_critica,
         "historial_reciente_8_semanas": serie_historica,
+        "desglose_demanda_ultimo_mes": desglose_demanda_mes,
     }

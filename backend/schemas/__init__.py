@@ -34,6 +34,7 @@ from .gerencia_schemas import (
     MixPorcentualVentasDTO,
     CoberturaStockCriticoItemDTO,
     HistorialSemanalItemDTO,
+    DesgloseDemandaCategoriaItemDTO,
     PrediccionVentasStockResponseDTO,
     PrediccionGerenciaResponseDTO,
 )

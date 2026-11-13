@@ -29,7 +29,11 @@ from models import (
     Vehiculo_Origen,
     Auditoria_Barrera,
 )
-from core.security import require_gerencia_role, require_gerencia_o_auditor_central
+from core.security import (
+    require_gerencia_role,
+    require_gerencia_o_auditor_central,
+    require_gerencia_jefe_ventas_o_auditor_central,
+)
 from schemas import (
     KpiFinancieroDTO,
     ResumenPagosDTO,
@@ -1058,7 +1062,7 @@ def obtener_predicciones_ventas_y_stock(
         description="ID de sucursal (1=Viña del Mar, 2=Limache). Si se omite, consolida toda la cadena.",
     ),
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_gerencia_o_auditor_central),
+    current_user: Usuario = Depends(require_gerencia_jefe_ventas_o_auditor_central),
 ):
     """
     Endpoint síncrono para predicción semanal (t+1) y mensual recursiva (4 semanas)
