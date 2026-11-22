@@ -108,26 +108,30 @@ Puesto crítico de alta concurrencia donde se reciben pagos en efectivo, transfe
 
 #### 1. Módulo Principal de Caja (`CajaMainScreen`)
 - **Ruta / Archivo:** `frontend/lib/features/caja/presentation/screens/caja_main_screen.dart`
-- **Sidebar de Navegación:**
-  - Alterna entre el panel de *Cobro Operativo* y el *Historial de Caja*.
-  - El cambio entre módulos es instantáneo y realiza una sincronización en segundo plano si los datos ya están en memoria.
+- **Sidebar de Navegación y Carga Lazy:**
+  - Alterna entre *Bandeja de Cobros*, *Historial de Pagos* y *Soporte*.
+  - Al iniciar sesión solo carga *Bandeja de Cobros*; las pestañas de *Historial* y *Soporte* se inicializan bajo demanda (**lazy**) al abrirlas por primera vez y permanecen instanciadas en `IndexedStack` para cambios instantáneos.
+- **Sincronización Híbrida en Tiempo Real (Push SSE + Respaldo 30s):**
+  - **Canal Push SSE (`CajaSseService` → `GET /api/v1/caja/stream`):** Al crearse o anularse una orden en mesón o registrarse/editarse un pago en la sucursal, la terminal de Caja recibe el evento en **<1 segundo** sin que la cajera tenga que pulsar "Actualizar".
+  - **Respaldo Silencioso:** `SilentPollingManager` sondea cada **30 segundos** con `await` estricto como red de seguridad ante eventuales microcortes del enlace.
 
-#### 2. Cobros Pendientes (`CobroScreen` / `CajaProvider`)
+#### 2. Cobros Pendientes (`CajaProvider`)
 - **Ruta / Archivo:** `frontend/lib/features/caja/presentation/providers/caja_provider.dart`
-- **Sistema de Refresco:**
-  - **Sondeo Silencioso:** `SilentPollingManager` sondea cada **12 segundos** por nuevas órdenes enviadas por los vendedores.
 - **🛡️ GUARDA CRÍTICA DE COBRO (Anti-Interrupción):**
-  - Si la cajera ha seleccionado una orden y está en proceso de cobro (`isProcesandoCobro == true` o existen métodos de pago digitados en el formulario), **el sondeo se pausa automáticamente**.
+  - Si la cajera ha seleccionado una orden y está en proceso de cobro (`isProcesandoCobro == true` o existen métodos de pago digitados en `pagosDivididos`), **tanto el stream SSE como el respaldo cada 30s omiten la actualización**.
   - **Garantía:** Jamás se deselecciona la orden en pantalla ni se limpian los montos ingresados por una actualización de red concurrente.
 
 #### 3. Historial y Cuadre de Caja (`HistorialCajaScreen` / `HistorialCajaProvider`)
 - **Ruta / Archivo:** `frontend/lib/features/caja/presentation/screens/historial_caja_screen.dart`
-- **Preservación de Paginación:**
-  - Dispone del método `cargarHistorialSilencioso({int? pagina})`.
-  - Permite actualizar el consolidado financiero de caja y las órdenes pagadas **manteniendo la página actual** (por ejemplo, página 3 de 10) sin forzar el salto a la página 1.
+- **Tabla Persistente (Sin Pantalla en Blanco):**
+  - El spinner centrado solo se muestra en la carga inicial (`isLoading && data == null`). Al cambiar página, período o filtro, la tabla y tarjetas de arqueo permanecen visibles con un `LinearProgressIndicator` sutil arriba.
+- **Preservación de Paginación y Solicitudes:**
+  - Dispone del método `Future<void> refrescarSilencioso()`, que se omite si ya hay una consulta explícita en curso y **nunca** invalida ni pisa la respuesta solicitada por el usuario.
 - **Protección de Modales de Auditoría:**
   - `DetalleAuditoriaDialog` y los selectores de rango de fecha usan la guarda `_isModalAbierto`.
-  - Al cerrar la ventana de inspección de una transacción, la tabla no se blanquea ni se recarga desde cero.
+  - Al cerrar la ventana de inspección de una transacción sin mutaciones, la tabla no se blanquea ni se recarga desde cero.
+
+> **Referencia técnica completa (eliminación de N+1 y SSE):** Ver [DOCUMENTACION_OPTIMIZACION_CAJA_Y_SSE.md](../../entregas/DOCUMENTACION_OPTIMIZACION_CAJA_Y_SSE.md).
 
 ---
 
@@ -183,8 +187,8 @@ Vista corporativa de escritorio / web para directores y gerentes de sucursal, co
 | **Ventas** | Mis Órdenes (Historial) | Silent Polling | 15s | `_isModalAbierto` | ✅ Sí |
 | **Ventas** | Bandeja de Tasación | Silent Polling + Post-Action | 20s | Formulario de precio | ✅ Sí |
 | **Ventas** | Entregas y Envíos | Event Sync | En evento | In-memory merge | ✅ Sí |
-| **Caja** | Cobros Pendientes | Silent Polling | 12s | `isProcesandoCobro` / Pagos en curso | ✅ Sí |
-| **Caja** | Historial y Cuadre | Silent Polling / Paginado | Manual / Silent | `_isModalAbierto` | ✅ Sí (preserva pág) |
+| **Caja** | Cobros Pendientes | Push SSE (<1s) + Respaldo 30s | Push / 30s | `isProcesandoCobro` / Pagos en curso | ✅ Sí |
+| **Caja** | Historial y Cuadre | Push SSE + Respaldo 30s + Lazy | Push / 30s | `_isModalAbierto` / `isCargando` | ✅ Sí (preserva pág y tabla visible) |
 | **Gerencia** | Dashboard Ejecutivo | Silent Polling + On-Tab | 45s | `_dashboardDirty` | ✅ Sí |
 | **Gerencia** | Historial de Órdenes | Silent Polling + Paginado | 45s (activo) | Modal de auditoría | ✅ Sí (preserva pág) |
 | **Gerencia** | Inventario y Tasación | Silent Polling + Paginado | 45s (activo) | `_isModalAbierto` (`_TasacionDialog`) | ✅ Sí (preserva pág) |
