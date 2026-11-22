@@ -3,7 +3,7 @@
 **Código de Especificación:** `SPEC-HU-EDICION-PAGOS-AUDITORIA`  
 **Módulo:** Caja / Bandeja de Cobros / Historial de Órdenes  
 **Fecha de Implementación Original:** Octubre 2026  
-**Última Actualización (Saneamiento y Blindaje):** Noviembre 2026  
+**Última Actualización (Saneamiento y Blindaje):** 22 de noviembre de 2026  
 **Estado:** Vigente e Implementado (Edición 1 a 1 Blindada; División `1 → N` pendiente de fase posterior)
 
 ---
@@ -28,6 +28,28 @@ En la operación de mesón y caja de Cresal Repuestos se producen errores humano
 > **Alcance diferido para una fase posterior (NO implementado todavía):**
 > - División/rebalanceo multimétodo (`1 → N`) para repartir un pago único ya registrado en dos o más medios.
 > - Reversión de cobros (`Pagada` → `Reservada`).
+
+### 1.1 Hoja de Ruta y Decisiones de Diseño Pendientes (NO implementado — Referencia para futuras fases)
+
+> [!WARNING]
+> Todo lo listado en esta sección es **diseño previsto**, no código vigente. No debe asumirse que existe en el sistema actual.
+
+**A. División / Rebalanceo `1 → N` (mismo total y misma `fecha_pago` original):**
+* Permitir repartir un pago ya registrado en 2 o más métodos (ej. `$500.000 Débito` → `$200.000 Débito + $300.000 Efectivo`), exigiendo $\sum \text{nuevos} == \text{monto reemplazado}$.
+* Las nuevas filas **heredan la `fecha_pago` del pago reemplazado** (nunca `NOW()`), para no mover dinero entre jornadas ya cerradas (ej. abono del lunes + pago del miércoles).
+* El pago original **no se borra**: pasaría a `estado_pago = "Reemplazado"` (nuevo valor de `EstadoPagoEnum`, hoy inexistente).
+* Cambios de esquema previstos en `Auditoria_Edicion_Pago` (hoy `id_pago` es `NOT NULL` y `valor_anterior`/`valor_nuevo` son `VARCHAR(255)`): `id_pago` pasaría a *nullable* con FK `ON DELETE SET NULL` (**nunca `CASCADE`**, para que borrar un pago no destruya su auditoría) y los valores a `TEXT`, de modo que un evento a nivel de orden (rebalanceo con 3+ métodos) pueda auditarse completo.
+
+**B. Verificaciones obligatorias al introducir `"Reemplazado"`:**
+* Los filtros actuales `estado_pago == "Procesado"` ya excluyen `Reemplazado` por construcción, pero deben cubrirse con tests explícitos (arqueo, `/pendientes`, `/historial`, KPIs de Gerencia y servicio ML).
+* **Riesgo conocido:** `anular_orden_post` y `anular_orden_patch` (`ordenes.py`) marcan como `Anulado` **todo pago cuyo estado sea distinto de `Anulado`** y suman su monto en `monto_reversado`. Con `Reemplazado` existiendo, esa condición debe cambiar a `== "Procesado"`; de lo contrario se sobrescribiría el estado histórico y se inflaría el monto reversado.
+
+**C. Reversión de cobro (`Pagada`/`Completada` → `Reservada`) — Decisión pendiente:**
+* Si se aprueba en el futuro, debe quedar **bloqueada** cuando exista un escaneo exitoso en `Auditoria_Barrera` (la pieza ya salió físicamente) y, para Rol Caja, limitada a cobros de la jornada actual.
+* Debe restaurar de forma atómica `qr_transaccional_salida = NULL`, estado de activos `Vendido → Reservado`, `Detalle_Orden.estado_preparacion`, `Reservas_Backorder` y `monto_pendiente`, marcando los pagos revertidos como `Anulado`.
+
+**D. Poka-Yoke pre-cobro global — Decisión pendiente:**
+* Hoy `ConfirmacionLiquidacionDialog` solo aparece al liquidar saldos posteriores. Extenderlo a todo cobro (venta nueva, abono y liquidación) fue evaluado y **diferido** por decisión de negocio.
 
 ---
 

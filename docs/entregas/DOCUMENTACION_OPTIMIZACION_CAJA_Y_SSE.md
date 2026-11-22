@@ -97,11 +97,11 @@ sequenceDiagram
 
 ## 4. Verificación y Pruebas Automatizadas
 
-* **Backend (`pytest`):** **85 pruebas aprobadas** en 10,74s, incluyendo [test_caja_rendimiento_y_sse.py](../../backend/tests/test_caja_rendimiento_y_sse.py):
+* **Backend (`pytest`):** **85 pruebas aprobadas** en 10,74s *(conteo al momento de esta entrega; tras el saneamiento posterior de edición de pagos, la suite completa del backend suma 330 tests)*, incluyendo [test_caja_rendimiento_y_sse.py](../../backend/tests/test_caja_rendimiento_y_sse.py):
   * `test_historial_caja_sin_n_mas_1_con_50_ordenes`: valida `<= 10` queries SQL con 65 órdenes elegibles y exactitud matemática de `resumen_cuadre`.
   * `test_pendientes_caja_sin_n_mas_1_con_35_operaciones`: valida `<= 8` queries SQL con 30 órdenes pendientes (nuevas y abonadas) + 5 backorders.
   * `test_sse_bus_aislamiento_por_sucursal` y `test_stream_sse_rbac_rechaza_sin_token_y_vendedor`.
-* **Frontend (`flutter test`):** **74 pruebas aprobadas** en `test/features/caja` y `test/features/autorefresh`, incluyendo en [historial_caja_test.dart](../../frontend/test/features/caja/historial_caja_test.dart):
+* **Frontend (`flutter test`):** **74 pruebas aprobadas** en `test/features/caja` y `test/features/autorefresh` *(conteo al momento de esta entrega; actualmente 76 tras el saneamiento de edición de pagos)*, incluyendo en [historial_caja_test.dart](../../frontend/test/features/caja/historial_caja_test.dart):
   * Protección anti-race condition (`cargarHistorialSilencioso` no pisa ni invalida una carga explícita).
   * Persistencia visual de la tabla con `LinearProgressIndicator` al cambiar filtros/período.
 * **Análisis estático (`dart analyze`):** 0 errores en los archivos modificados.
@@ -122,3 +122,9 @@ sequenceDiagram
      * `Auditoria_Barrera(id_orden)` y `Auditoria_Edicion_Pago(id_orden)`
 2. **Co-ubicación regional Render ↔ Supabase — No modificado:**
    * Hoy Render opera en **Virginia (US East)** y Supabase en **São Paulo (`sa-east-1`)** (~120–150 ms por viaje). Al reducir las peticiones de ~300 queries a ~5–8 queries fijas, el impacto quedó en `<1s`, pero si en el futuro se migra infraestructura, acercar ambos servicios a la misma región reducirá aún más la latencia base.
+3. **Ventana sin foco en Windows (`AppLifecycleState.inactive`) — No modificado:**
+   * `SilentPollingManager` y `CajaSseService` solo consideran la app activa en estado `resumed`. En escritorio Windows, al hacer clic fuera de la ventana (banco, Excel, WhatsApp) Flutter pasa a `inactive`, por lo que el stream SSE y el respaldo de 30s se detienen hasta volver a hacer clic en la app (comportamiento observado en pruebas de pantalla dividida).
+   * Mejora prevista: tratar `resumed` e `inactive` como activos y pausar únicamente en `paused`, `hidden` o `detached`.
+4. **Guarda de pausa de la Bandeja con una orden abierta — No modificado:**
+   * Al abrir una orden en el panel derecho, `seleccionarOrden()` precarga `pagosDivididos` con un método (`Efectivo`), por lo que `pagosDivididos.isNotEmpty` pausa SSE y polling mientras la orden permanece abierta; las órdenes nuevas aparecen al cerrarla o al pulsar `Refrescar`.
+   * Mejora prevista: pausar solo con `isProcesandoCobro`, modalidad `SPLIT` o más de un método cargado.
