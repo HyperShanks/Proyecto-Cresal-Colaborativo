@@ -10,8 +10,17 @@ SQLALCHEMY_DATABASE_URL = settings.DATABASE_URL
 if SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
     SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-# Crea el motor de base de datos
-engine = create_engine(SQLALCHEMY_DATABASE_URL)
+# Crea el motor de base de datos con resiliencia de pool para PostgreSQL/Supabase
+_engine_kwargs = {}
+if not SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
+    _engine_kwargs = {
+        "pool_pre_ping": True,
+        "pool_recycle": 300,
+        "pool_size": 5,
+        "max_overflow": 10,
+    }
+
+engine = create_engine(SQLALCHEMY_DATABASE_URL, **_engine_kwargs)
 
 # Fábrica de sesiones para las consultas a la BD
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

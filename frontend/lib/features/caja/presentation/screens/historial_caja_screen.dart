@@ -29,6 +29,7 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen>
   bool _providerInterno = false;
   bool _isModalAbierto = false;
   bool get isModalAbierto => _isModalAbierto;
+  bool get isCargando => _provider.state.isLoading;
   final TextEditingController _searchController = TextEditingController();
 
   @override
@@ -73,8 +74,8 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen>
   }
 
   /// Recarga silenciosa en segundo plano manteniendo la página y filtros activos
-  void refrescarSilencioso() {
-    _provider.cargarHistorialSilencioso();
+  Future<void> refrescarSilencioso() {
+    return _provider.cargarHistorialSilencioso();
   }
 
   Future<void> _initAsync() async {
@@ -614,13 +615,14 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen>
 
 
   Widget _buildCuerpoPrincipal(HistorialCajaState state) {
-    if (state.isLoading) {
+    // Spinner centrado únicamente en la carga inicial cuando todavía no hay datos
+    if (state.isLoading && state.data == null) {
       return const Center(
         child: CircularProgressIndicator(color: AppPalette.primary),
       );
     }
 
-    if (state.errorMessage != null) {
+    if (state.errorMessage != null && state.data == null) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -654,33 +656,79 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen>
       );
     }
 
-    if (state.data == null || state.data!.items.isEmpty) {
-      return _buildZeroState(state);
-    }
+    final Widget contenido = (state.data == null || state.data!.items.isEmpty)
+        ? _buildZeroState(state)
+        : HistorialTablaView(
+            items: state.data!.items,
+            paginaActual: state.paginaActual,
+            totalPaginas: state.data!.totalPaginas,
+            onCambiarPagina: (pag) => _provider.cargarHistorial(pagina: pag),
+            onVerDetalle: (orden) async {
+              _isModalAbierto = true;
+              try {
+                final actualizado = await DetalleAuditoriaDialog.show(context, orden);
+                if (actualizado == true && mounted) {
+                  _provider.cargarHistorialSilencioso();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Pago corregido exitosamente. Balances y arqueo actualizados.'),
+                      backgroundColor: AppPalette.success,
+                      duration: Duration(seconds: 3),
+                    ),
+                  );
+                }
+              } finally {
+                _isModalAbierto = false;
+              }
+            },
+          );
 
-    return HistorialTablaView(
-      items: state.data!.items,
-      paginaActual: state.paginaActual,
-      totalPaginas: state.data!.totalPaginas,
-      onCambiarPagina: (pag) => _provider.cargarHistorial(pagina: pag),
-      onVerDetalle: (orden) async {
-        _isModalAbierto = true;
-        try {
-          final actualizado = await DetalleAuditoriaDialog.show(context, orden);
-          if (actualizado == true && mounted) {
-            _provider.cargarHistorialSilencioso();
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Pago corregido exitosamente. Balances y arqueo actualizados.'),
-                backgroundColor: AppPalette.success,
-                duration: Duration(seconds: 3),
-              ),
-            );
-          }
-        } finally {
-          _isModalAbierto = false;
-        }
-      },
+    // Mantener la tabla visible con una barra de progreso lineal sutil arriba
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (state.isLoading) ...[
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: const LinearProgressIndicator(
+              minHeight: 3,
+              color: AppPalette.primary,
+              backgroundColor: Color(0xFFE2E8F0),
+            ),
+          ),
+          const SizedBox(height: 6),
+        ] else if (state.errorMessage != null) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            margin: const EdgeInsets.only(bottom: 8),
+            decoration: BoxDecoration(
+              color: AppPalette.error.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppPalette.error.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.error_outline_rounded, size: 18, color: AppPalette.error),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    state.errorMessage!,
+                    style: AppTypography.small.copyWith(color: AppPalette.error),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: () => _provider.cargarHistorial(pagina: state.paginaActual),
+                  child: const Text('Reintentar'),
+                ),
+              ],
+            ),
+          ),
+        ],
+        Expanded(child: contenido),
+      ],
     );
   }
 

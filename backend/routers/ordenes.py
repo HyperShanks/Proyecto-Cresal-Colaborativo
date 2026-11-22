@@ -13,6 +13,7 @@ from sqlalchemy import or_, and_, not_, func, cast, String, case
 
 from database import get_db
 from services.telegram_service import TelegramService
+from services.caja_events import notificar_caja
 from routers.inventario import extraer_siglas_motor
 from models import (
     Auditoria_Edicion_Pago,
@@ -429,6 +430,7 @@ def crear_orden(
         # ── 3. Commit Transaccional Atómico ─────────────────────────────────
         db.commit()
         db.refresh(nueva_orden)
+        notificar_caja(nueva_orden.id_sucursal, "pendientes_changed", {"id_orden": str(nueva_orden.id_orden)})
 
         return OrdenResponse(
             id_orden=nueva_orden.id_orden,
@@ -750,6 +752,7 @@ def listar_ordenes_auditoria(
     orden_ids = [orden.id_orden for orden, *_ in resultados_paginados]
     pagos_por_orden: Dict[int, List[Transaccion_Pago]] = defaultdict(list)
     articulos_por_orden: Dict[int, List[HistorialArticuloDTO]] = defaultdict(list)
+    auditorias_edicion_por_orden: Dict[int, list] = defaultdict(list)
 
     # Resolución de cajera activa por sucursal para órdenes históricas que requieran fallback
     cajeras_db = db.query(Usuario).filter(Usuario.id_rol == 3, Usuario.estado == "Activo").all()
@@ -765,6 +768,16 @@ def listar_ordenes_auditoria(
         )
         for p in todos_pagos:
             pagos_por_orden[p.id_orden].append(p)
+
+        todas_auditorias_edicion = (
+            db.query(Auditoria_Edicion_Pago, Usuario)
+            .join(Usuario, Auditoria_Edicion_Pago.id_usuario == Usuario.id_usuario)
+            .filter(Auditoria_Edicion_Pago.id_orden.in_(orden_ids))
+            .order_by(Auditoria_Edicion_Pago.fecha_edicion.asc())
+            .all()
+        )
+        for aud, usr in todas_auditorias_edicion:
+            auditorias_edicion_por_orden[aud.id_orden].append((aud, usr))
 
         todos_detalles = (
             db.query(Detalle_Orden, Activo_Inventariado, Vehiculo_Origen, Categoria_Activo, Detalle_Motor, Detalle_Caja_Cambio)
@@ -887,13 +900,7 @@ def listar_ordenes_auditoria(
                 )
             )
 
-        auditorias_pago_ord = (
-            db.query(Auditoria_Edicion_Pago, Usuario)
-            .join(Usuario, Auditoria_Edicion_Pago.id_usuario == Usuario.id_usuario)
-            .filter(Auditoria_Edicion_Pago.id_orden == orden.id_orden)
-            .order_by(Auditoria_Edicion_Pago.fecha_edicion.asc())
-            .all()
-        )
+        auditorias_pago_ord = auditorias_edicion_por_orden.get(orden.id_orden, [])
         for aud, usr in auditorias_pago_ord:
             aud_dt = (aud.fecha_edicion.replace(tzinfo=timezone.utc) if aud.fecha_edicion.tzinfo is None else aud.fecha_edicion).astimezone(tz_chile_ordenes)
             aud_f = aud_dt.strftime("%d/%m/%y")
@@ -2484,6 +2491,8 @@ def pagar_orden(
         db.commit()
         db.refresh(orden)
         db.refresh(nuevo_pago)
+        notificar_caja(orden.id_sucursal, "pendientes_changed", {"id_orden": str(orden.id_orden)})
+        notificar_caja(orden.id_sucursal, "historial_changed", {"id_orden": str(orden.id_orden)})
 
         print(f"✅ [PAGO] Pago procesado exitosamente para orden #{str(orden.id_orden)[:8].upper()}. "
               f"Estado: {orden.estado_orden}, Cajera: {user_ident}, Saldo pendiente: ${orden.monto_pendiente}")
@@ -2637,6 +2646,8 @@ def anular_orden_post(
 
         db.commit()
         db.refresh(orden)
+        notificar_caja(orden.id_sucursal, "pendientes_changed", {"id_orden": str(orden.id_orden)})
+        notificar_caja(orden.id_sucursal, "historial_changed", {"id_orden": str(orden.id_orden)})
 
         # Disparar alerta asíncrona a Telegram para Gerencia (no bloqueante)
         nombre_usuario = f"{current_user.nombres} {current_user.apellidos}".strip()
@@ -2748,6 +2759,8 @@ def anular_orden_patch(
 
         db.commit()
         db.refresh(orden)
+        notificar_caja(orden.id_sucursal, "pendientes_changed", {"id_orden": str(orden.id_orden)})
+        notificar_caja(orden.id_sucursal, "historial_changed", {"id_orden": str(orden.id_orden)})
 
         mensaje = "Orden anulada exitosamente. Los repuestos inventariados han sido devueltos al catálogo como disponibles."
         return OrdenAnulacionResponse(
@@ -3538,6 +3551,7 @@ def checkout_wizard(
 
         db.commit()
         db.refresh(orden)
+        notificar_caja(orden.id_sucursal, "pendientes_changed", {"id_orden": str(orden.id_orden)})
 
         return CheckoutWizardResponse(
             id_orden=orden.id_orden,
