@@ -154,6 +154,39 @@ def setup_edicion_pagos_data(setup_database):
         )
         db.add_all([ord_anulada, pago_anulado])
 
+        # Orden 4: Sucursal 2 (Limache)
+        ord_sucursal_2 = Orden_Venta(
+            id_orden=uuid.uuid4(),
+            numero_orden=1004,
+            id_cliente=cli.id_cliente,
+            id_vendedor=u_vendedor.id_usuario,
+            id_sucursal=2,
+            estado_orden="Reservada",
+            total_venta=120000,
+            monto_pendiente=80000,
+            fecha_creacion=datetime.now(timezone.utc).replace(tzinfo=None),
+        )
+        pago_sucursal_2 = Transaccion_Pago(
+            id_pago=uuid.uuid4(),
+            id_orden=ord_sucursal_2.id_orden,
+            monto=40000,
+            metodo_pago="Efectivo",
+            estado_pago="Procesado",
+            fecha_pago=datetime.now(timezone.utc).replace(tzinfo=None),
+        )
+        db.add_all([ord_sucursal_2, pago_sucursal_2])
+
+        # Pago anulado en orden 1 (no debe sumar en recálculo, pendientes ni historial)
+        pago_anulado_en_reservada = Transaccion_Pago(
+            id_pago=uuid.uuid4(),
+            id_orden=ord_reservada.id_orden,
+            monto=90000,
+            metodo_pago="Cheque",
+            estado_pago="Anulado",
+            fecha_pago=datetime.now(timezone.utc).replace(tzinfo=None),
+        )
+        db.add(pago_anulado_en_reservada)
+
         db.commit()
 
         yield {
@@ -162,10 +195,12 @@ def setup_edicion_pagos_data(setup_database):
             "u_admin": u_admin,
             "ord_reservada": ord_reservada,
             "pago_abono": pago_abono,
+            "pago_anulado_en_reservada": pago_anulado_en_reservada,
             "ord_pagada": ord_pagada,
             "pago_liquidado": pago_liquidado,
             "ord_anulada": ord_anulada,
             "pago_anulado": pago_anulado,
+            "pago_sucursal_2": pago_sucursal_2,
         }
     finally:
         db.close()
@@ -311,33 +346,82 @@ def test_editar_metodo_permitido_en_orden_pagada(client, setup_edicion_pagos_dat
     assert data["metodo_nuevo"] == "Debito"
 
 
-def test_editar_fecha_pago_exitoso_y_rechazo_futura(client, setup_edicion_pagos_data):
+def test_edicion_fecha_pago_bloqueada_para_todos_los_roles(client, setup_edicion_pagos_data):
     """
-    Verifica que se permita ajustar la fecha hacia el pasado (ej: pago fuera de horario)
-    pero se rechace si la fecha es futura.
+    Verifica que ni Cajera ni Admin puedan modificar la fecha_pago mediante PATCH /pagos/{id_pago},
+    preservando la marca de tiempo original de imputación contable.
     """
     u_admin = setup_edicion_pagos_data["u_admin"]
     pago_abono = setup_edicion_pagos_data["pago_abono"]
     headers = get_token_header(u_admin)
 
-    # 1. Fecha en el pasado (ayer)
-    fecha_ayer = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
-    resp_ok = client.patch(
-        f"/api/v1/caja/pagos/{pago_abono.id_pago}",
-        json={"nueva_fecha_pago": fecha_ayer, "motivo": "Transferencia realizada ayer viernes fuera de horario"},
-        headers=headers,
-    )
-    assert resp_ok.status_code == 200
+    db = TestingSessionLocal()
+    try:
+        fecha_original = db.query(Transaccion_Pago).filter_by(id_pago=pago_abono.id_pago).first().fecha_pago
+    finally:
+        db.close()
 
-    # 2. Fecha en el futuro (mañana)
-    fecha_manana = (datetime.now(timezone.utc) + timedelta(days=2)).isoformat()
-    resp_err = client.patch(
+    fecha_ayer = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    resp = client.patch(
         f"/api/v1/caja/pagos/{pago_abono.id_pago}",
-        json={"nueva_fecha_pago": fecha_manana, "motivo": "Intento de fijar fecha futura en el pago"},
+        json={"nueva_fecha_pago": fecha_ayer, "motivo": "Intento de alterar fecha contable de pago existente"},
         headers=headers,
     )
-    assert resp_err.status_code == 400
-    assert "no puede ser futura" in resp_err.json()["detail"]
+    assert resp.status_code == 400
+    assert "No se indicaron cambios" in resp.json()["detail"]
+
+    db = TestingSessionLocal()
+    try:
+        fecha_actual = db.query(Transaccion_Pago).filter_by(id_pago=pago_abono.id_pago).first().fecha_pago
+        assert fecha_actual == fecha_original
+    finally:
+        db.close()
+
+
+def test_rechazo_editar_pago_anulado_y_sucursal_ajena(client, setup_edicion_pagos_data):
+    """
+    Verifica blindajes de seguridad y consistencia:
+    - No se puede editar una transacción en estado 'Anulado'.
+    - Rol 3 (Caja) no puede editar pagos de otra sucursal (403 Forbidden).
+    - Pagos en estado 'Anulado' no se suman ni aparecen en /pendientes ni en /historial.
+    """
+    u_caja = setup_edicion_pagos_data["u_caja"]
+    pago_anulado_en_reservada = setup_edicion_pagos_data["pago_anulado_en_reservada"]
+    pago_sucursal_2 = setup_edicion_pagos_data["pago_sucursal_2"]
+    ord_reservada = setup_edicion_pagos_data["ord_reservada"]
+    headers = get_token_header(u_caja)
+
+    # 1. Pago en estado 'Anulado' rechazado
+    r_anulado = client.patch(
+        f"/api/v1/caja/pagos/{pago_anulado_en_reservada.id_pago}",
+        json={"nuevo_metodo": "Debito", "motivo": "Intento de editar transacción ya anulada"},
+        headers=headers,
+    )
+    assert r_anulado.status_code == 400
+    assert "Anulado" in r_anulado.json()["detail"]
+
+    # 2. Pago de otra sucursal rechazado para Rol Caja
+    r_suc = client.patch(
+        f"/api/v1/caja/pagos/{pago_sucursal_2.id_pago}",
+        json={"nuevo_metodo": "Debito", "motivo": "Intento de editar pago de sucursal Limache"},
+        headers=headers,
+    )
+    assert r_suc.status_code == 403
+    assert "otra sucursal" in r_suc.json()["detail"]
+
+    # 3. Verificar que el pago 'Anulado' (Cheque $90.000) NO figura en /pendientes ni en /historial
+    r_pend = client.get("/api/v1/caja/pendientes?sucursal_id=1", headers=headers)
+    assert r_pend.status_code == 200
+    item_pend = next((it for it in r_pend.json()["items"] if it["id_referencia"] == str(ord_reservada.id_orden)), None)
+    assert item_pend is not None
+    assert all(p["estado_pago"] == "Procesado" and p["metodo_pago"] != "Cheque" for p in item_pend["historial_abonos"])
+
+    r_hist = client.get("/api/v1/caja/historial?sucursal_id=1&periodo=TODOS", headers=headers)
+    assert r_hist.status_code == 200
+    assert r_hist.json()["resumen_cuadre"]["total_cheque"] == 0
+    item_hist = next((it for it in r_hist.json()["items"] if it["id_orden"] == str(ord_reservada.id_orden)), None)
+    assert item_hist is not None
+    assert all(p["metodo_pago"] != "Cheque" for p in item_hist["desglose_pagos"])
 
 
 def test_rechazo_motivo_muy_corto(client, setup_edicion_pagos_data):

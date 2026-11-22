@@ -45,7 +45,6 @@ class _EditarPagoDialogState extends State<EditarPagoDialog> {
   late String _metodoSeleccionado;
   late final TextEditingController _montoController;
   late final TextEditingController _motivoController;
-  late DateTime _fechaPagoSeleccionada;
   final _formKey = GlobalKey<FormState>();
 
   bool _isSaving = false;
@@ -62,7 +61,6 @@ class _EditarPagoDialogState extends State<EditarPagoDialog> {
       text: CurrencyFormatter.formatNumber(widget.pago.monto),
     );
     _motivoController = TextEditingController();
-    _fechaPagoSeleccionada = widget.pago.fechaPago ?? DateTime.now();
   }
 
   @override
@@ -81,10 +79,9 @@ class _EditarPagoDialogState extends State<EditarPagoDialog> {
     return 'Efectivo';
   }
 
-  int get _montoIngresado {
-    final parsed = CurrencyFormatter.parse(_montoController.text);
-    return parsed > 0 ? parsed : widget.pago.monto;
-  }
+  int get _montoIngresado => CurrencyFormatter.parse(_montoController.text);
+
+  bool get _montoInvalido => _esReservada && _montoIngresado <= 0;
 
   int get _nuevoSaldoPendiente {
     if (!_esReservada) return widget.orden.montoPendiente;
@@ -109,57 +106,17 @@ class _EditarPagoDialogState extends State<EditarPagoDialog> {
 
   bool get _metodoModificado => _metodoSeleccionado != _normalizarMetodo(widget.pago.metodoPago);
 
-  bool get _fechaModificada =>
-      widget.pago.fechaPago == null ||
-      _fechaPagoSeleccionada.difference(widget.pago.fechaPago!).inMinutes.abs() > 1;
-
-  bool get _hayCambios => _montoModificado || _metodoModificado || _fechaModificada;
-
-  Future<void> _seleccionarFechaHora() async {
-    final ahora = DateTime.now();
-    final fecha = await showDatePicker(
-      context: context,
-      initialDate: _fechaPagoSeleccionada.isAfter(ahora) ? ahora : _fechaPagoSeleccionada,
-      firstDate: DateTime(2024),
-      lastDate: ahora,
-      helpText: 'Seleccionar Fecha de Imputación',
-      cancelText: 'Cancelar',
-      confirmText: 'Siguiente',
-    );
-    if (fecha == null || !mounted) return;
-
-    final hora = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(_fechaPagoSeleccionada),
-      helpText: 'Seleccionar Hora de Imputación',
-      cancelText: 'Cancelar',
-      confirmText: 'Confirmar',
-    );
-    if (hora == null || !mounted) return;
-
-    final combinada = DateTime(
-      fecha.year,
-      fecha.month,
-      fecha.day,
-      hora.hour,
-      hora.minute,
-    );
-
-    if (combinada.isAfter(ahora)) {
-      setState(() {
-        _errorMessage = 'La fecha y hora de imputación no puede ser futura.';
-      });
-      return;
-    }
-
-    setState(() {
-      _fechaPagoSeleccionada = combinada;
-      _errorMessage = null;
-    });
-  }
+  bool get _hayCambios => (_montoModificado && !_montoInvalido) || _metodoModificado;
 
   Future<void> _guardarCambios() async {
     if (!_formKey.currentState!.validate()) return;
+
+    if (_montoInvalido) {
+      setState(() {
+        _errorMessage = 'El monto del abono debe ser estrictamente mayor a \$0.';
+      });
+      return;
+    }
 
     if (_esReservada && _superaTotalVenta) {
       setState(() {
@@ -189,11 +146,6 @@ class _EditarPagoDialogState extends State<EditarPagoDialog> {
         nuevoMetodoPayload = _metodoSeleccionado;
       }
 
-      DateTime? nuevaFechaPayload;
-      if (_fechaModificada) {
-        nuevaFechaPayload = _fechaPagoSeleccionada;
-      }
-
       if (!_hayCambios) {
         throw Exception('No se han modificado valores en el pago.');
       }
@@ -202,7 +154,6 @@ class _EditarPagoDialogState extends State<EditarPagoDialog> {
         idPago: idPagoStr,
         nuevoMonto: nuevoMontoPayload,
         nuevoMetodo: nuevoMetodoPayload,
-        nuevaFechaPago: nuevaFechaPayload,
         motivo: _motivoController.text.trim(),
       );
 
@@ -262,8 +213,8 @@ class _EditarPagoDialogState extends State<EditarPagoDialog> {
                       _buildInputMonto(),
                       const SizedBox(height: 16),
 
-                      // Campo 3: Fecha de Imputación
-                      _buildSelectorFecha(),
+                      // Dato informativo de solo lectura: Fecha de Imputación Contable
+                      _buildFechaSoloLectura(),
                       const SizedBox(height: 16),
 
                       // Campo 4: Motivo de la Corrección (Obligatorio)
@@ -560,19 +511,25 @@ class _EditarPagoDialogState extends State<EditarPagoDialog> {
     );
   }
 
-  Widget _buildSelectorFecha() {
-    final dia = _fechaPagoSeleccionada.day.toString().padLeft(2, '0');
-    final mes = _fechaPagoSeleccionada.month.toString().padLeft(2, '0');
-    final anio = _fechaPagoSeleccionada.year;
-    final hora = _fechaPagoSeleccionada.hour.toString().padLeft(2, '0');
-    final min = _fechaPagoSeleccionada.minute.toString().padLeft(2, '0');
-    final fechaStr = '$dia/$mes/$anio a las $hora:$min hrs';
+  Widget _buildFechaSoloLectura() {
+    final fechaRef = widget.pago.fechaPago;
+    final String fechaStr;
+    if (fechaRef != null) {
+      final dia = fechaRef.day.toString().padLeft(2, '0');
+      final mes = fechaRef.month.toString().padLeft(2, '0');
+      final anio = fechaRef.year;
+      final hora = fechaRef.hour.toString().padLeft(2, '0');
+      final min = fechaRef.minute.toString().padLeft(2, '0');
+      fechaStr = '$dia/$mes/$anio a las $hora:$min hrs';
+    } else {
+      fechaStr = 'Fecha original del comprobante';
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'FECHA Y HORA DE IMPUTACIÓN',
+          'FECHA Y HORA DE IMPUTACIÓN (INMUTABLE)',
           style: AppTypography.small.copyWith(
             fontWeight: FontWeight.w800,
             fontSize: 12,
@@ -581,43 +538,30 @@ class _EditarPagoDialogState extends State<EditarPagoDialog> {
           ),
         ),
         const SizedBox(height: 6),
-        InkWell(
-          onTap: _seleccionarFechaHora,
-          borderRadius: BorderRadius.circular(8),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            decoration: BoxDecoration(
-              color: AppPalette.backgroundLight,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppPalette.neutral.withValues(alpha: 0.2)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.calendar_today_rounded, size: 16, color: AppPalette.primary),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    fechaStr,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.body.copyWith(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppPalette.textPrimaryLight,
-                    ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          decoration: BoxDecoration(
+            color: AppPalette.neutral.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppPalette.neutral.withValues(alpha: 0.2)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.lock_clock_rounded, size: 16, color: AppPalette.textSecondaryLight),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  fechaStr,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.body.copyWith(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppPalette.textSecondaryLight,
                   ),
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  'Cambiar',
-                  style: AppTypography.small.copyWith(
-                    color: AppPalette.primary,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ],
@@ -748,7 +692,7 @@ class _EditarPagoDialogState extends State<EditarPagoDialog> {
                 padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
-              onPressed: (_isSaving || !_hayCambios) ? null : _guardarCambios,
+              onPressed: (_isSaving || !_hayCambios || _montoInvalido) ? null : _guardarCambios,
               child: _isSaving
                   ? const SizedBox(
                       width: 18,

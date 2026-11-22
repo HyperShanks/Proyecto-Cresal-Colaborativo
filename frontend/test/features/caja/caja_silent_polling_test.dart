@@ -11,7 +11,6 @@ class MockCajaService implements ICajaService {
     required String idPago,
     int? nuevoMonto,
     String? nuevoMetodo,
-    DateTime? nuevaFechaPago,
     required String motivo,
   }) async {
     return {'success': true};

@@ -33,6 +33,7 @@ from models import (
     Auditoria_Edicion_Pago,
 )
 from schemas import (
+    EstadoPagoEnum,
     CajaVerificarAccesoResponse,
     CobroPendienteItemResponse,
     CobroPendienteListResponse,
@@ -284,7 +285,10 @@ def obtener_cobros_pendientes(
             conds_pagos.append(Transaccion_Pago.id_reserva.in_(reserva_ids_bo))
         todos_pagos = (
             db.query(Transaccion_Pago)
-            .filter(or_(*conds_pagos))
+            .filter(
+                or_(*conds_pagos),
+                Transaccion_Pago.estado_pago == EstadoPagoEnum.PROCESADO.value,
+            )
             .order_by(Transaccion_Pago.fecha_pago.asc())
             .all()
         )
@@ -1010,14 +1014,14 @@ def registrar_cobro(
                     activo.reservado_por = None
                     activo.reserva_expira_en = None
                     
+                    orden_existente = None
+                    if reserva.id_orden:
+                        orden_existente = db.query(Orden_Venta).filter(Orden_Venta.id_orden == reserva.id_orden).first()
+
                     reserva.id_activo_asignado = activo.id_activo
                     reserva.estado_reserva = "Completada" if (orden_existente and orden_existente.estado_orden == "Completada") else "Confirmada"
 
                     qr_hash = f"TX-QR-{uuid.uuid4()}"
-
-                    orden_existente = None
-                    if reserva.id_orden:
-                        orden_existente = db.query(Orden_Venta).filter(Orden_Venta.id_orden == reserva.id_orden).first()
 
                     if orden_existente:
                         orden_existente.estado_orden = "Pagada"
@@ -1353,7 +1357,7 @@ def require_supervisor_or_caja_role(current_user: Usuario = Depends(get_current_
     "/pagos/{id_pago}",
     response_model=EditarPagoResponse,
     summary="Editar Registro de Pago o Abono",
-    description="Permite corregir método de pago, monto de abono (en Reservada) o fecha de imputación con auditoría estricta."
+    description="Permite corregir método de pago o monto de abono (en Reservada) con auditoría estricta y atomicidad ACID."
 )
 def editar_pago(
     id_pago: UUID,
@@ -1362,11 +1366,11 @@ def editar_pago(
     current_user: Usuario = Depends(require_supervisor_or_caja_role),
 ):
     """
-    Permite a la cajera, supervisor o administrador corregir errores de digitación en un pago:
+    Permite a la cajera, supervisor o administrador corregir errores de digitación en un pago procesado:
     - Método de pago (Efectivo, Débito, Transferencia, etc.)
-    - Monto de abono parcial (solo si la orden está en estado 'Reservada' y el nuevo total < total_venta)
-    - Fecha y hora de imputación (para pagos realizados fuera de horario/fin de semana)
+    - Monto de abono parcial (solo si la orden está en estado 'Reservada' y el total procesado < total_venta)
     Registra el evento detallado en Auditoria_Edicion_Pago.
+    No permite alterar la fecha de imputación contable.
     """
     if not payload.motivo or len(payload.motivo.strip()) < 10:
         raise HTTPException(
@@ -1381,17 +1385,33 @@ def editar_pago(
             detail=f"Transacción de pago con ID {id_pago} no encontrada."
         )
 
+    if (pago.estado_pago or EstadoPagoEnum.PROCESADO.value) != EstadoPagoEnum.PROCESADO.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"No se puede modificar una transacción en estado '{pago.estado_pago}'."
+        )
+
     if not pago.id_orden:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="La transacción de pago no está vinculada a una orden de venta editable."
         )
 
-    orden = db.query(Orden_Venta).filter(Orden_Venta.id_orden == pago.id_orden).first()
+    orden_q = db.query(Orden_Venta).filter(Orden_Venta.id_orden == pago.id_orden)
+    if db.bind is not None and db.bind.dialect.name != "sqlite":
+        orden_q = orden_q.with_for_update()
+    orden = orden_q.first()
+
     if not orden:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No se encontró la orden vinculada al pago."
+        )
+
+    if current_user.id_rol == 3 and orden.id_sucursal != current_user.id_sucursal:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso denegado: No puedes modificar pagos pertenecientes a otra sucursal."
         )
 
     if orden.estado_orden == "Anulada":
@@ -1402,105 +1422,57 @@ def editar_pago(
 
     monto_anterior = pago.monto
     metodo_anterior = pago.metodo_pago
-    fecha_anterior = pago.fecha_pago
 
     cambios_detectados = 0
     now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
 
-    # 1. Modificación de Monto (solo en estado 'Reservada' y manteniendo abono parcial < total_venta)
-    if payload.nuevo_monto is not None and payload.nuevo_monto != pago.monto:
-        if orden.estado_orden in ["Pagada", "Completada", "Despachada"]:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No se puede modificar el monto en una orden Pagada o Completada. Para órdenes liquidadas por error, debe anular la orden para devolver las piezas al stock de forma segura."
+    try:
+        # 1. Modificación de Monto (solo en estado 'Reservada' y manteniendo abono parcial < total_venta)
+        if payload.nuevo_monto is not None and payload.nuevo_monto != pago.monto:
+            if orden.estado_orden in ["Pagada", "Completada", "Despachada"]:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="No se puede modificar el monto en una orden Pagada o Completada. Para órdenes liquidadas por error, debe anular la orden para devolver las piezas al stock de forma segura."
+                )
+
+            if orden.estado_orden != "Reservada":
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Solo se puede modificar montos de abonos en órdenes con estado 'Reservada' (estado actual: {orden.estado_orden})."
+                )
+
+            if payload.nuevo_monto <= 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="El nuevo monto del abono debe ser estrictamente mayor a $0."
+                )
+
+            otros_pagos = (
+                db.query(Transaccion_Pago)
+                .filter(
+                    Transaccion_Pago.id_orden == orden.id_orden,
+                    Transaccion_Pago.id_pago != pago.id_pago,
+                    Transaccion_Pago.estado_pago == EstadoPagoEnum.PROCESADO.value,
+                )
+                .all()
             )
+            otros_total = sum(p.monto for p in otros_pagos)
+            nuevo_total_pagos = otros_total + payload.nuevo_monto
 
-        if orden.estado_orden != "Reservada":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Solo se puede modificar montos de abonos en órdenes con estado 'Reservada' (estado actual: {orden.estado_orden})."
-            )
+            if nuevo_total_pagos >= orden.total_venta:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"El nuevo monto (${payload.nuevo_monto:,}) liquidaría el total de la orden (${orden.total_venta:,}). Para liquidar el saldo pendiente, debe registrar el pago por el módulo normal de cobros en caja."
+                )
 
-        if payload.nuevo_monto <= 0:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="El nuevo monto del abono debe ser estrictamente mayor a $0."
-            )
+            pago.monto = payload.nuevo_monto
+            orden.monto_pendiente = orden.total_venta - nuevo_total_pagos
 
-        otros_pagos = (
-            db.query(Transaccion_Pago)
-            .filter(
-                Transaccion_Pago.id_orden == orden.id_orden,
-                Transaccion_Pago.id_pago != pago.id_pago
-            )
-            .all()
-        )
-        otros_total = sum(p.monto for p in otros_pagos)
-        nuevo_total_pagos = otros_total + payload.nuevo_monto
+            reserva = db.query(Reservas_Backorder).filter(Reservas_Backorder.id_orden == orden.id_orden).first()
+            if reserva:
+                reserva.monto_abonado = nuevo_total_pagos
+                reserva.fecha_actualizacion = now_utc
 
-        if nuevo_total_pagos >= orden.total_venta:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"El nuevo monto (${payload.nuevo_monto:,}) liquidaría el total de la orden (${orden.total_venta:,}). Para liquidar el saldo pendiente, debe registrar el pago por el módulo normal de cobros en caja."
-            )
-
-        pago.monto = payload.nuevo_monto
-        orden.monto_pendiente = orden.total_venta - nuevo_total_pagos
-
-        reserva = db.query(Reservas_Backorder).filter(Reservas_Backorder.id_orden == orden.id_orden).first()
-        if reserva:
-            reserva.monto_abonado = nuevo_total_pagos
-            reserva.fecha_actualizacion = now_utc
-
-        db.add(
-            Auditoria_Edicion_Pago(
-                id_auditoria=uuid.uuid4(),
-                id_pago=pago.id_pago,
-                id_orden=orden.id_orden,
-                id_usuario=current_user.id_usuario,
-                fecha_edicion=now_utc,
-                campo_modificado="monto",
-                valor_anterior=str(monto_anterior),
-                valor_nuevo=str(pago.monto),
-                motivo=payload.motivo.strip(),
-            )
-        )
-        cambios_detectados += 1
-
-    # 2. Modificación de Método de Pago
-    if payload.nuevo_metodo is not None and payload.nuevo_metodo.value != pago.metodo_pago:
-        pago.metodo_pago = payload.nuevo_metodo.value
-        db.add(
-            Auditoria_Edicion_Pago(
-                id_auditoria=uuid.uuid4(),
-                id_pago=pago.id_pago,
-                id_orden=orden.id_orden,
-                id_usuario=current_user.id_usuario,
-                fecha_edicion=now_utc,
-                campo_modificado="metodo_pago",
-                valor_anterior=metodo_anterior,
-                valor_nuevo=pago.metodo_pago,
-                motivo=payload.motivo.strip(),
-            )
-        )
-        cambios_detectados += 1
-
-    # 3. Modificación de Fecha / Hora de Pago
-    if payload.nueva_fecha_pago is not None:
-        dt_target = payload.nueva_fecha_pago
-        if dt_target.tzinfo is not None:
-            dt_target_utc = dt_target.astimezone(timezone.utc).replace(tzinfo=None)
-        else:
-            dt_target_utc = dt_target
-
-        if dt_target_utc > now_utc:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="La fecha de imputación no puede ser futura."
-            )
-
-        if dt_target_utc != pago.fecha_pago:
-            pago.fecha_pago = dt_target_utc
             db.add(
                 Auditoria_Edicion_Pago(
                     id_auditoria=uuid.uuid4(),
@@ -1508,24 +1480,52 @@ def editar_pago(
                     id_orden=orden.id_orden,
                     id_usuario=current_user.id_usuario,
                     fecha_edicion=now_utc,
-                    campo_modificado="fecha_pago",
-                    valor_anterior=fecha_anterior.isoformat() if fecha_anterior else "",
-                    valor_nuevo=dt_target_utc.isoformat(),
+                    campo_modificado="monto",
+                    valor_anterior=str(monto_anterior),
+                    valor_nuevo=str(pago.monto),
                     motivo=payload.motivo.strip(),
                 )
             )
             cambios_detectados += 1
 
-    if cambios_detectados == 0:
+        # 2. Modificación de Método de Pago
+        if payload.nuevo_metodo is not None and payload.nuevo_metodo.value != pago.metodo_pago:
+            pago.metodo_pago = payload.nuevo_metodo.value
+            db.add(
+                Auditoria_Edicion_Pago(
+                    id_auditoria=uuid.uuid4(),
+                    id_pago=pago.id_pago,
+                    id_orden=orden.id_orden,
+                    id_usuario=current_user.id_usuario,
+                    fecha_edicion=now_utc,
+                    campo_modificado="metodo_pago",
+                    valor_anterior=metodo_anterior,
+                    valor_nuevo=pago.metodo_pago,
+                    motivo=payload.motivo.strip(),
+                )
+            )
+            cambios_detectados += 1
+
+        if cambios_detectados == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No se indicaron cambios en el monto ni en el método de pago."
+            )
+
+        orden.fecha_actualizacion = now_utc
+        db.commit()
+        db.refresh(orden)
+        db.refresh(pago)
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No se indicaron cambios en el monto, método de pago ni fecha de imputación."
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error transaccional al editar el pago: {str(e)}"
         )
 
-    orden.fecha_actualizacion = now_utc
-    db.commit()
-    db.refresh(orden)
-    db.refresh(pago)
     notificar_caja(orden.id_sucursal, "historial_changed", {"id_orden": str(orden.id_orden)})
 
     return EditarPagoResponse(
@@ -1581,25 +1581,34 @@ def obtener_historial_caja(
         .filter(
             or_(
                 Orden_Venta.estado_orden != "Reservada",
-                Orden_Venta.id_orden.in_(select(Transaccion_Pago.id_orden).filter(Transaccion_Pago.id_orden.isnot(None))),
+                Orden_Venta.id_orden.in_(
+                    select(Transaccion_Pago.id_orden).filter(
+                        Transaccion_Pago.id_orden.isnot(None),
+                        Transaccion_Pago.estado_pago == EstadoPagoEnum.PROCESADO.value,
+                    )
+                ),
             )
         )
     )
 
     if start_utc is not None and end_utc is not None:
         # Una orden pertenece al período contable de caja si:
-        # a) Tiene transacciones de pago registradas dentro del período, ó
-        # b) No tiene transacciones de pago pero su fecha_actualizacion o fecha_creacion está en el período (ej: anuladas)
+        # a) Tiene transacciones de pago procesadas registradas dentro del período, ó
+        # b) No tiene transacciones de pago procesadas pero su fecha_actualizacion o fecha_creacion está en el período (ej: anuladas)
         subq_pagos = (
             select(Transaccion_Pago.id_orden)
             .filter(
                 Transaccion_Pago.id_orden.isnot(None),
+                Transaccion_Pago.estado_pago == EstadoPagoEnum.PROCESADO.value,
                 Transaccion_Pago.fecha_pago.between(start_utc, end_utc),
             )
         )
         subq_todos_pagos = (
             select(Transaccion_Pago.id_orden)
-            .filter(Transaccion_Pago.id_orden.isnot(None))
+            .filter(
+                Transaccion_Pago.id_orden.isnot(None),
+                Transaccion_Pago.estado_pago == EstadoPagoEnum.PROCESADO.value,
+            )
         )
 
         cond_con_pago_en_periodo = Orden_Venta.id_orden.in_(subq_pagos)
@@ -1629,6 +1638,7 @@ def obtener_historial_caja(
         mp_filtro = strip_accents(metodo_pago.strip())
         subq_mp = select(Transaccion_Pago.id_orden).filter(
             Transaccion_Pago.id_orden.isnot(None),
+            Transaccion_Pago.estado_pago == EstadoPagoEnum.PROCESADO.value,
             _normalize_accents_sql(Transaccion_Pago.metodo_pago).like(f"%{mp_filtro}%"),
         )
         query = query.filter(Orden_Venta.id_orden.in_(subq_mp))
@@ -1760,7 +1770,10 @@ def obtener_historial_caja(
             ).label("efectivo"),
         )
         .join(filtered_subq, Transaccion_Pago.id_orden == filtered_subq.c.id_orden)
-        .filter(filtered_subq.c.estado_orden != "Anulada")
+        .filter(
+            filtered_subq.c.estado_orden != "Anulada",
+            Transaccion_Pago.estado_pago == EstadoPagoEnum.PROCESADO.value,
+        )
         .one()
     )
 
@@ -1791,7 +1804,10 @@ def obtener_historial_caja(
             Transaccion_Pago.id_orden.label("id_orden"),
             func.max(Transaccion_Pago.fecha_pago).label("max_fecha_pago"),
         )
-        .filter(Transaccion_Pago.id_orden.isnot(None))
+        .filter(
+            Transaccion_Pago.id_orden.isnot(None),
+            Transaccion_Pago.estado_pago == EstadoPagoEnum.PROCESADO.value,
+        )
         .group_by(Transaccion_Pago.id_orden)
         .subquery()
     )
@@ -1822,7 +1838,10 @@ def obtener_historial_caja(
     if orden_ids:
         todos_pagos = (
             db.query(Transaccion_Pago)
-            .filter(Transaccion_Pago.id_orden.in_(orden_ids))
+            .filter(
+                Transaccion_Pago.id_orden.in_(orden_ids),
+                Transaccion_Pago.estado_pago == EstadoPagoEnum.PROCESADO.value,
+            )
             .order_by(Transaccion_Pago.fecha_pago.asc())
             .all()
         )

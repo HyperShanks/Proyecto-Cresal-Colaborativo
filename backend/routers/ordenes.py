@@ -24,6 +24,7 @@ from models import (
     Detalle_Motor, Detalle_Caja_Cambio
 )
 from schemas import (
+    EstadoPagoEnum,
     OrdenCreateRequest, OrdenResponse,
     ClienteOrdenResumen, DespachoOrdenResumen,
     DetalleOrdenItemResponse, OrdenHistorialItemResponse,
@@ -762,7 +763,10 @@ def listar_ordenes_auditoria(
     if orden_ids:
         todos_pagos = (
             db.query(Transaccion_Pago)
-            .filter(Transaccion_Pago.id_orden.in_(orden_ids))
+            .filter(
+                Transaccion_Pago.id_orden.in_(orden_ids),
+                Transaccion_Pago.estado_pago == EstadoPagoEnum.PROCESADO.value,
+            )
             .order_by(Transaccion_Pago.fecha_pago.asc())
             .all()
         )
@@ -2739,6 +2743,11 @@ def anular_orden_patch(
             r_bo.id_activo_asignado = None
             r_bo.fecha_actualizacion = datetime.now(timezone.utc)
 
+        pagos_patch = db.query(Transaccion_Pago).filter(Transaccion_Pago.id_orden == id_orden).all()
+        for pago in pagos_patch:
+            if pago.estado_pago != EstadoPagoEnum.ANULADO.value:
+                pago.estado_pago = EstadoPagoEnum.ANULADO.value
+
         estado_disponible = db.query(Estado_Activo).filter(Estado_Activo.nombre_estado == "Disponible").first()
         if not estado_disponible:
             estado_disponible = Estado_Activo(id_estado=1, nombre_estado="Disponible")
@@ -2965,7 +2974,10 @@ def obtener_orden(
     ).first()
     pagos = (
         db.query(Transaccion_Pago)
-        .filter(Transaccion_Pago.id_orden == id_orden)
+        .filter(
+            Transaccion_Pago.id_orden == id_orden,
+            Transaccion_Pago.estado_pago == EstadoPagoEnum.PROCESADO.value,
+        )
         .order_by(Transaccion_Pago.fecha_pago.asc())
         .all()
     )

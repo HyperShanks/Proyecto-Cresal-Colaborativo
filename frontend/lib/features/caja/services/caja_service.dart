@@ -39,7 +39,6 @@ abstract class ICajaService {
     required String idPago,
     int? nuevoMonto,
     String? nuevoMetodo,
-    DateTime? nuevaFechaPago,
     required String motivo,
   });
 
@@ -226,7 +225,6 @@ class CajaService implements ICajaService {
     required String idPago,
     int? nuevoMonto,
     String? nuevoMetodo,
-    DateTime? nuevaFechaPago,
     required String motivo,
   }) async {
     final uri = Uri.parse('$_endpoint/pagos/$idPago');
@@ -238,9 +236,6 @@ class CajaService implements ICajaService {
     }
     if (nuevoMetodo != null) {
       body['nuevo_metodo'] = nuevoMetodo;
-    }
-    if (nuevaFechaPago != null) {
-      body['nueva_fecha_pago'] = nuevaFechaPago.toUtc().toIso8601String();
     }
 
     final response = await ApiService.patch(

@@ -16,7 +16,6 @@ class MockCajaEdicionService implements ICajaService {
     required String idPago,
     int? nuevoMonto,
     String? nuevoMetodo,
-    DateTime? nuevaFechaPago,
     required String motivo,
   }) async {
     editarPagoLlamado = true;
@@ -24,7 +23,6 @@ class MockCajaEdicionService implements ICajaService {
       'idPago': idPago,
       'nuevoMonto': nuevoMonto,
       'nuevoMetodo': nuevoMetodo,
-      'nuevaFechaPago': nuevaFechaPago,
       'motivo': motivo,
     };
     if (shouldThrow) {
@@ -114,7 +112,8 @@ void main() {
       expect(find.text('TOTAL VENTA'), findsOneWidget);
       expect(find.text('MÉTODO DE PAGO'), findsOneWidget);
       expect(find.text('MONTO DEL ABONO'), findsOneWidget);
-      expect(find.text('FECHA Y HORA DE IMPUTACIÓN'), findsOneWidget);
+      expect(find.text('FECHA Y HORA DE IMPUTACIÓN (INMUTABLE)'), findsOneWidget);
+      expect(find.text('Cambiar'), findsNothing);
       expect(find.text('MOTIVO DE LA CORRECCIÓN'), findsOneWidget);
       expect(find.text('Guardar'), findsOneWidget);
 
@@ -276,6 +275,35 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('Campo monto vacío o en 0 evalúa 0 real y bloquea botón Guardar sin fallback silencioso', (tester) async {
+      final mockService = MockCajaEdicionService();
+      final orden = _crearOrdenMock(estado: 'Reservada', totalVenta: 100000, montoPendiente: 40000);
+      final pago = orden.desglosePagos.first;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: EditarPagoDialog(
+              orden: orden,
+              pago: pago,
+              cajaService: mockService,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final montoFinder = find.byType(TextFormField).first;
+      await tester.enterText(montoFinder, '0');
+      await tester.pumpAndSettle();
+
+      // Saldo resultante debe evaluarse como 100.000 (0 abonado), NO 40.000 del monto anterior
+      expect(find.textContaining('Nuevo saldo pendiente resultante: \$ 100.000'), findsOneWidget);
+
+      final botonGuardar = tester.widget<ElevatedButton>(find.widgetWithText(ElevatedButton, 'Guardar'));
+      expect(botonGuardar.onPressed, isNull);
     });
   });
 }

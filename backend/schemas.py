@@ -415,6 +415,11 @@ class MetodoPagoEnum(str, Enum):
     CHEQUE = "Cheque"
 
 
+class EstadoPagoEnum(str, Enum):
+    PROCESADO = "Procesado"
+    ANULADO = "Anulado"
+
+
 class TransaccionPagoItemSchema(BaseModel):
     metodo: MetodoPagoEnum
     monto: int = Field(gt=0, description="El monto por método debe ser mayor a 0 y sin decimales")
@@ -425,7 +430,6 @@ class TransaccionPagoItemSchema(BaseModel):
 class EditarPagoRequest(BaseModel):
     nuevo_monto: Optional[int] = Field(None, gt=0, description="Nuevo monto recaudado en el abono (solo permitido en estado Reservada)")
     nuevo_metodo: Optional[MetodoPagoEnum] = Field(None, description="Nuevo método de pago (Efectivo, Debito, Credito, Transferencia, Cheque)")
-    nueva_fecha_pago: Optional[datetime] = Field(None, description="Nueva marca de tiempo para imputación contable")
     motivo: str = Field(..., min_length=10, description="Justificación obligatoria de la corrección del pago")
 
 

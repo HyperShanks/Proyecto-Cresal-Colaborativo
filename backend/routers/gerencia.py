@@ -842,7 +842,10 @@ def obtener_auditoria_backorder_gerencia(
 
     pagos = (
         db.query(Transaccion_Pago)
-        .filter(or_(*filtro_pagos))
+        .filter(
+            or_(*filtro_pagos),
+            Transaccion_Pago.estado_pago == "Procesado",
+        )
         .order_by(Transaccion_Pago.fecha_pago.asc())
         .all()
     )
