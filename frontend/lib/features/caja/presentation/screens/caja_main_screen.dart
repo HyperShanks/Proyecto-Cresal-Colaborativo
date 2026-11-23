@@ -649,7 +649,7 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
                   ? 'Bandeja de Cobros'
                   : _selectedNavIndex == 1
                   ? 'Historial de Pagos'
-                  : 'Soporte Técnico',
+                  : 'Mesa de Ayuda y Tickets',
               style: AppTypography.title.copyWith(
                 fontSize: 18,
                 fontWeight: FontWeight.w800,

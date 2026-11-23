@@ -29,6 +29,12 @@ class DetalleAuditoriaDialog extends StatelessWidget {
           border: AppPalette.success.withValues(alpha: 0.4),
           text: AppPalette.success,
         );
+      case 'completada':
+        return (
+          bg: const Color(0xFF2596BE).withValues(alpha: 0.12),
+          border: const Color(0xFF2596BE).withValues(alpha: 0.4),
+          text: const Color(0xFF2596BE),
+        );
       case 'despachada':
         return (
           bg: const Color(0xFF0284C7).withValues(alpha: 0.12),
@@ -696,7 +702,7 @@ class DetalleAuditoriaDialog extends StatelessWidget {
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
-                                  'Corregir',
+                                  'Editar',
                                   style: AppTypography.small.copyWith(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w700,

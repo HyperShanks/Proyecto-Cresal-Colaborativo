@@ -16,12 +16,12 @@ import 'auditoria_tabla_view.dart';
 class AuditoriaDetalleDialog extends StatelessWidget {
   final HistorialOrdenItemModel orden;
 
-  const AuditoriaDetalleDialog({
-    super.key,
-    required this.orden,
-  });
+  const AuditoriaDetalleDialog({super.key, required this.orden});
 
-  static Future<void> show(BuildContext context, HistorialOrdenItemModel orden) {
+  static Future<void> show(
+    BuildContext context,
+    HistorialOrdenItemModel orden,
+  ) {
     return showDialog(
       context: context,
       barrierColor: Colors.black.withValues(alpha: 0.45),
@@ -33,9 +33,9 @@ class AuditoriaDetalleDialog extends StatelessWidget {
     switch (estado.toLowerCase()) {
       case 'completada':
         return (
-          bg: const Color(0xFFECFDF5),
-          border: const Color(0xFFA7F3D0),
-          text: const Color(0xFF059669),
+          bg: const Color(0xFF2596BE).withValues(alpha: 0.12),
+          border: const Color(0xFF2596BE).withValues(alpha: 0.4),
+          text: const Color(0xFF2596BE),
         );
       case 'reservada':
       case 'pendiente':
@@ -52,9 +52,9 @@ class AuditoriaDetalleDialog extends StatelessWidget {
         );
       case 'pagada':
         return (
-          bg: const Color(0xFFF0F9FF),
-          border: const Color(0xFFBAE6FD),
-          text: const Color(0xFF0284C7),
+          bg: const Color(0xFF2E7D32).withValues(alpha: 0.12),
+          border: const Color(0xFF2E7D32).withValues(alpha: 0.4),
+          text: const Color(0xFF2E7D32),
         );
       case 'anulada':
         return (
@@ -82,10 +82,15 @@ class AuditoriaDetalleDialog extends StatelessWidget {
       }
       final dia = dt.day.toString().padLeft(2, '0');
       final mes = dt.month.toString().padLeft(2, '0');
-      final anio = dt.year.toString().substring(dt.year.toString().length >= 2 ? dt.year.toString().length - 2 : 0);
+      final anio = dt.year.toString().substring(
+        dt.year.toString().length >= 2 ? dt.year.toString().length - 2 : 0,
+      );
       return 'Registrada el $dia/$mes/$anio ${orden.hora}';
     } catch (_) {
-      return 'Registrada el ${orden.fechaHoraFormateada}'.replaceAll('/2026', '/26');
+      return 'Registrada el ${orden.fechaHoraFormateada}'.replaceAll(
+        '/2026',
+        '/26',
+      );
     }
   }
 
@@ -95,16 +100,11 @@ class AuditoriaDetalleDialog extends StatelessWidget {
 
     return Dialog(
       backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       elevation: 12,
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(
-          maxWidth: 540,
-          maxHeight: 740,
-        ),
+        constraints: const BoxConstraints(maxWidth: 540, maxHeight: 740),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(28, 24, 28, 24),
           child: Column(
@@ -168,9 +168,16 @@ class AuditoriaDetalleDialog extends StatelessWidget {
                                 letterSpacing: -0.5,
                               ),
                             ),
-                            if (AuditoriaTablaView.buildBadgesMotorCaja(orden, context: context) != null) ...[
+                            if (AuditoriaTablaView.buildBadgesMotorCaja(
+                                  orden,
+                                  context: context,
+                                ) !=
+                                null) ...[
                               const SizedBox(width: 10),
-                              AuditoriaTablaView.buildBadgesMotorCaja(orden, context: context)!,
+                              AuditoriaTablaView.buildBadgesMotorCaja(
+                                orden,
+                                context: context,
+                              )!,
                             ],
                           ],
                         ),
@@ -270,10 +277,7 @@ class AuditoriaDetalleDialog extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: const Color(0xFFE2E8F0),
-          width: 1,
-        ),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -303,7 +307,8 @@ class AuditoriaDetalleDialog extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-                if (orden.clienteRut != null && orden.clienteRut!.isNotEmpty) ...[
+                if (orden.clienteRut != null &&
+                    orden.clienteRut!.isNotEmpty) ...[
                   const SizedBox(height: 2),
                   Text(
                     'RUT: ${orden.clienteRut}',
@@ -432,10 +437,7 @@ class AuditoriaDetalleDialog extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: const Color(0xFFE2E8F0),
-              width: 1,
-            ),
+            border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
           ),
           child: articulos.isNotEmpty
               ? ListView.separated(
@@ -491,7 +493,8 @@ class AuditoriaDetalleDialog extends StatelessWidget {
                                   runSpacing: 3,
                                   crossAxisAlignment: WrapCrossAlignment.center,
                                   children: [
-                                    if (art.sku != null && art.sku!.isNotEmpty) ...[
+                                    if (art.sku != null &&
+                                        art.sku!.isNotEmpty) ...[
                                       Text(
                                         'SKU: ${art.sku}',
                                         style: AppTypography.small.copyWith(
@@ -501,11 +504,19 @@ class AuditoriaDetalleDialog extends StatelessWidget {
                                         ),
                                       ),
                                       Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 5,
+                                          vertical: 1,
+                                        ),
                                         decoration: BoxDecoration(
                                           color: const Color(0xFFECFDF5),
-                                          borderRadius: BorderRadius.circular(4),
-                                          border: Border.all(color: const Color(0xFFA7F3D0), width: 0.8),
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
+                                          border: Border.all(
+                                            color: const Color(0xFFA7F3D0),
+                                            width: 0.8,
+                                          ),
                                         ),
                                         child: const Text(
                                           'Activo Físico',
@@ -524,16 +535,28 @@ class AuditoriaDetalleDialog extends StatelessWidget {
                                       ),
                                     if (art.vehiculoOrigenDisplay != null)
                                       Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 5,
+                                          vertical: 1,
+                                        ),
                                         decoration: BoxDecoration(
                                           color: const Color(0xFFF1F5F9),
-                                          borderRadius: BorderRadius.circular(4),
-                                          border: Border.all(color: const Color(0xFFE2E8F0), width: 0.8),
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
+                                          border: Border.all(
+                                            color: const Color(0xFFE2E8F0),
+                                            width: 0.8,
+                                          ),
                                         ),
                                         child: Row(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
-                                            const Icon(Icons.directions_car_rounded, size: 10, color: Color(0xFF64748B)),
+                                            const Icon(
+                                              Icons.directions_car_rounded,
+                                              size: 10,
+                                              color: Color(0xFF64748B),
+                                            ),
                                             const SizedBox(width: 3),
                                             Text(
                                               art.vehiculoOrigenDisplay!,
@@ -663,10 +686,7 @@ class AuditoriaDetalleDialog extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: const Color(0xFFE2E8F0),
-              width: 1,
-            ),
+            border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
           ),
           child: Column(
             children: [
@@ -733,7 +753,11 @@ class AuditoriaDetalleDialog extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.confirmation_num_outlined, size: 14, color: Color(0xFFDC2626)),
+                          const Icon(
+                            Icons.confirmation_num_outlined,
+                            size: 14,
+                            color: Color(0xFFDC2626),
+                          ),
                           const SizedBox(width: 4),
                           Text(
                             'Descuento a Favor',
@@ -827,10 +851,7 @@ class AuditoriaDetalleDialog extends StatelessWidget {
           decoration: BoxDecoration(
             color: const Color(0xFFF8FAFC),
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: const Color(0xFFE2E8F0),
-              width: 1,
-            ),
+            border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

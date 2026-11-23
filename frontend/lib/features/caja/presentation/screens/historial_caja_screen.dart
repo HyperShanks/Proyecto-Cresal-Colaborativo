@@ -209,28 +209,18 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'AUDITORÍA Y CIERRE',
-          style: AppTypography.small.copyWith(
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 1.1,
-            color: AppPalette.textSecondaryLight,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          'Historial de Órdenes',
+          'Arqueo y Trazabilidad',
           style: AppTypography.title.copyWith(
-            fontSize: 20,
+            fontSize: 18,
             fontWeight: FontWeight.w800,
             color: AppPalette.textPrimaryLight,
           ),
         ),
         const SizedBox(height: 2),
         Text(
-          'Control de cobros, arqueo de turno y trazabilidad de ventas',
+          'Control de cobros, cuadre por medio de pago y auditoría de turno',
           style: AppTypography.small.copyWith(
-            fontSize: 14,
+            fontSize: 13.5,
             fontWeight: FontWeight.normal,
             color: AppPalette.textSecondaryLight,
           ),
@@ -376,11 +366,26 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen>
                       child: CresalFilterDropdown<String>(
                         value: state.estadoOrden,
                         items: const [
-                          CresalFilterDropdownItem(value: 'TODOS', label: 'Todos los Estados'),
-                          CresalFilterDropdownItem(value: 'Pagada', label: 'Pagada'),
-                          CresalFilterDropdownItem(value: 'Completada', label: 'Completada'),
-                          CresalFilterDropdownItem(value: 'Reservada', label: 'Reservada (Abonada)'),
-                          CresalFilterDropdownItem(value: 'Anulada', label: 'Anulada'),
+                          CresalFilterDropdownItem(
+                            value: 'TODOS',
+                            label: 'Todos los Estados',
+                          ),
+                          CresalFilterDropdownItem(
+                            value: 'Pagada',
+                            label: 'Pagada',
+                          ),
+                          CresalFilterDropdownItem(
+                            value: 'Completada',
+                            label: 'Completada',
+                          ),
+                          CresalFilterDropdownItem(
+                            value: 'Reservada',
+                            label: 'Reservada (Abonada)',
+                          ),
+                          CresalFilterDropdownItem(
+                            value: 'Anulada',
+                            label: 'Anulada',
+                          ),
                         ],
                         onChanged: (val) => _provider.cambiarFiltroEstado(val),
                       ),
@@ -390,12 +395,30 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen>
                       child: CresalFilterDropdown<String>(
                         value: state.metodoPago,
                         items: const [
-                          CresalFilterDropdownItem(value: 'TODOS', label: 'Todos los Métodos'),
-                          CresalFilterDropdownItem(value: 'Efectivo', label: 'Efectivo'),
-                          CresalFilterDropdownItem(value: 'Débito', label: 'Débito'),
-                          CresalFilterDropdownItem(value: 'Crédito', label: 'Crédito'),
-                          CresalFilterDropdownItem(value: 'Transferencia', label: 'Transferencia'),
-                          CresalFilterDropdownItem(value: 'Cheque', label: 'Cheque'),
+                          CresalFilterDropdownItem(
+                            value: 'TODOS',
+                            label: 'Todos los Métodos',
+                          ),
+                          CresalFilterDropdownItem(
+                            value: 'Efectivo',
+                            label: 'Efectivo',
+                          ),
+                          CresalFilterDropdownItem(
+                            value: 'Débito',
+                            label: 'Débito',
+                          ),
+                          CresalFilterDropdownItem(
+                            value: 'Crédito',
+                            label: 'Crédito',
+                          ),
+                          CresalFilterDropdownItem(
+                            value: 'Transferencia',
+                            label: 'Transferencia',
+                          ),
+                          CresalFilterDropdownItem(
+                            value: 'Cheque',
+                            label: 'Cheque',
+                          ),
                         ],
                         onChanged: (val) => _provider.cambiarFiltroMetodo(val),
                       ),
@@ -412,15 +435,14 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen>
           decoration: BoxDecoration(
             color: AppPalette.surfaceLight,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppPalette.neutral.withValues(alpha: 0.18)),
+            border: Border.all(
+              color: AppPalette.neutral.withValues(alpha: 0.18),
+            ),
           ),
           child: Row(
             children: [
               // Buscador con debounce
-              Expanded(
-                flex: 5,
-                child: _buildCampoBusqueda(),
-              ),
+              Expanded(flex: 5, child: _buildCampoBusqueda()),
               const SizedBox(width: 12),
 
               // Filtro de Estado
@@ -429,11 +451,23 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen>
                 child: CresalFilterDropdown<String>(
                   value: state.estadoOrden,
                   items: const [
-                    CresalFilterDropdownItem(value: 'TODOS', label: 'Todos los Estados'),
+                    CresalFilterDropdownItem(
+                      value: 'TODOS',
+                      label: 'Todos los Estados',
+                    ),
                     CresalFilterDropdownItem(value: 'Pagada', label: 'Pagada'),
-                    CresalFilterDropdownItem(value: 'Completada', label: 'Completada'),
-                    CresalFilterDropdownItem(value: 'Reservada', label: 'Reservada (Abonada)'),
-                    CresalFilterDropdownItem(value: 'Anulada', label: 'Anulada'),
+                    CresalFilterDropdownItem(
+                      value: 'Completada',
+                      label: 'Completada',
+                    ),
+                    CresalFilterDropdownItem(
+                      value: 'Reservada',
+                      label: 'Reservada (Abonada)',
+                    ),
+                    CresalFilterDropdownItem(
+                      value: 'Anulada',
+                      label: 'Anulada',
+                    ),
                   ],
                   onChanged: (val) => _provider.cambiarFiltroEstado(val),
                 ),
@@ -446,11 +480,23 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen>
                 child: CresalFilterDropdown<String>(
                   value: state.metodoPago,
                   items: const [
-                    CresalFilterDropdownItem(value: 'TODOS', label: 'Todos los Métodos'),
-                    CresalFilterDropdownItem(value: 'Efectivo', label: 'Efectivo'),
+                    CresalFilterDropdownItem(
+                      value: 'TODOS',
+                      label: 'Todos los Métodos',
+                    ),
+                    CresalFilterDropdownItem(
+                      value: 'Efectivo',
+                      label: 'Efectivo',
+                    ),
                     CresalFilterDropdownItem(value: 'Débito', label: 'Débito'),
-                    CresalFilterDropdownItem(value: 'Crédito', label: 'Crédito'),
-                    CresalFilterDropdownItem(value: 'Transferencia', label: 'Transferencia'),
+                    CresalFilterDropdownItem(
+                      value: 'Crédito',
+                      label: 'Crédito',
+                    ),
+                    CresalFilterDropdownItem(
+                      value: 'Transferencia',
+                      label: 'Transferencia',
+                    ),
                     CresalFilterDropdownItem(value: 'Cheque', label: 'Cheque'),
                   ],
                   onChanged: (val) => _provider.cambiarFiltroMetodo(val),
@@ -480,7 +526,7 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen>
       ),
       onChanged: (val) => _provider.actualizarBusqueda(val),
       decoration: InputDecoration(
-        hintText: 'Buscar por Folio (ORD-), RUT, Cliente, Vendedor...',
+        hintText: 'Buscar por Folio, RUT, Cliente o Vendedor...',
         hintStyle: AppTypography.small.copyWith(
           color: AppPalette.textSecondaryLight,
           fontSize: 15,
@@ -501,10 +547,7 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen>
             : null,
         filled: true,
         fillColor: AppPalette.backgroundLight,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 12,
-          vertical: 8,
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: BorderSide(
@@ -519,25 +562,24 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen>
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(
-            color: AppPalette.primary,
-            width: 1.5,
-          ),
+          borderSide: const BorderSide(color: AppPalette.primary, width: 1.5),
         ),
       ),
     );
   }
 
   Widget _buildBotonRefresh() {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppPalette.surfaceLight,
+    return Material(
+      color: AppPalette.surfaceLight,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: AppPalette.neutral.withValues(alpha: 0.25),
-        ),
+        side: BorderSide(color: AppPalette.neutral.withValues(alpha: 0.25)),
       ),
+      clipBehavior: Clip.antiAlias,
       child: IconButton(
+        style: IconButton.styleFrom(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
         icon: const Icon(
           Icons.refresh_rounded,
           size: 20,
@@ -565,9 +607,7 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen>
               : AppPalette.neutral.withValues(alpha: 0.25),
           width: hayFiltros ? 1.5 : 1.0,
         ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
       icon: Icon(
         Icons.filter_alt_off_rounded,
@@ -580,7 +620,9 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen>
           Text(
             'Limpiar',
             style: AppTypography.button.copyWith(
-              color: hayFiltros ? AppPalette.primary : AppPalette.textSecondaryLight,
+              color: hayFiltros
+                  ? AppPalette.primary
+                  : AppPalette.textSecondaryLight,
               fontWeight: FontWeight.w700,
               fontSize: 12,
             ),
@@ -611,8 +653,6 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen>
       },
     );
   }
-
-
 
   Widget _buildCuerpoPrincipal(HistorialCajaState state) {
     // Spinner centrado únicamente en la carga inicial cuando todavía no hay datos
@@ -666,12 +706,17 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen>
             onVerDetalle: (orden) async {
               _isModalAbierto = true;
               try {
-                final actualizado = await DetalleAuditoriaDialog.show(context, orden);
+                final actualizado = await DetalleAuditoriaDialog.show(
+                  context,
+                  orden,
+                );
                 if (actualizado == true && mounted) {
                   _provider.cargarHistorialSilencioso();
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Pago corregido exitosamente. Balances y arqueo actualizados.'),
+                      content: Text(
+                        'Pago corregido exitosamente. Balances y arqueo actualizados.',
+                      ),
                       backgroundColor: AppPalette.success,
                       duration: Duration(seconds: 3),
                     ),
@@ -704,23 +749,32 @@ class HistorialCajaScreenState extends State<HistorialCajaScreen>
             decoration: BoxDecoration(
               color: AppPalette.error.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppPalette.error.withValues(alpha: 0.3)),
+              border: Border.all(
+                color: AppPalette.error.withValues(alpha: 0.3),
+              ),
             ),
             child: Row(
               children: [
-                const Icon(Icons.error_outline_rounded, size: 18, color: AppPalette.error),
+                const Icon(
+                  Icons.error_outline_rounded,
+                  size: 18,
+                  color: AppPalette.error,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     state.errorMessage!,
-                    style: AppTypography.small.copyWith(color: AppPalette.error),
+                    style: AppTypography.small.copyWith(
+                      color: AppPalette.error,
+                    ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 const SizedBox(width: 8),
                 TextButton(
-                  onPressed: () => _provider.cargarHistorial(pagina: state.paginaActual),
+                  onPressed: () =>
+                      _provider.cargarHistorial(pagina: state.paginaActual),
                   child: const Text('Reintentar'),
                 ),
               ],

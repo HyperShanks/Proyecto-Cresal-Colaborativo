@@ -672,14 +672,19 @@ class _EditarPagoDialogState extends State<EditarPagoDialog> {
           spacing: 12,
           runSpacing: 8,
           children: [
-            TextButton(
-              onPressed: _isSaving ? null : () => Navigator.of(context).pop(false),
-              child: Text(
-                'Cancelar',
-                style: AppTypography.body.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: AppPalette.textSecondaryLight,
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppPalette.textSecondaryLight,
+                side: BorderSide(
+                  color: AppPalette.neutral.withValues(alpha: 0.35),
                 ),
+                padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: _isSaving ? null : () => Navigator.of(context).pop(false),
+              child: const Text(
+                'Cancelar',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
               ),
             ),
             ElevatedButton(

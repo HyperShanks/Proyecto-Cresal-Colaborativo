@@ -80,31 +80,6 @@ class _BandejaCobrosPanelState extends State<BandejaCobrosPanel> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Tag superior "CAJA" en gris
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppPalette.backgroundLight,
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(
-                      color: AppPalette.neutral.withValues(alpha: 0.25),
-                      width: 1,
-                    ),
-                  ),
-                  child: Text(
-                    'CAJA',
-                    style: AppTypography.small.copyWith(
-                      color: AppPalette.textSecondaryLight,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 10,
-                      letterSpacing: 1.0,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 4),
                 // Título en negrita grande
                 Text(
                   'Pagos Pendientes',
@@ -128,16 +103,22 @@ class _BandejaCobrosPanelState extends State<BandejaCobrosPanel> {
             ),
           ),
           const SizedBox(width: 8),
-          // Botón de refresco animado
-          Container(
-            decoration: BoxDecoration(
-              color: AppPalette.backgroundLight,
+          // Botón de refresco animado (hover respeta bordes redondeados)
+          Material(
+            color: AppPalette.backgroundLight,
+            shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(
+              side: BorderSide(
                 color: AppPalette.neutral.withValues(alpha: 0.2),
               ),
             ),
+            clipBehavior: Clip.antiAlias,
             child: IconButton(
+              style: IconButton.styleFrom(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
               icon: provider.isRefreshing
                   ? const SizedBox(
                       width: 18,

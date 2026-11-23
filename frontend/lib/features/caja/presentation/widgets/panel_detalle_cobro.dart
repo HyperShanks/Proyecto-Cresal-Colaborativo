@@ -130,25 +130,21 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
     final orden = widget.provider.ordenSeleccionada;
     if (orden == null) return;
 
-    // Control preventivo: confirmación explícita para liquidar el saldo total en etapas posteriores
-    final esLiquidacionPosterior = widget.provider.esLiquidacionCompleta &&
-        (orden.abonoPrevio > 0 ||
-            orden.historialAbonos.isNotEmpty ||
-            !orden.esPrimerAbono ||
-            orden.esBackorder);
-
-    if (esLiquidacionPosterior) {
-      final confirmado = await ConfirmacionLiquidacionDialog.show(
-        context: context,
-        orden: orden,
-        montoALiquidar: widget.provider.montoDeclarado,
-      );
-      if (!confirmado) {
-        // Cancelación segura: no se procesa cobro y la orden mantiene su saldo intacto
-        return;
-      }
-      if (!mounted) return;
+    // Control preventivo (Poka-Yoke) obligatorio para todos los cobros de ventanilla:
+    // ventas nuevas, abonos parciales, liquidaciones posteriores y ventas en verde.
+    final confirmado = await ConfirmacionLiquidacionDialog.show(
+      context: context,
+      orden: orden,
+      montoALiquidar: widget.provider.montoDeclarado,
+      pagos: widget.provider.pagosDivididos,
+      esLiquidacion: widget.provider.esLiquidacionCompleta,
+      saldoPendienteActual: widget.provider.saldoPendienteActual,
+    );
+    if (!confirmado) {
+      // Cancelación segura: no se procesa cobro y la orden mantiene su saldo intacto
+      return;
     }
+    if (!mounted) return;
 
     // Cobro directo (para ventas normales, abonos y ventas en verde)
     // Las ventas en verde se cobran directamente al 100%; la asignación física del motor o caja
@@ -1025,25 +1021,30 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  const Icon(
-                    Icons.payment_rounded,
-                    size: 18,
-                    color: AppPalette.primary,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'MÉTODOS DE PAGO',
-                    style: AppTypography.title.copyWith(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      color: AppPalette.textSecondaryLight,
-                      letterSpacing: 0.5,
+              Expanded(
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.payment_rounded,
+                      size: 18,
+                      color: AppPalette.primary,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        'SELECCIONA EL O LOS MÉTODOS DE PAGO',
+                        style: AppTypography.title.copyWith(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: AppPalette.textSecondaryLight,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               InkWell(
                 onTap: () {
                   final nuevaMod = isUnico ? 'SPLIT' : 'UNICO';
@@ -1080,19 +1081,7 @@ class _PanelDetalleCobroState extends State<PanelDetalleCobro> {
               ),
             ],
           ),
-          const SizedBox(height: 14),
-
-          // Título del selector de métodos (idéntico al prototipo)
-          Text(
-            'SELECCIONA EL MÉTODO',
-            style: AppTypography.small.copyWith(
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-              color: AppPalette.textSecondaryLight,
-              letterSpacing: 0.6,
-            ),
-          ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
 
           // Grid de 5 Botones de Métodos (Borde constante de 1.5px y altura uniforme)
           _buildMetodosGrid(),

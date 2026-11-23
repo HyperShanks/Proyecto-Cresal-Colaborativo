@@ -34,6 +34,12 @@ class HistorialTablaView extends StatelessWidget {
           border: AppPalette.success.withValues(alpha: 0.4),
           text: AppPalette.success,
         );
+      case 'completada':
+        return (
+          bg: const Color(0xFF2596BE).withValues(alpha: 0.12),
+          border: const Color(0xFF2596BE).withValues(alpha: 0.4),
+          text: const Color(0xFF2596BE),
+        );
       case 'despachada':
         return (
           bg: const Color(0xFF0284C7).withValues(alpha: 0.12),
@@ -265,8 +271,8 @@ class HistorialTablaView extends StatelessWidget {
                                     item.vendedorNombre,
                                     style: AppTypography.small.copyWith(
                                       color: AppPalette.textPrimaryLight,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
                                     ),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
