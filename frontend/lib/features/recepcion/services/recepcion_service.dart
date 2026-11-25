@@ -14,12 +14,12 @@ class RecepcionService {
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        return data['siguiente_ingreso']?.toString() ?? '1';
+        return data['siguiente_ingreso']?.toString() ?? '1000';
       }
 
       if (res.statusCode == 401) {
         await AuthService.manejarSesionExpirada();
-        return '1';
+        return '1000';
       }
 
       // Fallback retrocompatible
@@ -27,17 +27,17 @@ class RecepcionService {
       final fallbackRes = await ApiService.get(fallbackUri, timeout: const Duration(seconds: 15));
       if (fallbackRes.statusCode == 200) {
         final data = jsonDecode(fallbackRes.body);
-        return data['siguiente_ingreso']?.toString() ?? '1';
+        return data['siguiente_ingreso']?.toString() ?? '1000';
       }
 
       if (fallbackRes.statusCode == 401) {
         await AuthService.manejarSesionExpirada();
-        return '1';
+        return '1000';
       }
-      return '1';
+      return '1000';
     } catch (e) {
       debugPrint('[RECEPCION_SERVICE] Error al obtener siguiente ingreso: $e');
-      return '1';
+      return '1000';
     }
   }
 

@@ -38,7 +38,7 @@ def obtener_siguiente_ingreso_recepcion(
     Accesible para roles: Recepción (9), Bodeguero (1), Gerencia (4) y Administrador (5).
     """
     resultado = db.query(func.max(cast(Vehiculo_Origen.numero_ingreso, Integer))).scalar()
-    siguiente = 1 if resultado is None else resultado + 1
+    siguiente = 1000 if resultado is None else resultado + 1
     return {"siguiente_ingreso": str(siguiente)}
 
 
@@ -91,7 +91,7 @@ def registrar_ingreso_vehicular(
     # 1. Asignación / Validación de correlativo de ingreso
     if not payload.numero_ingreso or not str(payload.numero_ingreso).strip():
         resultado = db.query(func.max(cast(Vehiculo_Origen.numero_ingreso, Integer))).scalar()
-        num_ingreso = str(1 if resultado is None else resultado + 1)
+        num_ingreso = str(1000 if resultado is None else resultado + 1)
     else:
         num_ingreso = str(payload.numero_ingreso).strip()
 
@@ -391,7 +391,7 @@ def obtener_siguiente_ingreso(db: Session = Depends(get_db), usuario_logeado: mo
     
     # Regla de Negocio: Si la tabla está vacía (Día 1 de operaciones)
     if resultado is None:
-        siguiente_numero = 1
+        siguiente_numero = 1000
     else:
         # Sumamos 1 al número más alto encontrado
         siguiente_numero = resultado + 1

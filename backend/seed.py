@@ -41,7 +41,7 @@ def seed_data():
         print("- Roles creados.")
 
         # 3. Poblar Categorías de Inventario
-        categorias_base = ["Motor", "Caja de Cambios", "Accesorio"]
+        categorias_base = ["Motor", "Caja de Cambios"]
         for cat in categorias_base:
             if not db.query(Categoria_Activo).filter_by(nombre_categoria=cat).first():
                 db.add(Categoria_Activo(nombre_categoria=cat))
