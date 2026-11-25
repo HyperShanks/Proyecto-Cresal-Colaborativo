@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'core/theme/app_theme.dart';
 import 'core/services/api_service.dart';
 import 'features/auth/presentation/screens/splash_screen.dart';
@@ -26,8 +27,15 @@ class _MyAppState extends State<MyApp> {
       valueListenable: ThemeController.themeMode,
       builder: (context, currentThemeMode, _) {
         return MaterialApp(
-          title: 'Cresal Capstone',
+          title: 'Cresal - Sistema de Gestión',
           debugShowCheckedModeBanner: false,
+          locale: const Locale('es', 'CL'),
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const [Locale('es', 'CL'), Locale('es')],
           navigatorKey: ApiService.navigatorKey,
           scaffoldMessengerKey: ApiService.scaffoldMessengerKey,
           navigatorObservers: [routeObserver],
@@ -52,5 +60,3 @@ class _MyAppState extends State<MyApp> {
     );
   }
 }
-
-

@@ -8,7 +8,6 @@ import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
 import '../../../../core/constants/especificaciones_vehiculo.dart';
 import '../../services/vehiculo_service.dart';
-import '../../utils/vehiculo_parser_util.dart';
 
 class RecepcionVehiculoScreen extends StatefulWidget {
   const RecepcionVehiculoScreen({super.key});
@@ -132,7 +131,6 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
         _cilindradaController.text = datos['cilindrada'] ?? '';
         _motorController.text = datos['numero_motor'] ?? '';
       });
-      _inferirEspecificacionesDesdeModelo();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('✅ Datos recuperados exitosamente.'),
@@ -153,24 +151,6 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
     });
   }
 
-  /// Infiere en tiempo real cilindrada, transmisión, combustible y tracción
-  /// analizando la descripción ingresada en Marca y Modelo (Matriz Los Pinos).
-  void _inferirEspecificacionesDesdeModelo() {
-    final modelo = _modeloController.text.trim();
-    if (modelo.isEmpty) return;
-    final inf = VehiculoParserUtil.inferir(
-      modelo: modelo,
-      marca: _marcaController.text.trim(),
-    );
-    setState(() {
-      if (inf.cilindrada != null) {
-        _cilindradaController.text = inf.cilindrada!;
-      }
-      traccionSeleccionada = inf.traccion;
-      transmisionSeleccionada = inf.transmision;
-      combustibleSeleccionado = inf.combustible;
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -454,11 +434,7 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
               const SizedBox(height: 22),
 
               // 5. DATOS TÉCNICOS DEL VEHÍCULO
-              Wrap(
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 8,
-                runSpacing: 6,
+              Row(
                 children: [
                   Text(
                     'Datos Técnicos del Vehículo',
@@ -466,29 +442,6 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
                       color: AppPalette.primary,
                       fontSize: 13.5,
                       letterSpacing: 0.5,
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: AppPalette.primary.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: AppPalette.primary.withValues(alpha: 0.3)),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.auto_awesome, color: AppPalette.primary, size: 12),
-                        SizedBox(width: 4),
-                        Text(
-                          'Autocompletado activo',
-                          style: TextStyle(
-                            color: AppPalette.primary,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
                     ),
                   ),
                 ],
@@ -503,7 +456,6 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
                       label: 'Marca *',
                       hint: 'Ej: Toyota',
                       isCapitalized: true,
-                      onChanged: (_) => _inferirEspecificacionesDesdeModelo(),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -513,7 +465,6 @@ class _RecepcionVehiculoScreenState extends State<RecepcionVehiculoScreen> {
                       label: 'Modelo *',
                       hint: 'Ej: Yaris',
                       isCapitalized: true,
-                      onChanged: (_) => _inferirEspecificacionesDesdeModelo(),
                     ),
                   ),
                 ],

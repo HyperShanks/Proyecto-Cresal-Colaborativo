@@ -147,10 +147,25 @@ class ResultadoCard extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Expanded(
-                            child: Text(
-                              '${itemCompleto['categoria'] ?? 'Activo'} $marca $modelo',
-                              style: AppTypography.title.copyWith(fontSize: 15),
-                              overflow: TextOverflow.ellipsis,
+                            child: Builder(
+                              builder: (_) {
+                                final cat = (itemCompleto['categoria'] ?? 'Activo').toString();
+                                final esMotor = (itemCompleto['id_categoria'] == 1) || cat.toLowerCase().trim() == 'motor';
+                                final numMot = (itemCompleto['numero_motor'] ?? itemCompleto['numeroMotor'])?.toString();
+                                String sigla = '';
+                                if (esMotor && numMot != null) {
+                                  final limpio = numMot.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').trim().toUpperCase();
+                                  if (limpio.isNotEmpty && limpio != 'SA' && limpio != 'SN' && limpio != 'NULL' && limpio != 'NA' && limpio != 'NONE') {
+                                    sigla = limpio.length > 4 ? limpio.substring(0, 4) : limpio;
+                                  }
+                                }
+                                final sufijo = sigla.isNotEmpty ? ' [$sigla]' : '';
+                                return Text(
+                                  '$cat $marca $modelo$sufijo',
+                                  style: AppTypography.title.copyWith(fontSize: 15),
+                                  overflow: TextOverflow.ellipsis,
+                                );
+                              },
                             ),
                           ),
                           Container(
@@ -175,11 +190,45 @@ class ResultadoCard extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        'SKU: $sku',
-                        style: AppTypography.small.copyWith(
-                          color: AppPalette.textSecondary,
-                        ),
+                      Row(
+                        children: [
+                          Text(
+                            'SKU: $sku',
+                            style: AppTypography.small.copyWith(
+                              color: AppPalette.textSecondary,
+                            ),
+                          ),
+                          if (itemCompleto['numero_motor'] != null &&
+                              itemCompleto['numero_motor'].toString().trim().isNotEmpty) ...[
+                            const SizedBox(width: 8),
+                            Text(
+                              '•',
+                              style: AppTypography.small.copyWith(
+                                color: AppPalette.textSecondary,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: AppPalette.primary.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(
+                                  color: AppPalette.primary.withValues(alpha: 0.3),
+                                  width: 0.8,
+                                ),
+                              ),
+                              child: Text(
+                                'Motor: ${itemCompleto['numero_motor']}',
+                                style: AppTypography.small.copyWith(
+                                  color: AppPalette.primary,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                       const SizedBox(height: 8),
                       if (!tieneUbicacion) ...[

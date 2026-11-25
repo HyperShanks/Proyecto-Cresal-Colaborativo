@@ -111,7 +111,10 @@ class HistorialCajaProvider extends ChangeNotifier {
 
   Timer? _debounceTimer;
   bool _isDisposed = false;
+  bool _isSilentLoading = false;
   int _currentRequestId = 0;
+
+  bool get isSilentLoading => _isSilentLoading;
 
   HistorialCajaProvider({
     ICajaService? cajaService,
@@ -166,10 +169,14 @@ class HistorialCajaProvider extends ChangeNotifier {
     }
   }
 
-  /// Recarga silenciosa en segundo plano manteniendo la página y filtros activos sin mostrar spinner
+  /// Recarga silenciosa en segundo plano manteniendo la página y filtros activos sin mostrar spinner.
+  /// Nunca invalida ni compite con una carga explícita del usuario en curso.
   Future<void> cargarHistorialSilencioso({int? pagina}) async {
-    final requestId = ++_currentRequestId;
+    if (_isDisposed || _state.isLoading || _isSilentLoading) return;
+
+    final expectedRequestId = _currentRequestId;
     final targetPagina = pagina ?? _state.paginaActual;
+    _isSilentLoading = true;
     try {
       final response = await _cajaService.obtenerHistorialCaja(
         sucursalId: sucursalId,
@@ -184,19 +191,19 @@ class HistorialCajaProvider extends ChangeNotifier {
         pagina: targetPagina,
       );
 
-      if (requestId != _currentRequestId || _isDisposed) return;
+      // Si el usuario disparó un filtro/página nuevo mientras esto viajaba, descartar silenciosamente
+      if (expectedRequestId != _currentRequestId || _isDisposed) return;
 
       _state = _state.copyWith(
         isLoading: false,
         data: response,
         paginaActual: targetPagina,
       );
+      notifyListeners();
     } catch (_) {
       // Silenciar errores en ciclo en segundo plano
     } finally {
-      if (requestId == _currentRequestId && !_isDisposed) {
-        notifyListeners();
-      }
+      _isSilentLoading = false;
     }
   }
 

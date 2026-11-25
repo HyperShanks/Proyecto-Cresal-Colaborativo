@@ -46,6 +46,46 @@ void main() {
       });
       expect(itemConGalpon.ubicacionFormateada, 'Galpón: N • Pasillo: P-01 • Pallet: PL-02');
     });
+
+    test('SPEC-24: Motor con numero_motor incluye las primeras 4 siglas en corchetes [XXXX]', () {
+      final motorConSigla = CatalogoItem.fromJson({
+        'id_activo': 'act-001',
+        'sku_qr_fisico': 'MOT-001',
+        'id_categoria': 1,
+        'nombre_categoria': 'Motor',
+        'marca': 'Toyota',
+        'modelo': 'Yaris',
+        'anio': 2018,
+        'numero_motor': '1NZ-FE-9921',
+      });
+      expect(motorConSigla.tituloRepuesto, 'Motor - Toyota Yaris 2018 [1NZF]');
+      expect(motorConSigla.tituloVehiculo, 'Toyota Yaris 2018 [1NZF]');
+
+      final motorSinSigla = CatalogoItem.fromJson({
+        'id_activo': 'act-002',
+        'sku_qr_fisico': 'MOT-002',
+        'id_categoria': 1,
+        'nombre_categoria': 'Motor',
+        'marca': 'Toyota',
+        'modelo': 'Corolla',
+        'anio': 2020,
+      });
+      expect(motorSinSigla.tituloRepuesto, 'Motor - Toyota Corolla 2020');
+      expect(motorSinSigla.tituloVehiculo, 'Toyota Corolla 2020');
+
+      final cajaConMotor = CatalogoItem.fromJson({
+        'id_activo': 'act-003',
+        'sku_qr_fisico': 'CAJ-001',
+        'id_categoria': 2,
+        'nombre_categoria': 'Caja de Cambio',
+        'marca': 'Toyota',
+        'modelo': 'Yaris',
+        'anio': 2018,
+        'numero_motor': '1NZ-FE-9921',
+      });
+      expect(cajaConMotor.tituloRepuesto, 'Caja de Cambio - Toyota Yaris 2018');
+      expect(cajaConMotor.tituloVehiculo, 'Toyota Yaris 2018');
+    });
   });
 
   group('CatalogoItemCard Widget Tests', () {

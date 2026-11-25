@@ -1,15 +1,20 @@
+import asyncio
 import uuid
 import math
-from typing import Optional, List
+from collections import defaultdict
+from typing import Optional, List, Dict
 from datetime import datetime, timezone, time, timedelta, date
 from uuid import UUID
 from zoneinfo import ZoneInfo
-from fastapi import APIRouter, Depends, Query, HTTPException, status, BackgroundTasks
-from sqlalchemy import or_, and_, func, select
+from fastapi import APIRouter, Depends, Query, HTTPException, status, BackgroundTasks, Request
+from fastapi.responses import StreamingResponse
+from fastapi.security import HTTPAuthorizationCredentials
+from sqlalchemy import or_, and_, not_, func, select, case, cast, String
 from sqlalchemy.orm import Session, aliased
 
 from database import get_db
 from services.telegram_service import TelegramService
+from services.caja_events import caja_event_bus, notificar_caja
 from models import (
     Usuario,
     Cliente,
@@ -25,8 +30,10 @@ from models import (
     Detalle_Motor,
     Detalle_Caja_Cambio,
     Despacho,
+    Auditoria_Edicion_Pago,
 )
 from schemas import (
+    EstadoPagoEnum,
     CajaVerificarAccesoResponse,
     CobroPendienteItemResponse,
     CobroPendienteListResponse,
@@ -46,8 +53,10 @@ from schemas import (
     ResumenCuadreCajaDTO,
     HistorialOrdenItemResponse,
     HistorialCajaResponse,
+    EditarPagoRequest,
+    EditarPagoResponse,
 )
-from core.security import require_caja_role
+from core.security import require_caja_role, get_current_user, _bearer_scheme
 from core.policies import validar_horario_operativo_caja
 
 router = APIRouter(
@@ -76,6 +85,82 @@ def strip_accents(s: str) -> str:
     if not s:
         return ""
     return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn").lower()
+
+
+def _normalize_accents_sql(col):
+    """Normaliza mayúsculas y tildes en SQL de forma compatible con PostgreSQL y SQLite."""
+    expr = func.lower(func.coalesce(col, ""))
+    for accented, plain in (
+        ("á", "a"), ("Á", "a"),
+        ("é", "e"), ("É", "e"),
+        ("í", "i"), ("Í", "i"),
+        ("ó", "o"), ("Ó", "o"),
+        ("ú", "u"), ("Ú", "u"),
+        ("ü", "u"), ("Ü", "u"),
+    ):
+        expr = func.replace(expr, accented, plain)
+    return expr
+
+
+def _get_caja_user_ephemeral(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(_bearer_scheme),
+) -> Usuario:
+    """
+    Valida JWT y rol de Caja cerrando inmediatamente la sesión de BD antes de abrir
+    el stream SSE, evitando retener conexiones del pool de SQLAlchemy mientras dura el stream.
+    """
+    db_provider = request.app.dependency_overrides.get(get_db, get_db)
+    db_gen = db_provider()
+    db = next(db_gen)
+    try:
+        user = get_current_user(credentials=credentials, db=db)
+        return require_caja_role(current_user=user)
+    finally:
+        try:
+            next(db_gen)
+        except StopIteration:
+            pass
+
+
+@router.get(
+    "/stream",
+    summary="Stream SSE de Eventos en Tiempo Real de Caja",
+    description="Canal Server-Sent Events por sucursal para refrescar al instante (<1s) "
+                "la Bandeja de Cobros y el Historial ante nuevas órdenes, anulaciones o pagos."
+)
+async def stream_eventos_caja(
+    request: Request,
+    sucursal_id: int = Query(..., description="ID de la sucursal activa"),
+    current_user: Usuario = Depends(_get_caja_user_ephemeral),
+):
+    queue, sub = caja_event_bus.subscribe(sucursal_id)
+
+    async def event_generator():
+        try:
+            yield f": connected sucursal={sucursal_id}\n\n"
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    msg = await asyncio.wait_for(queue.get(), timeout=25.0)
+                    yield msg
+                except asyncio.TimeoutError:
+                    yield ": ping\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            caja_event_bus.unsubscribe(sucursal_id, sub)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get(
@@ -120,8 +205,11 @@ def obtener_cobros_pendientes(
     tipo_filtro = (tipo_operacion or "TODOS").strip().upper()
     items_resultado: List[CobroPendienteItemResponse] = []
 
+    ordenes_query = []
+    reservas_query = []
+
     # ─────────────────────────────────────────────────────────────────────────
-    # 1. CONSULTAR ÓRDENES DE VENTA PENDIENTES DE PAGO
+    # 1. CONSULTAR CABECERAS EN BLOQUE (VENTAS Y BACKORDERS)
     # ─────────────────────────────────────────────────────────────────────────
     if tipo_filtro in ["TODOS", "VENTA"]:
         # Excluir órdenes que corresponden a reservas backorder para evitar duplicidad en caja
@@ -140,162 +228,6 @@ def obtener_cobros_pendientes(
             .filter(~Orden_Venta.id_orden.in_(subq_backorders))
         ).all()
 
-        for orden, cliente, vendedor in ordenes_query:
-            # Obtener detalles de la orden enriquecidos con especificaciones tecnicas
-            detalles_raw = (
-                db.query(
-                    Detalle_Orden,
-                    Activo_Inventariado,
-                    Vehiculo_Origen,
-                    Categoria_Activo,
-                    Detalle_Motor,
-                    Detalle_Caja_Cambio,
-                )
-                .outerjoin(Activo_Inventariado, Detalle_Orden.id_activo == Activo_Inventariado.id_activo)
-                .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
-                .outerjoin(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
-                .outerjoin(Detalle_Motor, Activo_Inventariado.id_activo == Detalle_Motor.id_activo)
-                .outerjoin(Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo)
-                .filter(Detalle_Orden.id_orden == orden.id_orden)
-            ).all()
-
-            articulos_dto: List[ArticuloResumenDTO] = []
-            for det, activo, vehiculo, categoria, motor, caja in detalles_raw:
-                cat_str = categoria.nombre_categoria if categoria else None
-                marca_str = vehiculo.marca if vehiculo else None
-                modelo_str = vehiculo.modelo if vehiculo else None
-                anio_int = vehiculo.anio if vehiculo else None
-
-                # Detalle técnico identificable (cilindrada, combustible, transmisión)
-                tec_parts = []
-                if motor:
-                    if motor.cilindrada:
-                        tec_parts.append(motor.cilindrada)
-                    if motor.combustible:
-                        tec_parts.append(motor.combustible)
-                if caja and caja.transmision_tipo:
-                    tec_parts.append(caja.transmision_tipo)
-                detalle_tec_str = " • ".join(tec_parts) if tec_parts else None
-
-                if activo:
-                    tipo_art = "INVENTARIADO"
-                    sku_art = activo.sku_qr_fisico
-
-                    es_desc_antigua_solo_sku = bool(
-                        det.descripcion_manual
-                        and (f"- SKU: {activo.sku_qr_fisico}" in det.descripcion_manual or f"SKU: {activo.sku_qr_fisico}" in det.descripcion_manual)
-                    )
-
-                    if det.descripcion_manual and not es_desc_antigua_solo_sku:
-                        desc_art = det.descripcion_manual
-                    else:
-                        cat_base = cat_str or "Repuesto"
-                        veh_parts = [p for p in [marca_str, modelo_str, str(anio_int) if anio_int else None] if p]
-                        veh_text = f" - {' '.join(veh_parts)}" if veh_parts else ""
-                        tec_text = f" ({detalle_tec_str})" if detalle_tec_str else ""
-                        desc_art = f"{cat_base}{veh_text}{tec_text}".strip() or "Repuesto Inventariado"
-                else:
-                    sku_art = None
-                    desc_man = det.descripcion_manual or ""
-                    if "[RESERVA EN VERDE]" in desc_man or "[BACKORDER]" in desc_man:
-                        tipo_art = "RESERVA"
-                        desc_art = desc_man.replace("[BACKORDER]", "[VENTA EN VERDE]").replace("[RESERVA EN VERDE]", "[VENTA EN VERDE]")
-                    else:
-                        tipo_art = "MISCELANEO"
-                        desc_art = desc_man or "Ítem Misceláneo"
-
-                precio_unit = det.precio_unitario if det.precio_unitario is not None else det.precio_final
-                articulos_dto.append(
-                    ArticuloResumenDTO(
-                        cantidad=det.cantidad,
-                        tipo=tipo_art,
-                        descripcion=desc_art,
-                        sku=sku_art,
-                        precio=precio_unit,
-                        subtotal=det.precio_final,
-                        categoria=cat_str,
-                        marca=marca_str,
-                        modelo=modelo_str,
-                        anio=anio_int,
-                        detalle_tecnico=detalle_tec_str,
-                    )
-                )
-
-            # Folio representativo
-            folio_doc = orden.folio
-
-            total_op = orden.total_venta + (getattr(orden, "descuento", 0) or 0)
-            abono_req = getattr(orden, "abono_requerido", 0) or 0
-            saldo_pendiente = orden.monto_pendiente
-
-            # Consultar transacciones previas registradas para la orden
-            pagos_query = (
-                db.query(Transaccion_Pago)
-                .filter(Transaccion_Pago.id_orden == orden.id_orden)
-                .order_by(Transaccion_Pago.fecha_pago.asc())
-                .all()
-            )
-            historial_dto: List[HistorialAbonoItemDTO] = []
-            abono_acumulado = 0
-            for p in pagos_query:
-                f_pago_fmt, h_pago_fmt, dt_p_utc = format_chile_datetime(p.fecha_pago)
-                historial_dto.append(
-                    HistorialAbonoItemDTO(
-                        id_pago=p.id_pago,
-                        monto=p.monto,
-                        metodo_pago=p.metodo_pago,
-                        fecha_pago=dt_p_utc,
-                        fecha_pago_formateada=f_pago_fmt,
-                        hora_pago_formateada=h_pago_fmt,
-                        estado_pago=p.estado_pago or "Procesado",
-                    )
-                )
-                abono_acumulado += p.monto
-
-            if orden.monto_pendiente == orden.total_venta:
-                # El cliente no ha pagado nada aún
-                abono_prev = 0
-                if abono_req > 0 and abono_req < orden.total_venta:
-                    # Se requiere un abono comercial acordado como sugerencia inicial
-                    monto_cobrar = min(abono_req, orden.monto_pendiente)
-                else:
-                    # Venta estándar sin abono (o abono que cubre el 100%): se cobra el total pendiente
-                    monto_cobrar = orden.monto_pendiente
-            else:
-                # El cliente ya abonó previamente
-                abono_prev = abono_acumulado if abono_acumulado > 0 else max(0, orden.total_venta - orden.monto_pendiente)
-                monto_cobrar = orden.monto_pendiente
-
-            fecha_fmt, hora_fmt, dt_utc = format_chile_datetime(orden.fecha_creacion)
-            cliente_nombre = f"{cliente.nombres} {cliente.apellidos}".strip()
-            vendedor_nombre = f"{vendedor.nombres} {vendedor.apellidos}".strip()
-
-            item_dto = CobroPendienteItemResponse(
-                id_referencia=orden.id_orden,
-                folio_documento=folio_doc,
-                tipo_operacion="VENTA",
-                estado_documento=orden.estado_orden,
-                cliente_nombre=cliente_nombre,
-                cliente_rut=cliente.rut_cliente,
-                vendedor_nombre=vendedor_nombre,
-                fecha_emision=dt_utc,
-                fecha_emision_formateada=fecha_fmt,
-                hora_emision_formateada=hora_fmt,
-                total_operacion=total_op,
-                descuento=getattr(orden, "descuento", 0) or 0,
-                abono_previo=abono_prev,
-                abono_requerido=abono_req if (abono_req > 0 and abono_req < orden.total_venta) else 0,
-                saldo_pendiente=saldo_pendiente,
-                monto_a_cobrar=monto_cobrar,
-                historial_abonos=historial_dto,
-                articulos=articulos_dto,
-                especificaciones_backorder=None,
-            )
-            items_resultado.append(item_dto)
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # 2. CONSULTAR RESERVAS BACKORDER PENDIENTES DE ABONO / CONFIRMACIÓN
-    # ─────────────────────────────────────────────────────────────────────────
     if tipo_filtro in ["TODOS", "BACKORDER"]:
         reservas_query = (
             db.query(Reservas_Backorder, Cliente, Usuario, Categoria_Activo, Orden_Venta)
@@ -308,167 +240,347 @@ def obtener_cobros_pendientes(
             .filter((Reservas_Backorder.precio_acordado - Reservas_Backorder.monto_abonado) > 0)
         ).all()
 
-        for res, cliente, vendedor, categoria, orden_vinculada in reservas_query:
-            folio_doc = (orden_vinculada.folio if orden_vinculada and orden_vinculada.folio else None) or f"RES-{str(res.id_reserva).replace('-', '')[:4].upper()}"
-            desc_val = getattr(orden_vinculada, "descuento", 0) or 0 if orden_vinculada else 0
-            
-            # Subtotal Bruto antes de descuento
-            if orden_vinculada and orden_vinculada.total_venta is not None:
-                total_op = orden_vinculada.total_venta + desc_val
-            else:
-                total_op = res.precio_acordado
+    # ─────────────────────────────────────────────────────────────────────────
+    # 2. PRE-CARGA EN LOTE DE DETALLES Y PAGOS (ELIMINACIÓN DE N+1)
+    # ─────────────────────────────────────────────────────────────────────────
+    orden_ids_ventas = [orden.id_orden for orden, _, _ in ordenes_query]
+    orden_ids_bo = [
+        orden_vinculada.id_orden
+        for _, _, _, _, orden_vinculada in reservas_query
+        if orden_vinculada is not None
+    ]
+    all_orden_ids = list(dict.fromkeys(orden_ids_ventas + orden_ids_bo))
+    reserva_ids_bo = [res.id_reserva for res, _, _, _, _ in reservas_query]
 
-            abono_req = getattr(res, "abono_requerido", 0) or (getattr(orden_vinculada, "abono_requerido", 0) if orden_vinculada else 0) or 0
-            
-            # Total neto a liquidar deduciendo descuento
-            total_neto = max(0, total_op - desc_val)
-            saldo_pendiente = max(0, total_neto - res.monto_abonado)
+    detalles_por_orden: Dict[UUID, list] = defaultdict(list)
+    pagos_por_orden: Dict[UUID, List[Transaccion_Pago]] = defaultdict(list)
+    pagos_por_reserva: Dict[UUID, List[Transaccion_Pago]] = defaultdict(list)
 
-            # Si la orden vinculada ya está saldada o el saldo pendiente es 0, no mostrar en pendientes
-            if saldo_pendiente <= 0 or (orden_vinculada and (orden_vinculada.monto_pendiente == 0 or orden_vinculada.estado_orden == "Pagada")):
-                continue
-
-            # Consultar transacciones previas registradas para la reserva
-            if res.id_orden is not None:
-                filtro_pagos = (Transaccion_Pago.id_reserva == res.id_reserva) | (Transaccion_Pago.id_orden == res.id_orden)
-            else:
-                filtro_pagos = (Transaccion_Pago.id_reserva == res.id_reserva)
-
-            pagos_reserva_query = (
-                db.query(Transaccion_Pago)
-                .filter(filtro_pagos)
-                .order_by(Transaccion_Pago.fecha_pago.asc())
-                .all()
+    if all_orden_ids:
+        todos_detalles = (
+            db.query(
+                Detalle_Orden,
+                Activo_Inventariado,
+                Vehiculo_Origen,
+                Categoria_Activo,
+                Detalle_Motor,
+                Detalle_Caja_Cambio,
             )
-            historial_dto: List[HistorialAbonoItemDTO] = []
-            abono_acumulado = 0
-            for p in pagos_reserva_query:
-                f_pago_fmt, h_pago_fmt, dt_p_utc = format_chile_datetime(p.fecha_pago)
-                historial_dto.append(
-                    HistorialAbonoItemDTO(
-                        id_pago=p.id_pago,
-                        monto=p.monto,
-                        metodo_pago=p.metodo_pago,
-                        fecha_pago=dt_p_utc,
-                        fecha_pago_formateada=f_pago_fmt,
-                        hora_pago_formateada=h_pago_fmt,
-                        estado_pago=p.estado_pago or "Procesado",
+            .outerjoin(Activo_Inventariado, Detalle_Orden.id_activo == Activo_Inventariado.id_activo)
+            .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
+            .outerjoin(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
+            .outerjoin(Detalle_Motor, Activo_Inventariado.id_activo == Detalle_Motor.id_activo)
+            .outerjoin(Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo)
+            .filter(Detalle_Orden.id_orden.in_(all_orden_ids))
+            .all()
+        )
+        for row in todos_detalles:
+            detalles_por_orden[row[0].id_orden].append(row)
+
+    if all_orden_ids or reserva_ids_bo:
+        conds_pagos = []
+        if all_orden_ids:
+            conds_pagos.append(Transaccion_Pago.id_orden.in_(all_orden_ids))
+        if reserva_ids_bo:
+            conds_pagos.append(Transaccion_Pago.id_reserva.in_(reserva_ids_bo))
+        todos_pagos = (
+            db.query(Transaccion_Pago)
+            .filter(
+                or_(*conds_pagos),
+                Transaccion_Pago.estado_pago == EstadoPagoEnum.PROCESADO.value,
+            )
+            .order_by(Transaccion_Pago.fecha_pago.asc())
+            .all()
+        )
+        for p in todos_pagos:
+            if p.id_orden is not None:
+                pagos_por_orden[p.id_orden].append(p)
+            if p.id_reserva is not None:
+                pagos_por_reserva[p.id_reserva].append(p)
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # 3. ENSAMBLAR ÓRDENES DE VENTA PENDIENTES EN MEMORIA (O(1) POR ORDEN)
+    # ─────────────────────────────────────────────────────────────────────────
+    for orden, cliente, vendedor in ordenes_query:
+        detalles_raw = detalles_por_orden.get(orden.id_orden, [])
+
+        articulos_dto: List[ArticuloResumenDTO] = []
+        for det, activo, vehiculo, categoria, motor, caja in detalles_raw:
+            cat_str = categoria.nombre_categoria if categoria else None
+            marca_str = vehiculo.marca if vehiculo else None
+            modelo_str = vehiculo.modelo if vehiculo else None
+            anio_int = vehiculo.anio if vehiculo else None
+
+            # Detalle técnico identificable (cilindrada, combustible, transmisión)
+            tec_parts = []
+            if motor:
+                if motor.cilindrada:
+                    tec_parts.append(motor.cilindrada)
+                if motor.combustible:
+                    tec_parts.append(motor.combustible)
+            if caja and caja.transmision_tipo:
+                tec_parts.append(caja.transmision_tipo)
+            detalle_tec_str = " • ".join(tec_parts) if tec_parts else None
+
+            if activo:
+                tipo_art = "INVENTARIADO"
+                sku_art = activo.sku_qr_fisico
+
+                es_desc_antigua_solo_sku = bool(
+                    det.descripcion_manual
+                    and (f"- SKU: {activo.sku_qr_fisico}" in det.descripcion_manual or f"SKU: {activo.sku_qr_fisico}" in det.descripcion_manual)
+                )
+
+                if det.descripcion_manual and not es_desc_antigua_solo_sku:
+                    desc_art = det.descripcion_manual
+                else:
+                    cat_base = cat_str or "Repuesto"
+                    veh_parts = [p for p in [marca_str, modelo_str, str(anio_int) if anio_int else None] if p]
+                    veh_text = f" - {' '.join(veh_parts)}" if veh_parts else ""
+                    tec_text = f" ({detalle_tec_str})" if detalle_tec_str else ""
+                    desc_art = f"{cat_base}{veh_text}{tec_text}".strip() or "Repuesto Inventariado"
+            else:
+                sku_art = None
+                desc_man = det.descripcion_manual or ""
+                if "[RESERVA EN VERDE]" in desc_man or "[BACKORDER]" in desc_man:
+                    tipo_art = "RESERVA"
+                    desc_art = desc_man.replace("[BACKORDER]", "[VENTA EN VERDE]").replace("[RESERVA EN VERDE]", "[VENTA EN VERDE]")
+                else:
+                    tipo_art = "MISCELANEO"
+                    desc_art = desc_man or "Ítem Misceláneo"
+
+            precio_unit = det.precio_unitario if det.precio_unitario is not None else det.precio_final
+            articulos_dto.append(
+                ArticuloResumenDTO(
+                    cantidad=det.cantidad,
+                    tipo=tipo_art,
+                    descripcion=desc_art,
+                    sku=sku_art,
+                    precio=precio_unit,
+                    subtotal=det.precio_final,
+                    categoria=cat_str,
+                    marca=marca_str,
+                    modelo=modelo_str,
+                    anio=anio_int,
+                    detalle_tecnico=detalle_tec_str,
+                )
+            )
+
+        # Folio representativo
+        folio_doc = orden.folio
+
+        total_op = orden.total_venta + (getattr(orden, "descuento", 0) or 0)
+        abono_req = getattr(orden, "abono_requerido", 0) or 0
+        saldo_pendiente = orden.monto_pendiente
+
+        pagos_query = pagos_por_orden.get(orden.id_orden, [])
+        historial_dto: List[HistorialAbonoItemDTO] = []
+        abono_acumulado = 0
+        for p in pagos_query:
+            f_pago_fmt, h_pago_fmt, dt_p_utc = format_chile_datetime(p.fecha_pago)
+            historial_dto.append(
+                HistorialAbonoItemDTO(
+                    id_pago=p.id_pago,
+                    monto=p.monto,
+                    metodo_pago=p.metodo_pago,
+                    fecha_pago=dt_p_utc,
+                    fecha_pago_formateada=f_pago_fmt,
+                    hora_pago_formateada=h_pago_fmt,
+                    estado_pago=p.estado_pago or "Procesado",
+                )
+            )
+            abono_acumulado += p.monto
+
+        if orden.monto_pendiente == orden.total_venta:
+            # El cliente no ha pagado nada aún
+            abono_prev = 0
+            if abono_req > 0 and abono_req < orden.total_venta:
+                # Se requiere un abono comercial acordado como sugerencia inicial
+                monto_cobrar = min(abono_req, orden.monto_pendiente)
+            else:
+                # Venta estándar sin abono (o abono que cubre el 100%): se cobra el total pendiente
+                monto_cobrar = orden.monto_pendiente
+        else:
+            # El cliente ya abonó previamente
+            abono_prev = abono_acumulado if abono_acumulado > 0 else max(0, orden.total_venta - orden.monto_pendiente)
+            monto_cobrar = orden.monto_pendiente
+
+        fecha_fmt, hora_fmt, dt_utc = format_chile_datetime(orden.fecha_creacion)
+        cliente_nombre = f"{cliente.nombres} {cliente.apellidos}".strip()
+        vendedor_nombre = f"{vendedor.nombres} {vendedor.apellidos}".strip()
+
+        item_dto = CobroPendienteItemResponse(
+            id_referencia=orden.id_orden,
+            folio_documento=folio_doc,
+            tipo_operacion="VENTA",
+            estado_documento=orden.estado_orden,
+            cliente_nombre=cliente_nombre,
+            cliente_rut=cliente.rut_cliente,
+            vendedor_nombre=vendedor_nombre,
+            fecha_emision=dt_utc,
+            fecha_emision_formateada=fecha_fmt,
+            hora_emision_formateada=hora_fmt,
+            total_operacion=total_op,
+            descuento=getattr(orden, "descuento", 0) or 0,
+            abono_previo=abono_prev,
+            abono_requerido=abono_req if (abono_req > 0 and abono_req < orden.total_venta) else 0,
+            saldo_pendiente=saldo_pendiente,
+            monto_a_cobrar=monto_cobrar,
+            historial_abonos=historial_dto,
+            articulos=articulos_dto,
+            especificaciones_backorder=None,
+        )
+        items_resultado.append(item_dto)
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # 4. ENSAMBLAR RESERVAS BACKORDER PENDIENTES EN MEMORIA (O(1) POR RESERVA)
+    # ─────────────────────────────────────────────────────────────────────────
+    for res, cliente, vendedor, categoria, orden_vinculada in reservas_query:
+        folio_doc = (orden_vinculada.folio if orden_vinculada and orden_vinculada.folio else None) or f"RES-{str(res.id_reserva).replace('-', '')[:4].upper()}"
+        desc_val = getattr(orden_vinculada, "descuento", 0) or 0 if orden_vinculada else 0
+
+        # Subtotal Bruto antes de descuento
+        if orden_vinculada and orden_vinculada.total_venta is not None:
+            total_op = orden_vinculada.total_venta + desc_val
+        else:
+            total_op = res.precio_acordado
+
+        abono_req = getattr(res, "abono_requerido", 0) or (getattr(orden_vinculada, "abono_requerido", 0) if orden_vinculada else 0) or 0
+
+        # Total neto a liquidar deduciendo descuento
+        total_neto = max(0, total_op - desc_val)
+        saldo_pendiente = max(0, total_neto - res.monto_abonado)
+
+        # Si la orden vinculada ya está saldada o el saldo pendiente es 0, no mostrar en pendientes
+        if saldo_pendiente <= 0 or (orden_vinculada and (orden_vinculada.monto_pendiente == 0 or orden_vinculada.estado_orden == "Pagada")):
+            continue
+
+        # Combinar pagos de la reserva y de la orden vinculada sin duplicar
+        pagos_vistos = {}
+        for p in pagos_por_reserva.get(res.id_reserva, []):
+            pagos_vistos[p.id_pago] = p
+        if res.id_orden is not None:
+            for p in pagos_por_orden.get(res.id_orden, []):
+                pagos_vistos[p.id_pago] = p
+        pagos_reserva_query = sorted(
+            pagos_vistos.values(),
+            key=lambda p: p.fecha_pago or datetime.min,
+        )
+
+        historial_dto: List[HistorialAbonoItemDTO] = []
+        abono_acumulado = 0
+        for p in pagos_reserva_query:
+            f_pago_fmt, h_pago_fmt, dt_p_utc = format_chile_datetime(p.fecha_pago)
+            historial_dto.append(
+                HistorialAbonoItemDTO(
+                    id_pago=p.id_pago,
+                    monto=p.monto,
+                    metodo_pago=p.metodo_pago,
+                    fecha_pago=dt_p_utc,
+                    fecha_pago_formateada=f_pago_fmt,
+                    hora_pago_formateada=h_pago_fmt,
+                    estado_pago=p.estado_pago or "Procesado",
+                )
+            )
+            abono_acumulado += p.monto
+
+        if res.monto_abonado == 0:
+            abono_prev = 0
+            if abono_req > 0:
+                monto_cobrar = min(abono_req, saldo_pendiente)
+            else:
+                monto_cobrar = saldo_pendiente
+        else:
+            abono_prev = res.monto_abonado if res.monto_abonado > 0 else abono_acumulado
+            monto_cobrar = saldo_pendiente
+
+        cat_nombre = categoria.nombre_categoria if categoria else "Repuesto Solicitado"
+        transito_str = res.notas_preparacion or "Pendiente de Recepción"
+
+        specs_dto = BackorderEspecificacionesDTO(
+            marca=res.marca_requerida,
+            modelo=res.modelo_requerido,
+            anio=res.anio_requerido,
+            categoria=cat_nombre,
+            cilindrada=res.cilindrada_requerida,
+            combustible=res.combustible_requerido,
+            transito=transito_str,
+        )
+
+        # Cargar artículos adicionales (misceláneos o inventariados) de la orden híbrida desde el lote
+        articulos_bo_dto: List[ArticuloResumenDTO] = []
+        if orden_vinculada:
+            detalles_bo_raw = detalles_por_orden.get(orden_vinculada.id_orden, [])
+
+            for det, act, veh, cat_a, mot, caj in detalles_bo_raw:
+                desc_man = det.descripcion_manual or ""
+                # Omitir la línea del backorder en la lista de artículos para que se vea exclusivamente en el grid de especificaciones
+                if "[RESERVA EN VERDE]" in desc_man or "[BACKORDER]" in desc_man:
+                    continue
+
+                c_str = cat_a.nombre_categoria if cat_a else None
+                m_str = veh.marca if veh else None
+                mod_str = veh.modelo if veh else None
+                a_int = veh.anio if veh else None
+
+                tp = []
+                if mot and mot.cilindrada: tp.append(mot.cilindrada)
+                if mot and mot.combustible: tp.append(mot.combustible)
+                if caj and caj.transmision_tipo: tp.append(caj.transmision_tipo)
+                det_tec = " • ".join(tp) if tp else None
+
+                if act:
+                    tipo_art = "INVENTARIADO"
+                    sku_art = act.sku_qr_fisico
+                    d_art = desc_man or f"{c_str or 'Repuesto'} ({sku_art})"
+                else:
+                    tipo_art = "MISCELANEO"
+                    sku_art = None
+                    d_art = desc_man or "Ítem Misceláneo"
+
+                p_unit = det.precio_unitario if det.precio_unitario is not None else det.precio_final
+                articulos_bo_dto.append(
+                    ArticuloResumenDTO(
+                        cantidad=det.cantidad,
+                        tipo=tipo_art,
+                        descripcion=d_art,
+                        sku=sku_art,
+                        precio=p_unit,
+                        subtotal=det.precio_final,
+                        categoria=c_str,
+                        marca=m_str,
+                        modelo=mod_str,
+                        anio=a_int,
+                        detalle_tecnico=det_tec,
                     )
                 )
-                abono_acumulado += p.monto
 
-            if res.monto_abonado == 0:
-                abono_prev = 0
-                if abono_req > 0:
-                    monto_cobrar = min(abono_req, saldo_pendiente)
-                else:
-                    monto_cobrar = saldo_pendiente
-            else:
-                abono_prev = res.monto_abonado if res.monto_abonado > 0 else abono_acumulado
-                monto_cobrar = saldo_pendiente
+        fecha_fmt, hora_fmt, dt_utc = format_chile_datetime(res.fecha_creacion)
+        cliente_nombre = f"{cliente.nombres} {cliente.apellidos}".strip()
+        vendedor_nombre = f"{vendedor.nombres} {vendedor.apellidos}".strip()
 
-            cat_nombre = categoria.nombre_categoria if categoria else "Repuesto Solicitado"
-            transito_str = res.notas_preparacion or "Pendiente de Recepción"
-
-            specs_dto = BackorderEspecificacionesDTO(
-                marca=res.marca_requerida,
-                modelo=res.modelo_requerido,
-                anio=res.anio_requerido,
-                categoria=cat_nombre,
-                cilindrada=res.cilindrada_requerida,
-                combustible=res.combustible_requerido,
-                transito=transito_str,
-            )
-
-            # Cargar artículos adicionales (misceláneos o inventariados) de la orden híbrida si existen
-            articulos_bo_dto: List[ArticuloResumenDTO] = []
-            if orden_vinculada:
-                detalles_bo_raw = (
-                    db.query(
-                        Detalle_Orden,
-                        Activo_Inventariado,
-                        Vehiculo_Origen,
-                        Categoria_Activo,
-                        Detalle_Motor,
-                        Detalle_Caja_Cambio,
-                    )
-                    .outerjoin(Activo_Inventariado, Detalle_Orden.id_activo == Activo_Inventariado.id_activo)
-                    .outerjoin(Vehiculo_Origen, Activo_Inventariado.id_vehiculo == Vehiculo_Origen.id_vehiculo)
-                    .outerjoin(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
-                    .outerjoin(Detalle_Motor, Activo_Inventariado.id_activo == Detalle_Motor.id_activo)
-                    .outerjoin(Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo)
-                    .filter(Detalle_Orden.id_orden == orden_vinculada.id_orden)
-                ).all()
-
-                for det, act, veh, cat_a, mot, caj in detalles_bo_raw:
-                    desc_man = det.descripcion_manual or ""
-                    # Omitir la línea del backorder en la lista de artículos para que se vea exclusivamente en el grid de especificaciones
-                    if "[RESERVA EN VERDE]" in desc_man or "[BACKORDER]" in desc_man:
-                        continue
-
-                    c_str = cat_a.nombre_categoria if cat_a else None
-                    m_str = veh.marca if veh else None
-                    mod_str = veh.modelo if veh else None
-                    a_int = veh.anio if veh else None
-
-                    tp = []
-                    if mot and mot.cilindrada: tp.append(mot.cilindrada)
-                    if mot and mot.combustible: tp.append(mot.combustible)
-                    if caj and caj.transmision_tipo: tp.append(caj.transmision_tipo)
-                    det_tec = " • ".join(tp) if tp else None
-
-                    if act:
-                        tipo_art = "INVENTARIADO"
-                        sku_art = act.sku_qr_fisico
-                        d_art = desc_man or f"{c_str or 'Repuesto'} ({sku_art})"
-                    else:
-                        tipo_art = "MISCELANEO"
-                        sku_art = None
-                        d_art = desc_man or "Ítem Misceláneo"
-
-                    p_unit = det.precio_unitario if det.precio_unitario is not None else det.precio_final
-                    articulos_bo_dto.append(
-                        ArticuloResumenDTO(
-                            cantidad=det.cantidad,
-                            tipo=tipo_art,
-                            descripcion=d_art,
-                            sku=sku_art,
-                            precio=p_unit,
-                            subtotal=det.precio_final,
-                            categoria=c_str,
-                            marca=m_str,
-                            modelo=mod_str,
-                            anio=a_int,
-                            detalle_tecnico=det_tec,
-                        )
-                    )
-
-            fecha_fmt, hora_fmt, dt_utc = format_chile_datetime(res.fecha_creacion)
-            cliente_nombre = f"{cliente.nombres} {cliente.apellidos}".strip()
-            vendedor_nombre = f"{vendedor.nombres} {vendedor.apellidos}".strip()
-
-            item_dto = CobroPendienteItemResponse(
-                id_referencia=res.id_reserva,
-                folio_documento=folio_doc,
-                tipo_operacion="BACKORDER",
-                estado_documento=res.estado_reserva,
-                cliente_nombre=cliente_nombre,
-                cliente_rut=cliente.rut_cliente,
-                vendedor_nombre=vendedor_nombre,
-                fecha_emision=dt_utc,
-                fecha_emision_formateada=fecha_fmt,
-                hora_emision_formateada=hora_fmt,
-                total_operacion=total_op,
-                descuento=desc_val,
-                abono_previo=abono_prev,
-                abono_requerido=abono_req,
-                saldo_pendiente=saldo_pendiente,
-                monto_a_cobrar=monto_cobrar,
-                historial_abonos=historial_dto,
-                articulos=articulos_bo_dto,
-                especificaciones_backorder=specs_dto,
-            )
-            items_resultado.append(item_dto)
+        item_dto = CobroPendienteItemResponse(
+            id_referencia=res.id_reserva,
+            folio_documento=folio_doc,
+            tipo_operacion="BACKORDER",
+            estado_documento=res.estado_reserva,
+            cliente_nombre=cliente_nombre,
+            cliente_rut=cliente.rut_cliente,
+            vendedor_nombre=vendedor_nombre,
+            fecha_emision=dt_utc,
+            fecha_emision_formateada=fecha_fmt,
+            hora_emision_formateada=hora_fmt,
+            total_operacion=total_op,
+            descuento=desc_val,
+            abono_previo=abono_prev,
+            abono_requerido=abono_req,
+            saldo_pendiente=saldo_pendiente,
+            monto_a_cobrar=monto_cobrar,
+            historial_abonos=historial_dto,
+            articulos=articulos_bo_dto,
+            especificaciones_backorder=specs_dto,
+        )
+        items_resultado.append(item_dto)
 
     # ─────────────────────────────────────────────────────────────────────────
     # 3. FILTRADO REACTIVO POR BÚSQUEDA MULTICRITERIO
@@ -740,7 +852,7 @@ def registrar_cobro(
                         activo.reservado_por = None
                         activo.reserva_expira_en = None
                         reserva_vinculada.id_activo_asignado = activo.id_activo
-                        reserva_vinculada.estado_reserva = "Completada"
+                        reserva_vinculada.estado_reserva = "Completada" if orden.estado_orden == "Completada" else "Confirmada"
 
                         qr_hash = f"TX-QR-{uuid.uuid4()}"
                         orden.qr_transaccional_salida = qr_hash
@@ -770,12 +882,22 @@ def registrar_cobro(
                         db.add(estado_vendido)
                         db.flush()
 
+                    activo_ids = [d.id_activo for d in detalles_orden if d.id_activo is not None]
+                    activos_map = {}
+                    if activo_ids:
+                        activos_db = (
+                            db.query(Activo_Inventariado)
+                            .filter(Activo_Inventariado.id_activo.in_(activo_ids))
+                            .all()
+                        )
+                        activos_map = {a.id_activo: a for a in activos_db}
+
                     for d in detalles_orden:
                         if d.id_activo is None:
                             d.estado_preparacion = "Listo"
                             d.fecha_preparacion = now_utc
                         else:
-                            act = db.query(Activo_Inventariado).filter(Activo_Inventariado.id_activo == d.id_activo).first()
+                            act = activos_map.get(d.id_activo)
                             if act:
                                 act.id_estado = estado_vendido.id_estado
                                 act.version_lock = (act.version_lock or 1) + 1
@@ -892,14 +1014,14 @@ def registrar_cobro(
                     activo.reservado_por = None
                     activo.reserva_expira_en = None
                     
-                    reserva.id_activo_asignado = activo.id_activo
-                    reserva.estado_reserva = "Completada"
-
-                    qr_hash = f"TX-QR-{uuid.uuid4()}"
-
                     orden_existente = None
                     if reserva.id_orden:
                         orden_existente = db.query(Orden_Venta).filter(Orden_Venta.id_orden == reserva.id_orden).first()
+
+                    reserva.id_activo_asignado = activo.id_activo
+                    reserva.estado_reserva = "Completada" if (orden_existente and orden_existente.estado_orden == "Completada") else "Confirmada"
+
+                    qr_hash = f"TX-QR-{uuid.uuid4()}"
 
                     if orden_existente:
                         orden_existente.estado_orden = "Pagada"
@@ -1058,6 +1180,14 @@ def registrar_cobro(
 
         db.commit()
 
+        suc_notif = (
+            orden.id_sucursal
+            if payload.tipo_operacion == TipoOperacionEnum.ORDEN
+            else reserva.id_sucursal_registro
+        )
+        notificar_caja(suc_notif, "pendientes_changed", {"folio": folio_doc})
+        notificar_caja(suc_notif, "historial_changed", {"folio": folio_doc})
+
         # =========================================================================
         # NOTIFICACIÓN ASÍNCRONA A GERENCIA VÍA TELEGRAM
         # =========================================================================
@@ -1213,6 +1343,206 @@ def parse_periodo_chile(
     return start_utc, end_utc
 
 
+
+def require_supervisor_or_caja_role(current_user: Usuario = Depends(get_current_user)) -> Usuario:
+    if current_user.id_rol not in [3, 4, 5]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso denegado: Se requieren permisos de Caja, Supervisor o Administrador para editar pagos."
+        )
+    return current_user
+
+
+@router.patch(
+    "/pagos/{id_pago}",
+    response_model=EditarPagoResponse,
+    summary="Editar Registro de Pago o Abono",
+    description="Permite corregir método de pago o monto de abono (en Reservada) con auditoría estricta y atomicidad ACID."
+)
+def editar_pago(
+    id_pago: UUID,
+    payload: EditarPagoRequest,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_supervisor_or_caja_role),
+):
+    """
+    Permite a la cajera, supervisor o administrador corregir errores de digitación en un pago procesado:
+    - Método de pago (Efectivo, Débito, Transferencia, etc.)
+    - Monto de abono parcial (solo si la orden está en estado 'Reservada' y el total procesado < total_venta)
+    Registra el evento detallado en Auditoria_Edicion_Pago.
+    No permite alterar la fecha de imputación contable.
+    """
+    if not payload.motivo or len(payload.motivo.strip()) < 10:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Debe proporcionar un motivo de corrección detallado (mínimo 10 caracteres)."
+        )
+
+    pago = db.query(Transaccion_Pago).filter(Transaccion_Pago.id_pago == id_pago).first()
+    if not pago:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Transacción de pago con ID {id_pago} no encontrada."
+        )
+
+    if (pago.estado_pago or EstadoPagoEnum.PROCESADO.value) != EstadoPagoEnum.PROCESADO.value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"No se puede modificar una transacción en estado '{pago.estado_pago}'."
+        )
+
+    if not pago.id_orden:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La transacción de pago no está vinculada a una orden de venta editable."
+        )
+
+    orden_q = db.query(Orden_Venta).filter(Orden_Venta.id_orden == pago.id_orden)
+    if db.bind is not None and db.bind.dialect.name != "sqlite":
+        orden_q = orden_q.with_for_update()
+    orden = orden_q.first()
+
+    if not orden:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No se encontró la orden vinculada al pago."
+        )
+
+    if current_user.id_rol == 3 and orden.id_sucursal != current_user.id_sucursal:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso denegado: No puedes modificar pagos pertenecientes a otra sucursal."
+        )
+
+    if orden.estado_orden == "Anulada":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se pueden editar pagos de una orden que se encuentra Anulada."
+        )
+
+    monto_anterior = pago.monto
+    metodo_anterior = pago.metodo_pago
+
+    cambios_detectados = 0
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    try:
+        # 1. Modificación de Monto (solo en estado 'Reservada' y manteniendo abono parcial < total_venta)
+        if payload.nuevo_monto is not None and payload.nuevo_monto != pago.monto:
+            if orden.estado_orden in ["Pagada", "Completada", "Despachada"]:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="No se puede modificar el monto en una orden Pagada o Completada. Para órdenes liquidadas por error, debe anular la orden para devolver las piezas al stock de forma segura."
+                )
+
+            if orden.estado_orden != "Reservada":
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Solo se puede modificar montos de abonos en órdenes con estado 'Reservada' (estado actual: {orden.estado_orden})."
+                )
+
+            if payload.nuevo_monto <= 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="El nuevo monto del abono debe ser estrictamente mayor a $0."
+                )
+
+            otros_pagos = (
+                db.query(Transaccion_Pago)
+                .filter(
+                    Transaccion_Pago.id_orden == orden.id_orden,
+                    Transaccion_Pago.id_pago != pago.id_pago,
+                    Transaccion_Pago.estado_pago == EstadoPagoEnum.PROCESADO.value,
+                )
+                .all()
+            )
+            otros_total = sum(p.monto for p in otros_pagos)
+            nuevo_total_pagos = otros_total + payload.nuevo_monto
+
+            if nuevo_total_pagos >= orden.total_venta:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"El nuevo monto (${payload.nuevo_monto:,}) liquidaría el total de la orden (${orden.total_venta:,}). Para liquidar el saldo pendiente, debe registrar el pago por el módulo normal de cobros en caja."
+                )
+
+            pago.monto = payload.nuevo_monto
+            orden.monto_pendiente = orden.total_venta - nuevo_total_pagos
+
+            reserva = db.query(Reservas_Backorder).filter(Reservas_Backorder.id_orden == orden.id_orden).first()
+            if reserva:
+                reserva.monto_abonado = nuevo_total_pagos
+                reserva.fecha_actualizacion = now_utc
+
+            db.add(
+                Auditoria_Edicion_Pago(
+                    id_auditoria=uuid.uuid4(),
+                    id_pago=pago.id_pago,
+                    id_orden=orden.id_orden,
+                    id_usuario=current_user.id_usuario,
+                    fecha_edicion=now_utc,
+                    campo_modificado="monto",
+                    valor_anterior=str(monto_anterior),
+                    valor_nuevo=str(pago.monto),
+                    motivo=payload.motivo.strip(),
+                )
+            )
+            cambios_detectados += 1
+
+        # 2. Modificación de Método de Pago
+        if payload.nuevo_metodo is not None and payload.nuevo_metodo.value != pago.metodo_pago:
+            pago.metodo_pago = payload.nuevo_metodo.value
+            db.add(
+                Auditoria_Edicion_Pago(
+                    id_auditoria=uuid.uuid4(),
+                    id_pago=pago.id_pago,
+                    id_orden=orden.id_orden,
+                    id_usuario=current_user.id_usuario,
+                    fecha_edicion=now_utc,
+                    campo_modificado="metodo_pago",
+                    valor_anterior=metodo_anterior,
+                    valor_nuevo=pago.metodo_pago,
+                    motivo=payload.motivo.strip(),
+                )
+            )
+            cambios_detectados += 1
+
+        if cambios_detectados == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No se indicaron cambios en el monto ni en el método de pago."
+            )
+
+        orden.fecha_actualizacion = now_utc
+        db.commit()
+        db.refresh(orden)
+        db.refresh(pago)
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error transaccional al editar el pago: {str(e)}"
+        )
+
+    notificar_caja(orden.id_sucursal, "historial_changed", {"id_orden": str(orden.id_orden)})
+
+    return EditarPagoResponse(
+        success=True,
+        mensaje="Registro de pago actualizado exitosamente y registrado en la bitácora de auditoría.",
+        id_pago=pago.id_pago,
+        id_orden=orden.id_orden,
+        monto_anterior=monto_anterior,
+        monto_nuevo=pago.monto,
+        metodo_anterior=metodo_anterior,
+        metodo_nuevo=pago.metodo_pago,
+        monto_pendiente_actualizado=orden.monto_pendiente,
+        estado_orden_actualizado=orden.estado_orden,
+        fecha_edicion=now_utc,
+    )
+
+
 @router.get(
     "/historial",
     response_model=HistorialCajaResponse,
@@ -1251,25 +1581,34 @@ def obtener_historial_caja(
         .filter(
             or_(
                 Orden_Venta.estado_orden != "Reservada",
-                Orden_Venta.id_orden.in_(select(Transaccion_Pago.id_orden).filter(Transaccion_Pago.id_orden.isnot(None))),
+                Orden_Venta.id_orden.in_(
+                    select(Transaccion_Pago.id_orden).filter(
+                        Transaccion_Pago.id_orden.isnot(None),
+                        Transaccion_Pago.estado_pago == EstadoPagoEnum.PROCESADO.value,
+                    )
+                ),
             )
         )
     )
 
     if start_utc is not None and end_utc is not None:
         # Una orden pertenece al período contable de caja si:
-        # a) Tiene transacciones de pago registradas dentro del período, ó
-        # b) No tiene transacciones de pago pero su fecha_actualizacion o fecha_creacion está en el período (ej: anuladas)
+        # a) Tiene transacciones de pago procesadas registradas dentro del período, ó
+        # b) No tiene transacciones de pago procesadas pero su fecha_actualizacion o fecha_creacion está en el período (ej: anuladas)
         subq_pagos = (
             select(Transaccion_Pago.id_orden)
             .filter(
                 Transaccion_Pago.id_orden.isnot(None),
+                Transaccion_Pago.estado_pago == EstadoPagoEnum.PROCESADO.value,
                 Transaccion_Pago.fecha_pago.between(start_utc, end_utc),
             )
         )
         subq_todos_pagos = (
             select(Transaccion_Pago.id_orden)
-            .filter(Transaccion_Pago.id_orden.isnot(None))
+            .filter(
+                Transaccion_Pago.id_orden.isnot(None),
+                Transaccion_Pago.estado_pago == EstadoPagoEnum.PROCESADO.value,
+            )
         )
 
         cond_con_pago_en_periodo = Orden_Venta.id_orden.in_(subq_pagos)
@@ -1294,38 +1633,222 @@ def obtener_historial_caja(
     if monto_max is not None:
         query = query.filter(Orden_Venta.total_venta <= monto_max)
 
-    resultados_raw = query.order_by(Orden_Venta.fecha_creacion.desc()).all()
+    # Filtro SQL por método de pago tolerante a tildes (Débito/Debito, Crédito/Credito)
+    if metodo_pago and metodo_pago.strip().upper() != "TODOS":
+        mp_filtro = strip_accents(metodo_pago.strip())
+        subq_mp = select(Transaccion_Pago.id_orden).filter(
+            Transaccion_Pago.id_orden.isnot(None),
+            Transaccion_Pago.estado_pago == EstadoPagoEnum.PROCESADO.value,
+            _normalize_accents_sql(Transaccion_Pago.metodo_pago).like(f"%{mp_filtro}%"),
+        )
+        query = query.filter(Orden_Venta.id_orden.in_(subq_mp))
 
-    items_filtrados: List[HistorialOrdenItemResponse] = []
+    # Filtro SQL de búsqueda multicriterio tolerante a tildes, formato de RUT y folio
+    if busqueda and busqueda.strip():
+        q_raw = busqueda.strip().lower()
+        q = strip_accents(q_raw)
+        q_rut = q.replace(".", "").replace("-", "")
+        q_sin_ord = q.replace("ord-", "").strip()
+        q_digits = q_sin_ord.lstrip("0")
 
-    for orden, cliente, vendedor, cajera in resultados_raw:
-        # Obtener pagos
-        pagos_db = (
+        rut_norm_sql = func.replace(
+            func.replace(func.lower(func.coalesce(Cliente.rut_cliente, "")), ".", ""),
+            "-",
+            "",
+        )
+        id_orden_sin_guion = func.replace(func.lower(cast(Orden_Venta.id_orden, String)), "-", "")
+
+        subq_articulos_match = (
+            select(Detalle_Orden.id_orden)
+            .outerjoin(Activo_Inventariado, Detalle_Orden.id_activo == Activo_Inventariado.id_activo)
+            .filter(
+                or_(
+                    _normalize_accents_sql(Detalle_Orden.descripcion_manual).like(f"%{q}%"),
+                    _normalize_accents_sql(Activo_Inventariado.sku_qr_fisico).like(f"%{q}%"),
+                )
+            )
+        )
+
+        conds_busqueda = [
+            _normalize_accents_sql(Orden_Venta.qr_transaccional_salida).like(f"%{q}%"),
+            _normalize_accents_sql(Cliente.nombres).like(f"%{q}%"),
+            _normalize_accents_sql(Cliente.apellidos).like(f"%{q}%"),
+            _normalize_accents_sql(func.coalesce(Cliente.nombres, "") + " " + func.coalesce(Cliente.apellidos, "")).like(f"%{q}%"),
+            func.lower(func.coalesce(Cliente.rut_cliente, "")).like(f"%{q_raw}%"),
+            _normalize_accents_sql(UsuarioVendedor.nombres).like(f"%{q}%"),
+            _normalize_accents_sql(UsuarioVendedor.apellidos).like(f"%{q}%"),
+            _normalize_accents_sql(func.coalesce(UsuarioVendedor.nombres, "") + " " + func.coalesce(UsuarioVendedor.apellidos, "")).like(f"%{q}%"),
+            _normalize_accents_sql(UsuarioCajera.nombres).like(f"%{q}%"),
+            _normalize_accents_sql(UsuarioCajera.apellidos).like(f"%{q}%"),
+            _normalize_accents_sql(func.coalesce(UsuarioCajera.nombres, "") + " " + func.coalesce(UsuarioCajera.apellidos, "")).like(f"%{q}%"),
+            Orden_Venta.id_orden.in_(subq_articulos_match),
+        ]
+        if q_rut:
+            conds_busqueda.append(rut_norm_sql.like(f"%{q_rut}%"))
+        if q_digits and q_digits.isdigit():
+            conds_busqueda.append(cast(Orden_Venta.numero_orden, String).like(f"%{q_digits}%"))
+        if q_sin_ord:
+            conds_busqueda.append(id_orden_sin_guion.like(f"%{q_sin_ord}%"))
+        if q in "caja 01":
+            conds_busqueda.append(Orden_Venta.id_cajera.is_(None))
+
+        query = query.filter(or_(*conds_busqueda))
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # 1. MÉTRICAS AGREGADAS EN SQL (TOTAL REGISTROS + RESUMEN CUADRE EN 2 QUERIES)
+    # ─────────────────────────────────────────────────────────────────────────
+    filtered_subq = query.with_entities(
+        Orden_Venta.id_orden.label("id_orden"),
+        Orden_Venta.estado_orden.label("estado_orden"),
+    ).subquery()
+
+    stats_row = (
+        db.query(
+            func.count(filtered_subq.c.id_orden).label("total_registros"),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (filtered_subq.c.estado_orden.in_(["Pagada", "Completada", "Despachada"]), 1),
+                        else_=0,
+                    )
+                ),
+                0,
+            ).label("total_ordenes_pagadas"),
+        )
+        .one()
+    )
+
+    total_registros = int(stats_row.total_registros or 0)
+    tot_ordenes_pag = int(stats_row.total_ordenes_pagadas or 0)
+    total_paginas = max(1, math.ceil(total_registros / limite))
+
+    if total_registros == 0:
+        return HistorialCajaResponse(
+            total_registros=0,
+            pagina_actual=pagina,
+            limite_por_pagina=limite,
+            total_paginas=1,
+            resumen_cuadre=ResumenCuadreCajaDTO(
+                total_recaudado=0,
+                total_ordenes_pagadas=0,
+                total_efectivo=0,
+                total_pos=0,
+                total_debito=0,
+                total_credito=0,
+                total_transferencia=0,
+                total_cheque=0,
+            ),
+            items=[],
+        )
+
+    mp_norm_col = _normalize_accents_sql(Transaccion_Pago.metodo_pago)
+    pagos_agg = (
+        db.query(
+            func.coalesce(func.sum(case((mp_norm_col.like("%debito%"), Transaccion_Pago.monto), else_=0)), 0).label("debito"),
+            func.coalesce(func.sum(case((mp_norm_col.like("%credito%"), Transaccion_Pago.monto), else_=0)), 0).label("credito"),
+            func.coalesce(func.sum(case((mp_norm_col.like("%transferencia%"), Transaccion_Pago.monto), else_=0)), 0).label("transferencia"),
+            func.coalesce(func.sum(case((mp_norm_col.like("%cheque%"), Transaccion_Pago.monto), else_=0)), 0).label("cheque"),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (
+                            or_(
+                                mp_norm_col.like("%efectivo%"),
+                                and_(
+                                    not_(mp_norm_col.like("%debito%")),
+                                    not_(mp_norm_col.like("%credito%")),
+                                    not_(mp_norm_col.like("%transferencia%")),
+                                    not_(mp_norm_col.like("%cheque%")),
+                                ),
+                            ),
+                            Transaccion_Pago.monto,
+                        ),
+                        else_=0,
+                    )
+                ),
+                0,
+            ).label("efectivo"),
+        )
+        .join(filtered_subq, Transaccion_Pago.id_orden == filtered_subq.c.id_orden)
+        .filter(
+            filtered_subq.c.estado_orden != "Anulada",
+            Transaccion_Pago.estado_pago == EstadoPagoEnum.PROCESADO.value,
+        )
+        .one()
+    )
+
+    tot_efectivo = int(pagos_agg.efectivo or 0)
+    tot_debito = int(pagos_agg.debito or 0)
+    tot_credito = int(pagos_agg.credito or 0)
+    tot_transferencia = int(pagos_agg.transferencia or 0)
+    tot_cheque = int(pagos_agg.cheque or 0)
+    tot_pos = tot_debito + tot_credito
+    tot_recaudado = tot_efectivo + tot_pos + tot_transferencia + tot_cheque
+
+    resumen = ResumenCuadreCajaDTO(
+        total_recaudado=tot_recaudado,
+        total_ordenes_pagadas=tot_ordenes_pag,
+        total_efectivo=tot_efectivo,
+        total_pos=tot_pos,
+        total_debito=tot_debito,
+        total_credito=tot_credito,
+        total_transferencia=tot_transferencia,
+        total_cheque=tot_cheque,
+    )
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # 2. PAGINACIÓN EN SQL ORDENADA POR FECHA OPERATIVA DESCENDENTE
+    # ─────────────────────────────────────────────────────────────────────────
+    max_pago_subq = (
+        db.query(
+            Transaccion_Pago.id_orden.label("id_orden"),
+            func.max(Transaccion_Pago.fecha_pago).label("max_fecha_pago"),
+        )
+        .filter(
+            Transaccion_Pago.id_orden.isnot(None),
+            Transaccion_Pago.estado_pago == EstadoPagoEnum.PROCESADO.value,
+        )
+        .group_by(Transaccion_Pago.id_orden)
+        .subquery()
+    )
+    fecha_operativa_sql = func.coalesce(
+        max_pago_subq.c.max_fecha_pago,
+        Orden_Venta.fecha_actualizacion,
+        Orden_Venta.fecha_creacion,
+    )
+
+    offset = (pagina - 1) * limite
+    resultados_paginados = (
+        query.outerjoin(max_pago_subq, Orden_Venta.id_orden == max_pago_subq.c.id_orden)
+        .order_by(fecha_operativa_sql.desc(), Orden_Venta.fecha_creacion.desc())
+        .offset(offset)
+        .limit(limite)
+        .all()
+    )
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # 3. PRE-CARGA EN LOTE SOLO PARA LOS <= 20 REGISTROS DE LA PÁGINA (4 QUERIES)
+    # ─────────────────────────────────────────────────────────────────────────
+    orden_ids = [orden.id_orden for orden, *_ in resultados_paginados]
+    pagos_por_orden: Dict[UUID, List[Transaccion_Pago]] = defaultdict(list)
+    detalles_por_orden: Dict[UUID, list] = defaultdict(list)
+    barrera_por_orden: Dict[UUID, Auditoria_Barrera] = {}
+    auditorias_edicion_por_orden: Dict[UUID, list] = defaultdict(list)
+
+    if orden_ids:
+        todos_pagos = (
             db.query(Transaccion_Pago)
-            .filter(Transaccion_Pago.id_orden == orden.id_orden)
+            .filter(
+                Transaccion_Pago.id_orden.in_(orden_ids),
+                Transaccion_Pago.estado_pago == EstadoPagoEnum.PROCESADO.value,
+            )
             .order_by(Transaccion_Pago.fecha_pago.asc())
             .all()
         )
+        for p in todos_pagos:
+            pagos_por_orden[p.id_orden].append(p)
 
-        desglose_pagos = [
-            HistorialPagoDetalleDTO(
-                id_transaccion=p.id_pago,
-                metodo_pago=p.metodo_pago,
-                monto=p.monto,
-                fecha_pago=p.fecha_pago,
-            )
-            for p in pagos_db
-        ]
-
-        # Filtro por método de pago normalizando tildes (Débito/Debito, Crédito/Credito)
-        if metodo_pago and metodo_pago.strip().upper() != "TODOS":
-            mp_filtro = strip_accents(metodo_pago.strip())
-            encontrado = any(mp_filtro in strip_accents(p.metodo_pago or "") for p in pagos_db)
-            if not encontrado:
-                continue
-
-        # Obtener detalles de repuestos/artículos
-        detalles_raw = (
+        todos_detalles = (
             db.query(
                 Detalle_Orden,
                 Activo_Inventariado,
@@ -1339,8 +1862,50 @@ def obtener_historial_caja(
             .outerjoin(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
             .outerjoin(Detalle_Motor, Activo_Inventariado.id_activo == Detalle_Motor.id_activo)
             .outerjoin(Detalle_Caja_Cambio, Activo_Inventariado.id_activo == Detalle_Caja_Cambio.id_activo)
-            .filter(Detalle_Orden.id_orden == orden.id_orden)
-        ).all()
+            .filter(Detalle_Orden.id_orden.in_(orden_ids))
+            .all()
+        )
+        for row in todos_detalles:
+            detalles_por_orden[row[0].id_orden].append(row)
+
+        todas_barreras = (
+            db.query(Auditoria_Barrera)
+            .filter(Auditoria_Barrera.id_orden.in_(orden_ids))
+            .all()
+        )
+        for b in todas_barreras:
+            if b.id_orden not in barrera_por_orden:
+                barrera_por_orden[b.id_orden] = b
+
+        todas_auditorias_edicion = (
+            db.query(Auditoria_Edicion_Pago, Usuario)
+            .join(Usuario, Auditoria_Edicion_Pago.id_usuario == Usuario.id_usuario)
+            .filter(Auditoria_Edicion_Pago.id_orden.in_(orden_ids))
+            .order_by(Auditoria_Edicion_Pago.fecha_edicion.asc())
+            .all()
+        )
+        for aud, usr in todas_auditorias_edicion:
+            auditorias_edicion_por_orden[aud.id_orden].append((aud, usr))
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # 4. ENSAMBLAJE DE ITEMS PAGINADOS EN MEMORIA (O(1) POR ORDEN)
+    # ─────────────────────────────────────────────────────────────────────────
+    paginated_items: List[HistorialOrdenItemResponse] = []
+
+    for orden, cliente, vendedor, cajera in resultados_paginados:
+        pagos_db = pagos_por_orden.get(orden.id_orden, [])
+
+        desglose_pagos = [
+            HistorialPagoDetalleDTO(
+                id_transaccion=p.id_pago,
+                metodo_pago=p.metodo_pago,
+                monto=p.monto,
+                fecha_pago=p.fecha_pago,
+            )
+            for p in pagos_db
+        ]
+
+        detalles_raw = detalles_por_orden.get(orden.id_orden, [])
 
         articulos_dto: List[HistorialArticuloDTO] = []
         for det, activo, vehiculo, categoria, motor, caja in detalles_raw:
@@ -1486,11 +2051,7 @@ def obtener_historial_caja(
                 )
             )
 
-        auditoria_barrera = (
-            db.query(Auditoria_Barrera)
-            .filter(Auditoria_Barrera.id_orden == orden.id_orden)
-            .first()
-        )
+        auditoria_barrera = barrera_por_orden.get(orden.id_orden)
         if auditoria_barrera:
             b_dt = (auditoria_barrera.fecha_escaneo.replace(tzinfo=timezone.utc) if auditoria_barrera.fecha_escaneo.tzinfo is None else auditoria_barrera.fecha_escaneo).astimezone(tz_chile)
             b_fecha_26 = b_dt.strftime("%d/%m/%y")
@@ -1511,6 +2072,27 @@ def obtener_historial_caja(
                 HistorialMovimientoDTO(
                     hora=f"{anul_fecha_26} {anul_hora} hrs",
                     evento="Orden anulada en el sistema",
+                )
+            )
+
+        auditorias_pago = auditorias_edicion_por_orden.get(orden.id_orden, [])
+        for aud, usr in auditorias_pago:
+            aud_dt = (aud.fecha_edicion.replace(tzinfo=timezone.utc) if aud.fecha_edicion.tzinfo is None else aud.fecha_edicion).astimezone(tz_chile)
+            aud_f = aud_dt.strftime("%d/%m/%y")
+            aud_h = aud_dt.strftime("%H:%M")
+            usr_nom = f"{usr.nombres} {usr.apellidos or ''}".strip()
+            if aud.campo_modificado == "metodo_pago":
+                ev = f"Método de pago corregido de {aud.valor_anterior} a {aud.valor_nuevo} por {usr_nom} (Motivo: {aud.motivo})"
+            elif aud.campo_modificado == "monto":
+                ev = f"Monto de abono modificado de ${int(aud.valor_anterior):,} a ${int(aud.valor_nuevo):,} por {usr_nom} (Motivo: {aud.motivo})".replace(",", ".")
+            elif aud.campo_modificado == "fecha_pago":
+                ev = f"Fecha de imputación ajustada por {usr_nom} (Motivo: {aud.motivo})"
+            else:
+                ev = f"Pago modificado por {usr_nom}: {aud.campo_modificado} (Motivo: {aud.motivo})"
+            movimientos.append(
+                HistorialMovimientoDTO(
+                    hora=f"{aud_f} {aud_h} hrs",
+                    evento=ev,
                 )
             )
 
@@ -1539,85 +2121,7 @@ def obtener_historial_caja(
             historial_movimientos=movimientos,
         )
 
-        items_filtrados.append(item)
-
-    # Filtro reactivo de búsqueda multicriterio
-    if busqueda and busqueda.strip():
-
-        q_raw = busqueda.strip().lower()
-        q = strip_accents(q_raw)
-        q_rut = q.replace(".", "").replace("-", "")
-
-        def match_search(it: HistorialOrdenItemResponse) -> bool:
-            if q in strip_accents(it.folio):
-                return True
-            if q in strip_accents(it.cliente_nombre):
-                return True
-            rut_clean = (it.cliente_rut or "").lower().replace(".", "").replace("-", "")
-            if (it.cliente_rut and q in it.cliente_rut.lower()) or (q_rut and q_rut in rut_clean):
-                return True
-            if q in strip_accents(it.vendedor_nombre) or q in strip_accents(it.cajera_nombre):
-                return True
-            for art in it.articulos:
-                if q in strip_accents(art.descripcion) or (art.sku and q in strip_accents(art.sku)):
-                    return True
-            return False
-
-        items_filtrados = [it for it in items_filtrados if match_search(it)]
-
-    # Cálculo exacto de resumen_cuadre (excluyendo órdenes en estado 'Anulada')
-    tot_recaudado = 0
-    tot_ordenes_pag = 0
-    tot_efectivo = 0
-    tot_debito = 0
-    tot_credito = 0
-    tot_transferencia = 0
-    tot_cheque = 0
-
-    for it in items_filtrados:
-        if it.estado_orden == "Anulada":
-            continue
-
-        if it.estado_orden in ["Pagada", "Completada", "Despachada"]:
-            tot_ordenes_pag += 1
-
-        for p in it.desglose_pagos:
-            mp = (p.metodo_pago or "").lower()
-            if "efectivo" in mp:
-                tot_efectivo += p.monto
-            elif "débito" in mp or "debito" in mp:
-                tot_debito += p.monto
-            elif "crédito" in mp or "credito" in mp:
-                tot_credito += p.monto
-            elif "transferencia" in mp:
-                tot_transferencia += p.monto
-            elif "cheque" in mp:
-                tot_cheque += p.monto
-            else:
-                tot_efectivo += p.monto
-
-    tot_pos = tot_debito + tot_credito
-    tot_recaudado = tot_efectivo + tot_pos + tot_transferencia + tot_cheque
-
-    resumen = ResumenCuadreCajaDTO(
-        total_recaudado=tot_recaudado,
-        total_ordenes_pagadas=tot_ordenes_pag,
-        total_efectivo=tot_efectivo,
-        total_pos=tot_pos,
-        total_debito=tot_debito,
-        total_credito=tot_credito,
-        total_transferencia=tot_transferencia,
-        total_cheque=tot_cheque,
-    )
-
-    # Ordenar cronológicamente por fecha operativa de caja descendente
-    items_filtrados.sort(key=lambda it: it.fecha_iso + " " + it.hora, reverse=True)
-
-    # Paginación
-    total_registros = len(items_filtrados)
-    total_paginas = max(1, math.ceil(total_registros / limite))
-    offset = (pagina - 1) * limite
-    paginated_items = items_filtrados[offset: offset + limite]
+        paginated_items.append(item)
 
     return HistorialCajaResponse(
         total_registros=total_registros,

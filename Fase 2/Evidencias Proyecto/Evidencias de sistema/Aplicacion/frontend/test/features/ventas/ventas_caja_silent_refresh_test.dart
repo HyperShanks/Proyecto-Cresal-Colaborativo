@@ -6,6 +6,16 @@ import 'package:frontend/features/caja/models/cobro_pendiente_model.dart';
 import 'package:frontend/features/caja/models/cobro_model.dart';
 
 class MockCajaAuditService implements ICajaService {
+  @override
+  Future<Map<String, dynamic>> editarPago({
+    required String idPago,
+    int? nuevoMonto,
+    String? nuevoMetodo,
+    required String motivo,
+  }) async {
+    return {'success': true};
+  }
+
   int fetchCount = 0;
   int lastFetchedPagina = 1;
 

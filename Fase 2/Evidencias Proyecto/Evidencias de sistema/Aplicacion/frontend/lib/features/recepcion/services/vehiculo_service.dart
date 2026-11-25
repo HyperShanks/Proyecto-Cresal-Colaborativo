@@ -19,7 +19,7 @@ class VehiculoService {
       final response = await ApiService.get(uri);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return data['siguiente_ingreso']?.toString() ?? '1';
+        return data['siguiente_ingreso']?.toString() ?? '1000';
       }
       if (response.statusCode == 401) {
         await AuthService.manejarSesionExpirada();

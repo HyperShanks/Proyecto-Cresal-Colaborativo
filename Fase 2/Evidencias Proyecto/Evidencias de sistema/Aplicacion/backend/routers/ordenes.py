@@ -13,7 +13,10 @@ from sqlalchemy import or_, and_, not_, func, cast, String, case
 
 from database import get_db
 from services.telegram_service import TelegramService
+from services.caja_events import notificar_caja
+from routers.inventario import extraer_siglas_motor
 from models import (
+    Auditoria_Edicion_Pago,
     Usuario, Cliente, Region, Comuna, Orden_Venta, Detalle_Orden,
     Despacho, Activo_Inventariado, Estado_Activo,
     Vehiculo_Origen, Categoria_Activo, Transaccion_Pago,
@@ -21,6 +24,7 @@ from models import (
     Detalle_Motor, Detalle_Caja_Cambio
 )
 from schemas import (
+    EstadoPagoEnum,
     OrdenCreateRequest, OrdenResponse,
     ClienteOrdenResumen, DespachoOrdenResumen,
     DetalleOrdenItemResponse, OrdenHistorialItemResponse,
@@ -427,6 +431,7 @@ def crear_orden(
         # ── 3. Commit Transaccional Atómico ─────────────────────────────────
         db.commit()
         db.refresh(nueva_orden)
+        notificar_caja(nueva_orden.id_sucursal, "pendientes_changed", {"id_orden": str(nueva_orden.id_orden)})
 
         return OrdenResponse(
             id_orden=nueva_orden.id_orden,
@@ -748,6 +753,7 @@ def listar_ordenes_auditoria(
     orden_ids = [orden.id_orden for orden, *_ in resultados_paginados]
     pagos_por_orden: Dict[int, List[Transaccion_Pago]] = defaultdict(list)
     articulos_por_orden: Dict[int, List[HistorialArticuloDTO]] = defaultdict(list)
+    auditorias_edicion_por_orden: Dict[int, list] = defaultdict(list)
 
     # Resolución de cajera activa por sucursal para órdenes históricas que requieran fallback
     cajeras_db = db.query(Usuario).filter(Usuario.id_rol == 3, Usuario.estado == "Activo").all()
@@ -757,12 +763,25 @@ def listar_ordenes_auditoria(
     if orden_ids:
         todos_pagos = (
             db.query(Transaccion_Pago)
-            .filter(Transaccion_Pago.id_orden.in_(orden_ids))
+            .filter(
+                Transaccion_Pago.id_orden.in_(orden_ids),
+                Transaccion_Pago.estado_pago == EstadoPagoEnum.PROCESADO.value,
+            )
             .order_by(Transaccion_Pago.fecha_pago.asc())
             .all()
         )
         for p in todos_pagos:
             pagos_por_orden[p.id_orden].append(p)
+
+        todas_auditorias_edicion = (
+            db.query(Auditoria_Edicion_Pago, Usuario)
+            .join(Usuario, Auditoria_Edicion_Pago.id_usuario == Usuario.id_usuario)
+            .filter(Auditoria_Edicion_Pago.id_orden.in_(orden_ids))
+            .order_by(Auditoria_Edicion_Pago.fecha_edicion.asc())
+            .all()
+        )
+        for aud, usr in todas_auditorias_edicion:
+            auditorias_edicion_por_orden[aud.id_orden].append((aud, usr))
 
         todos_detalles = (
             db.query(Detalle_Orden, Activo_Inventariado, Vehiculo_Origen, Categoria_Activo, Detalle_Motor, Detalle_Caja_Cambio)
@@ -885,6 +904,27 @@ def listar_ordenes_auditoria(
                 )
             )
 
+        auditorias_pago_ord = auditorias_edicion_por_orden.get(orden.id_orden, [])
+        for aud, usr in auditorias_pago_ord:
+            aud_dt = (aud.fecha_edicion.replace(tzinfo=timezone.utc) if aud.fecha_edicion.tzinfo is None else aud.fecha_edicion).astimezone(tz_chile_ordenes)
+            aud_f = aud_dt.strftime("%d/%m/%y")
+            aud_h = aud_dt.strftime("%H:%M")
+            usr_nom = f"{usr.nombres} {usr.apellidos or ''}".strip()
+            if aud.campo_modificado == "metodo_pago":
+                ev = f"Método de pago corregido de {aud.valor_anterior} a {aud.valor_nuevo} por {usr_nom} (Motivo: {aud.motivo})"
+            elif aud.campo_modificado == "monto":
+                ev = f"Monto de abono modificado de ${int(aud.valor_anterior):,} a ${int(aud.valor_nuevo):,} por {usr_nom} (Motivo: {aud.motivo})".replace(",", ".")
+            elif aud.campo_modificado == "fecha_pago":
+                ev = f"Fecha de imputación ajustada por {usr_nom} (Motivo: {aud.motivo})"
+            else:
+                ev = f"Pago modificado por {usr_nom}: {aud.campo_modificado} (Motivo: {aud.motivo})"
+            movimientos.append(
+                HistorialMovimientoDTO(
+                    hora=f"{aud_f} {aud_h} hrs",
+                    evento=ev,
+                )
+            )
+
         # Asegurar formato comercial ORD-XXXX si el folio viniera como TX-QR-... o nulo
         folio_display = orden.folio
         if not folio_display or folio_display.startswith("TX-QR-"):
@@ -992,10 +1032,9 @@ def obtener_mis_ventas(
         filtro_vendedor = (Orden_Venta.id_vendedor == current_user.id_usuario)
 
     if seccion == "por_asignar":
-        # Apartado exclusivo: Ventas en verde pagadas que están pendientes de asignación física de activo
+        # Apartado exclusivo: Ventas en verde pendientes de asignación física de activo (para abonos o asignación)
         query = db.query(Orden_Venta).filter(
             filtro_vendedor,
-            Orden_Venta.monto_pendiente == 0,
             Orden_Venta.qr_transaccional_salida.is_(None),
             Orden_Venta.id_orden.in_(subquery_por_asignar),
             func.lower(Orden_Venta.estado_orden).notin_(["anulada", "cancelada"])
@@ -1018,11 +1057,10 @@ def obtener_mis_ventas(
             except ValueError:
                 pass
     else:
-        # Apartado normal: Excluir estrictamente órdenes pendientes de asignación para evitar duplicidad o botones Ver QR inválidos
+        # Apartado normal: Excluir órdenes pendientes de asignación para evitar duplicidad
         query = db.query(Orden_Venta).filter(
             filtro_vendedor,
             ~and_(
-                Orden_Venta.monto_pendiente == 0,
                 Orden_Venta.qr_transaccional_salida.is_(None),
                 Orden_Venta.id_orden.in_(subquery_por_asignar)
             )
@@ -1204,6 +1242,10 @@ def obtener_mis_ventas(
                         titulo_item = f"{nombre_cat} - {veh.marca} {veh.modelo} {veh.anio or ''}".strip()
                     else:
                         titulo_item = f"{nombre_cat} ({sku_fisico})"
+                    if act.id_categoria == 1 and veh and veh.numero_motor:
+                        sigla = extraer_siglas_motor(veh.numero_motor)
+                        if sigla:
+                            titulo_item = f"{titulo_item} [{sigla}]"
             elif reserva_asociada:
                 cat_bo = categorias_map.get(reserva_asociada.id_categoria_requerida)
                 id_cat = cat_bo.id_categoria if cat_bo else None
@@ -1526,9 +1568,9 @@ def asignar_activo_backorder(
     activo.reserva_expira_en = None
     activo.fecha_actualizacion = now_utc
 
-    # Asignar a la reserva y marcarla como completada
+    # Asignar a la reserva
     reserva.id_activo_asignado = activo.id_activo
-    reserva.estado_reserva = "Completada"
+    reserva.estado_reserva = "Completada" if orden.estado_orden == "Completada" else "Confirmada"
     reserva.fecha_actualizacion = now_utc
 
     # Generar QR transaccional para la orden
@@ -1812,9 +1854,6 @@ def listar_entregas_envios(
             for d in detalles_db
         )
 
-        if tiene_reserva_verde and (orden.monto_pendiente > 0 or not orden.qr_transaccional_salida):
-            continue
-
         # Cliente
         cliente_db = clientes_map.get(orden.id_cliente)
         cliente_resumen = None
@@ -1868,6 +1907,10 @@ def listar_entregas_envios(
                         titulo_item = f"{nombre_cat} - {veh.marca} {veh.modelo} {veh.anio or ''}".strip()
                     else:
                         titulo_item = f"{nombre_cat} ({sku_fisico})"
+                    if act.id_categoria == 1 and veh and veh.numero_motor:
+                        sigla = extraer_siglas_motor(veh.numero_motor)
+                        if sigla:
+                            titulo_item = f"{titulo_item} [{sigla}]"
 
             notas_item = None if (not d.id_activo and not reserva_asociada) else d.notas_preparacion
 
@@ -1966,6 +2009,7 @@ def listar_entregas_envios(
                 total_venta=orden.total_venta,
                 descuento=getattr(orden, "descuento", 0) or 0,
                 monto_pendiente=orden.monto_pendiente,
+                abono_requerido=reserva_asociada.abono_requerido if reserva_asociada else (getattr(orden, "abono_requerido", 0) or 0),
                 qr_transaccional_salida=orden.qr_transaccional_salida,
                 fecha_creacion=orden.fecha_creacion.isoformat() if orden.fecha_creacion else None,
                 fecha_actualizacion=orden.fecha_actualizacion.isoformat() if orden.fecha_actualizacion else None,
@@ -1973,6 +2017,7 @@ def listar_entregas_envios(
                 cliente=cliente_resumen,
                 despacho=despacho_resumen,
                 detalles=detalles_resumen,
+                id_vendedor=orden.id_vendedor,
                 vendedor_nombre=vendedor_nombre,
                 id_vendedor_asignado=orden.id_vendedor_asignado,
                 vendedor_asignado_nombre=vendedor_asignado_nombre,
@@ -2039,6 +2084,12 @@ def confirmar_entrega_tienda(
         # Actualizar Orden a 'Completada'
         orden.estado_orden = "Completada"
         orden.fecha_actualizacion = datetime.now()
+
+        # Si la orden tiene reservas backorder asociadas, completarlas formalmente tras entrega física
+        reservas_entrega = db.query(Reservas_Backorder).filter(Reservas_Backorder.id_orden == orden.id_orden).all()
+        for r_bo in reservas_entrega:
+            r_bo.estado_reserva = "Completada"
+            r_bo.fecha_actualizacion = datetime.now(timezone.utc)
 
         # Obtener o crear estado 'Entregado' / 'Finalizado'
         estado_final = db.query(Estado_Activo).filter(
@@ -2444,6 +2495,8 @@ def pagar_orden(
         db.commit()
         db.refresh(orden)
         db.refresh(nuevo_pago)
+        notificar_caja(orden.id_sucursal, "pendientes_changed", {"id_orden": str(orden.id_orden)})
+        notificar_caja(orden.id_sucursal, "historial_changed", {"id_orden": str(orden.id_orden)})
 
         print(f"✅ [PAGO] Pago procesado exitosamente para orden #{str(orden.id_orden)[:8].upper()}. "
               f"Estado: {orden.estado_orden}, Cajera: {user_ident}, Saldo pendiente: ${orden.monto_pendiente}")
@@ -2558,6 +2611,13 @@ def anular_orden_post(
         orden.fecha_anulacion = datetime.now(timezone.utc)
         orden.fecha_actualizacion = datetime.now(timezone.utc)
 
+        # Sincronización atómica de Reservas_Backorder (Ventas en Verde) vinculadas
+        reservas_anular = db.query(Reservas_Backorder).filter(Reservas_Backorder.id_orden == id_orden).all()
+        for r_bo in reservas_anular:
+            r_bo.estado_reserva = "Anulada"
+            r_bo.id_activo_asignado = None
+            r_bo.fecha_actualizacion = datetime.now(timezone.utc)
+
         # Paso B: Reversar pagos asociados
         pagos = db.query(Transaccion_Pago).filter(Transaccion_Pago.id_orden == id_orden).all()
         pagos_reversados = 0
@@ -2590,6 +2650,8 @@ def anular_orden_post(
 
         db.commit()
         db.refresh(orden)
+        notificar_caja(orden.id_sucursal, "pendientes_changed", {"id_orden": str(orden.id_orden)})
+        notificar_caja(orden.id_sucursal, "historial_changed", {"id_orden": str(orden.id_orden)})
 
         # Disparar alerta asíncrona a Telegram para Gerencia (no bloqueante)
         nombre_usuario = f"{current_user.nombres} {current_user.apellidos}".strip()
@@ -2674,6 +2736,18 @@ def anular_orden_patch(
         orden.monto_pendiente = 0
         orden.fecha_actualizacion = datetime.now(timezone.utc)
 
+        # Sincronización atómica de Reservas_Backorder (Ventas en Verde) vinculadas
+        reservas_anular_patch = db.query(Reservas_Backorder).filter(Reservas_Backorder.id_orden == id_orden).all()
+        for r_bo in reservas_anular_patch:
+            r_bo.estado_reserva = "Anulada"
+            r_bo.id_activo_asignado = None
+            r_bo.fecha_actualizacion = datetime.now(timezone.utc)
+
+        pagos_patch = db.query(Transaccion_Pago).filter(Transaccion_Pago.id_orden == id_orden).all()
+        for pago in pagos_patch:
+            if pago.estado_pago != EstadoPagoEnum.ANULADO.value:
+                pago.estado_pago = EstadoPagoEnum.ANULADO.value
+
         estado_disponible = db.query(Estado_Activo).filter(Estado_Activo.nombre_estado == "Disponible").first()
         if not estado_disponible:
             estado_disponible = Estado_Activo(id_estado=1, nombre_estado="Disponible")
@@ -2694,6 +2768,8 @@ def anular_orden_patch(
 
         db.commit()
         db.refresh(orden)
+        notificar_caja(orden.id_sucursal, "pendientes_changed", {"id_orden": str(orden.id_orden)})
+        notificar_caja(orden.id_sucursal, "historial_changed", {"id_orden": str(orden.id_orden)})
 
         mensaje = "Orden anulada exitosamente. Los repuestos inventariados han sido devueltos al catálogo como disponibles."
         return OrdenAnulacionResponse(
@@ -2898,7 +2974,10 @@ def obtener_orden(
     ).first()
     pagos = (
         db.query(Transaccion_Pago)
-        .filter(Transaccion_Pago.id_orden == id_orden)
+        .filter(
+            Transaccion_Pago.id_orden == id_orden,
+            Transaccion_Pago.estado_pago == EstadoPagoEnum.PROCESADO.value,
+        )
         .order_by(Transaccion_Pago.fecha_pago.asc())
         .all()
     )
@@ -3484,6 +3563,7 @@ def checkout_wizard(
 
         db.commit()
         db.refresh(orden)
+        notificar_caja(orden.id_sucursal, "pendientes_changed", {"id_orden": str(orden.id_orden)})
 
         return CheckoutWizardResponse(
             id_orden=orden.id_orden,

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/features/caja/models/cobro_pendiente_model.dart';
@@ -10,8 +11,20 @@ import 'package:frontend/features/caja/presentation/widgets/detalle_auditoria_di
 import 'package:frontend/features/caja/presentation/screens/historial_caja_screen.dart';
 
 class MockCajaHistorialService implements ICajaService {
+  @override
+  Future<Map<String, dynamic>> editarPago({
+    required String idPago,
+    int? nuevoMonto,
+    String? nuevoMetodo,
+    required String motivo,
+  }) async {
+    return {'success': true};
+  }
+
   HistorialCajaResponseModel? mockResponse;
   bool shouldFail = false;
+  Completer<void>? artificialDelay;
+  int callCount = 0;
 
   @override
   Future<List<CobroPendienteModel>> obtenerCobrosPendientes({
@@ -64,6 +77,10 @@ class MockCajaHistorialService implements ICajaService {
     int pagina = 1,
     int limite = 20,
   }) async {
+    callCount++;
+    if (artificialDelay != null) {
+      await artificialDelay!.future;
+    }
     if (shouldFail) {
       throw Exception('Fallo de conexión simulado en historial');
     }
@@ -547,6 +564,76 @@ void main() {
       if (provider.state.data != null) {
         expect(provider.state.data!.items.every((it) => it.estadoOrden == 'Pagada'), isTrue);
       }
+    });
+
+    test('cargarHistorialSilencioso NO invalida ni pisa una carga explícita en curso', () async {
+      final completer = Completer<void>();
+      mockService.artificialDelay = completer;
+
+      final provider = HistorialCajaProvider(
+        cajaService: mockService,
+        sucursalId: 1,
+        autoCargar: false,
+      );
+
+      // Disparar carga explícita lenta
+      final explicitFuture = provider.cargarHistorial();
+      expect(provider.state.isLoading, isTrue);
+      expect(mockService.callCount, 1);
+
+      // Mientras está cargando, intentar refresco silencioso (debe omitirse sin incrementar requestId)
+      await provider.cargarHistorialSilencioso();
+      expect(mockService.callCount, 1);
+
+      // Completar la carga explícita
+      completer.complete();
+      await explicitFuture;
+
+      expect(provider.state.isLoading, isFalse);
+      expect(provider.state.data, isNotNull);
+      expect(provider.state.data!.items.length, 2);
+    });
+
+    testWidgets('HistorialCajaScreen mantiene tabla visible y muestra LinearProgressIndicator al cambiar filtro', (tester) async {
+      tester.view.physicalSize = const Size(1366, 768);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final provider = HistorialCajaProvider(
+        cajaService: mockService,
+        sucursalId: 1,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: HistorialCajaScreen(provider: provider),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Datos iniciales visibles
+      expect(find.text('ORD-9778'), findsOneWidget);
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+
+      // Simular nueva consulta lenta (cambio de período)
+      final completer = Completer<void>();
+      mockService.artificialDelay = completer;
+
+      provider.cambiarPeriodo(PeriodoHistorial.esteMes);
+      await tester.pump();
+
+      // La tabla previa SIGUE visible (no pantalla blanca) y aparece barra lineal sutil
+      expect(find.text('ORD-9778'), findsOneWidget);
+      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+
+      // Terminar consulta
+      completer.complete();
+      await tester.pumpAndSettle();
+      expect(find.byType(LinearProgressIndicator), findsNothing);
     });
   });
 }

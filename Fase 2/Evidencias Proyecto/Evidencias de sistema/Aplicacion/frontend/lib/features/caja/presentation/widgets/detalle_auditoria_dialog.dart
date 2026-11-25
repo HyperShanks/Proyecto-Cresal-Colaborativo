@@ -1,3 +1,4 @@
+import 'editar_pago_dialog.dart';
 import 'package:flutter/material.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
@@ -8,45 +9,69 @@ import 'cobro_pendiente_card.dart';
 class DetalleAuditoriaDialog extends StatelessWidget {
   final HistorialOrdenItemModel orden;
 
-  const DetalleAuditoriaDialog({
-    super.key,
-    required this.orden,
-  });
+  const DetalleAuditoriaDialog({super.key, required this.orden});
 
-  static Future<void> show(BuildContext context, HistorialOrdenItemModel orden) {
-    return showDialog(
+  static Future<bool?> show(
+    BuildContext context,
+    HistorialOrdenItemModel orden,
+  ) {
+    return showDialog<bool>(
       context: context,
       builder: (context) => DetalleAuditoriaDialog(orden: orden),
     );
   }
 
-  Color _getEstadoColor(String estado) {
+  ({Color bg, Color border, Color text}) _getEstadoBadgeColors(String estado) {
     switch (estado.toLowerCase()) {
       case 'pagada':
-        return AppPalette.success;
+        return (
+          bg: AppPalette.success.withValues(alpha: 0.12),
+          border: AppPalette.success.withValues(alpha: 0.4),
+          text: AppPalette.success,
+        );
+      case 'completada':
+        return (
+          bg: const Color(0xFF2596BE).withValues(alpha: 0.12),
+          border: const Color(0xFF2596BE).withValues(alpha: 0.4),
+          text: const Color(0xFF2596BE),
+        );
       case 'despachada':
-        return const Color(0xFF0284C7);
+        return (
+          bg: const Color(0xFF0284C7).withValues(alpha: 0.12),
+          border: const Color(0xFF0284C7).withValues(alpha: 0.4),
+          text: const Color(0xFF0284C7),
+        );
       case 'reservada':
       case 'pendiente':
-        return AppPalette.secondary;
+        return (
+          bg: const Color(0xFFFEF3C7),
+          border: const Color(0xFFF59E0B).withValues(alpha: 0.45),
+          text: AppPalette.warningText,
+        );
       case 'anulada':
-        return AppPalette.error;
+        return (
+          bg: AppPalette.error.withValues(alpha: 0.12),
+          border: AppPalette.error.withValues(alpha: 0.4),
+          text: AppPalette.error,
+        );
       default:
-        return AppPalette.textSecondaryLight;
+        return (
+          bg: AppPalette.textSecondaryLight.withValues(alpha: 0.12),
+          border: AppPalette.textSecondaryLight.withValues(alpha: 0.4),
+          text: AppPalette.textSecondaryLight,
+        );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final estadoColor = _getEstadoColor(orden.estadoOrden);
+    final estadoBadge = _getEstadoBadgeColors(orden.estadoOrden);
 
     return Dialog(
       backgroundColor: AppPalette.surfaceLight,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: AppPalette.neutral.withValues(alpha: 0.2),
-        ),
+        side: BorderSide(color: AppPalette.neutral.withValues(alpha: 0.2)),
       ),
       insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
       child: Container(
@@ -55,7 +80,7 @@ class DetalleAuditoriaDialog extends StatelessWidget {
         child: Column(
           children: [
             // ── CABECERA DEL MODAL ──
-            _buildHeader(context, estadoColor),
+            _buildHeader(context, estadoBadge),
 
             Divider(
               height: 1,
@@ -101,7 +126,10 @@ class DetalleAuditoriaDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildHeader(BuildContext context, Color estadoColor) {
+  Widget _buildHeader(
+    BuildContext context,
+    ({Color bg, Color border, Color text}) estadoBadge,
+  ) {
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 18, 16, 18),
       child: Row(
@@ -147,16 +175,14 @@ class DetalleAuditoriaDialog extends StatelessWidget {
                               vertical: 3,
                             ),
                             decoration: BoxDecoration(
-                              color: estadoColor.withValues(alpha: 0.12),
+                              color: estadoBadge.bg,
                               borderRadius: BorderRadius.circular(6),
-                              border: Border.all(
-                                color: estadoColor.withValues(alpha: 0.4),
-                              ),
+                              border: Border.all(color: estadoBadge.border),
                             ),
                             child: Text(
                               orden.estadoOrden.toUpperCase(),
                               style: AppTypography.small.copyWith(
-                                color: estadoColor,
+                                color: estadoBadge.text,
                                 fontWeight: FontWeight.w800,
                                 fontSize: 11,
                               ),
@@ -164,7 +190,8 @@ class DetalleAuditoriaDialog extends StatelessWidget {
                           ),
                           if (orden.emiteQr)
                             Tooltip(
-                              message: 'QR Transaccional emitido para barrera de salida',
+                              message:
+                                  'QR Transaccional emitido para barrera de salida',
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 6,
@@ -174,7 +201,9 @@ class DetalleAuditoriaDialog extends StatelessWidget {
                                   color: AppPalette.backgroundLight,
                                   borderRadius: BorderRadius.circular(4),
                                   border: Border.all(
-                                    color: AppPalette.neutral.withValues(alpha: 0.3),
+                                    color: AppPalette.neutral.withValues(
+                                      alpha: 0.3,
+                                    ),
                                   ),
                                 ),
                                 child: Row(
@@ -202,7 +231,8 @@ class DetalleAuditoriaDialog extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Emitida el ${orden.fechaCreacionFormateada ?? orden.fechaHoraFormateada}'.replaceAll('/2026', '/26'),
+                        'Emitida el ${orden.fechaCreacionFormateada ?? orden.fechaHoraFormateada}'
+                            .replaceAll('/2026', '/26'),
                         style: AppTypography.small.copyWith(
                           color: AppPalette.textSecondaryLight,
                           fontSize: 12,
@@ -230,9 +260,7 @@ class DetalleAuditoriaDialog extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppPalette.backgroundLight,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppPalette.neutral.withValues(alpha: 0.18),
-        ),
+        border: Border.all(color: AppPalette.neutral.withValues(alpha: 0.18)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -451,12 +479,18 @@ class DetalleAuditoriaDialog extends StatelessWidget {
                           else
                             Builder(
                               builder: (context) {
-                                final bool esVentaVerde = art.tipo == 'RESERVA' ||
-                                    art.descripcion.toUpperCase().contains('VENTA EN VERDE');
+                                final bool esVentaVerde =
+                                    art.tipo == 'RESERVA' ||
+                                    art.descripcion.toUpperCase().contains(
+                                      'VENTA EN VERDE',
+                                    );
 
                                 if (esVentaVerde) {
                                   return Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 1.5,
+                                    ),
                                     decoration: BoxDecoration(
                                       color: const Color(0xFFF3E8FF),
                                       borderRadius: BorderRadius.circular(4),
@@ -477,9 +511,14 @@ class DetalleAuditoriaDialog extends StatelessWidget {
                                 }
 
                                 return Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 1.5,
+                                  ),
                                   decoration: BoxDecoration(
-                                    color: AppPalette.neutral.withValues(alpha: 0.12),
+                                    color: AppPalette.neutral.withValues(
+                                      alpha: 0.12,
+                                    ),
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: Text(
@@ -625,6 +664,56 @@ class DetalleAuditoriaDialog extends StatelessWidget {
                           color: AppPalette.success,
                         ),
                       ),
+                      if (orden.estadoOrden != 'Anulada') ...[
+                        const SizedBox(width: 10),
+                        InkWell(
+                          onTap: () async {
+                            final modificado = await EditarPagoDialog.show(
+                              context: context,
+                              orden: orden,
+                              pago: pago,
+                            );
+                            if (modificado == true && context.mounted) {
+                              Navigator.of(context).pop(true);
+                            }
+                          },
+                          borderRadius: BorderRadius.circular(6),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppPalette.primary.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: AppPalette.primary.withValues(
+                                  alpha: 0.3,
+                                ),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.edit_rounded,
+                                  size: 14,
+                                  color: AppPalette.primary,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Editar',
+                                  style: AppTypography.small.copyWith(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppPalette.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 );

@@ -8,6 +8,16 @@ import 'package:frontend/features/caja/presentation/providers/caja_provider.dart
 import 'package:frontend/features/caja/presentation/widgets/panel_detalle_cobro.dart';
 
 class MockCajaService implements ICajaService {
+  @override
+  Future<Map<String, dynamic>> editarPago({
+    required String idPago,
+    int? nuevoMonto,
+    String? nuevoMetodo,
+    required String motivo,
+  }) async {
+    return {'success': true};
+  }
+
   List<CobroPendienteModel> dummyItems = [];
   bool registrarCobroLlamado = false;
   RegistrarCobroRequestModel? ultimoRequest;
@@ -551,5 +561,129 @@ void main() {
     // Casilla marcada -> Botón habilitado (onPressed != null)
     final btnHabilitado = tester.widget<ElevatedButton>(btnConfirmarFinder);
     expect(btnHabilitado.onPressed, isNotNull);
+  });
+
+  testWidgets(
+      'Control Preventivo Universal: Venta nueva al 100% sin abonos previos exige confirmación antes de cobrar',
+      (tester) async {
+    setDesktopViewport(tester);
+
+    final ventaNueva = CobroPendienteModel(
+      idReferencia: 'ord-nueva-sin-abono',
+      folioDocumento: 'ORD-7700',
+      tipoOperacion: 'VENTA',
+      estadoDocumento: 'Reservada',
+      clienteNombre: 'Lucía Fernández',
+      clienteRut: '13.456.789-0',
+      vendedorNombre: 'Carlos Vendedor',
+      fechaEmision: DateTime.now(),
+      fechaEmisionFormateada: '23/11/2026',
+      horaEmisionFormateada: '14:00',
+      totalOperacion: 450000,
+      abonoPrevio: 0,
+      saldoPendiente: 450000,
+      montoACobrar: 450000,
+      articulos: [],
+    );
+
+    provider.seleccionarOrden(ventaNueva);
+    await tester.pumpWidget(createTestWidget(PanelDetalleCobro(provider: provider)));
+    await tester.pumpAndSettle();
+
+    final btnCobrarFinder = find.text('CONFIRMAR Y PROCESAR COBRO');
+    await tester.ensureVisible(btnCobrarFinder);
+    await tester.pumpAndSettle();
+    await tester.tap(btnCobrarFinder);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Confirmar Cobro Total'), findsOneWidget);
+    expect(find.text('VENTA NUEVA • COBRO TOTAL (100%)'), findsOneWidget);
+    expect(mockService.registrarCobroLlamado, isFalse);
+
+    // Cancelar no ejecuta el cobro
+    await tester.tap(find.text('Cancelar / Volver'));
+    await tester.pumpAndSettle();
+    expect(mockService.registrarCobroLlamado, isFalse);
+  });
+
+  testWidgets(
+      'Control Preventivo Universal: Abono parcial en orden nueva exige confirmación antes de registrar',
+      (tester) async {
+    setDesktopViewport(tester);
+
+    final ordenAbono = CobroPendienteModel(
+      idReferencia: 'ord-abono-nuevo',
+      folioDocumento: 'ORD-7701',
+      tipoOperacion: 'VENTA',
+      estadoDocumento: 'Reservada',
+      clienteNombre: 'Diego Araya',
+      clienteRut: '16.543.210-1',
+      vendedorNombre: 'Carlos Vendedor',
+      fechaEmision: DateTime.now(),
+      fechaEmisionFormateada: '23/11/2026',
+      horaEmisionFormateada: '14:15',
+      totalOperacion: 900000,
+      abonoPrevio: 0,
+      abonoRequerido: 300000,
+      saldoPendiente: 900000,
+      montoACobrar: 300000,
+      articulos: [],
+    );
+
+    provider.seleccionarOrden(ordenAbono);
+    await tester.pumpWidget(createTestWidget(PanelDetalleCobro(provider: provider)));
+    await tester.pumpAndSettle();
+
+    final btnAbonoFinder = find.text('REGISTRAR ABONO PARCIAL');
+    await tester.ensureVisible(btnAbonoFinder);
+    await tester.pumpAndSettle();
+    await tester.tap(btnAbonoFinder);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Confirmar Primer Abono'), findsOneWidget);
+    expect(
+      find.text('Saldo restante tras este abono: \$600.000 CLP (Queda en Reservada)'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byType(Checkbox));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Confirmar'));
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(mockService.registrarCobroLlamado, isTrue);
+    expect(mockService.ultimoRequest!.montoDeclarado, 300000);
+  });
+
+  testWidgets(
+      'Control Preventivo Universal: Venta en Verde (Backorder) nueva o con abono exige confirmación antes de cobrar',
+      (tester) async {
+    setDesktopViewport(tester);
+    provider.seleccionarOrden(sampleBackorder);
+
+    await tester.pumpWidget(createTestWidget(PanelDetalleCobro(provider: provider)));
+    await tester.pumpAndSettle();
+
+    final btnBackorderFinder = find.text('CONFIRMAR Y PROCESAR COBRO');
+    await tester.ensureVisible(btnBackorderFinder);
+    await tester.pumpAndSettle();
+    await tester.tap(btnBackorderFinder);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Confirmar Liquidación Venta en Verde'), findsOneWidget);
+    expect(find.text('VENTA EN VERDE • LIQUIDACIÓN TOTAL'), findsOneWidget);
+    expect(mockService.registrarCobroLlamado, isFalse);
+
+    await tester.tap(find.byType(Checkbox));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Confirmar'));
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(mockService.registrarCobroLlamado, isTrue);
+    expect(mockService.ultimoRequest!.tipoOperacion, 'BACKORDER');
   });
 }

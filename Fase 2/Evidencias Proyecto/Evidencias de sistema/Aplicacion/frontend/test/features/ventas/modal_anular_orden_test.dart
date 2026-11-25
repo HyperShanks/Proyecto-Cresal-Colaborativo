@@ -792,5 +792,93 @@ void main() {
       expect(find.byType(OrdenDetailSheet), findsNothing);
       expect(bottomSheetCerrado, isTrue);
     });
+
+    testWidgets('Área Segura Móvil: OrdenDetailSheet respeta insets inferiores de barra Android evitando solapamiento', (tester) async {
+      tester.view.physicalSize = const Size(360, 800);
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.padding = const FakeViewPadding(bottom: 48);
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetPadding();
+      });
+
+      final ordenReservada = OrdenHistorialModel(
+        idOrden: 'ord-safearea-1',
+        estadoOrden: 'Reservada',
+        totalVenta: 50000,
+        montoPendiente: 50000,
+        totalItems: 1,
+        fechaCreacion: '2026-09-22T11:00:00Z',
+        detalles: [],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: OrdenDetailSheet(
+              orden: ordenReservada,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Botón debe ser visible y SafeArea debe estar presente
+      expect(find.byType(SafeArea), findsWidgets);
+      expect(find.byKey(const Key('btn_anular_orden_detail')), findsOneWidget);
+
+      // El botón debe posicionarse por encima de los 48dp de la barra del sistema
+      final botonRect = tester.getRect(find.byKey(const Key('btn_anular_orden_detail')));
+      // La coordenada inferior del botón debe estar por encima de la barra de navegación (800 - 48 = 752)
+      expect(botonRect.bottom, lessThan(752.0));
+    });
+
+    testWidgets('Área Segura Móvil: Pantalla compacta (320px) con navegación por gestos (24dp) sin overflow y abre diálogo', (tester) async {
+      tester.view.physicalSize = const Size(320, 568);
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.padding = const FakeViewPadding(bottom: 24);
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetPadding();
+      });
+
+      final ordenReservada = OrdenHistorialModel(
+        idOrden: 'ord-compact-safe-1',
+        estadoOrden: 'Reservada',
+        totalVenta: 15000,
+        montoPendiente: 15000,
+        totalItems: 1,
+        fechaCreacion: '2026-09-22T11:00:00Z',
+        detalles: [],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: OrdenDetailSheet(
+              orden: ordenReservada,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      final boton = find.byKey(const Key('btn_anular_orden_detail'));
+      expect(boton, findsOneWidget);
+
+      final botonRect = tester.getRect(boton);
+      // Con pantalla de 568 de alto y 24dp de barra de gestos, el botón queda por encima de (568 - 24 = 544)
+      expect(botonRect.bottom, lessThan(544.0));
+
+      // Flujo preservado: al pulsar el botón se despliega ModalAnularOrden
+      await tester.ensureVisible(boton);
+      await tester.pumpAndSettle();
+      await tester.tap(boton);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ModalAnularOrden), findsOneWidget);
+    });
   });
 }

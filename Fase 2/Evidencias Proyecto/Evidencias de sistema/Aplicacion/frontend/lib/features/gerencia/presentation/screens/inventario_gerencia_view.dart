@@ -15,6 +15,7 @@ import '../../services/gerencia_service.dart';
 import '../../../ventas/presentation/widgets/visor_imagen_completa_dialog.dart';
 import '../../../../core/constants/especificaciones_vehiculo.dart';
 import '../../../../core/widgets/cresal_filter_dropdown.dart';
+import '../../../inventario/presentation/widgets/editar_activo_modal.dart';
 
 enum ModoVistaStock { tarjetas, tabla }
 
@@ -157,6 +158,7 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
   int _totalCount = 0;
   int _pendientesTasacionCount = 0;
   bool _puedeTasar = false;
+  bool _puedeEditar = false;
 
   @override
   void initState() {
@@ -164,15 +166,19 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
     _idSucursal = widget.idSucursalInicial;
     _soloSinTasar = widget.filtroSinTasarInicial;
     _busquedaController = TextEditingController();
-    _verificarPermisoTasacion();
+    _verificarPermisos();
     _cargarOpcionesUbicacion();
     _cargarInventario();
   }
 
-  Future<void> _verificarPermisoTasacion() async {
-    final puede = await AuthService.puedeTasar();
+  Future<void> _verificarPermisos() async {
+    final puedeT = await AuthService.puedeTasar();
+    final puedeE = await AuthService.puedeEditarInventario();
     if (mounted) {
-      setState(() => _puedeTasar = puede);
+      setState(() {
+        _puedeTasar = puedeT;
+        _puedeEditar = puedeE;
+      });
     }
   }
 
@@ -361,31 +367,37 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Panel Superior de Búsqueda y Filtros
-          _buildPanelFiltros(),
-          const SizedBox(height: 16),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final esPequena = constraints.maxWidth < 600;
+        final paddingGrl = esPequena ? 12.0 : 24.0;
+        return Padding(
+          padding: EdgeInsets.all(paddingGrl),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Panel Superior de Búsqueda y Filtros
+              _buildPanelFiltros(),
+              const SizedBox(height: 16),
 
-          // Área Central con Vistas o Estados de Carga
-          Expanded(
-            child: _isLoading && _items.isEmpty
-                ? const Center(
-                    child: CircularProgressIndicator(color: AppPalette.primary),
-                  )
-                : _errorMessage != null && _items.isEmpty
-                    ? _buildErrorState()
-                    : _items.isEmpty
-                        ? _buildEmptyState()
-                        : _modoVista == ModoVistaStock.tarjetas
-                            ? _buildVistaTarjetas()
-                            : _buildVistaTabla(),
+              // Área Central con Vistas o Estados de Carga
+              Expanded(
+                child: _isLoading && _items.isEmpty
+                    ? const Center(
+                        child: CircularProgressIndicator(color: AppPalette.primary),
+                      )
+                    : _errorMessage != null && _items.isEmpty
+                        ? _buildErrorState()
+                        : _items.isEmpty
+                            ? _buildEmptyState()
+                            : _modoVista == ModoVistaStock.tarjetas
+                                ? _buildVistaTarjetas()
+                                : _buildVistaTabla(),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -416,16 +428,25 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
               final esCompacto = constraints.maxWidth < 900;
               return esCompacto
                   ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         _buildBuscadorInput(),
                         const SizedBox(height: 12),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          alignment: WrapAlignment.spaceBetween,
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
-                            _buildBotonSinTasar(),
-                            const SizedBox(width: 8),
-                            _buildBotonLimpiar(),
-                            const Spacer(),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                _buildBotonSinTasar(),
+                                _buildBotonLimpiar(),
+                              ],
+                            ),
                             _buildSwitcherModoVista(),
                           ],
                         ),
@@ -615,7 +636,7 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
       ),
       decoration: InputDecoration(
         isDense: true,
-        hintText: 'Buscar por SKU, Marca, Pasillo (A, B, C), Pallet o N° Ingreso...',
+        hintText: 'Buscar por SKU, Marca, N° Motor, Pasillo, Pallet o N° Ingreso...',
         hintStyle: AppTypography.small.copyWith(
           color: AppPalette.textSecondaryLight.withValues(alpha: 0.7),
           fontSize: 12,
@@ -918,21 +939,25 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
             builder: (context, constraints) {
               final width = constraints.maxWidth;
               int crossAxisCount = 4;
+              double cardHeight = 440;
               if (width < 680) {
                 crossAxisCount = 1;
+                cardHeight = 430;
               } else if (width < 1080) {
                 crossAxisCount = 2;
+                cardHeight = 450;
               } else if (width < 1520) {
                 crossAxisCount = 3;
+                cardHeight = 440;
               }
 
               return GridView.builder(
                 padding: const EdgeInsets.only(bottom: 16),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: crossAxisCount,
-                  crossAxisSpacing: 20,
-                  mainAxisSpacing: 20,
-                  mainAxisExtent: 420, // Proporción balanceada con espacio para observaciones y anti-overflow
+                  crossAxisSpacing: 16,
+                  mainAxisSpacing: 16,
+                  mainAxisExtent: cardHeight, // Altura balanceada con espacio adaptativo anti-overflow
                 ),
                 itemCount: _items.length,
                 itemBuilder: (context, index) {
@@ -1087,6 +1112,8 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                       spacing: 6,
                       runSpacing: 4,
                       children: [
+                        if (item.numeroMotor != null && item.numeroMotor!.trim().isNotEmpty)
+                          _buildSpecChip('Motor: ${item.numeroMotor!}'),
                         if (item.combustible != null)
                           _buildSpecChip(item.combustible!),
                         if (item.transmisionTipo != null)
@@ -1184,98 +1211,143 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                tienePrecio ? 'PRECIO SUGERIDO' : 'PRECIO COMERCIAL',
-                                style: const TextStyle(
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 0.5,
-                                  color: Color(0xFF94A3B8),
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                tienePrecio ? _formatoCLP(item.precioSugerido) : '⚠️ Sin Tasar',
-                                style: TextStyle(
-                                  fontSize: tienePrecio ? 16 : 12,
-                                  fontWeight: FontWeight.w900,
-                                  color: tienePrecio ? const Color(0xFF0F172A) : const Color(0xFFEA580C),
-                                ),
-                              ),
-                              if (tienePrecio && item.precioMinimo != null && item.precioMaximo != null) ...[
-                                const SizedBox(height: 2),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF1F5F9),
-                                    borderRadius: BorderRadius.circular(4),
-                                    border: Border.all(color: AppPalette.borderLight),
+                          Flexible(
+                            flex: 4,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  tienePrecio ? 'PRECIO SUGERIDO' : 'PRECIO COMERCIAL',
+                                  style: const TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.5,
+                                    color: Color(0xFF94A3B8),
                                   ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 2),
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerLeft,
                                   child: Text(
-                                    'Rango: ${item.rangoPrecioFormateado}',
-                                    style: const TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF475569),
+                                    tienePrecio ? _formatoCLP(item.precioSugerido) : '⚠️ Sin Tasar',
+                                    style: TextStyle(
+                                      fontSize: tienePrecio ? 15 : 12,
+                                      fontWeight: FontWeight.w900,
+                                      color: tienePrecio ? const Color(0xFF0F172A) : const Color(0xFFEA580C),
                                     ),
                                   ),
                                 ),
-                              ],
-                            ],
-                          ),
-
-                              // Botón de Acción
-                              if (!_puedeTasar)
-                                const SizedBox.shrink()
-                              else if (esBloqueado)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF1F5F9),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: AppPalette.borderLight),
+                                if (tienePrecio && item.precioMinimo != null && item.precioMaximo != null) ...[
+                                  const SizedBox(height: 2),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF1F5F9),
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(color: AppPalette.borderLight),
+                                    ),
+                                    child: Text(
+                                      'Rango: ${item.rangoPrecioFormateado}',
+                                      style: const TextStyle(
+                                        fontSize: 9.5,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF475569),
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(Icons.lock, size: 12, color: Color(0xFF94A3B8)),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        estadoNombre,
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w700,
-                                          color: Color(0xFF94A3B8),
+                                ],
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+
+                          // Botón de Acción
+                          if (!_puedeTasar && !_puedeEditar)
+                            const SizedBox.shrink()
+                          else if (esBloqueado)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF1F5F9),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: AppPalette.borderLight),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.lock, size: 12, color: Color(0xFF94A3B8)),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    estadoNombre,
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF94A3B8),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          else
+                            Flexible(
+                              flex: 6,
+                              child: Align(
+                                alignment: Alignment.centerRight,
+                                child: Wrap(
+                                  spacing: 5,
+                                  runSpacing: 4,
+                                  alignment: WrapAlignment.end,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  children: [
+                                    if (_puedeEditar)
+                                      OutlinedButton.icon(
+                                        onPressed: () => _abrirModalEdicionPieza(item),
+                                        icon: const Icon(Icons.edit_note, size: 14),
+                                        label: const Text('Editar'),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: AppPalette.primary,
+                                          side: const BorderSide(color: AppPalette.primary),
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                          minimumSize: Size.zero,
+                                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                          textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
                                         ),
                                       ),
-                                    ],
-                                  ),
-                                )
-                              else
-                                ElevatedButton.icon(
-                                  onPressed: () => _abrirModalTasacion(item),
-                                  icon: Icon(
-                                    !tienePrecio || esPaletizado ? Icons.sell : Icons.edit,
-                                    size: 14,
-                                  ),
-                                  label: Text(!tienePrecio || esPaletizado ? 'Tasar' : 'Precio'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: !tienePrecio || esPaletizado
-                                        ? const Color(0xFFEA580C)
-                                        : AppPalette.tertiary,
-                                    foregroundColor: Colors.white,
-                                    elevation: 0,
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                    textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-                                  ),
+                                    if (_puedeTasar)
+                                      ElevatedButton.icon(
+                                        onPressed: () => _abrirModalTasacion(item),
+                                        icon: Icon(
+                                          !tienePrecio || esPaletizado ? Icons.sell : Icons.price_change_outlined,
+                                          size: 13,
+                                        ),
+                                        label: Text(!tienePrecio || esPaletizado ? 'Tasar' : 'Precio'),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: !tienePrecio || esPaletizado
+                                              ? const Color(0xFFEA580C)
+                                              : AppPalette.tertiary,
+                                          foregroundColor: Colors.white,
+                                          elevation: 0,
+                                          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                                          minimumSize: Size.zero,
+                                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                          textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                                        ),
+                                      ),
+                                  ],
                                 ),
-                            ],
-                          ),
-                        ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
                       ],
                     ),
                   ),
@@ -1381,7 +1453,7 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                 Expanded(
                   child: LayoutBuilder(
                     builder: (context, constraints) {
-                      final tableWidth = math.max(constraints.maxWidth, 980.0);
+                      final tableWidth = math.max(constraints.maxWidth, 1150.0);
                       return SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
                         child: SizedBox(
@@ -1466,12 +1538,12 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
         children: [
           _buildHeaderCell('SKU / QR FÍSICO', flex: 2),
           _buildHeaderCell('PIEZA / FICHA TÉCNICA', flex: 4),
-          _buildHeaderCell('UBICACIÓN FÍSICA', flex: 3),
+          _buildHeaderCell('UBICACIÓN FÍSICA', flex: 2),
           _buildHeaderCell('SUCURSAL', flex: 2),
           _buildHeaderCell('ESTADO FÍSICO', flex: 2, alignment: Alignment.center),
           _buildHeaderCell('PRECIO TASACIÓN', flex: 2, alignment: Alignment.centerRight),
-          if (_puedeTasar)
-            _buildHeaderCell('ACCIÓN', flex: 2, alignment: Alignment.center),
+          if (_puedeTasar || _puedeEditar)
+            _buildHeaderCell('ACCIONES', flex: 3, alignment: Alignment.center),
         ],
       ),
     );
@@ -1654,7 +1726,7 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            '${item.combustible ?? ""} • ${item.transmisionTipo ?? ""}${item.cilindrada != null ? " • ${item.cilindrada!}L" : ""}',
+                            '${item.combustible ?? ""} • ${item.transmisionTipo ?? ""}${item.cilindrada != null ? " • ${item.cilindrada!}L" : ""}${item.numeroMotor != null && item.numeroMotor!.trim().isNotEmpty ? " • Motor: ${item.numeroMotor!}" : ""}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
@@ -1696,7 +1768,7 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
 
             // 3. Ubicación Física
             Expanded(
-              flex: 3,
+              flex: 2,
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
                 child: Align(
@@ -1708,13 +1780,19 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                       borderRadius: BorderRadius.circular(6),
                       border: Border.all(color: AppPalette.borderLight),
                     ),
-                    child: Text(
-                      'G${item.ubicacionGalpon ?? "1"} • Pasillo ${item.ubicacionPasillo ?? "-"} • Pallet ${item.ubicacionPallet ?? "-"}',
-                      style: const TextStyle(
-                        fontFamily: 'monospace',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF334155),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'G${item.ubicacionGalpon ?? "1"} • Pasillo ${item.ubicacionPasillo ?? "-"} • Pallet ${item.ubicacionPallet ?? "-"}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF334155),
+                        ),
                       ),
                     ),
                   ),
@@ -1798,9 +1876,9 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
             ),
 
             // 7. Acción
-            if (_puedeTasar)
+            if (_puedeTasar || _puedeEditar)
               Expanded(
-                flex: 2,
+                flex: 3,
                 child: Center(
                   child: esBloqueado
                       ? Container(
@@ -1826,23 +1904,49 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                             ],
                           ),
                         )
-                      : ElevatedButton.icon(
-                          onPressed: () => _abrirModalTasacion(item),
-                          icon: Icon(
-                            !tienePrecio || esPaletizado ? Icons.sell : Icons.edit,
-                            size: 13,
-                          ),
-                          label: Text(!tienePrecio || esPaletizado ? 'Tasar' : 'Precio'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: !tienePrecio || esPaletizado
-                                ? const Color(0xFFEA580C)
-                                : AppPalette.tertiary,
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-                          ),
+                      : Wrap(
+                          spacing: 5,
+                          runSpacing: 4,
+                          alignment: WrapAlignment.center,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            if (_puedeEditar)
+                              OutlinedButton.icon(
+                                onPressed: () => _abrirModalEdicionPieza(item),
+                                icon: const Icon(Icons.edit_note, size: 13),
+                                label: const Text('Editar'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppPalette.primary,
+                                  side: const BorderSide(color: AppPalette.primary),
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                            if (_puedeTasar)
+                              ElevatedButton.icon(
+                                onPressed: () => _abrirModalTasacion(item),
+                                icon: Icon(
+                                  !tienePrecio || esPaletizado ? Icons.sell : Icons.price_change_outlined,
+                                  size: 13,
+                                ),
+                                label: Text(!tienePrecio || esPaletizado ? 'Tasar' : 'Precio'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: !tienePrecio || esPaletizado
+                                      ? const Color(0xFFEA580C)
+                                      : AppPalette.tertiary,
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                          ],
                         ),
                 ),
               ),
@@ -1859,95 +1963,136 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
     final start = _totalCount == 0 ? 0 : (_paginaActual - 1) * _limitePorPagina + 1;
     final end = (_paginaActual * _limitePorPagina).clamp(0, _totalCount);
 
-    return Container(
-      margin: const EdgeInsets.only(top: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppPalette.borderLight),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text.rich(
-            TextSpan(
-              text: 'Mostrando ',
-              style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-              children: [
-                TextSpan(
-                  text: '$start - $end ',
-                  style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final esEstrecho = constraints.maxWidth < 620;
+        final controlesPaginacion = Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            OutlinedButton.icon(
+              onPressed: _paginaActual > 1
+                  ? () => _cargarInventario(pagina: _paginaActual - 1)
+                  : null,
+              icon: const Icon(Icons.chevron_left, size: 16),
+              label: const Text('Anterior'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(0, 32),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                foregroundColor: AppPalette.primary,
+                disabledForegroundColor: const Color(0xFF94A3B8),
+                disabledIconColor: const Color(0xFF94A3B8),
+                side: BorderSide(
+                  color: _paginaActual > 1 ? AppPalette.primary : const Color(0xFFE2E8F0),
                 ),
-                const TextSpan(text: 'de '),
-                TextSpan(
-                  text: '$_totalCount ',
-                  style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                ),
-                const TextSpan(text: 'repuestos'),
-              ],
+              ),
             ),
-          ),
-          Row(
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                'Página $_paginaActual de $_totalPaginas',
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF334155)),
+              ),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton.icon(
+              onPressed: _paginaActual < _totalPaginas
+                  ? () => _cargarInventario(pagina: _paginaActual + 1)
+                  : null,
+              icon: const Icon(Icons.chevron_right, size: 16),
+              label: const Text('Siguiente'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(0, 32),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                foregroundColor: AppPalette.primary,
+                disabledForegroundColor: const Color(0xFF94A3B8),
+                disabledIconColor: const Color(0xFF94A3B8),
+                side: BorderSide(
+                  color: _paginaActual < _totalPaginas ? AppPalette.primary : const Color(0xFFE2E8F0),
+                ),
+              ),
+            ),
+          ],
+        );
+
+        final textoResumen = Text.rich(
+          TextSpan(
+            text: 'Mostrando ',
+            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
             children: [
-              OutlinedButton.icon(
-                onPressed: _paginaActual > 1
-                    ? () => _cargarInventario(pagina: _paginaActual - 1)
-                    : null,
-                icon: const Icon(Icons.chevron_left, size: 16),
-                label: const Text('Anterior'),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(0, 32),
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-                  foregroundColor: AppPalette.primary,
-                  disabledForegroundColor: const Color(0xFF94A3B8),
-                  disabledIconColor: const Color(0xFF94A3B8),
-                  side: BorderSide(
-                    color: _paginaActual > 1 ? AppPalette.primary : const Color(0xFFE2E8F0),
-                  ),
-                ),
+              TextSpan(
+                text: '$start - $end ',
+                style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
               ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  'Página $_paginaActual de $_totalPaginas',
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF334155)),
-                ),
+              const TextSpan(text: 'de '),
+              TextSpan(
+                text: '$_totalCount ',
+                style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
               ),
-              const SizedBox(width: 8),
-              OutlinedButton.icon(
-                onPressed: _paginaActual < _totalPaginas
-                    ? () => _cargarInventario(pagina: _paginaActual + 1)
-                    : null,
-                icon: const Icon(Icons.chevron_right, size: 16),
-                label: const Text('Siguiente'),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(0, 32),
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-                  foregroundColor: AppPalette.primary,
-                  disabledForegroundColor: const Color(0xFF94A3B8),
-                  disabledIconColor: const Color(0xFF94A3B8),
-                  side: BorderSide(
-                    color: _paginaActual < _totalPaginas ? AppPalette.primary : const Color(0xFFE2E8F0),
-                  ),
-                ),
-              ),
+              const TextSpan(text: 'repuestos'),
             ],
           ),
-        ],
-      ),
+        );
+
+        return Container(
+          margin: const EdgeInsets.only(top: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppPalette.borderLight),
+          ),
+          child: esEstrecho
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    textoResumen,
+                    const SizedBox(height: 8),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: controlesPaginacion,
+                    ),
+                  ],
+                )
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    textoResumen,
+                    controlesPaginacion,
+                  ],
+                ),
+        );
+      },
     );
   }
 
   // =========================================================================
-  // 5. MODAL DE TASACIÓN GERENCIAL (FIJAR PRECIO COMERCIAL)
+  // 5. MODAL DE EDICIÓN DE PIEZA Y VEHÍCULO ORIGEN (HU-24)
+  // =========================================================================
+  Future<void> _abrirModalEdicionPieza(CatalogoItem item) async {
+    if (!_puedeEditar) return;
+    setState(() => _isModalAbierto = true);
+    final resultado = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => EditarActivoModal(activo: item.toJson()),
+    );
+    setState(() => _isModalAbierto = false);
+    if (resultado != null && mounted) {
+      await refrescarSilencioso();
+      widget.onStockMutado?.call();
+    }
+  }
+
+  // =========================================================================
+  // 5.1. MODAL DE TASACIÓN GERENCIAL (FIJAR PRECIO COMERCIAL)
   // =========================================================================
   void _abrirModalTasacion(CatalogoItem item) {
     if (!_puedeTasar) return;

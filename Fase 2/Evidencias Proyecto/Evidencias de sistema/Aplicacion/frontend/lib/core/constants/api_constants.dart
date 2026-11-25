@@ -4,7 +4,7 @@ class ApiConstants {
   // ==========================================
   // SINGLE SOURCE OF TRUTH (URL BASE)
   // ==========================================
-  // URL DE PRUEBAS / EVALUACIÓN ACADÉMICA (Render Dev - Activa para Capstone)
+  // URL DE PRUEBAS / EVALUACIÓN (Render Test - Activa)
   static const String _baseUrl = 'https://cresal-backend-dev.onrender.com/api';
 
   // URL DE DESARROLLO LOCAL (Windows Desktop / Localhost)

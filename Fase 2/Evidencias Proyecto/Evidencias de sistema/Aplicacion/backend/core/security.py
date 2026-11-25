@@ -222,6 +222,22 @@ def require_bodeguero_or_admin(
     return current_user
 
 
+def require_inventario_editor(
+    current_user: Usuario = Depends(get_current_user)
+) -> Usuario:
+    """
+    Valida que el usuario autenticado posea permisos de Bodeguero (id_rol == 1)
+    o Gerencia (id_rol == 4) para editar piezas y especificaciones de inventario.
+    El rol Administrador (id_rol == 5) tiene explícitamente denegada la edición de piezas.
+    """
+    if current_user.id_rol not in [1, 4]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso restringido: Se requieren permisos de Bodeguero o Gerencia para editar piezas e inventario."
+        )
+    return current_user
+
+
 def require_gerencia_role(
     current_user: Usuario = Depends(get_current_user)
 ) -> Usuario:
@@ -271,6 +287,32 @@ def require_gerencia_o_auditor_central(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Acceso restringido: Se requieren privilegios gerenciales o de Auditoría Central."
+        )
+    if current_user.id_rol == 8 and not es_usuario_auditor_central(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso restringido: Los auditores de sucursal satélite solo tienen acceso al visor de inventario y catálogo."
+        )
+    return current_user
+
+
+def require_gerencia_jefe_ventas_o_auditor_central(
+    current_user: Usuario = Depends(get_current_user)
+) -> Usuario:
+    """
+    Valida que el usuario tenga acceso al endpoint predictivo ML (CRES-283).
+    Permitido para:
+    - Gerencia General (id_rol == 4)
+    - Administrador (id_rol == 5)
+    - Jefe de Ventas (id_rol == 6)
+    - Auditor Central / Casa Matriz (id_rol == 8 con id_sucursal == 1 o Casa Matriz)
+
+    Bloquea a auditores de sucursales satélites (id_rol == 8 con id_sucursal != 1).
+    """
+    if current_user.id_rol not in [4, 5, 6, 8]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso restringido: Se requieren privilegios gerenciales, Jefatura de Ventas o Auditoría Central."
         )
     if current_user.id_rol == 8 and not es_usuario_auditor_central(current_user):
         raise HTTPException(

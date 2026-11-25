@@ -10,6 +10,7 @@ import '../widgets/caja_drawer.dart';
 import '../widgets/bandeja_cobros_panel.dart';
 import '../widgets/panel_detalle_cobro.dart';
 import 'historial_caja_screen.dart';
+import '../../services/caja_sse_service.dart';
 import '../../../../core/services/silent_polling_manager.dart';
 import '../../../../core/widgets/update_dialog.dart';
 import '../../../../core/services/app_update_service.dart';
@@ -33,7 +34,9 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
   bool _providerInterno = false;
 
   bool _sidebarOpen = true;
-  int _selectedNavIndex = 0; // 0: Caja, 1: Historial
+  int _selectedNavIndex = 0; // 0: Caja, 1: Historial, 2: Soporte
+  bool _historialInicializado = false;
+  bool _soporteInicializado = false;
   String _cajeraNombre =
       AuthService.cachedUser != null &&
           AuthService.cachedUser!.nombres.isNotEmpty
@@ -43,6 +46,7 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
   String _sucursalNombre = 'Sucursal Activa';
   int _idSucursal = AuthService.cachedUser?.idSucursal ?? 1;
   SilentPollingManager? _cajaPollingManager;
+  CajaSseService? _cajaSseService;
 
   @override
   void initState() {
@@ -58,15 +62,18 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
 
     _cargarDatosCajera();
 
+    // Respaldo silencioso cada 30s ante eventuales microcortes del canal SSE
     _cajaPollingManager = SilentPollingManager(
-      interval: const Duration(seconds: 3),
-      debugLabel: 'CajaPolling',
+      interval: const Duration(seconds: 30),
+      debugLabel: 'CajaPollingFallback',
       shouldPause: () {
         if (_selectedNavIndex == 0) {
           return _cajaProvider.isProcesandoCobro ||
               _cajaProvider.pagosDivididos.isNotEmpty;
         } else if (_selectedNavIndex == 1) {
-          return _historialKey.currentState?.isModalAbierto ?? false;
+          return !_historialInicializado ||
+              (_historialKey.currentState?.isModalAbierto ?? false) ||
+              (_historialKey.currentState?.isCargando ?? false);
         }
         return true;
       },
@@ -76,9 +83,32 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
           await _cajaProvider.cargarCobrosPendientesSilencioso(
             sucursalId: _idSucursal,
           );
-        } else if (_selectedNavIndex == 1) {
-          _historialKey.currentState?.refrescarSilencioso();
+        } else if (_selectedNavIndex == 1 && _historialInicializado) {
+          await _historialKey.currentState?.refrescarSilencioso();
         }
+      },
+    )..start();
+
+    // Canal Push SSE en tiempo real (<1s al crearse/anularse una orden o registrarse un pago)
+    _cajaSseService = CajaSseService(
+      sucursalId: _idSucursal,
+      onPendientesChanged: () async {
+        if (!mounted) return;
+        if (_cajaProvider.isProcesandoCobro ||
+            _cajaProvider.pagosDivididos.isNotEmpty) {
+          return;
+        }
+        await _cajaProvider.cargarCobrosPendientesSilencioso(
+          sucursalId: _idSucursal,
+        );
+      },
+      onHistorialChanged: () async {
+        if (!mounted || !_historialInicializado) return;
+        if ((_historialKey.currentState?.isModalAbierto ?? false) ||
+            (_historialKey.currentState?.isCargando ?? false)) {
+          return;
+        }
+        await _historialKey.currentState?.refrescarSilencioso();
       },
     )..start();
 
@@ -112,11 +142,33 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
   @override
   void dispose() {
     routeObserver.unsubscribe(this);
+    _cajaSseService?.dispose();
     _cajaPollingManager?.dispose();
     if (_providerInterno) {
       _cajaProvider.dispose();
     }
     super.dispose();
+  }
+
+  void _seleccionarPestana(int index) {
+    final yaEstabaHistorial = _historialInicializado;
+    setState(() {
+      _selectedNavIndex = index;
+      if (index == 1) _historialInicializado = true;
+      if (index == 2) _soporteInicializado = true;
+    });
+
+    if (index == 0) {
+      if (_cajaProvider.cobros.isEmpty) {
+        _cajaProvider.cargarCobrosPendientes(sucursalId: _idSucursal);
+      } else {
+        _cajaProvider.cargarCobrosPendientesSilencioso(
+          sucursalId: _idSucursal,
+        );
+      }
+    } else if (index == 1 && yaEstabaHistorial) {
+      _historialKey.currentState?.refrescarSilencioso();
+    }
   }
 
   Future<void> _cargarDatosCajera() async {
@@ -138,6 +190,7 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
       }
     });
 
+    _cajaSseService?.updateSucursal(_idSucursal);
     _cajaProvider.cargarCobrosPendientes(sucursalId: _idSucursal);
   }
 
@@ -229,22 +282,7 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
           backgroundColor: AppPalette.backgroundLight,
           drawer: CajaDrawer(
             selectedIndex: _selectedNavIndex,
-            onSectionSelected: (index) {
-              setState(() {
-                _selectedNavIndex = index;
-              });
-              if (index == 0) {
-                if (_cajaProvider.cobros.isEmpty) {
-                  _cajaProvider.cargarCobrosPendientes(sucursalId: _idSucursal);
-                } else {
-                  _cajaProvider.cargarCobrosPendientesSilencioso(
-                    sucursalId: _idSucursal,
-                  );
-                }
-              } else if (index == 1) {
-                _historialKey.currentState?.refrescarSilencioso();
-              }
-            },
+            onSectionSelected: _seleccionarPestana,
           ),
           body: SafeArea(
             child: Row(
@@ -262,8 +300,12 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
                           index: _selectedNavIndex.clamp(0, 2),
                           children: [
                             _buildBandejaCobrosView(),
-                            _buildHistorialPagosView(),
-                            const SoporteDesktopView(),
+                            _historialInicializado
+                                ? _buildHistorialPagosView()
+                                : const SizedBox.shrink(),
+                            _soporteInicializado
+                                ? const SoporteDesktopView()
+                                : const SizedBox.shrink(),
                           ],
                         ),
                       ),
@@ -369,20 +411,7 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
                       title: 'Caja',
                       subtitle: 'Bandeja de Cobros',
                       isSelected: _selectedNavIndex == 0,
-                      onTap: () {
-                        setState(() {
-                          _selectedNavIndex = 0;
-                        });
-                        if (_cajaProvider.cobros.isEmpty) {
-                          _cajaProvider.cargarCobrosPendientes(
-                            sucursalId: _idSucursal,
-                          );
-                        } else {
-                          _cajaProvider.cargarCobrosPendientesSilencioso(
-                            sucursalId: _idSucursal,
-                          );
-                        }
-                      },
+                      onTap: () => _seleccionarPestana(0),
                     ),
                     const SizedBox(height: 6),
                     _buildSidebarItem(
@@ -390,12 +419,7 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
                       title: 'Historial',
                       subtitle: 'Historial de Pagos',
                       isSelected: _selectedNavIndex == 1,
-                      onTap: () {
-                        setState(() {
-                          _selectedNavIndex = 1;
-                        });
-                        _historialKey.currentState?.refrescarSilencioso();
-                      },
+                      onTap: () => _seleccionarPestana(1),
                     ),
                     const SizedBox(height: 6),
                     _buildSidebarItem(
@@ -403,11 +427,7 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
                       title: 'Soporte',
                       subtitle: 'Tickets de Soporte',
                       isSelected: _selectedNavIndex == 2,
-                      onTap: () {
-                        setState(() {
-                          _selectedNavIndex = 2;
-                        });
-                      },
+                      onTap: () => _seleccionarPestana(2),
                     ),
                     const SizedBox(height: 6),
                     _buildSidebarItem(
@@ -629,7 +649,7 @@ class _CajaMainScreenState extends State<CajaMainScreen> with RouteAware {
                   ? 'Bandeja de Cobros'
                   : _selectedNavIndex == 1
                   ? 'Historial de Pagos'
-                  : 'Soporte Técnico',
+                  : 'Mesa de Ayuda y Tickets',
               style: AppTypography.title.copyWith(
                 fontSize: 18,
                 fontWeight: FontWeight.w800,

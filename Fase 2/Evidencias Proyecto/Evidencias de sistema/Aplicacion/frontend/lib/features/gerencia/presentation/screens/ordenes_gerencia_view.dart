@@ -18,11 +18,15 @@ import '../widgets/panel_filtros_avanzados.dart';
 class OrdenesGerenciaView extends StatefulWidget {
   final int? idSucursalInicial;
   final String? estadoInicial;
+  final String? tipoActivoInicial;
+  final String? periodoInicial;
 
   const OrdenesGerenciaView({
     super.key,
     this.idSucursalInicial,
     this.estadoInicial,
+    this.tipoActivoInicial,
+    this.periodoInicial,
   });
 
   @override
@@ -107,6 +111,19 @@ class OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
     await _cargarOrdenes(pagina: 1);
   }
 
+  /// Aplica el filtro de tipo de activo (ej: 'MOTORES_CAJAS') y periodo, recargando inmediatamente
+  Future<void> aplicarFiltroTipoActivo(String tipoActivo, {String periodo = 'hoy'}) async {
+    setState(() {
+      _tipoActivo = tipoActivo;
+      _periodo = periodo;
+      _estado = 'todos';
+      _metodoPago = 'todos';
+      _busquedaController.clear();
+      _paginaActual = 1;
+    });
+    await _cargarOrdenes(pagina: 1);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -114,6 +131,12 @@ class OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
     if (widget.estadoInicial != null && widget.estadoInicial!.isNotEmpty) {
       _estado = widget.estadoInicial!;
       _periodo = 'todos';
+    }
+    if (widget.tipoActivoInicial != null && widget.tipoActivoInicial!.isNotEmpty) {
+      _tipoActivo = widget.tipoActivoInicial!;
+    }
+    if (widget.periodoInicial != null && widget.periodoInicial!.isNotEmpty) {
+      _periodo = widget.periodoInicial!;
     }
     _busquedaController = TextEditingController();
     _cargarOrdenes();
@@ -130,6 +153,14 @@ class OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
     if (oldWidget.estadoInicial != widget.estadoInicial && widget.estadoInicial != null) {
       _estado = widget.estadoInicial!;
       _periodo = 'todos';
+      shouldReload = true;
+    }
+    if (oldWidget.tipoActivoInicial != widget.tipoActivoInicial && widget.tipoActivoInicial != null) {
+      _tipoActivo = widget.tipoActivoInicial!;
+      shouldReload = true;
+    }
+    if (oldWidget.periodoInicial != widget.periodoInicial && widget.periodoInicial != null) {
+      _periodo = widget.periodoInicial!;
       shouldReload = true;
     }
     if (shouldReload) {
@@ -292,6 +323,9 @@ class OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
 
         const SizedBox(height: 14),
 
+        if (_tipoActivo.toUpperCase() == 'MOTORES_CAJAS')
+          _buildBannerFiltroMotoresCajas(),
+
         // ── 2. TABLA FORENSE DE AUDITORÍA CON 10 COLUMNAS E ÍCONOS DEL MOCKUP ──
         Expanded(
           child: _buildContenidoPrincipal(
@@ -301,6 +335,107 @@ class OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildBannerFiltroMotoresCajas() {
+    final periodoLabel = _periodo == 'hoy'
+        ? 'Hoy'
+        : (_periodo == 'mes'
+            ? 'Este Mes'
+            : (_periodo == 'semana' ? 'Esta Semana' : 'Histórico Completo'));
+
+    return Container(
+      key: const Key('banner_filtro_motores_cajas'),
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEEF2FF), // Indigo 50
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFC7D2FE)), // Indigo 200
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF6366F1).withValues(alpha: 0.06),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: const Color(0xFF6366F1).withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.precision_manufacturing_rounded,
+              size: 18,
+              color: Color(0xFF4338CA),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text.rich(
+                  TextSpan(
+                    text: 'Filtro Activo: Salidas de Motores y Cajas Inventariadas ',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF312E81), // Indigo 900
+                    ),
+                    children: [
+                      TextSpan(
+                        text: '(MOT-XXXX y CAJ-XXXX)',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF4338CA),
+                        ),
+                      ),
+                    ],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Mostrando exclusivamente órdenes que contienen motores o transmisiones inventariadas • Periodo: $periodoLabel',
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    color: Color(0xFF4F46E5),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          OutlinedButton.icon(
+            key: const Key('btn_limpiar_filtro_banner'),
+            style: OutlinedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: const Color(0xFF4338CA),
+              side: const BorderSide(color: Color(0xFFA5B4FC)),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            icon: const Icon(Icons.close_rounded, size: 16),
+            label: const Text(
+              'Restablecer historial general',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+            onPressed: _onLimpiarFiltros,
+          ),
+        ],
+      ),
     );
   }
 

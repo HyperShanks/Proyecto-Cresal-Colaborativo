@@ -6,6 +6,16 @@ import 'package:frontend/features/caja/services/caja_service.dart';
 import 'package:frontend/features/caja/presentation/providers/caja_provider.dart';
 
 class MockCajaService implements ICajaService {
+  @override
+  Future<Map<String, dynamic>> editarPago({
+    required String idPago,
+    int? nuevoMonto,
+    String? nuevoMetodo,
+    required String motivo,
+  }) async {
+    return {'success': true};
+  }
+
   List<CobroPendienteModel> dummyItems = [];
   bool shouldFail = false;
 

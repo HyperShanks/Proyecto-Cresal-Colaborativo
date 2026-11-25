@@ -24,4 +24,18 @@ from .gerencia_schemas import (
     BackorderGerenciaListResponse,
     BackorderGerenciaKpisDTO,
     SucursalGerenciaDTO,
+    BackorderMovimientoDTO,
+    BackorderPagoDetalleDTO,
+    BackorderAuditoriaResponseDTO,
+    MetadataModeloDTO,
+    ProyeccionSemanalItemDTO,
+    PrediccionSemanalT1DTO,
+    ProyeccionMensual4SemanasDTO,
+    MixPorcentualVentasDTO,
+    CoberturaStockCriticoItemDTO,
+    HistorialSemanalItemDTO,
+    DesgloseDemandaCategoriaItemDTO,
+    PrediccionVentasStockResponseDTO,
+    PrediccionGerenciaResponseDTO,
 )
+

@@ -134,6 +134,7 @@ class AppRoutes {
 
     // Vendedor (2, 7) y Jefe de Ventas (6)
     if (idRol == 2 || idRol == 6 || idRol == 7) {
+      if (idRol == 6 && route == gerencia) return true;
       return _ventasRoutes.contains(route);
     }
 

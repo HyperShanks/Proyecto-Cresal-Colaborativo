@@ -26,19 +26,45 @@ class HistorialTablaView extends StatelessWidget {
     this.mostrarSucursal = false,
   });
 
-  Color _getEstadoColor(String estado) {
+  ({Color bg, Color border, Color text}) _getEstadoBadgeColors(String estado) {
     switch (estado.toLowerCase()) {
       case 'pagada':
-        return AppPalette.success;
+        return (
+          bg: AppPalette.success.withValues(alpha: 0.12),
+          border: AppPalette.success.withValues(alpha: 0.4),
+          text: AppPalette.success,
+        );
+      case 'completada':
+        return (
+          bg: const Color(0xFF2596BE).withValues(alpha: 0.12),
+          border: const Color(0xFF2596BE).withValues(alpha: 0.4),
+          text: const Color(0xFF2596BE),
+        );
       case 'despachada':
-        return const Color(0xFF0284C7);
+        return (
+          bg: const Color(0xFF0284C7).withValues(alpha: 0.12),
+          border: const Color(0xFF0284C7).withValues(alpha: 0.4),
+          text: const Color(0xFF0284C7),
+        );
       case 'reservada':
       case 'pendiente':
-        return AppPalette.secondary;
+        return (
+          bg: const Color(0xFFFEF3C7),
+          border: const Color(0xFFF59E0B).withValues(alpha: 0.45),
+          text: AppPalette.warningText,
+        );
       case 'anulada':
-        return AppPalette.error;
+        return (
+          bg: AppPalette.error.withValues(alpha: 0.12),
+          border: AppPalette.error.withValues(alpha: 0.4),
+          text: AppPalette.error,
+        );
       default:
-        return AppPalette.textSecondaryLight;
+        return (
+          bg: AppPalette.textSecondaryLight.withValues(alpha: 0.12),
+          border: AppPalette.textSecondaryLight.withValues(alpha: 0.4),
+          text: AppPalette.textSecondaryLight,
+        );
     }
   }
 
@@ -56,7 +82,10 @@ class HistorialTablaView extends StatelessWidget {
             children: [
               // ── CABECERA DE LA TABLA ──
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
                   color: AppPalette.backgroundLight,
                   borderRadius: const BorderRadius.only(
@@ -75,13 +104,20 @@ class HistorialTablaView extends StatelessWidget {
                     _buildHeaderCell('FOLIO', flex: 2),
                     _buildHeaderCell('FECHA / HORA', flex: 2),
                     _buildHeaderCell('CLIENTE / RUT', flex: 3),
-                    if (mostrarSucursal)
-                      _buildHeaderCell('SUCURSAL', flex: 2),
+                    if (mostrarSucursal) _buildHeaderCell('SUCURSAL', flex: 2),
                     _buildHeaderCell('VENDEDOR / CAJERA', flex: 3),
                     _buildHeaderCell('ESTADO', flex: 2),
                     _buildHeaderCell('MÉTODOS DE PAGO', flex: 3),
-                    _buildHeaderCell('TOTAL', flex: 2, alignment: Alignment.centerRight),
-                    _buildHeaderCell('AUDITORÍA', flex: 2, alignment: Alignment.center),
+                    _buildHeaderCell(
+                      'TOTAL',
+                      flex: 2,
+                      alignment: Alignment.centerRight,
+                    ),
+                    _buildHeaderCell(
+                      'AUDITORÍA',
+                      flex: 2,
+                      alignment: Alignment.center,
+                    ),
                   ],
                 ),
               ),
@@ -96,7 +132,7 @@ class HistorialTablaView extends StatelessWidget {
                   ),
                   itemBuilder: (context, index) {
                     final item = items[index];
-                    final estadoColor = _getEstadoColor(item.estadoOrden);
+                    final estadoBadge = _getEstadoBadgeColors(item.estadoOrden);
 
                     return InkWell(
                       onTap: () => onVerDetalle(item),
@@ -170,8 +206,14 @@ class HistorialTablaView extends StatelessWidget {
                                   Builder(
                                     builder: (context) {
                                       final rut = item.clienteRut;
-                                      final rutLimpio = rut?.replaceAll(RegExp(r'[^0-9kK]'), '') ?? '';
-                                      final esGenerico = rut == null ||
+                                      final rutLimpio =
+                                          rut?.replaceAll(
+                                            RegExp(r'[^0-9kK]'),
+                                            '',
+                                          ) ??
+                                          '';
+                                      final esGenerico =
+                                          rut == null ||
                                           rutLimpio.isEmpty ||
                                           rutLimpio.startsWith('666666') ||
                                           rut == '6.666.666-6';
@@ -180,7 +222,8 @@ class HistorialTablaView extends StatelessWidget {
                                         return Text(
                                           'Sin RUT',
                                           style: AppTypography.small.copyWith(
-                                            color: AppPalette.textSecondaryLight,
+                                            color:
+                                                AppPalette.textSecondaryLight,
                                             fontSize: 11,
                                             fontStyle: FontStyle.italic,
                                           ),
@@ -228,8 +271,8 @@ class HistorialTablaView extends StatelessWidget {
                                     item.vendedorNombre,
                                     style: AppTypography.small.copyWith(
                                       color: AppPalette.textPrimaryLight,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
                                     ),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
@@ -258,16 +301,16 @@ class HistorialTablaView extends StatelessWidget {
                                     vertical: 3,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: estadoColor.withValues(alpha: 0.12),
+                                    color: estadoBadge.bg,
                                     borderRadius: BorderRadius.circular(6),
                                     border: Border.all(
-                                      color: estadoColor.withValues(alpha: 0.4),
+                                      color: estadoBadge.border,
                                     ),
                                   ),
                                   child: Text(
                                     item.estadoOrden,
                                     style: AppTypography.small.copyWith(
-                                      color: estadoColor,
+                                      color: estadoBadge.text,
                                       fontWeight: FontWeight.w700,
                                       fontSize: 11,
                                     ),
@@ -340,8 +383,12 @@ class HistorialTablaView extends StatelessWidget {
                                     ),
                                     side: BorderSide(
                                       color: isReadOnly
-                                          ? AppPalette.tertiary.withValues(alpha: 0.5)
-                                          : AppPalette.primary.withValues(alpha: 0.5),
+                                          ? AppPalette.tertiary.withValues(
+                                              alpha: 0.5,
+                                            )
+                                          : AppPalette.primary.withValues(
+                                              alpha: 0.5,
+                                            ),
                                     ),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(6),
@@ -406,7 +453,10 @@ class HistorialTablaView extends StatelessWidget {
 
               // ── BARRA DE PAGINACIÓN INFERIOR RESPONSIVA ──
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: AppPalette.backgroundLight,
                   borderRadius: const BorderRadius.only(
@@ -499,18 +549,17 @@ class HistorialTablaView extends StatelessWidget {
     return OutlinedButton.icon(
       style: OutlinedButton.styleFrom(
         foregroundColor: AppPalette.primary,
-        disabledForegroundColor:
-            AppPalette.textSecondaryLight.withValues(alpha: 0.45),
-        disabledIconColor: AppPalette.textSecondaryLight.withValues(alpha: 0.45),
+        disabledForegroundColor: AppPalette.textSecondaryLight.withValues(
+          alpha: 0.45,
+        ),
+        disabledIconColor: AppPalette.textSecondaryLight.withValues(
+          alpha: 0.45,
+        ),
         backgroundColor: Colors.white,
         disabledBackgroundColor: AppPalette.backgroundLight,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        side: BorderSide(
-          color: AppPalette.neutral.withValues(alpha: 0.25),
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(6),
-        ),
+        side: BorderSide(color: AppPalette.neutral.withValues(alpha: 0.25)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
         textStyle: AppTypography.button.copyWith(
           fontSize: 13,
           fontWeight: FontWeight.w700,

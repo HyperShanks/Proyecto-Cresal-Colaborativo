@@ -457,5 +457,79 @@ class GerenciaService {
       ),
     ];
   }
+
+  /// Consulta la auditoría forense completa de una Venta en Verde (Backorder).
+  /// Retorna ficha de cliente, datos técnicos, orden vinculada, pagos y bitácora cronológica.
+  static Future<BackorderAuditoriaModel> obtenerAuditoriaBackorder(String idReserva) async {
+    try {
+      final uri = Uri.parse('${ApiConstants.gerenciaEndpoint}/backorders/$idReserva/auditoria');
+      final response = await ApiService.get(uri);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        return BackorderAuditoriaModel.fromJson(data);
+      } else {
+        final msg = ApiService.extraerMensajeError(
+          response,
+          fallback: 'No fue posible cargar el detalle de auditoría de la venta en verde.',
+        );
+        throw CustomApiException(
+          messageUser: msg,
+          errorCode: 'BACKORDER_AUDITORIA_DATA_ERROR',
+          statusCode: response.statusCode,
+        );
+      }
+    } on CustomApiException {
+      rethrow;
+    } catch (e) {
+      throw CustomApiException(
+        messageUser: 'Error de red al consultar la auditoría de la venta en verde.',
+        errorCode: 'BACKORDER_AUDITORIA_NETWORK_ERROR',
+        messageDev: e.toString(),
+      );
+    }
+  }
+
+  /// Consulta las predicciones ML de ingresos, mix porcentual y cobertura (CRES-281 / CRES-282).
+  /// Endpoint real: GET /api/v1/gerencia/dashboard/predicciones (?id_sucursal=1 o 2).
+  static Future<PredictionDashboardModel> obtenerPrediccionesDashboard({
+    int? idSucursal,
+  }) async {
+    try {
+      final queryParam = idSucursal != null ? '?id_sucursal=$idSucursal' : '';
+      final url = Uri.parse(
+        '${ApiConstants.gerenciaEndpoint}/dashboard/predicciones$queryParam',
+      );
+
+      final response = await ApiService.get(url);
+
+      if (response.statusCode == 200) {
+        final data =
+            jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        return PredictionDashboardModel.fromJson(data);
+      } else {
+        final msg = ApiService.extraerMensajeError(
+          response,
+          fallback:
+              'No fue posible generar la proyección financiera IA del modelo XGBoost.',
+        );
+        throw CustomApiException(
+          messageUser: msg,
+          errorCode: 'GERENCIA_PREDICCION_DATA_ERROR',
+          statusCode: response.statusCode,
+        );
+      }
+    } on CustomApiException {
+      rethrow;
+    } catch (e) {
+      throw CustomApiException(
+        messageUser:
+            'No fue posible conectar con el servicio de proyección financiera IA.',
+        errorCode: 'GERENCIA_PREDICCION_NETWORK_ERROR',
+        messageDev: e.toString(),
+      );
+    }
+  }
 }
+
 

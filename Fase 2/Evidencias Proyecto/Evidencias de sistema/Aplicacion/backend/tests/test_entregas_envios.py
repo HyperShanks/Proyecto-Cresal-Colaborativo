@@ -628,10 +628,11 @@ def test_actualizar_estado_despacho_independiente_de_orden(client, auth_headers)
         db.close()
 
 
-def test_ventas_en_verde_no_pagadas_o_sin_qr_no_aparecen_en_entregas_envios(client, auth_headers):
+def test_ventas_en_verde_sin_asignacion_son_visibles_en_entregas_envios_para_abonos(client, auth_headers):
     """
-    Verifica que las ventas en verde que no están 100% pagadas o no cuentan con QR
-    transaccional (activo no asignado) no se listen en entregas y envíos.
+    Verifica que las ventas en verde sin asignación física (con saldo pendiente o pagadas
+    pero sin QR físico asignado) SÍ se listen en Entregas y Envíos, para permitir a los
+    vendedores consultar el número de orden/folio y gestionar los abonos de los clientes.
     """
     db = TestingSessionLocal()
     try:
@@ -682,13 +683,13 @@ def test_ventas_en_verde_no_pagadas_o_sin_qr_no_aparecen_en_entregas_envios(clie
         db.add(detalle)
         db.commit()
 
-        # Caso A: Con saldo pendiente -> NO debe aparecer
+        # Caso A: Con saldo pendiente -> SÍ debe aparecer para consultar folio y abonar
         res_a = client.get("/api/v1/ordenes/entregas-envios?sucursal_id=1", headers=auth_headers)
         assert res_a.status_code == 200
         folios_a = [item["folio"] for item in res_a.json()]
-        assert orden_bo.folio not in folios_a
+        assert orden_bo.folio in folios_a
 
-        # Caso B: Pagada pero sin QR asignado -> NO debe aparecer
+        # Caso B: Pagada pero sin QR asignado -> SÍ debe aparecer
         orden_bo.monto_pendiente = 0
         orden_bo.estado_orden = "Pagada"
         db.commit()
@@ -696,7 +697,7 @@ def test_ventas_en_verde_no_pagadas_o_sin_qr_no_aparecen_en_entregas_envios(clie
         res_b = client.get("/api/v1/ordenes/entregas-envios?sucursal_id=1", headers=auth_headers)
         assert res_b.status_code == 200
         folios_b = [item["folio"] for item in res_b.json()]
-        assert orden_bo.folio not in folios_b
+        assert orden_bo.folio in folios_b
 
         # Caso C: Pagada y con QR asignado -> SÍ debe aparecer
         orden_bo.qr_transaccional_salida = f"TX-QR-{uuid.uuid4()}"
@@ -706,6 +707,144 @@ def test_ventas_en_verde_no_pagadas_o_sin_qr_no_aparecen_en_entregas_envios(clie
         assert res_c.status_code == 200
         folios_c = [item["folio"] for item in res_c.json()]
         assert orden_bo.folio in folios_c
+
+    finally:
+        db.close()
+
+
+def test_venta_en_verde_asignacion_cruzada_vendedor1_vendedor2_visible_para_ambos(client):
+    """
+    Verifica que si el Vendedor 1 hace una venta en verde y se la asigna al Vendedor 2,
+    ambos vendedores (el creador comercial y el asignado) puedan ver la orden en
+    /entregas-envios para conocer el número de orden y realizar los abonos en mesón.
+    """
+    db = TestingSessionLocal()
+    try:
+        vendedor_rol = db.query(models.Rol).filter_by(id_rol=2).first()
+        if not vendedor_rol:
+            db.add(models.Rol(id_rol=2, nombre_rol="Vendedor"))
+            db.flush()
+
+        u_seed = uuid.uuid4().hex[:5]
+        vendedor_1 = models.Usuario(
+            id_usuario=uuid.uuid4(),
+            rut_usuario=f"91.{u_seed}1-1",
+            nombres="Vendedor",
+            apellidos="Uno",
+            email=f"v1_{u_seed}@cresal.cl",
+            id_rol=2,
+            id_sucursal=1,
+            password_hash="dummy",
+            pin_acceso="1111",
+            estado="Activo",
+        )
+        vendedor_2 = models.Usuario(
+            id_usuario=uuid.uuid4(),
+            rut_usuario=f"92.{u_seed}2-2",
+            nombres="Vendedor",
+            apellidos="Dos",
+            email=f"v2_{u_seed}@cresal.cl",
+            id_rol=2,
+            id_sucursal=1,
+            password_hash="dummy",
+            pin_acceso="2222",
+            estado="Activo",
+        )
+        vendedor_3 = models.Usuario(
+            id_usuario=uuid.uuid4(),
+            rut_usuario=f"93.{u_seed}3-3",
+            nombres="Vendedor",
+            apellidos="Tres",
+            email=f"v3_{u_seed}@cresal.cl",
+            id_rol=2,
+            id_sucursal=1,
+            password_hash="dummy",
+            pin_acceso="3333",
+            estado="Activo",
+        )
+        db.add_all([vendedor_1, vendedor_2, vendedor_3])
+
+        cliente = models.Cliente(
+            id_cliente=uuid.uuid4(),
+            rut_cliente=f"94.{u_seed}4-4",
+            nombres="Cliente",
+            apellidos="Abonos",
+            telefono="+56977777777",
+            consentimiento_legal=True,
+        )
+        db.add(cliente)
+        db.flush()
+
+        id_orden = uuid.uuid4()
+        orden = models.Orden_Venta(
+            id_orden=id_orden,
+            id_cliente=cliente.id_cliente,
+            id_vendedor=vendedor_1.id_usuario,
+            id_vendedor_asignado=vendedor_2.id_usuario,
+            id_sucursal=1,
+            estado_orden="Reservada",
+            total_venta=450000,
+            monto_pendiente=300000,
+            qr_transaccional_salida=None,
+        )
+        db.add(orden)
+        db.flush()
+
+        reserva = models.Reservas_Backorder(
+            id_reserva=uuid.uuid4(),
+            id_cliente=cliente.id_cliente,
+            id_vendedor=vendedor_1.id_usuario,
+            id_orden=id_orden,
+            id_sucursal_registro=1,
+            id_categoria_requerida=1,
+            marca_requerida="Toyota",
+            modelo_requerido="Yaris",
+            precio_acordado=450000,
+            monto_abonado=150000,
+            abono_requerido=150000,
+            id_activo_asignado=None,
+            estado_reserva="Confirmada",
+        )
+        db.add(reserva)
+
+        detalle = models.Detalle_Orden(
+            id_detalle=uuid.uuid4(),
+            id_orden=id_orden,
+            descripcion_manual="[VENTA EN VERDE] Motor Toyota 1NZ-FE Yaris",
+            cantidad=1,
+            precio_unitario=450000,
+            precio_final=450000,
+            estado_preparacion="Pendiente",
+        )
+        db.add(detalle)
+        db.commit()
+
+        token_v1 = create_access_token(data={"sub": str(vendedor_1.id_usuario), "id_rol": 2, "id_sucursal": 1})
+        headers_v1 = {"Authorization": f"Bearer {token_v1}"}
+
+        token_v2 = create_access_token(data={"sub": str(vendedor_2.id_usuario), "id_rol": 2, "id_sucursal": 1})
+        headers_v2 = {"Authorization": f"Bearer {token_v2}"}
+
+        token_v3 = create_access_token(data={"sub": str(vendedor_3.id_usuario), "id_rol": 2, "id_sucursal": 1})
+        headers_v3 = {"Authorization": f"Bearer {token_v3}"}
+
+        # 1. Vendedor 1 (creador) DEBE ver la orden asignada al Vendedor 2
+        res_v1 = client.get("/api/v1/ordenes/entregas-envios?sucursal_id=1", headers=headers_v1)
+        assert res_v1.status_code == 200
+        folios_v1 = [it["folio"] for it in res_v1.json()]
+        assert orden.folio in folios_v1, "Vendedor 1 (creador) debe ver la orden para consultar el número y hacer abonos"
+
+        # 2. Vendedor 2 (asignado) DEBE ver la orden creada por Vendedor 1
+        res_v2 = client.get("/api/v1/ordenes/entregas-envios?sucursal_id=1", headers=headers_v2)
+        assert res_v2.status_code == 200
+        folios_v2 = [it["folio"] for it in res_v2.json()]
+        assert orden.folio in folios_v2, "Vendedor 2 (asignado) debe ver la orden para gestionar abonos o entrega"
+
+        # 3. Vendedor 3 (no relacionado) NO debe verla por la regla de privacidad
+        res_v3 = client.get("/api/v1/ordenes/entregas-envios?sucursal_id=1", headers=headers_v3)
+        assert res_v3.status_code == 200
+        folios_v3 = [it["folio"] for it in res_v3.json()]
+        assert orden.folio not in folios_v3, "Vendedor 3 no relacionado no debe ver la orden privada"
 
     finally:
         db.close()

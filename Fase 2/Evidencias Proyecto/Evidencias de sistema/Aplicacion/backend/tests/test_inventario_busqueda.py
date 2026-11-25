@@ -157,6 +157,15 @@ def setup_inventario_test(setup_database):
             db.add(activo_motor_listo)
             db.flush()
 
+            det_motor_listo = Detalle_Motor(
+                id_activo=activo_motor_listo.id_activo,
+                numero_motor="1ZR-FE-9988",
+                cilindrada="1.8L",
+                combustible="Bencina",
+                transmision_tipo="Manual",
+            )
+            db.add(det_motor_listo)
+
         db.commit()
 
         token = create_access_token(data={"sub": str(user_bodega.id_usuario), "id_rol": 1, "id_sucursal": 1})
@@ -205,3 +214,148 @@ def test_busqueda_ingreso_ya_paletizado_400(client, setup_inventario_test):
     assert response.status_code == 400
     data = response.json()
     assert data["detail"] == "El activo asociado a este número ya fue paletizado previamente o no requiere este flujo."
+
+
+def test_busqueda_bodeguero_por_siglas_numero_motor(client, setup_inventario_test):
+    """
+    Verifica que el bodeguero en su inventario (/buscar) pueda buscar por el
+    número de motor o sus siglas (ej. '1ZR', '1ZR-FE', '1zrfe') y obtener resultados.
+    """
+    headers = setup_inventario_test
+
+    # 1. Búsqueda por sigla del motor '1ZR'
+    res1 = client.get("/api/v1/inventario/buscar?q=1ZR&estado=Todos", headers=headers)
+    assert res1.status_code == 200
+    items1 = res1.json()
+    skus1 = [it["sku"] for it in items1]
+    assert "QR-MOTO-7002" in skus1
+    # Verificar que el número de motor se incluya en el response
+    motor_item = next(it for it in items1 if it["sku"] == "QR-MOTO-7002")
+    assert motor_item["numero_motor"] == "1ZR-FE-9988"
+
+    # 2. Búsqueda sin guiones '1zrfe' (tolerancia de siglas)
+    res2 = client.get("/api/v1/inventario/buscar?q=1zrfe&estado=Todos", headers=headers)
+    assert res2.status_code == 200
+    skus2 = [it["sku"] for it in res2.json()]
+    assert "QR-MOTO-7002" in skus2
+
+    # 3. Búsqueda por subcadena numérica '9988'
+    res3 = client.get("/api/v1/inventario/buscar?q=9988&estado=Todos", headers=headers)
+    assert res3.status_code == 200
+    skus3 = [it["sku"] for it in res3.json()]
+    assert "QR-MOTO-7002" in skus3
+
+
+def test_busqueda_catalogo_y_gerencia_por_siglas_numero_motor(client, setup_database):
+    """
+    Verifica que los vendedores en catálogo (/catalogo) y gerencia en inventario (/maestro)
+    puedan buscar por las siglas del número de motor (ej. '2ZR', '2ZR-FE', '2zrfe') y encontrar los repuestos.
+    """
+    db = TestingSessionLocal()
+    try:
+        user_gerente = Usuario(
+            id_usuario=uuid.uuid4(),
+            rut_usuario="99.888.777-6",
+            nombres="Gloria",
+            apellidos="Gerente",
+            email="gloria_test_motor@cresal.cl",
+            password_hash="mock_hash",
+            id_rol=5,  # Gerente
+            id_sucursal=1,
+            pin_acceso="5555",
+            estado="Activo",
+        )
+        db.add(user_gerente)
+
+        user_vendedor = Usuario(
+            id_usuario=uuid.uuid4(),
+            rut_usuario="99.777.666-5",
+            nombres="Victor",
+            apellidos="Vendedor",
+            email="victor_test_motor@cresal.cl",
+            password_hash="mock_hash",
+            id_rol=2,  # Vendedor
+            id_sucursal=1,
+            pin_acceso="2222",
+            estado="Activo",
+        )
+        db.add(user_vendedor)
+        db.flush()
+
+        veh = Vehiculo_Origen(
+            id_vehiculo=uuid.uuid4(),
+            numero_ingreso="8801",
+            marca="Toyota",
+            modelo="Auris",
+            anio=2022,
+            patente="AURI22",
+            estado="Completado",
+            numero_motor="2ZR-FXE-12345",
+        )
+        db.add(veh)
+        db.flush()
+
+        activo_motor = Activo_Inventariado(
+            id_activo=uuid.uuid4(),
+            sku_qr_fisico="MOT-TOY-8801",
+            id_categoria=1,
+            id_estado=1,  # Disponible
+            id_sucursal_actual=1,
+            id_vehiculo=veh.id_vehiculo,
+            ubicacion_pasillo="A-1",
+            ubicacion_pallet="PAL-10",
+            ubicacion_galpon="G-2",
+            precio_referencia=1200000,
+            precio_minimo=1000000,
+            precio_maximo=1400000,
+            estado="Activo",
+        )
+        db.add(activo_motor)
+        db.flush()
+
+        det_motor = Detalle_Motor(
+            id_activo=activo_motor.id_activo,
+            numero_motor="2ZR-FXE-12345",
+            cilindrada="1.8L",
+            combustible="Híbrido",
+            transmision_tipo="Automática",
+        )
+        db.add(det_motor)
+        db.commit()
+
+        token_gerente = create_access_token(data={"sub": str(user_gerente.id_usuario), "id_rol": 5, "id_sucursal": 1})
+        headers_gerente = {"Authorization": f"Bearer {token_gerente}"}
+
+        token_vendedor = create_access_token(data={"sub": str(user_vendedor.id_usuario), "id_rol": 2, "id_sucursal": 1})
+        headers_vendedor = {"Authorization": f"Bearer {token_vendedor}"}
+
+        # A. Catálogo (Vendedores) con sigla '2ZR'
+        res_cat = client.get("/api/v1/inventario/catalogo?q=2ZR", headers=headers_vendedor)
+        assert res_cat.status_code == 200
+        items_cat = res_cat.json()["items"]
+        skus_cat = [it["sku_qr_fisico"] for it in items_cat]
+        assert "MOT-TOY-8801" in skus_cat
+        assert items_cat[0]["numero_motor"] == "2ZR-FXE-12345"
+
+        # B. Catálogo con subcadena sin guión '2zrfxe'
+        res_cat_clean = client.get("/api/v1/inventario/catalogo?q=2zrfxe", headers=headers_vendedor)
+        assert res_cat_clean.status_code == 200
+        skus_cat_clean = [it["sku_qr_fisico"] for it in res_cat_clean.json()["items"]]
+        assert "MOT-TOY-8801" in skus_cat_clean
+
+        # C. Gerencia Maestro con sigla '2ZR'
+        res_ger = client.get("/api/v1/inventario/maestro?q=2ZR", headers=headers_gerente)
+        assert res_ger.status_code == 200
+        items_ger = res_ger.json()["items"]
+        skus_ger = [it["sku_qr_fisico"] for it in items_ger]
+        assert "MOT-TOY-8801" in skus_ger
+        assert items_ger[0]["numero_motor"] == "2ZR-FXE-12345"
+
+        # D. Gerencia Maestro con subcadena numérica '12345'
+        res_ger_num = client.get("/api/v1/inventario/maestro?q=12345", headers=headers_gerente)
+        assert res_ger_num.status_code == 200
+        skus_ger_num = [it["sku_qr_fisico"] for it in res_ger_num.json()["items"]]
+        assert "MOT-TOY-8801" in skus_ger_num
+
+    finally:
+        db.close()

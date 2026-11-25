@@ -262,7 +262,7 @@ def test_pendientes_precio_retorna_activos_paletizados_sin_precio_para_jefe_vent
     assert item_motor["nombre_categoria"] == "Motor"
     assert item_motor["ubicacion_pasillo"] == "P-03"
     assert item_motor["ubicacion_pallet"] == "PL-10"
-    assert item_motor["titulo_repuesto"] == "Motor - Hyundai Accent 2020"
+    assert item_motor["titulo_repuesto"] == "Motor - Hyundai Accent 2020 [G4LC]"
 
 
 # ── TEST 3: Verificación explícita de filtros de ubicación física y estados tempranos ──

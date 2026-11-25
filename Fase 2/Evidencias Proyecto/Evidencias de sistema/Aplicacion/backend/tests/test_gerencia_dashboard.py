@@ -25,6 +25,7 @@ from models import (
     Orden_Venta,
     Detalle_Orden,
     Transaccion_Pago,
+    Reservas_Backorder,
     Despacho,
 )
 from core.security import create_access_token, hash_password
@@ -70,6 +71,7 @@ def db_session_gerencia(setup_database):
             Rol(id_rol=3, nombre_rol="Caja"),
             Rol(id_rol=4, nombre_rol="Gerente"),
             Rol(id_rol=5, nombre_rol="Administrador"),
+            Rol(id_rol=6, nombre_rol="Jefe de Ventas"),
             Rol(id_rol=8, nombre_rol="Auditor"),
         ]
         for rol in roles:
@@ -163,7 +165,19 @@ def db_session_gerencia(setup_database):
             pin_acceso="8002",
             estado="Activo",
         )
-        db.add_all([user_gerente, user_admin, user_vendedor, user_bodeguero, user_auditor, user_auditor_limache])
+        user_jefe_ventas = Usuario(
+            id_usuario=uuid.uuid4(),
+            id_rol=6,
+            id_sucursal=101,
+            rut_usuario="15.678.901-2",
+            nombres="Valeria",
+            apellidos="JefeVentas",
+            email="jefe.ventas.test@cresal.cl",
+            password_hash=hash_password("jefe123"),
+            pin_acceso="6001",
+            estado="Activo",
+        )
+        db.add_all([user_gerente, user_admin, user_vendedor, user_bodeguero, user_auditor, user_auditor_limache, user_jefe_ventas])
 
         # 5. Clientes
         cli1 = Cliente(
@@ -380,6 +394,8 @@ def db_session_gerencia(setup_database):
             "user_bodeguero": user_bodeguero,
             "user_auditor": user_auditor,
             "user_auditor_limache": user_auditor_limache,
+            "user_jefe_ventas": user_jefe_ventas,
+            "cli1": cli1,
             "sucursal_1": 101,
             "sucursal_2": 102,
         }
@@ -473,6 +489,12 @@ def test_gerencia_kpis_aislamiento_por_sucursal_y_exclusion_pagos_anulados(
     assert data["ticket_promedio"] == 600000.0
     assert data["acumulado_mensual_mtd"] >= 1200000
     assert data["margen_bruto"] == 64.8
+    assert "salidas_motores_hoy" in data
+    assert "salidas_cajas_hoy" in data
+    assert "total_salidas_hoy" in data
+    assert data["salidas_motores_hoy"] == 1
+    assert data["salidas_cajas_hoy"] == 0
+    assert data["total_salidas_hoy"] == 1
 
 
 def test_gerencia_kpis_consolidado_global_toda_la_cadena(
@@ -654,3 +676,271 @@ def test_auditor_satelite_limache_aislamiento_estricto(
     # 7. Maestro de inventario multi-sucursal permitido para chequear stock de Viña del Mar
     r_inv = client.get("/api/v1/inventario/maestro?id_sucursal=101", headers=headers)
     assert r_inv.status_code == 200
+
+
+def test_gerencia_kpis_salidas_motores_cajas_inventariadas(
+    client, db_session_gerencia
+):
+    """
+    Verifica que el cálculo de salidas en tiempo real de piezas inventariadas:
+    - Retorne contadores numéricos exactos de motores (MOT-XXXX) y cajas (CAJ-XXXX).
+    - Desglose correctamente la suma total de salidas hoy.
+    - Excluya ventas misceláneas sin SKU inventariado y transacciones anuladas.
+    """
+    admin = db_session_gerencia["user_admin"]
+    token = create_access_token(
+        data={"sub": str(admin.id_usuario), "rol": admin.id_rol}
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Consulta consolidada global
+    res = client.get("/api/v1/gerencia/dashboard/kpis", headers=headers)
+    assert res.status_code == 200
+    data = res.json()
+
+    assert "salidas_motores_hoy" in data
+    assert "salidas_cajas_hoy" in data
+    assert "total_salidas_hoy" in data
+    assert isinstance(data["salidas_motores_hoy"], int)
+    assert isinstance(data["salidas_cajas_hoy"], int)
+    assert isinstance(data["total_salidas_hoy"], int)
+    assert data["total_salidas_hoy"] == data["salidas_motores_hoy"] + data["salidas_cajas_hoy"]
+
+
+def test_gerencia_predicciones_ml_ventas_y_stock(
+    client, db_session_gerencia
+):
+    """
+    Verifica el endpoint predictivo ML (CRES-281):
+    - 200 OK global y filtrado por sucursal (id_sucursal=101) para usuario Administrador/Gerente.
+    - Estructura completa de respuesta (metadata_modelo, t+1, proyección 4 semanas, mix, cobertura crítica 1 y 2, historial 8 semanas).
+    - Bloqueo 403 Forbidden para Auditor de sucursal satélite (Limache) y Vendedor.
+    """
+    admin = db_session_gerencia["user_admin"]
+    headers_admin = {
+        "Authorization": f"Bearer {create_access_token(data={'sub': str(admin.id_usuario), 'rol': admin.id_rol})}"
+    }
+
+    # 1. Consulta consolidada global
+    res_global = client.get("/api/v1/gerencia/dashboard/predicciones", headers=headers_admin)
+    assert res_global.status_code == 200
+    payload = res_global.json()
+
+    assert "metadata_modelo" in payload
+    assert payload["metadata_modelo"]["id_sucursal_filtro"] is None
+    assert payload["metadata_modelo"]["algoritmo"] == "XGBoost Multi-Target (CRISP-DM)"
+    assert payload["metadata_modelo"]["tiempo_inferencia_ms"] >= 0
+
+    assert "prediccion_semanal_t1" in payload
+    t1 = payload["prediccion_semanal_t1"]
+    assert t1["unidades_motor"] >= 0
+    assert t1["monto_motor_clp"] >= 0
+    assert t1["unidades_caja"] >= 0
+    assert t1["monto_caja_clp"] >= 0
+    assert t1["unidades_accesorio"] >= 0
+    assert t1["monto_accesorio_clp"] >= 0
+    assert t1["venta_total_proyectada_clp"] == (
+        t1["monto_motor_clp"] + t1["monto_caja_clp"] + t1["monto_accesorio_clp"]
+    )
+    assert t1["regimen_motor"] in ("Baja", "Normal", "Alta")
+    assert t1["regimen_caja"] in ("Baja", "Normal", "Alta")
+    assert t1["regimen_accesorio"] in ("Baja", "Normal", "Alta")
+
+    assert "proyeccion_mensual_4_semanas" in payload
+    mensual = payload["proyeccion_mensual_4_semanas"]
+    assert len(mensual["desglose_semanal"]) == 4
+
+    assert "mix_porcentual_ventas" in payload
+    mix = payload["mix_porcentual_ventas"]
+    assert abs((mix["motor_pct"] + mix["caja_pct"] + mix["accesorio_pct"]) - 100.0) <= 0.1
+
+    assert "cobertura_stock_critico" in payload
+    cobertura = payload["cobertura_stock_critico"]
+    assert len(cobertura) == 2
+    assert {item["id_categoria"] for item in cobertura} == {1, 2}
+    cob_por_cat = {item["id_categoria"]: item for item in cobertura}
+    for item in cobertura:
+        assert item["estado_alerta"] in (
+            "Déficit Crítico",
+            "Atención / En Proceso",
+            "Cobertura Óptima",
+        )
+        assert item["stock_en_desarme"] >= 0
+        assert item["stock_en_proceso_interno"] == (
+            item["stock_paletizado_sin_tasar"] + item["stock_en_desarme"]
+        )
+        assert isinstance(item["recomendacion_accionable"], str)
+        assert len(item["recomendacion_accionable"]) > 0
+        assert item["precio_referencia_promedio"] >= 0
+        assert item["precio_referencia_min"] >= 0
+        assert item["precio_referencia_max"] >= 0
+    assert cob_por_cat[1]["stock_disponible_tasado"] == 1
+    assert cob_por_cat[1]["stock_paletizado_sin_tasar"] == 1
+    assert cob_por_cat[1]["stock_disponible_vina"] == 1
+    assert cob_por_cat[1]["paletizado_vina"] == 1
+    assert cob_por_cat[2]["paletizado_limache"] == 1
+    assert cob_por_cat[1]["estado_alerta"] == "Déficit Crítico"
+    assert cob_por_cat[1]["deficit_neto_compra"] > 0
+    assert "remates" in cob_por_cat[1]["recomendacion_accionable"].lower()
+    assert cob_por_cat[1]["precio_referencia_promedio"] == 1500000
+    assert cob_por_cat[1]["precio_referencia_min"] == 1500000
+    assert cob_por_cat[1]["precio_referencia_max"] == 1500000
+    assert cob_por_cat[2]["precio_referencia_promedio"] == 0
+
+    assert "desglose_demanda_ultimo_mes" in payload
+    desglose_mes = payload["desglose_demanda_ultimo_mes"]
+    assert {item["id_categoria"] for item in desglose_mes} == {1, 2, 3}
+    desglose_por_cat = {item["id_categoria"]: item for item in desglose_mes}
+    for item in desglose_mes:
+        assert item["unidades_totales_mes"] == (
+            item["unidades_stock_fisico"] + item["unidades_backorder"]
+        )
+    assert desglose_por_cat[1]["unidades_stock_fisico"] == 1
+    assert desglose_por_cat[1]["unidades_backorder"] == 0
+
+    assert "historial_reciente_8_semanas" in payload
+    assert len(payload["historial_reciente_8_semanas"]) == 8
+
+    # 2. Acceso Jefe de Ventas (id_rol=6) permitido en /dashboard/predicciones (CRES-283)
+    jefe_ventas = db_session_gerencia["user_jefe_ventas"]
+    headers_jefe = {
+        "Authorization": f"Bearer {create_access_token(data={'sub': str(jefe_ventas.id_usuario), 'rol': jefe_ventas.id_rol})}"
+    }
+    res_jefe = client.get("/api/v1/gerencia/dashboard/predicciones", headers=headers_jefe)
+    assert res_jefe.status_code == 200
+    assert res_jefe.json()["metadata_modelo"]["algoritmo"] == "XGBoost Multi-Target (CRISP-DM)"
+    # El Jefe de Ventas sigue restringido respecto de KPIs puramente financieros
+    res_jefe_kpis = client.get("/api/v1/gerencia/dashboard/kpis", headers=headers_jefe)
+    assert res_jefe_kpis.status_code == 403
+
+    # 3. Verificación de backorder en desglose_demanda_ultimo_mes sin doble contabilidad
+    db = TestingSessionLocal()
+    try:
+        ahora_utc = datetime.now(tz_chile).astimezone(timezone.utc).replace(tzinfo=None)
+        rb_bo = Reservas_Backorder(
+            id_reserva=uuid.uuid4(),
+            id_cliente=db_session_gerencia["cli1"].id_cliente,
+            id_vendedor=jefe_ventas.id_usuario,
+            id_orden=None,
+            id_sucursal_registro=101,
+            id_categoria_requerida=2,
+            marca_requerida="Toyota",
+            modelo_requerido="Hilux",
+            precio_acordado=650000,
+            monto_abonado=200000,
+            abono_requerido=200000,
+            estado_reserva="Confirmada",
+            fecha_creacion=ahora_utc,
+        )
+        pago_bo = Transaccion_Pago(
+            id_pago=uuid.uuid4(),
+            id_orden=None,
+            id_reserva=rb_bo.id_reserva,
+            monto=200000,
+            metodo_pago="Transferencia",
+            estado_pago="Procesado",
+            fecha_pago=ahora_utc,
+        )
+        db.add_all([rb_bo, pago_bo])
+        db.commit()
+    finally:
+        db.close()
+
+    res_suc = client.get("/api/v1/gerencia/dashboard/predicciones?id_sucursal=101", headers=headers_jefe)
+    assert res_suc.status_code == 200
+    payload_suc = res_suc.json()
+    assert payload_suc["metadata_modelo"]["id_sucursal_filtro"] == 101
+    desg_suc = {item["id_categoria"]: item for item in payload_suc["desglose_demanda_ultimo_mes"]}
+    assert desg_suc[2]["unidades_backorder"] == 1
+    assert desg_suc[2]["unidades_totales_mes"] == desg_suc[2]["unidades_stock_fisico"] + 1
+
+    # 4. Bloqueo 403 para Auditor satélite (Limache)
+    auditor_limache = db_session_gerencia["user_auditor_limache"]
+    headers_limache = {
+        "Authorization": f"Bearer {create_access_token(data={'sub': str(auditor_limache.id_usuario), 'rol': auditor_limache.id_rol})}"
+    }
+    res_limache = client.get("/api/v1/gerencia/dashboard/predicciones", headers=headers_limache)
+    assert res_limache.status_code == 403
+
+    # 5. Bloqueo 403 para Vendedor
+    vendedor = db_session_gerencia["user_vendedor"]
+    headers_vendedor = {
+        "Authorization": f"Bearer {create_access_token(data={'sub': str(vendedor.id_usuario), 'rol': vendedor.id_rol})}"
+    }
+    res_vendedor = client.get("/api/v1/gerencia/dashboard/predicciones", headers=headers_vendedor)
+    assert res_vendedor.status_code == 403
+
+    # 6. Verificación CRES-284: Conteo 'En Desarme', 'Atención / En Proceso' y 'Cobertura Óptima'
+    db = TestingSessionLocal()
+    creados_ids = []
+    try:
+        if not db.query(Estado_Activo).filter_by(id_estado=6).first():
+            db.add(Estado_Activo(id_estado=6, nombre_estado="En Desarme"))
+            db.flush()
+
+        req_motor = cob_por_cat[1]["requerimiento_total"]
+        # Agregamos activos en estado 'En Desarme' en Viña (101) y Limache (102) suficientes
+        # para cubrir requerimiento_total sin llegar a cubrirlo en vitrina ('Disponible')
+        faltantes_para_atencion = max(2, req_motor - cob_por_cat[1]["stock_disponible_tasado"] - cob_por_cat[1]["stock_en_proceso_interno"])
+        for idx in range(faltantes_para_atencion):
+            act_des = Activo_Inventariado(
+                id_activo=uuid.uuid4(),
+                sku_qr_fisico=f"MOT-DESARME-{idx}",
+                id_categoria=1,
+                id_estado=6,
+                id_sucursal_actual=101 if idx % 2 == 0 else 102,
+                precio_referencia=None,
+                estado="Activo",
+            )
+            db.add(act_des)
+            creados_ids.append(act_des.id_activo)
+        db.commit()
+
+        res_atencion = client.get("/api/v1/gerencia/dashboard/predicciones", headers=headers_admin)
+        assert res_atencion.status_code == 200
+        cob_atencion = {
+            item["id_categoria"]: item
+            for item in res_atencion.json()["cobertura_stock_critico"]
+        }[1]
+        assert cob_atencion["stock_en_desarme"] == faltantes_para_atencion
+        assert cob_atencion["stock_proceso_vina"] >= 1
+        assert cob_atencion["stock_proceso_limache"] >= 1
+        assert cob_atencion["estado_alerta"] == "Atención / En Proceso"
+        assert cob_atencion["deficit_neto_compra"] == 0
+        assert "Paletizado/En Desarme" in cob_atencion["recomendacion_accionable"]
+
+        # Ahora tasamos / disponibilizamos motores suficientes en vitrina -> Cobertura Óptima
+        faltantes_vitrina = max(1, req_motor - cob_atencion["stock_disponible_tasado"] + 1)
+        for idx in range(faltantes_vitrina):
+            act_disp = Activo_Inventariado(
+                id_activo=uuid.uuid4(),
+                sku_qr_fisico=f"MOT-VITRINA-{idx}",
+                id_categoria=1,
+                id_estado=1,
+                id_sucursal_actual=101,
+                precio_referencia=1450000,
+                estado="Activo",
+            )
+            db.add(act_disp)
+            creados_ids.append(act_disp.id_activo)
+        db.commit()
+
+        res_optima = client.get("/api/v1/gerencia/dashboard/predicciones", headers=headers_admin)
+        assert res_optima.status_code == 200
+        cob_optima = {
+            item["id_categoria"]: item
+            for item in res_optima.json()["cobertura_stock_critico"]
+        }[1]
+        assert cob_optima["balance_unidades"] >= 1
+        assert cob_optima["deficit_neto_compra"] == 0
+        assert cob_optima["estado_alerta"] == "Cobertura Óptima"
+        assert "Cobertura óptima: superávit" in cob_optima["recomendacion_accionable"]
+    finally:
+        if creados_ids:
+            db.query(Activo_Inventariado).filter(
+                Activo_Inventariado.id_activo.in_(creados_ids)
+            ).delete(synchronize_session=False)
+            db.commit()
+        db.close()
+
+

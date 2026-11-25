@@ -1642,6 +1642,7 @@ class EntregaEnvioModel {
   final ClienteOrdenResumenModel? cliente;
   final DespachoOrdenResumenModel? despacho;
   final List<DetalleOrdenItemModel> detalles;
+  final String? idVendedor;
   final String? vendedorNombre;
   final String? idVendedorAsignado;
   final String? vendedorAsignadoNombre;
@@ -1663,6 +1664,7 @@ class EntregaEnvioModel {
     this.cliente,
     this.despacho,
     required this.detalles,
+    this.idVendedor,
     this.vendedorNombre,
     this.idVendedorAsignado,
     this.vendedorAsignadoNombre,
@@ -1808,6 +1810,7 @@ class EntregaEnvioModel {
                   DetalleOrdenItemModel.fromJson(d as Map<String, dynamic>))
               .toList() ??
           [],
+      idVendedor: json['id_vendedor']?.toString(),
       vendedorNombre: json['vendedor_nombre']?.toString(),
       idVendedorAsignado: json['id_vendedor_asignado']?.toString(),
       vendedorAsignadoNombre: json['vendedor_asignado_nombre']?.toString(),
@@ -1831,6 +1834,7 @@ class EntregaEnvioModel {
     if (cliente != null) 'cliente': cliente!.toJson(),
     if (despacho != null) 'despacho': despacho!.toJson(),
     'detalles': detalles.map((d) => d.toJson()).toList(),
+    if (idVendedor != null) 'id_vendedor': idVendedor,
     if (vendedorNombre != null) 'vendedor_nombre': vendedorNombre,
     if (idVendedorAsignado != null) 'id_vendedor_asignado': idVendedorAsignado,
     if (vendedorAsignadoNombre != null) 'vendedor_asignado_nombre': vendedorAsignadoNombre,

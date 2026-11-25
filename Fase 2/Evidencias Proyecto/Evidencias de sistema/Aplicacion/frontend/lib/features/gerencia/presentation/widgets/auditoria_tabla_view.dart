@@ -42,9 +42,9 @@ class AuditoriaTablaView extends StatelessWidget {
     switch (estado.toLowerCase()) {
       case 'completada':
         return (
-          bg: const Color(0xFFECFDF5),
-          border: const Color(0xFFA7F3D0),
-          text: const Color(0xFF059669),
+          bg: const Color(0xFF2596BE).withValues(alpha: 0.12),
+          border: const Color(0xFF2596BE).withValues(alpha: 0.4),
+          text: const Color(0xFF2596BE),
         );
       case 'reservada':
       case 'pendiente':
@@ -61,9 +61,9 @@ class AuditoriaTablaView extends StatelessWidget {
         );
       case 'pagada':
         return (
-          bg: const Color(0xFFF0F9FF),
-          border: const Color(0xFFBAE6FD),
-          text: const Color(0xFF0284C7),
+          bg: const Color(0xFF2E7D32).withValues(alpha: 0.12),
+          border: const Color(0xFF2E7D32).withValues(alpha: 0.4),
+          text: const Color(0xFF2E7D32),
         );
       case 'anulada':
         return (
@@ -127,7 +127,10 @@ class AuditoriaTablaView extends StatelessWidget {
   ///   con Tooltip interactivo que revela el vehículo de origen.
   /// - Para repuestos misceláneos calificados: despliega la insignia MOTOR o CAJA (excluyendo
   ///   estrictamente falsos positivos como motor de partida, cremallera, etc.).
-  static Widget? buildBadgesMotorCaja(HistorialOrdenItemModel item, {BuildContext? context}) {
+  static Widget? buildBadgesMotorCaja(
+    HistorialOrdenItemModel item, {
+    BuildContext? context,
+  }) {
     final activos = item.activosAuditados;
     if (activos.isEmpty) {
       return null;
@@ -144,7 +147,10 @@ class AuditoriaTablaView extends StatelessWidget {
   }
 
   /// Insignia visual individual para un motor o transmisión clasificada
-  static Widget buildBadgeActivo(ActivoAuditoriaItem activo, {BuildContext? context}) {
+  static Widget buildBadgeActivo(
+    ActivoAuditoriaItem activo, {
+    BuildContext? context,
+  }) {
     final Color bgColor;
     final Color borderColor;
     final Color textColor;
@@ -181,11 +187,11 @@ class AuditoriaTablaView extends StatelessWidget {
 
     final tooltipMsg = activo.esInventariado
         ? (activo.vehiculoOrigen != null && activo.vehiculoOrigen!.isNotEmpty
-            ? '🚗 Vehículo Origen: ${activo.vehiculoOrigen}\nCódigo SKU: ${activo.label}'
-            : 'Pieza Inventariada: ${activo.label}\n${activo.descripcion}')
+              ? '🚗 Vehículo Origen: ${activo.vehiculoOrigen}\nCódigo SKU: ${activo.label}'
+              : 'Pieza Inventariada: ${activo.label}\n${activo.descripcion}')
         : (activo.esMotor
-            ? '⚙️ Venta Mesón Miscelánea (Motor):\n${activo.descripcion}'
-            : '🕹️ Venta Mesón Miscelánea (Transmisión):\n${activo.descripcion}');
+              ? '⚙️ Venta Mesón Miscelánea (Motor):\n${activo.descripcion}'
+              : '🕹️ Venta Mesón Miscelánea (Transmisión):\n${activo.descripcion}');
 
     return Tooltip(
       message: tooltipMsg,
@@ -194,11 +200,7 @@ class AuditoriaTablaView extends StatelessWidget {
         color: const Color(0xFF0F172A),
         borderRadius: BorderRadius.circular(8),
         boxShadow: const [
-          BoxShadow(
-            color: Colors.black26,
-            blurRadius: 6,
-            offset: Offset(0, 2),
-          ),
+          BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 2)),
         ],
       ),
       textStyle: const TextStyle(
@@ -244,7 +246,10 @@ class AuditoriaTablaView extends StatelessWidget {
   }
 
   /// Modal interactivo rápido al hacer clic en el badge para auditar el vehículo donante
-  static void _mostrarInfoVehiculoDialog(BuildContext context, ActivoAuditoriaItem activo) {
+  static void _mostrarInfoVehiculoDialog(
+    BuildContext context,
+    ActivoAuditoriaItem activo,
+  ) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -256,12 +261,18 @@ class AuditoriaTablaView extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(7),
               decoration: BoxDecoration(
-                color: activo.esMotor ? const Color(0xFFEEF2FF) : const Color(0xFFFAF5FF),
+                color: activo.esMotor
+                    ? const Color(0xFFEEF2FF)
+                    : const Color(0xFFFAF5FF),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(
-                activo.esMotor ? Icons.settings_rounded : Icons.alt_route_rounded,
-                color: activo.esMotor ? const Color(0xFF4338CA) : const Color(0xFF7E22CE),
+                activo.esMotor
+                    ? Icons.settings_rounded
+                    : Icons.alt_route_rounded,
+                color: activo.esMotor
+                    ? const Color(0xFF4338CA)
+                    : const Color(0xFF7E22CE),
                 size: 20,
               ),
             ),
@@ -305,7 +316,11 @@ class AuditoriaTablaView extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.directions_car_rounded, size: 20, color: Color(0xFF0284C7)),
+                    const Icon(
+                      Icons.directions_car_rounded,
+                      size: 20,
+                      color: Color(0xFF0284C7),
+                    ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
@@ -334,10 +349,7 @@ class AuditoriaTablaView extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               activo.descripcion,
-              style: const TextStyle(
-                fontSize: 13,
-                color: Color(0xFF334155),
-              ),
+              style: const TextStyle(fontSize: 13, color: Color(0xFF334155)),
             ),
           ],
         ),
@@ -355,7 +367,10 @@ class AuditoriaTablaView extends StatelessWidget {
   }
 
   /// Método retrocompatible para llamadas anteriores
-  static Widget? buildBadgeTipoActivo(HistorialOrdenItemModel item, {BuildContext? context}) {
+  static Widget? buildBadgeTipoActivo(
+    HistorialOrdenItemModel item, {
+    BuildContext? context,
+  }) {
     return buildBadgesMotorCaja(item, context: context);
   }
 
@@ -426,8 +441,11 @@ class AuditoriaTablaView extends StatelessWidget {
                 _buildHeaderCell('TOTAL VENTA', flex: 13),
                 _buildHeaderCell('PENDIENTE', flex: 12),
                 _buildHeaderCell('ESTADO OFICIAL', flex: 13),
-                _buildHeaderCell('ACCIONES',
-                    flex: 12, alignment: Alignment.center),
+                _buildHeaderCell(
+                  'ACCIONES',
+                  flex: 12,
+                  alignment: Alignment.center,
+                ),
               ],
             ),
           ),
@@ -617,10 +635,7 @@ class AuditoriaTablaView extends StatelessWidget {
             ),
 
             // 6. MÉTODO DE PAGO (Pill + Monto)
-            Expanded(
-              flex: 18,
-              child: _buildMetodoPagoCell(item),
-            ),
+            Expanded(flex: 18, child: _buildMetodoPagoCell(item)),
 
             // 7. TOTAL VENTA
             Expanded(
@@ -648,7 +663,9 @@ class AuditoriaTablaView extends StatelessWidget {
                       style: AppTypography.body.copyWith(
                         fontWeight: FontWeight.w800,
                         fontSize: 14.5,
-                        color: const Color(0xFFC2410C), // Ámbar / Naranja alerta
+                        color: const Color(
+                          0xFFC2410C,
+                        ), // Ámbar / Naranja alerta
                       ),
                     )
                   : Text(
@@ -674,10 +691,7 @@ class AuditoriaTablaView extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: estadoStyle.bg,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: estadoStyle.border,
-                      width: 1,
-                    ),
+                    border: Border.all(color: estadoStyle.border, width: 1),
                   ),
                   child: Text(
                     item.estadoOrden,
@@ -861,7 +875,8 @@ class AuditoriaTablaView extends StatelessWidget {
 
           // Total consolidado a la derecha con tooltip explicativo
           Tooltip(
-            message: 'Monto efectivamente recaudado en órdenes procesadas y abonos de reservas (excluye anuladas y saldos pendientes)',
+            message:
+                'Monto efectivamente recaudado en órdenes procesadas y abonos de reservas (excluye anuladas y saldos pendientes)',
             child: Text.rich(
               TextSpan(
                 text: 'Total Consolidado en Vista: ',
@@ -937,10 +952,7 @@ class _BotonAuditarPastillaState extends State<_BotonAuditarPastilla> {
           borderRadius: BorderRadius.circular(16),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 120),
-            padding: const EdgeInsets.symmetric(
-              horizontal: 8,
-              vertical: 4,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
               color: _isHovered
                   ? const Color(0xFFE0F2FE)

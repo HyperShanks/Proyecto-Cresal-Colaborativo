@@ -41,6 +41,7 @@ from schemas import (
 )
 from core.security import get_current_user, require_bodega_access
 from core.policies import validar_horario_operativo_bodega
+from routers.inventario import extraer_siglas_motor
 
 router = APIRouter(
     prefix="/api/v1/bodega",
@@ -531,6 +532,12 @@ def obtener_tareas_pendientes(
         else:
             titulo = f"{cat_nombre} - {activo.sku_qr_fisico}" if activo.sku_qr_fisico else cat_nombre
 
+        if activo.id_categoria == 1:
+            num_mot = (motor.numero_motor if motor else None) or (vehiculo.numero_motor if vehiculo else None)
+            sigla = extraer_siglas_motor(num_mot)
+            if sigla:
+                titulo = f"{titulo} [{sigla}]"
+
         alertas.append(
             TareaAlertaResponse(
                 id_tarea=f"IMP-{str(activo.id_activo)[:8]}",
@@ -855,6 +862,12 @@ def escanear_salida(
         # A. Actualizar Orden_Venta a 'Completada'
         orden.estado_orden = "Completada"
         orden.fecha_actualizacion = datetime.now()
+
+        # Si la orden tiene compras en verde / backorders vinculados, marcarlas formalmente como 'Completada' tras la salida física
+        reservas_salida = db.query(Reservas_Backorder).filter(Reservas_Backorder.id_orden == orden.id_orden).all()
+        for r_bo in reservas_salida:
+            r_bo.estado_reserva = "Completada"
+            r_bo.fecha_actualizacion = datetime.now(timezone.utc)
 
         # Si la orden corresponde a un despacho (courier), marcar el despacho como 'Enviado'
         despacho_db = db.query(Despacho).filter(Despacho.id_orden == orden.id_orden).first()

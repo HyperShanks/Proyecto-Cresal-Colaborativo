@@ -276,7 +276,10 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
         color: AppPalette.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(16.0)),
       ),
-      child: Column(
+      child: SafeArea(
+        top: false,
+        bottom: true,
+        child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           // ── Tirador visual del modal ──────────────────────────────────
@@ -460,11 +463,14 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                           children: [
                             const Icon(Icons.person, size: 16.0, color: AppPalette.primary),
                             const SizedBox(width: 6.0),
-                            Text(
-                              'Datos del Cliente',
-                              style: AppTypography.small.copyWith(
-                                color: AppPalette.primary,
-                                fontWeight: FontWeight.bold,
+                            Expanded(
+                              child: Text(
+                                'Datos del Cliente',
+                                style: AppTypography.small.copyWith(
+                                  color: AppPalette.primary,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ],
@@ -596,10 +602,13 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        'Desglose de Repuestos',
-                        style: AppTypography.title.copyWith(fontSize: 15.0),
+                      Expanded(
+                        child: Text(
+                          'Desglose de Repuestos',
+                          style: AppTypography.title.copyWith(fontSize: 15.0),
+                        ),
                       ),
+                      const SizedBox(width: 8.0),
                       Text(
                         '${_orden.detalles.length} ${_orden.detalles.length == 1 ? 'ítem' : 'ítems'}',
                         style: AppTypography.small.copyWith(color: AppPalette.textSecondary),
@@ -826,10 +835,13 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              'Total de la Orden',
-                              style: AppTypography.title.copyWith(fontSize: 16.0),
+                            Expanded(
+                              child: Text(
+                                'Total de la Orden',
+                                style: AppTypography.title.copyWith(fontSize: 16.0),
+                              ),
                             ),
+                            const SizedBox(width: 8.0),
                             Text(
                               _orden.totalVentaFormateado,
                               style: AppTypography.headline.copyWith(
@@ -1152,12 +1164,14 @@ class _OrdenDetailSheetState extends State<OrdenDetailSheet> {
                     ),
                   ],
 
-                  const SizedBox(height: 16.0),
+                  // Margen inferior preventivo adaptativo al área segura (Safe Area / Insets de Android)
+                  const SizedBox(height: 20.0),
                 ],
               ),
             ),
           ),
         ],
+      ),
       ),
     );
   }

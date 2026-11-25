@@ -11,8 +11,8 @@ logger = logging.getLogger("cresal.updates")
 router = APIRouter(prefix="/api/v1/updates", tags=["Actualizaciones de la App"])
 
 # Configuración de GitHub Repository
-GITHUB_OWNER = os.getenv("GITHUB_REPO_OWNER", "FelipeCSDav")
-GITHUB_REPO = os.getenv("GITHUB_REPO_NAME", "CresalRepoCapstone")
+GITHUB_OWNER = os.getenv("GITHUB_REPO_OWNER", "")
+GITHUB_REPO = os.getenv("GITHUB_REPO_NAME", "")
 GITHUB_TOKEN = os.getenv("GITHUB_RELEASE_TOKEN") or os.getenv("GITHUB_TOKEN")
 
 def parse_version(v_str: str) -> tuple:

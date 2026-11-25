@@ -40,15 +40,17 @@ def db_session(setup_database):
         )
         db.add(suc)
 
-        # Seed Roles: Bodeguero (1), Vendedor (2), Administrador (5)
+        # Seed Roles: Bodeguero (1), Vendedor (2), Gerencia (4), Administrador (5)
         rol_bodega = Rol(id_rol=1, nombre_rol="Bodeguero")
         rol_vendedor = Rol(id_rol=2, nombre_rol="Vendedor")
+        rol_gerencia = Rol(id_rol=4, nombre_rol="Gerencia")
         rol_admin = Rol(id_rol=5, nombre_rol="Administrador")
-        db.add_all([rol_bodega, rol_vendedor, rol_admin])
+        db.add_all([rol_bodega, rol_vendedor, rol_gerencia, rol_admin])
 
         # Usuarios
         u_bodega_id = uuid.uuid4()
         u_vendedor_id = uuid.uuid4()
+        u_gerencia_id = uuid.uuid4()
         u_admin_id = uuid.uuid4()
 
         user_bodega = Usuario(
@@ -75,6 +77,18 @@ def db_session(setup_database):
             pin_acceso="2222",
             estado="Activo",
         )
+        user_gerencia = Usuario(
+            id_usuario=u_gerencia_id,
+            id_rol=4,
+            id_sucursal=1,
+            rut_usuario="44.444.444-4",
+            nombres="Gerente",
+            apellidos="General",
+            email="gerente@cresal.cl",
+            password_hash="hash4",
+            pin_acceso="4444",
+            estado="Activo",
+        )
         user_admin = Usuario(
             id_usuario=u_admin_id,
             id_rol=5,
@@ -87,7 +101,7 @@ def db_session(setup_database):
             pin_acceso="5555",
             estado="Activo",
         )
-        db.add_all([user_bodega, user_vendedor, user_admin])
+        db.add_all([user_bodega, user_vendedor, user_gerencia, user_admin])
 
         # Categorías
         cat_motor = Categoria_Activo(id_categoria=1, nombre_categoria="Motor")
@@ -209,6 +223,7 @@ def db_session(setup_database):
             "db": db,
             "user_bodega": user_bodega,
             "user_vendedor": user_vendedor,
+            "user_gerencia": user_gerencia,
             "user_admin": user_admin,
             "activo_1": activo_1,
             "activo_vendido": activo_vendido,
@@ -262,12 +277,12 @@ def test_editar_activo_exitoso_bodeguero(client, db_session):
 
 def test_editar_activo_actualiza_ubicacion_pallet_y_galpon(client, db_session):
     """
-    Edición de ubicación: Admin (id_rol=5) actualiza ubicacion_pallet y ubicacion_galpon.
+    Edición de ubicación: Gerencia (id_rol=4) actualiza ubicacion_pallet y ubicacion_galpon.
     """
-    user_admin = db_session["user_admin"]
+    user_gerencia = db_session["user_gerencia"]
     activo_1 = db_session["activo_1"]
 
-    token = create_access_token(data={"sub": str(user_admin.id_usuario)})
+    token = create_access_token(data={"sub": str(user_gerencia.id_usuario)})
     headers = {"Authorization": f"Bearer {token}"}
 
     payload = {
@@ -417,10 +432,10 @@ def test_editar_activo_rechazo_pieza_entregada_400(client, db_session):
     Intento de editar un repuesto en estado 'Entregado' (id_estado=6).
     Debe responder 400 Bad Request indicando que solo se permite en Disponible o Paletizado.
     """
-    user_admin = db_session["user_admin"]
+    user_bodega = db_session["user_bodega"]
     activo_entregado = db_session["activo_entregado"]
 
-    token = create_access_token(data={"sub": str(user_admin.id_usuario)})
+    token = create_access_token(data={"sub": str(user_bodega.id_usuario)})
     headers = {"Authorization": f"Bearer {token}"}
 
     payload = {
@@ -453,6 +468,34 @@ def test_editar_activo_rechazo_rol_no_autorizado_403(client, db_session):
 
     payload = {
         "ubicacion_pasillo": "P-09",
+        "version_lock_esperado": 3,
+    }
+
+    response = client.patch(
+        f"/api/v1/inventario/{activo_1.id_activo}",
+        json=payload,
+        headers=headers,
+    )
+
+    assert response.status_code == 403
+    data = response.json()
+    detail = data.get("detail", "")
+    assert "Acceso restringido" in detail
+
+
+def test_editar_activo_rechazo_admin_no_puede_editar_403(client, db_session):
+    """
+    Seguridad RBAC: Un usuario con rol Administrador (id_rol=5) NO puede editar inventario.
+    Debe ser rechazado con 403 Forbidden según requerimiento explícito.
+    """
+    user_admin = db_session["user_admin"]
+    activo_1 = db_session["activo_1"]
+
+    token = create_access_token(data={"sub": str(user_admin.id_usuario)})
+    headers = {"Authorization": f"Bearer {token}"}
+
+    payload = {
+        "ubicacion_pasillo": "P-99",
         "version_lock_esperado": 3,
     }
 
@@ -754,5 +797,69 @@ def test_despaletizar_activo_rechazo_rol_no_autorizado(client, db_session):
     )
 
     assert response.status_code == 403
+
+
+def test_editar_activo_exitoso_gerencia(client, db_session):
+    """
+    SPEC-24: Un usuario con rol Gerencia (id_rol=4) puede editar los datos vehiculares
+    y técnicos de una pieza (marca, modelo, año, tracción, número de motor, etc.)
+    en el inventario maestro de gerencia.
+    """
+    user_gerencia = db_session["user_gerencia"]
+    activo_1 = db_session["activo_1"]
+
+    token = create_access_token(data={"sub": str(user_gerencia.id_usuario)})
+    headers = {"Authorization": f"Bearer {token}"}
+
+    payload = {
+        "marca": "Toyota Modificada",
+        "modelo": "Yaris Sport",
+        "anio": 2023,
+        "traccion": "4x2 Delantera",
+        "numero_motor": "1NZ-FE-9988",
+        "combustible": "Gasolina",
+        "transmision_tipo": "Automática",
+        "cilindrada": "1.5L",
+        "ubicacion_pasillo": "P-GER",
+        "ubicacion_pallet": "PL-GER",
+        "ubicacion_galpon": "G-1",
+        "version_lock_esperado": activo_1.version_lock,
+    }
+
+    response = client.patch(
+        f"/api/v1/inventario/{activo_1.id_activo}",
+        json=payload,
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["marca"] == "Toyota Modificada"
+    assert data["modelo"] == "Yaris Sport"
+    assert data["anio"] == 2023
+    assert data["traccion"] == "4x2 Delantera"
+    assert data["numero_motor"] == "1NZ-FE-9988"
+    assert data["transmision_tipo"] == "Automática"
+    assert data["combustible"] == "Gasolina"
+    assert data["cilindrada"] == "1.5L"
+    assert data["ubicacion_pasillo"] == "P-GER"
+
+
+def test_extraer_siglas_motor_unit():
+    """
+    SPEC-24: Verifica la extracción precisa de las primeras 4 siglas alfanuméricas
+    del número de motor para formateo de nombres con [XXXX].
+    """
+    from routers.inventario import extraer_siglas_motor
+
+    assert extraer_siglas_motor("1NZ-FE-9921") == "1NZF"
+    assert extraer_siglas_motor("1GD-1234567") == "1GD1"
+    assert extraer_siglas_motor("1NZ") == "1NZ"
+    assert extraer_siglas_motor("SKYACTIV-G") == "SKYA"
+    assert extraer_siglas_motor("PSA-98231") == "PSA9"
+    assert extraer_siglas_motor("G4LC123456") == "G4LC"
+    assert extraer_siglas_motor(None) == ""
+    assert extraer_siglas_motor("S/A") == ""
+    assert extraer_siglas_motor("N/A") == ""
 
 

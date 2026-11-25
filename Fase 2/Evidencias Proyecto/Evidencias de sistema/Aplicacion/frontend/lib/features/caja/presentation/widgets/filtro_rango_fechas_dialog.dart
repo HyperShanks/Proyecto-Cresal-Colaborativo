@@ -95,33 +95,85 @@ class _FiltroRangoFechasDialogState extends State<FiltroRangoFechasDialog> {
     });
   }
 
-  Future<void> _seleccionarFechaDesde() async {
-    final picked = await showDatePicker(
+  Future<DateTime?> _mostrarDatePickerChileno({
+    required DateTime initialDate,
+    required DateTime firstDate,
+  }) {
+    return showDatePicker(
       context: context,
-      initialDate: _fechaDesde,
-      firstDate: DateTime(2020),
+      initialDate: initialDate,
+      firstDate: firstDate,
       lastDate: DateTime(2030),
+      helpText: 'Seleccionar fecha',
+      cancelText: 'Cancelar',
+      confirmText: 'Seleccionar',
+      fieldLabelText: 'Ingresar fecha',
+      fieldHintText: 'dd/mm/aaaa',
+      errorFormatText: 'Formato inválido (dd/mm/aaaa)',
+      errorInvalidText: 'Fecha fuera de rango',
       builder: (context, child) {
         final isDark = Theme.of(context).brightness == Brightness.dark;
+        final surface = isDark ? AppPalette.surface : AppPalette.surfaceLight;
+        final onSurface = isDark ? AppPalette.textPrimary : AppPalette.textPrimaryLight;
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: isDark
                 ? ColorScheme.dark(
                     primary: AppPalette.primary,
                     onPrimary: Colors.white,
-                    surface: AppPalette.surface,
-                    onSurface: AppPalette.textPrimary,
+                    surface: surface,
+                    onSurface: onSurface,
                   )
                 : ColorScheme.light(
                     primary: AppPalette.primary,
                     onPrimary: Colors.white,
-                    surface: AppPalette.surfaceLight,
-                    onSurface: AppPalette.textPrimaryLight,
+                    surface: surface,
+                    onSurface: onSurface,
                   ),
+            datePickerTheme: DatePickerThemeData(
+              backgroundColor: surface,
+              surfaceTintColor: Colors.transparent,
+              headerBackgroundColor: AppPalette.primary,
+              headerForegroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(
+                  color: AppPalette.neutral.withValues(alpha: 0.2),
+                ),
+              ),
+              cancelButtonStyle: OutlinedButton.styleFrom(
+                foregroundColor: AppPalette.textSecondaryLight,
+                side: BorderSide(
+                  color: AppPalette.neutral.withValues(alpha: 0.3),
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+              ),
+              confirmButtonStyle: ElevatedButton.styleFrom(
+                backgroundColor: AppPalette.primary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+              ),
+            ),
           ),
           child: child!,
         );
       },
+    );
+  }
+
+  Future<void> _seleccionarFechaDesde() async {
+    final picked = await _mostrarDatePickerChileno(
+      initialDate: _fechaDesde,
+      firstDate: DateTime(2020),
     );
     if (!mounted || picked == null) return;
     setState(() {
@@ -134,32 +186,9 @@ class _FiltroRangoFechasDialogState extends State<FiltroRangoFechasDialog> {
   }
 
   Future<void> _seleccionarFechaHasta() async {
-    final picked = await showDatePicker(
-      context: context,
+    final picked = await _mostrarDatePickerChileno(
       initialDate: _fechaHasta,
       firstDate: _fechaDesde,
-      lastDate: DateTime(2030),
-      builder: (context, child) {
-        final isDark = Theme.of(context).brightness == Brightness.dark;
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: isDark
-                ? ColorScheme.dark(
-                    primary: AppPalette.primary,
-                    onPrimary: Colors.white,
-                    surface: AppPalette.surface,
-                    onSurface: AppPalette.textPrimary,
-                  )
-                : ColorScheme.light(
-                    primary: AppPalette.primary,
-                    onPrimary: Colors.white,
-                    surface: AppPalette.surfaceLight,
-                    onSurface: AppPalette.textPrimaryLight,
-                  ),
-          ),
-          child: child!,
-        );
-      },
     );
     if (!mounted || picked == null) return;
     setState(() {

@@ -913,7 +913,7 @@ def test_flujo_completo_backorder_dos_pagos_abono_y_liquidacion_con_atribucion(c
     try:
         res_db3 = db.query(Reservas_Backorder).filter(Reservas_Backorder.id_reserva == id_reserva).first()
         assert res_db3.id_activo_asignado == id_activo
-        assert res_db3.estado_reserva == "Completada"
+        assert res_db3.estado_reserva == "Confirmada"  # Permanece Confirmada hasta entrega formal en barrera (Regla de Completitud)
 
         ord_db3 = db.query(Orden_Venta).filter(Orden_Venta.id_orden == id_orden).first()
         assert ord_db3.qr_transaccional_salida == data_asig["qr_transaccional_salida"]
