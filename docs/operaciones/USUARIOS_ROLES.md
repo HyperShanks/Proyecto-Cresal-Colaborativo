@@ -1,13 +1,13 @@
-# Matriz de Usuarios y Credenciales por Rol (Cresal SaaS - Supabase)
+# Matriz de Usuarios y Credenciales por Rol para TEST (Cresal SaaS - Supabase)
 
-Este documento detalla los usuarios activos cargados y sincronizados en la base de datos PostgreSQL de **Supabase**. Cada rol cuenta con un usuario configurado con contraseña segura estandarizada y PIN de acceso rápido para pruebas y operación.
+Este documento detalla los usuarios activos cargados y sincronizados en la base de datos de prueba, PostgreSQL de **Supabase**. Cada rol cuenta con un usuario configurado con contraseña segura estandarizada y PIN de acceso rápido para pruebas y operación.
 
 ---
 
 ## 1. Tabla Resumen de Credenciales
 
 > [!TIP]
-> **Contraseña universal para todos los usuarios**: `Password123!`
+> **Contraseña universal para todos los usuarios de prueba**: `Password123!`
 
 | Rol ID | Rol / Perfil | Nombre Completo | RUT | Correo Electrónico | Contraseña | PIN | Sucursal | Dispositivo / Entorno | Tema Visual (SSOT) |
 |:---:|:---|:---|:---:|:---|:---:|:---:|:---:|:---|:---:|
