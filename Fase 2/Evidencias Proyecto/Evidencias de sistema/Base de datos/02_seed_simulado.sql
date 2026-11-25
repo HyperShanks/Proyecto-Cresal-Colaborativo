@@ -1,6 +1,6 @@
 -- ==============================================================================
 -- SISTEMA CRESAL SAAS - DATOS SIMULADOS DE EVALUACIÓN ACADÉMICA (SEEDS)
--- Proyecto: Capstone Profesional de Ingeniería
+-- Proyecto Colaborativo - Gestión Integral Automotriz
 -- Motor: PostgreSQL 14+ / Supabase
 -- Archivo: 02_seed_simulado.sql
 -- ==============================================================================
@@ -34,11 +34,10 @@ INSERT INTO "Rol" (id_rol, nombre_rol, estado) VALUES
     (5, 'Administrador', 'Activo')
 ON CONFLICT (id_rol) DO UPDATE SET nombre_rol = EXCLUDED.nombre_rol;
 
--- 4. CATEGORÍAS DE INVENTARIO
+-- 4. CATEGORÍAS DE INVENTARIO (Solo Motor y Caja de Cambios)
 INSERT INTO "Categoria_Activo" (id_categoria, nombre_categoria) VALUES
     (1, 'Motor'),
-    (2, 'Caja de Cambios'),
-    (3, 'Accesorio')
+    (2, 'Caja de Cambios')
 ON CONFLICT (id_categoria) DO NOTHING;
 
 -- 5. ESTADOS DEL ACTIVO LOGÍSTICO
@@ -65,7 +64,6 @@ SELECT setval(pg_get_serial_sequence('"Estado_Activo"', 'id_estado'), COALESCE((
 -- Contraseña genérica para todos: Password123! (hash bcrypt standard)
 -- ==============================================================================
 
--- Hash Bcrypt para 'Password123!': $2b$12$K1bO.mK4P.lqK0bYwP8e5.7pL1.wI9W2vU5nJ6oQ1.eY2pW4z7a1u
 INSERT INTO "Usuario" (
     id_usuario, id_rol, id_sucursal, rut_usuario, nombres, apellidos, 
     email, password_hash, pin_acceso, estado
@@ -105,11 +103,23 @@ INSERT INTO "Vehiculo_Origen" (
     (
         'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'ING-1002', 'LPRT88', 'KMHCT81DBJU123456', 
         'Hyundai', 'Tucson 2.0 CRDi', 2019, 'Gris Plata', 'D4HA-123456', 'DESARME', 'Activo'
+    ),
+    (
+        'cccccccc-cccc-cccc-cccc-cccccccccccc', 'ING-1003', 'MNXY45', '3N1CN7AP9KL234567', 
+        'Nissan', 'NP300 Navara 2.3', 2020, 'Gris Oscuro', 'YS23-445566', 'DESARME', 'Activo'
+    ),
+    (
+        'dddddddd-dddd-dddd-dddd-dddddddddddd', 'ING-1004', 'PQRS90', '8AWDB45H1LA345678', 
+        'Mitsubishi', 'L200 Katana 2.4', 2022, 'Rojo', '4N15-778899', 'DESARME', 'Activo'
+    ),
+    (
+        'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', 'ING-1005', 'TVWZ12', '1FA6P8CF5H5456789', 
+        'Kia', 'Frontier 2.5 CRDi', 2018, 'Blanco', 'D4CB-654321', 'DESARME', 'Activo'
     )
 ON CONFLICT (numero_ingreso) DO NOTHING;
 
 -- ==============================================================================
--- 8. 10 REPUESTOS AUTOMOTRICES FICTICIOS (STOCK Y PRECIOS SIMULADOS)
+-- 8. 10 REPUESTOS AUTOMOTRICES FICTICIOS (SOLO MOTORES Y CAJAS DE CAMBIOS)
 -- ==============================================================================
 
 -- 8.1. Motor Completo Toyota Hilux 2.4 Diesel (MOT-1001)
@@ -142,98 +152,122 @@ INSERT INTO "Detalle_Caja_Cambio" (id_activo, transmision_tipo)
 VALUES ('a0000002-0000-0000-0000-000000000002', 'Manual 4x4')
 ON CONFLICT (id_activo) DO NOTHING;
 
--- 8.3. Turbo Compresor Hilux 2GD (ACC-1001)
+-- 8.3. Motor Completo Hyundai Tucson 2.0 CRDi (MOT-1002)
 INSERT INTO "Activo_Inventariado" (
     id_activo, sku_qr_fisico, id_categoria, id_estado, id_sucursal_actual, id_vehiculo,
     ubicacion_pasillo, ubicacion_galpon, ubicacion_pallet, precio_referencia, precio_minimo, precio_maximo,
     observacion_estado, qr_impreso, estado
 ) VALUES (
-    'a0000003-0000-0000-0000-000000000003', 'ACC-1001', 3, 2, 1, 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-    'Estante B3', 'Galpón 1', 'PAL-03', 380000, 320000, 420000,
-    'Turbocompresor de geometría variable original Toyota / IHI sin juego axial.', TRUE, 'Activo'
-) ON CONFLICT (sku_qr_fisico) DO NOTHING;
-
--- 8.4. Alternador Original Hilux 12V 100A (ACC-1002)
-INSERT INTO "Activo_Inventariado" (
-    id_activo, sku_qr_fisico, id_categoria, id_estado, id_sucursal_actual, id_vehiculo,
-    ubicacion_pasillo, ubicacion_galpon, ubicacion_pallet, precio_referencia, precio_minimo, precio_maximo,
-    observacion_estado, qr_impreso, estado
-) VALUES (
-    'a0000004-0000-0000-0000-000000000004', 'ACC-1002', 3, 2, 1, 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-    'Estante B1', 'Galpón 1', 'PAL-04', 160000, 130000, 180000,
-    'Alternador Denso original verificado en banco de carga.', TRUE, 'Activo'
-) ON CONFLICT (sku_qr_fisico) DO NOTHING;
-
--- 8.5. Motor de Partida Hilux 2.4 (ACC-1003)
-INSERT INTO "Activo_Inventariado" (
-    id_activo, sku_qr_fisico, id_categoria, id_estado, id_sucursal_actual, id_vehiculo,
-    ubicacion_pasillo, ubicacion_galpon, ubicacion_pallet, precio_referencia, precio_minimo, precio_maximo,
-    observacion_estado, qr_impreso, estado
-) VALUES (
-    'a0000005-0000-0000-0000-000000000005', 'ACC-1003', 3, 2, 1, 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-    'Estante B2', 'Galpón 1', 'PAL-05', 140000, 110000, 160000,
-    'Motor de arranque probado, piñón y bendix operativos.', TRUE, 'Activo'
-) ON CONFLICT (sku_qr_fisico) DO NOTHING;
-
--- 8.6. Motor Completo Hyundai Tucson 2.0 CRDi (MOT-1002)
-INSERT INTO "Activo_Inventariado" (
-    id_activo, sku_qr_fisico, id_categoria, id_estado, id_sucursal_actual, id_vehiculo,
-    ubicacion_pasillo, ubicacion_galpon, ubicacion_pallet, precio_referencia, precio_minimo, precio_maximo,
-    observacion_estado, qr_impreso, estado
-) VALUES (
-    'a0000006-0000-0000-0000-000000000006', 'MOT-1002', 1, 2, 1, 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
-    'Pasillo C', 'Galpón 2', 'PAL-06', 2200000, 1950000, 2400000,
+    'a0000003-0000-0000-0000-000000000003', 'MOT-1002', 1, 2, 1, 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+    'Pasillo C', 'Galpón 2', 'PAL-03', 2200000, 1950000, 2400000,
     'Motor D4HA 2.0 litros diésel common rail con bomba de inyección.', TRUE, 'Activo'
 ) ON CONFLICT (sku_qr_fisico) DO NOTHING;
 
 INSERT INTO "Detalle_Motor" (id_activo, numero_motor, cilindrada, combustible, transmision_tipo)
-VALUES ('a0000006-0000-0000-0000-000000000006', 'D4HA-123456', '2000', 'Diesel', 'Automatica')
+VALUES ('a0000003-0000-0000-0000-000000000003', 'D4HA-123456', '2000', 'Diesel', 'Automatica')
 ON CONFLICT (id_activo) DO NOTHING;
 
--- 8.7. Caja de Cambios Hyundai Tucson Automática (CAJ-1002)
+-- 8.4. Caja de Cambios Hyundai Tucson Automática (CAJ-1002)
 INSERT INTO "Activo_Inventariado" (
     id_activo, sku_qr_fisico, id_categoria, id_estado, id_sucursal_actual, id_vehiculo,
     ubicacion_pasillo, ubicacion_galpon, ubicacion_pallet, precio_referencia, precio_minimo, precio_maximo,
     observacion_estado, qr_impreso, estado
 ) VALUES (
-    'a0000007-0000-0000-0000-000000000007', 'CAJ-1002', 2, 2, 1, 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
-    'Pasillo C', 'Galpón 2', 'PAL-07', 790000, 690000, 890000,
+    'a0000004-0000-0000-0000-000000000004', 'CAJ-1002', 2, 2, 1, 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+    'Pasillo C', 'Galpón 2', 'PAL-04', 790000, 690000, 890000,
     'Transmisión automática de 6 velocidades con convertidor de par.', TRUE, 'Activo'
 ) ON CONFLICT (sku_qr_fisico) DO NOTHING;
 
 INSERT INTO "Detalle_Caja_Cambio" (id_activo, transmision_tipo)
-VALUES ('a0000007-0000-0000-0000-000000000007', 'Automatica')
+VALUES ('a0000004-0000-0000-0000-000000000004', 'Automatica')
 ON CONFLICT (id_activo) DO NOTHING;
 
--- 8.8. Compresor de Aire Acondicionado Tucson (ACC-1004)
+-- 8.5. Motor Completo Nissan NP300 Navara 2.3 (MOT-1003)
 INSERT INTO "Activo_Inventariado" (
     id_activo, sku_qr_fisico, id_categoria, id_estado, id_sucursal_actual, id_vehiculo,
     ubicacion_pasillo, ubicacion_galpon, ubicacion_pallet, precio_referencia, precio_minimo, precio_maximo,
     observacion_estado, qr_impreso, estado
 ) VALUES (
-    'a0000008-0000-0000-0000-000000000008', 'ACC-1004', 3, 2, 1, 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
-    'Estante D1', 'Galpón 2', 'PAL-08', 190000, 160000, 220000,
-    'Compresor de A/C original Doowon probado sin fugas con embrague magnético operativo.', TRUE, 'Activo'
+    'a0000005-0000-0000-0000-000000000005', 'MOT-1003', 1, 2, 1, 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+    'Pasillo B', 'Galpón 1', 'PAL-05', 2650000, 2350000, 2900000,
+    'Motor YS23 biturbo diésel verificado en banco, excelente presión de aceite.', TRUE, 'Activo'
 ) ON CONFLICT (sku_qr_fisico) DO NOTHING;
 
--- 8.9. Bomba de Dirección Hidráulica Tucson (ACC-1005)
+INSERT INTO "Detalle_Motor" (id_activo, numero_motor, cilindrada, combustible, transmision_tipo)
+VALUES ('a0000005-0000-0000-0000-000000000005', 'YS23-445566', '2300', 'Diesel', 'Manual')
+ON CONFLICT (id_activo) DO NOTHING;
+
+-- 8.6. Caja de Cambios Nissan NP300 4x4 Manual (CAJ-1003)
 INSERT INTO "Activo_Inventariado" (
     id_activo, sku_qr_fisico, id_categoria, id_estado, id_sucursal_actual, id_vehiculo,
     ubicacion_pasillo, ubicacion_galpon, ubicacion_pallet, precio_referencia, precio_minimo, precio_maximo,
     observacion_estado, qr_impreso, estado
 ) VALUES (
-    'a0000009-0000-0000-0000-000000000009', 'ACC-1005', 3, 2, 1, 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
-    'Estante D2', 'Galpón 2', 'PAL-09', 120000, 95000, 140000,
-    'Bomba hidráulica de dirección probada en banco de presión.', TRUE, 'Activo'
+    'a0000006-0000-0000-0000-000000000006', 'CAJ-1003', 2, 2, 1, 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+    'Pasillo B', 'Galpón 1', 'PAL-06', 920000, 800000, 1050000,
+    'Caja manual de 6 marchas 4WD con transfer incluido, sin zumbidos.', TRUE, 'Activo'
 ) ON CONFLICT (sku_qr_fisico) DO NOTHING;
 
--- 8.10. Riel de Inyección Common Rail Hyundai (ACC-1006)
+INSERT INTO "Detalle_Caja_Cambio" (id_activo, transmision_tipo)
+VALUES ('a0000006-0000-0000-0000-000000000006', 'Manual 4x4')
+ON CONFLICT (id_activo) DO NOTHING;
+
+-- 8.7. Motor Completo Mitsubishi L200 Katana 2.4 (MOT-1004)
 INSERT INTO "Activo_Inventariado" (
     id_activo, sku_qr_fisico, id_categoria, id_estado, id_sucursal_actual, id_vehiculo,
     ubicacion_pasillo, ubicacion_galpon, ubicacion_pallet, precio_referencia, precio_minimo, precio_maximo,
     observacion_estado, qr_impreso, estado
 ) VALUES (
-    'a0000010-0000-0000-0000-000000000010', 'ACC-1006', 3, 2, 1, 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
-    'Estante D3', 'Galpón 2', 'PAL-10', 210000, 175000, 240000,
-    'Riel de combustible de alta presión Bosch con sensor y válvula reguladora incluidos.', TRUE, 'Activo'
+    'a0000007-0000-0000-0000-000000000007', 'MOT-1004', 1, 2, 2, 'dddddddd-dddd-dddd-dddd-dddddddddddd',
+    'Pasillo A', 'Galpón Limache', 'PAL-07', 2750000, 2450000, 3000000,
+    'Motor 4N15 MIVEC Diésel, bajo kilometraje y partida inmediata.', TRUE, 'Activo'
 ) ON CONFLICT (sku_qr_fisico) DO NOTHING;
+
+INSERT INTO "Detalle_Motor" (id_activo, numero_motor, cilindrada, combustible, transmision_tipo)
+VALUES ('a0000007-0000-0000-0000-000000000007', '4N15-778899', '2400', 'Diesel', 'Automatica')
+ON CONFLICT (id_activo) DO NOTHING;
+
+-- 8.8. Caja de Cambios Mitsubishi L200 Automática 4x4 (CAJ-1004)
+INSERT INTO "Activo_Inventariado" (
+    id_activo, sku_qr_fisico, id_categoria, id_estado, id_sucursal_actual, id_vehiculo,
+    ubicacion_pasillo, ubicacion_galpon, ubicacion_pallet, precio_referencia, precio_minimo, precio_maximo,
+    observacion_estado, qr_impreso, estado
+) VALUES (
+    'a0000008-0000-0000-0000-000000000008', 'CAJ-1004', 2, 2, 2, 'dddddddd-dddd-dddd-dddd-dddddddddddd',
+    'Pasillo A', 'Galpón Limache', 'PAL-08', 980000, 860000, 1100000,
+    'Caja automática secuencial Super Select 4WD en óptimo estado.', TRUE, 'Activo'
+) ON CONFLICT (sku_qr_fisico) DO NOTHING;
+
+INSERT INTO "Detalle_Caja_Cambio" (id_activo, transmision_tipo)
+VALUES ('a0000008-0000-0000-0000-000000000008', 'Automatica 4x4')
+ON CONFLICT (id_activo) DO NOTHING;
+
+-- 8.9. Motor Completo Kia Frontier 2.5 CRDi (MOT-1005)
+INSERT INTO "Activo_Inventariado" (
+    id_activo, sku_qr_fisico, id_categoria, id_estado, id_sucursal_actual, id_vehiculo,
+    ubicacion_pasillo, ubicacion_galpon, ubicacion_pallet, precio_referencia, precio_minimo, precio_maximo,
+    observacion_estado, qr_impreso, estado
+) VALUES (
+    'a0000009-0000-0000-0000-000000000009', 'MOT-1005', 1, 2, 1, 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
+    'Pasillo D', 'Galpón 2', 'PAL-09', 1950000, 1750000, 2150000,
+    'Motor D4CB 2.5 diésel utilitario probado, sin consumo de refrigerante.', TRUE, 'Activo'
+) ON CONFLICT (sku_qr_fisico) DO NOTHING;
+
+INSERT INTO "Detalle_Motor" (id_activo, numero_motor, cilindrada, combustible, transmision_tipo)
+VALUES ('a0000009-0000-0000-0000-000000000009', 'D4CB-654321', '2500', 'Diesel', 'Manual')
+ON CONFLICT (id_activo) DO NOTHING;
+
+-- 8.10. Caja de Cambios Kia Frontier 6 Velocidades (CAJ-1005)
+INSERT INTO "Activo_Inventariado" (
+    id_activo, sku_qr_fisico, id_categoria, id_estado, id_sucursal_actual, id_vehiculo,
+    ubicacion_pasillo, ubicacion_galpon, ubicacion_pallet, precio_referencia, precio_minimo, precio_maximo,
+    observacion_estado, qr_impreso, estado
+) VALUES (
+    'a0000010-0000-0000-0000-000000000010', 'CAJ-1005', 2, 2, 1, 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
+    'Pasillo D', 'Galpón 2', 'PAL-10', 650000, 560000, 740000,
+    'Transmisión manual 6 velocidades para vehículo comercial ligero.', TRUE, 'Activo'
+) ON CONFLICT (sku_qr_fisico) DO NOTHING;
+
+INSERT INTO "Detalle_Caja_Cambio" (id_activo, transmision_tipo)
+VALUES ('a0000010-0000-0000-0000-000000000010', 'Manual')
+ON CONFLICT (id_activo) DO NOTHING;
