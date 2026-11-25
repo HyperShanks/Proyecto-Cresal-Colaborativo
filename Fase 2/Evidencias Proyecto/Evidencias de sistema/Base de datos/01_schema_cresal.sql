@@ -1,11 +1,11 @@
 -- ==============================================================================
 -- SISTEMA CRESAL SAAS - ESQUEMA DE BASE DE DATOS OFICIAL (DDL)
--- Proyecto: Capstone Profesional de Ingeniería
+-- Proyecto Colaborativo - Gestión Integral Automotriz
 -- Motor: PostgreSQL 14+ / Supabase
--- Archivo: 01_schema_cresal.sql
+-- Archivo: 01_schema_cresal.sql (24 tablas relacionales)
 -- ==============================================================================
 
--- 0. Habilitar extensión UUID
+-- 0. Habilitar extensiones UUID
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
@@ -258,7 +258,7 @@ CREATE TABLE IF NOT EXISTS "Transaccion_Pago" (
     monto INTEGER NOT NULL,
     metodo_pago VARCHAR(50) NOT NULL,
     estado_pago VARCHAR(20) NOT NULL DEFAULT 'Procesado',
-    fecha_pago TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT NOW()
+    fecha_pago TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
 -- ==========================================
@@ -302,7 +302,7 @@ CREATE TABLE IF NOT EXISTS "Despacho" (
 );
 
 -- ==========================================
--- 7. BITÁCORA FORENSE WMS Y NOTIFICACIONES
+-- 7. BITÁCORA FORENSE WMS, NOTIFICACIONES Y AUDITORÍA DE PAGOS
 -- ==========================================
 
 CREATE TABLE IF NOT EXISTS "Bitacora_Movimiento_Inventario" (
@@ -335,3 +335,18 @@ CREATE TABLE IF NOT EXISTS "Notificacion_Sistema" (
 );
 
 CREATE INDEX IF NOT EXISTS idx_notif_estado_fecha ON "Notificacion_Sistema"(estado, fecha_creacion DESC);
+
+CREATE TABLE IF NOT EXISTS "Auditoria_Edicion_Pago" (
+    id_auditoria UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id_pago UUID NOT NULL REFERENCES "Transaccion_Pago"(id_pago) ON DELETE CASCADE,
+    id_orden UUID NOT NULL REFERENCES "Orden_Venta"(id_orden) ON DELETE CASCADE,
+    id_usuario UUID NOT NULL REFERENCES "Usuario"(id_usuario) ON DELETE RESTRICT,
+    fecha_edicion TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    campo_modificado VARCHAR(50) NOT NULL,
+    valor_anterior VARCHAR(255) NOT NULL,
+    valor_nuevo VARCHAR(255) NOT NULL,
+    motivo TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_auditoria_edicion_pago_orden ON "Auditoria_Edicion_Pago"(id_orden);
+CREATE INDEX IF NOT EXISTS idx_auditoria_edicion_pago_fecha ON "Auditoria_Edicion_Pago"(fecha_edicion DESC);
