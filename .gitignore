@@ -1,11 +1,16 @@
 # Variables de Entorno (Oculta las contraseñas)
 backend/.env
 **/.env
+!.env.example
+!**/.env.example
 
 # Entorno Virtual y Caché de Python
 backend/venv/
 backend/__pycache__/
+**/__pycache__/
 **/*.pyc
+.pytest_cache/
+**/.pytest_cache/
 
 # Archivos compilados de Flutter (Frontend)
 frontend/.dart_tool/

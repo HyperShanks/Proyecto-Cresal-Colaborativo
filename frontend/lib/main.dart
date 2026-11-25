@@ -27,7 +27,7 @@ class _MyAppState extends State<MyApp> {
       valueListenable: ThemeController.themeMode,
       builder: (context, currentThemeMode, _) {
         return MaterialApp(
-          title: 'Cresal Capstone',
+          title: 'Cresal - Sistema de Gestión',
           debugShowCheckedModeBanner: false,
           locale: const Locale('es', 'CL'),
           localizationsDelegates: const [
@@ -35,10 +35,7 @@ class _MyAppState extends State<MyApp> {
             GlobalWidgetsLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,
           ],
-          supportedLocales: const [
-            Locale('es', 'CL'),
-            Locale('es'),
-          ],
+          supportedLocales: const [Locale('es', 'CL'), Locale('es')],
           navigatorKey: ApiService.navigatorKey,
           scaffoldMessengerKey: ApiService.scaffoldMessengerKey,
           navigatorObservers: [routeObserver],
@@ -63,5 +60,3 @@ class _MyAppState extends State<MyApp> {
     );
   }
 }
-
-

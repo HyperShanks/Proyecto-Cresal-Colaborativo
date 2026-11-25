@@ -4,18 +4,14 @@ class ApiConstants {
   // ==========================================
   // SINGLE SOURCE OF TRUTH (URL BASE)
   // ==========================================
-  // URL DE DESARROLLO (Render)
-  // static const String _baseUrl = 'https://cresal-backend-dev.onrender.com/api';
-  // URL DE (Render test)
-  // static const String _baseUrl = 'https://cresal-backend-dev.onrender.com/api';
-  // Red local
+  // URL DE PRUEBAS / EVALUACIÓN (Render Test - Activa)
+  static const String _baseUrl = 'https://cresal-backend-dev.onrender.com/api';
+
+  // URL DE DESARROLLO LOCAL (Windows Desktop / Localhost)
   // static const String _baseUrl = 'http://127.0.0.1:8000/api';
 
-  // URL DE DESARROLLO (Windows Desktop / Localhost)
-  static const String _baseUrl = 'http://127.0.0.1:8000/api';
-
-  // URL DE DESARROLLO (Emulador Android)
-  //static const String _baseUrl = 'http://10.0.2.2:8000/api';
+  // URL DE DESARROLLO LOCAL (Emulador Android)
+  // static const String _baseUrl = 'http://10.0.2.2:8000/api';
 
   // ==========================================
   // ENDPOINTS ESPECÍFICOS

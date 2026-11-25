@@ -1,5 +1,7 @@
 # Variables de entorno
 .env
+.env.*
+!.env.example
 
 # Llaves y credenciales
 *.json
@@ -9,3 +11,4 @@ vision-key.json
 __pycache__/
 *.pyc
 venv/
+.pytest_cache/
