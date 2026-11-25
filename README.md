@@ -1,1 +1,1 @@
-# Proyecto-Cresal-Capstone
+# Proyecto-Cresal-Colaborativo
