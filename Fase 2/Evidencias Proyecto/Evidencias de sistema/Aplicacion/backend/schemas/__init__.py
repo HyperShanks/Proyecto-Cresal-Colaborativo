@@ -37,5 +37,8 @@ from .gerencia_schemas import (
     DesgloseDemandaCategoriaItemDTO,
     PrediccionVentasStockResponseDTO,
     PrediccionGerenciaResponseDTO,
+    EditarOrdenGerenciaRequest,
+    EditarOrdenGerenciaResponse,
+    EliminarOrdenGerenciaResponse,
 )
 

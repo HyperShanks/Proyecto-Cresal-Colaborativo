@@ -95,74 +95,6 @@ class HistorialArticuloModel {
 
   bool get esInventariado => tipo == 'INVENTARIADO';
 
-  /// Términos de exclusión para motores (accesorios electromecánicos y periféricos secundarios).
-  /// Si la descripción contiene alguno de estos términos, NO debe recibir la insignia de MOTOR.
-  static final List<String> exclusionesMotor = [
-    'cremallera',
-    'partida',
-    'arranque',
-    'limpia parabrisas',
-    'limpiaparabrisas',
-    'limpia parabrisa',
-    'limpiaparabrisa',
-    'limpiavidrio',
-    'limpiavidrios',
-    'limpia vidrio',
-    'limpia vidrios',
-    'alzavidrio',
-    'alzavidrios',
-    'alza vidrio',
-    'alza vidrios',
-    'calefaccion',
-    'calefacción',
-    'ventilador',
-    'electroventilador',
-    'electro ventilador',
-    'electro-ventilador',
-    'soplador',
-    'blower',
-    'espejo',
-    'espejos',
-    'antena',
-    'bomba',
-    'paso a paso',
-    'ralenti',
-    'ralentí',
-    'sunroof',
-    'techo',
-    'actuador',
-    'regulador',
-    'fusible',
-    'fusibles',
-    'fusilera',
-  ];
-
-  /// Términos de exclusión para cajas (elementos auxiliares ajenos a la transmisión).
-  /// Si la descripción contiene alguno de estos términos, NO debe recibir la insignia de CAJA.
-  static final List<String> exclusionesCaja = [
-    'fusible',
-    'fusibles',
-    'fusilera',
-    'direccion',
-    'dirección',
-    'filtro',
-    'filtro de aire',
-    'filtro aire',
-    'evaporador',
-    'evaporadora',
-    'bateria',
-    'batería',
-    'rele',
-    'relé',
-    'relay',
-    'mariposa',
-    'termostato',
-    'herramienta',
-    'herramientas',
-    'sonido',
-    'parlante',
-  ];
-
   /// Retorna la cadena descriptiva del vehículo de origen si está disponible
   String? get vehiculoOrigenDisplay {
     final partes = <String>[];
@@ -178,95 +110,40 @@ class HistorialArticuloModel {
     return veh;
   }
 
-  /// Clasifica el artículo como Motor o Caja de cambios (inventariado o misceláneo),
-  /// aplicando estrictamente el filtro de exclusión semántica para evitar falsos positivos.
+  /// Clasifica el artículo exclusivamente si corresponde a un activo físico
+  /// inventariado real (Motor MOT-XXXX o Caja de Cambios CAJ-XXXX).
+  /// Los ítems manuales o misceláneos de mesón sin SKU inventariado retornan null.
   ActivoAuditoriaItem? get activoAuditado {
     final skuNorm = (sku ?? '').trim().toUpperCase();
     final catNorm = (categoria ?? '').trim().toLowerCase();
-    final descNorm = descripcion.toLowerCase();
 
-    // 1. Detección para Piezas Inventariadas con SKU formal
-    if (skuNorm.isNotEmpty || esInventariado) {
-      if (skuNorm.startsWith('MOT') || catNorm.contains('motor')) {
-        return ActivoAuditoriaItem(
-          tipo: TipoActivoAuditoria.motorInventariado,
-          label: skuNorm.isNotEmpty ? skuNorm : 'MOTOR',
-          esInventariado: true,
-          sku: skuNorm.isNotEmpty ? skuNorm : null,
-          vehiculoOrigen: vehiculoOrigenDisplay,
-          descripcion: descripcion,
-        );
-      }
-      if (skuNorm.startsWith('CAJ') ||
-          catNorm.contains('caja') ||
-          catNorm.contains('transmisi')) {
-        return ActivoAuditoriaItem(
-          tipo: TipoActivoAuditoria.cajaInventariada,
-          label: skuNorm.isNotEmpty ? skuNorm : 'CAJA',
-          esInventariado: true,
-          sku: skuNorm.isNotEmpty ? skuNorm : null,
-          vehiculoOrigen: vehiculoOrigenDisplay,
-          descripcion: descripcion,
-        );
-      }
+    if (!esInventariado &&
+        !skuNorm.startsWith('MOT') &&
+        !skuNorm.startsWith('CAJ')) {
+      return null;
     }
 
-    // 2. Detección y Clasificación para Ítems Misceláneos (Texto libre de mesón sin SKU)
-    // A. Regla Semántica para Motores
-    final contienePalabraMotor = descNorm.contains('motor') ||
-        descNorm.contains('block') ||
-        ((descNorm.contains('verde') || descNorm.contains('backorder')) &&
-            descNorm.contains('motor'));
-
-    if (contienePalabraMotor) {
-      // Verificación estricta de exclusiones de motor y componentes de caja ajenos
-      final esFalsoPositivoMotor = exclusionesMotor.any((exc) => descNorm.contains(exc)) ||
-          (descNorm.contains('caja') && exclusionesCaja.any((exc) => descNorm.contains(exc)));
-      if (!esFalsoPositivoMotor) {
-        return ActivoAuditoriaItem(
-          tipo: TipoActivoAuditoria.motorMiscelaneo,
-          label: 'MOTOR',
-          esInventariado: false,
-          sku: null,
-          vehiculoOrigen: vehiculoOrigenDisplay,
-          descripcion: descripcion,
-        );
-      }
+    if (skuNorm.startsWith('MOT') || catNorm.contains('motor')) {
+      return ActivoAuditoriaItem(
+        tipo: TipoActivoAuditoria.motorInventariado,
+        label: skuNorm.isNotEmpty ? skuNorm : 'MOT',
+        esInventariado: true,
+        sku: skuNorm.isNotEmpty ? skuNorm : null,
+        vehiculoOrigen: vehiculoOrigenDisplay,
+        descripcion: descripcion,
+      );
     }
-
-    // B. Regla Semántica para Cajas de Cambios / Transmisiones
-    final contienePalabraCaja = descNorm.contains('caja') ||
-        descNorm.contains('transmision') ||
-        descNorm.contains('transmisión');
-
-    if (contienePalabraCaja) {
-      // Verificación estricta de exclusiones de caja
-      final esFalsoPositivoCaja = exclusionesCaja.any((exc) => descNorm.contains(exc)) ||
-          (descNorm.contains('motor') && exclusionesMotor.any((exc) => descNorm.contains(exc)));
-      if (!esFalsoPositivoCaja) {
-        // Asegurar que sea transmisión o caja de cambio
-        final esTransmisionValida = descNorm.contains('transmisi') ||
-            descNorm.contains('cambio') ||
-            descNorm.contains('manual') ||
-            descNorm.contains('mecanica') ||
-            descNorm.contains('mecánica') ||
-            descNorm.contains('automatica') ||
-            descNorm.contains('automática') ||
-            descNorm.contains('cvt') ||
-            descNorm.contains('secuencial') ||
-            descNorm.contains('caja');
-
-        if (esTransmisionValida) {
-          return ActivoAuditoriaItem(
-            tipo: TipoActivoAuditoria.cajaMiscelanea,
-            label: 'CAJA',
-            esInventariado: false,
-            sku: null,
-            vehiculoOrigen: vehiculoOrigenDisplay,
-            descripcion: descripcion,
-          );
-        }
-      }
+    if (skuNorm.startsWith('CAJ') ||
+        catNorm.contains('caja') ||
+        catNorm.contains('transmisi')) {
+      return ActivoAuditoriaItem(
+        tipo: TipoActivoAuditoria.cajaInventariada,
+        label: skuNorm.isNotEmpty ? skuNorm : 'CAJ',
+        esInventariado: true,
+        sku: skuNorm.isNotEmpty ? skuNorm : null,
+        vehiculoOrigen: vehiculoOrigenDisplay,
+        descripcion: descripcion,
+      );
     }
 
     return null;
@@ -462,40 +339,19 @@ class HistorialOrdenItemModel {
   bool get esAnulada => estadoOrden == 'Anulada';
   bool get esSplit => modalidadPago.toLowerCase() == 'split';
 
-  /// Lista de activos (Motores y Cajas de Cambio) clasificados según su origen,
-  /// excluyendo estrictamente repuestos secundarios y falsos positivos electromecánicos.
+  /// Lista de activos físicos inventariados reales (Motores MOT-XXXX y Cajas CAJ-XXXX).
   List<ActivoAuditoriaItem> get activosAuditados {
     final auditados = <ActivoAuditoriaItem>[];
     for (final art in articulos) {
       final act = art.activoAuditado;
-      if (act != null) {
+      if (act != null && act.esInventariado) {
         auditados.add(act);
       }
     }
-
-    // Si la orden es una operación en verde o backorder sin artículos específicos catalogados
-    if (auditados.isEmpty) {
-      final op = tipoOperacion.toUpperCase();
-      if (op.contains('VERDE') || op.contains('BACKORDER')) {
-        auditados.add(
-          ActivoAuditoriaItem(
-            tipo: TipoActivoAuditoria.motorMiscelaneo,
-            label: 'MOTOR',
-            esInventariado: false,
-            sku: null,
-            vehiculoOrigen: null,
-            descripcion: 'Venta en Verde / Backorder',
-          ),
-        );
-      }
-    }
-
     return auditados;
   }
 
-  /// Retorna true si la orden incluye un Motor o Caja de cambios válido
-  /// (inventariado o misceláneo calificado), excluyendo falsos positivos como
-  /// motor de partida, motor de alzavidrio, motor de cremallera o caja de fusibles.
+  /// Retorna true si la orden contiene al menos un Motor o Caja inventariado real.
   bool get tieneMotorOCaja => activosAuditados.isNotEmpty;
 
   /// Retorna true si la orden tiene al menos un activo físico inventariado con SKU/QR

@@ -270,9 +270,13 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(
-          find.text('Proyección Financiera IA & Mix de Ingresos (XGBoost)'),
+          find.text('Proyección Financiera y Mix de Ingresos'),
           findsOneWidget,
         );
+        expect(find.textContaining('XGBoost'), findsNothing);
+        expect(find.textContaining('WAPE'), findsNothing);
+        expect(find.textContaining('t+1'), findsNothing);
+        expect(find.textContaining('Prom. 4 sem'), findsNothing);
 
         // Valores CLP sin decimales y con puntos de miles en Vista Semanal
         expect(find.text('\$17.978.712'), findsOneWidget);
@@ -394,6 +398,45 @@ void main() {
           findsOneWidget,
         );
         expect(find.text('\$17.978.712'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'DashboardGerenciaView y secciones predictivas no generan RenderFlex overflow en ventanas estrechas (390px y 760px)',
+      (tester) async {
+        for (final size in [const Size(390, 900), const Size(760, 900)]) {
+          tester.view.physicalSize = size;
+          tester.view.devicePixelRatio = 1.0;
+
+          const mockKpis = KpiFinancieroModel(
+            ventasDelDia: 2500000,
+            transaccionesHoy: 8,
+            acumuladoMensualMtd: 35000000,
+            ticketPromedio: 312500.0,
+            salidasMotoresHoy: 3,
+            salidasCajasHoy: 2,
+            totalSalidasHoy: 5,
+          );
+          final mockPred = PredictionDashboardModel.fromJson(
+            _buildMockPredictionJson(),
+          );
+
+          await tester.pumpWidget(
+            MaterialApp(
+              home: Scaffold(
+                body: DashboardGerenciaView(
+                  kpisIniciales: mockKpis,
+                  prediccionesIniciales: mockPred,
+                ),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          expect(tester.takeException(), isNull);
+        }
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
       },
     );
   });

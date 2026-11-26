@@ -580,10 +580,10 @@ def test_ordenes_filtro_por_tipo_activo(client, db_session_auditoria):
 
 def test_ordenes_filtro_motores_cajas_exclusion_falsos_positivos(client, db_session_auditoria):
     """
-    SPEC CRES-240 / Definition of Done:
-    Valida que los filtros de Gerencia excluyan estrictamente falsos positivos:
-    - «Motor de cremallera», «Motor de partida», «Caja de fusibles» NO se computan como motores/cajas.
-    - Misceláneos genuinos como «Motor Toyota 1.5» o «Caja de cambios 5ta» SÍ se computan.
+    SPEC HU-TAREA-26:
+    Valida que el filtro MOTORES_CAJAS retorne exclusivamente órdenes con
+    activos físicos inventariados reales (Motores MOT-XXXX / Cajas CAJ-XXXX),
+    excluyendo ventas manuales de mesón sin id_activo (incluso si mencionan motor/caja).
     """
     token_gerente = create_access_token(
         {"sub": str(db_session_auditoria["gerente"].id_usuario)}
@@ -591,8 +591,15 @@ def test_ordenes_filtro_motores_cajas_exclusion_falsos_positivos(client, db_sess
 
     db = TestingSessionLocal()
     ordenes_creadas = []
+    activos_creados = []
     try:
-        # 1. Orden Falsa: Motor de partida
+        cat_caja = db.query(Categoria_Activo).filter_by(id_categoria=2).first()
+        if not cat_caja:
+            cat_caja = Categoria_Activo(id_categoria=2, nombre_categoria="Cajas de Cambio")
+            db.add(cat_caja)
+            db.commit()
+
+        # 1. Orden Falsa: Motor de partida (manual sin SKU)
         o_partida = Orden_Venta(
             id_orden=uuid.uuid4(),
             id_sucursal=201,
@@ -607,17 +614,16 @@ def test_ordenes_filtro_motores_cajas_exclusion_falsos_positivos(client, db_sess
         )
         db.add(o_partida)
         ordenes_creadas.append(o_partida.id_orden)
-        d_partida = Detalle_Orden(
+        db.add(Detalle_Orden(
             id_detalle=uuid.uuid4(),
             id_orden=o_partida.id_orden,
             descripcion_manual="Motor de partida Bosch 12V",
             cantidad=1,
             precio_unitario=45000,
             precio_final=45000,
-        )
-        db.add(d_partida)
+        ))
 
-        # 2. Orden Falsa: Caja de fusibles
+        # 2. Orden Falsa: Caja de fusibles (manual sin SKU)
         o_fusibles = Orden_Venta(
             id_orden=uuid.uuid4(),
             id_sucursal=201,
@@ -632,17 +638,16 @@ def test_ordenes_filtro_motores_cajas_exclusion_falsos_positivos(client, db_sess
         )
         db.add(o_fusibles)
         ordenes_creadas.append(o_fusibles.id_orden)
-        d_fusibles = Detalle_Orden(
+        db.add(Detalle_Orden(
             id_detalle=uuid.uuid4(),
             id_orden=o_fusibles.id_orden,
             descripcion_manual="Caja de fusibles de cabina",
             cantidad=1,
             precio_unitario=35000,
             precio_final=35000,
-        )
-        db.add(d_fusibles)
+        ))
 
-        # 3. Orden Falsa: Motor de cremallera
+        # 3. Orden Falsa: Motor de cremallera (manual sin SKU)
         o_cremallera = Orden_Venta(
             id_orden=uuid.uuid4(),
             id_sucursal=201,
@@ -657,18 +662,17 @@ def test_ordenes_filtro_motores_cajas_exclusion_falsos_positivos(client, db_sess
         )
         db.add(o_cremallera)
         ordenes_creadas.append(o_cremallera.id_orden)
-        d_cremallera = Detalle_Orden(
+        db.add(Detalle_Orden(
             id_detalle=uuid.uuid4(),
             id_orden=o_cremallera.id_orden,
             descripcion_manual="Motor de cremallera hidráulica",
             cantidad=1,
             precio_unitario=60000,
             precio_final=60000,
-        )
-        db.add(d_cremallera)
+        ))
 
-        # 4. Orden Verdadera Miscelánea: Motor principal
-        o_motor_real = Orden_Venta(
+        # 4. Orden Manual de Mesón (sin Activo_Inventariado): NO debe etiquetarse como activo inventariado
+        o_motor_manual = Orden_Venta(
             id_orden=uuid.uuid4(),
             id_sucursal=201,
             id_cliente=db_session_auditoria["cliente_perez"].id_cliente,
@@ -680,20 +684,19 @@ def test_ordenes_filtro_motores_cajas_exclusion_falsos_positivos(client, db_sess
             fecha_creacion=datetime.now(timezone.utc).replace(tzinfo=None),
             qr_transaccional_salida="ORD-OK-MOTOR-MISC",
         )
-        db.add(o_motor_real)
-        ordenes_creadas.append(o_motor_real.id_orden)
-        d_motor_real = Detalle_Orden(
+        db.add(o_motor_manual)
+        ordenes_creadas.append(o_motor_manual.id_orden)
+        db.add(Detalle_Orden(
             id_detalle=uuid.uuid4(),
-            id_orden=o_motor_real.id_orden,
+            id_orden=o_motor_manual.id_orden,
             descripcion_manual="Motor Toyota Yaris 1NZ 1.5 Bencinero Completo",
             cantidad=1,
             precio_unitario=850000,
             precio_final=850000,
-        )
-        db.add(d_motor_real)
+        ))
 
-        # 5. Orden Verdadera Miscelánea: Caja de cambios
-        o_caja_real = Orden_Venta(
+        # 5. Orden Manual de Mesón (sin Activo_Inventariado): NO debe etiquetarse como activo inventariado
+        o_caja_manual = Orden_Venta(
             id_orden=uuid.uuid4(),
             id_sucursal=201,
             id_cliente=db_session_auditoria["cliente_perez"].id_cliente,
@@ -705,17 +708,52 @@ def test_ordenes_filtro_motores_cajas_exclusion_falsos_positivos(client, db_sess
             fecha_creacion=datetime.now(timezone.utc).replace(tzinfo=None),
             qr_transaccional_salida="ORD-OK-CAJA-MISC",
         )
-        db.add(o_caja_real)
-        ordenes_creadas.append(o_caja_real.id_orden)
-        d_caja_real = Detalle_Orden(
+        db.add(o_caja_manual)
+        ordenes_creadas.append(o_caja_manual.id_orden)
+        db.add(Detalle_Orden(
             id_detalle=uuid.uuid4(),
-            id_orden=o_caja_real.id_orden,
+            id_orden=o_caja_manual.id_orden,
             descripcion_manual="Caja de cambios mecánica 5 velocidades Hyundai Accent",
             cantidad=1,
             precio_unitario=420000,
             precio_final=420000,
+        ))
+
+        # 6. Orden con Activo Inventariado Real (CAJ-TEST-999): SÍ debe retornar en MOTORES_CAJAS
+        activo_caja = Activo_Inventariado(
+            id_activo=uuid.uuid4(),
+            id_sucursal_actual=201,
+            id_categoria=2,
+            sku_qr_fisico="CAJ-TEST-999",
+            precio_referencia=420000,
+            id_estado=3,
         )
-        db.add(d_caja_real)
+        db.add(activo_caja)
+        db.flush()
+        activos_creados.append(activo_caja.id_activo)
+
+        o_caja_inv = Orden_Venta(
+            id_orden=uuid.uuid4(),
+            id_sucursal=201,
+            id_cliente=db_session_auditoria["cliente_perez"].id_cliente,
+            id_vendedor=db_session_auditoria["vendedor"].id_usuario,
+            id_cajera=db_session_auditoria["caja"].id_usuario,
+            estado_orden="Pagada",
+            total_venta=420000,
+            monto_pendiente=0,
+            fecha_creacion=datetime.now(timezone.utc).replace(tzinfo=None),
+            qr_transaccional_salida="ORD-OK-CAJA-INV",
+        )
+        db.add(o_caja_inv)
+        ordenes_creadas.append(o_caja_inv.id_orden)
+        db.add(Detalle_Orden(
+            id_detalle=uuid.uuid4(),
+            id_orden=o_caja_inv.id_orden,
+            id_activo=activo_caja.id_activo,
+            cantidad=1,
+            precio_unitario=420000,
+            precio_final=420000,
+        ))
 
         db.commit()
 
@@ -728,17 +766,181 @@ def test_ordenes_filtro_motores_cajas_exclusion_falsos_positivos(client, db_sess
         data = res.json()
         folios = [it["folio"] for it in data["items"]]
 
-        # Validaciones de aceptación:
-        # A. Falsos positivos NO deben estar en folios
+        # A. Todos los ítems manuales sin Activo_Inventariado quedan excluidos
         assert "ORD-FP-PARTIDA" not in folios
         assert "ORD-FP-FUSIBLES" not in folios
         assert "ORD-FP-CREMALLERA" not in folios
+        assert "ORD-OK-MOTOR-MISC" not in folios
+        assert "ORD-OK-CAJA-MISC" not in folios
 
-        # B. Misceláneos legítimos de motor y caja SÍ deben estar
-        assert "ORD-OK-MOTOR-MISC" in folios
-        assert "ORD-OK-CAJA-MISC" in folios
+        # B. El activo inventariado real SÍ aparece
+        assert "ORD-OK-CAJA-INV" in folios
     finally:
         for ord_id in ordenes_creadas:
+            db.query(Detalle_Orden).filter_by(id_orden=ord_id).delete()
+            db.query(Orden_Venta).filter_by(id_orden=ord_id).delete()
+        for act_id in activos_creados:
+            db.query(Activo_Inventariado).filter_by(id_activo=act_id).delete()
+        db.commit()
+        db.close()
+
+
+def test_filtro_operativo_dashboard_gerencia(client, db_session_auditoria):
+    """
+    SPEC HU-TAREA-28:
+    Valida que el parámetro filtro_operativo del historial de órdenes refleje
+    exactamente la lógica de cada acceso rápido del Dashboard de Gerencia:
+    - SALDOS_POR_COBRAR: órdenes != Anulada con monto_pendiente > 0.
+    - EN_PREPARACION: órdenes Reservada o Pagada con ítems != 'Listo' y != 'Reingresado'.
+    - LISTO_MOSTRADOR: órdenes Reservada o Pagada con ítems == 'Listo' y sin Despacho 'Enviado'.
+    - DESPACHO_COURIER: órdenes con Despacho 'Enviado' (incluso Completada) o estado 'Despachada'.
+    """
+    token_gerente = create_access_token(
+        {"sub": str(db_session_auditoria["gerente"].id_usuario)}
+    )
+
+    db = TestingSessionLocal()
+    ordenes_creadas = []
+    ahora = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    def _crear_orden(folio: str, estado: str, pendiente: int) -> Orden_Venta:
+        orden = Orden_Venta(
+            id_orden=uuid.uuid4(),
+            id_sucursal=201,
+            id_cliente=db_session_auditoria["cliente_perez"].id_cliente,
+            id_vendedor=db_session_auditoria["vendedor"].id_usuario,
+            id_cajera=db_session_auditoria["caja"].id_usuario,
+            estado_orden=estado,
+            total_venta=300000,
+            monto_pendiente=pendiente,
+            fecha_creacion=ahora,
+            qr_transaccional_salida=folio,
+        )
+        db.add(orden)
+        ordenes_creadas.append(orden.id_orden)
+        return orden
+
+    try:
+        # 1. Pagada pero con pieza aún en rack ('Pendiente') -> EN_PREPARACION
+        o_pagada_prep = _crear_orden("ORD-OP-PAG-PREP", "Pagada", 0)
+        db.add(Detalle_Orden(
+            id_detalle=uuid.uuid4(),
+            id_orden=o_pagada_prep.id_orden,
+            descripcion_manual="Alternador en rack",
+            cantidad=1,
+            precio_unitario=300000,
+            precio_final=300000,
+            estado_preparacion="Pendiente",
+        ))
+
+        # 2. Reservada con saldo y pieza 'Listo' en mostrador -> SALDOS_POR_COBRAR y LISTO_MOSTRADOR
+        o_res_listo = _crear_orden("ORD-OP-RES-LISTO", "Reservada", 150000)
+        db.add(Detalle_Orden(
+            id_detalle=uuid.uuid4(),
+            id_orden=o_res_listo.id_orden,
+            descripcion_manual="Culata lista mostrador",
+            cantidad=1,
+            precio_unitario=300000,
+            precio_final=300000,
+            estado_preparacion="Listo",
+        ))
+
+        # 3. Anulada con monto_pendiente residual -> NO debe aparecer en SALDOS_POR_COBRAR
+        o_anul_saldo = _crear_orden("ORD-OP-ANUL-SALDO", "Anulada", 100000)
+        db.add(Detalle_Orden(
+            id_detalle=uuid.uuid4(),
+            id_orden=o_anul_saldo.id_orden,
+            descripcion_manual="Orden anulada",
+            cantidad=1,
+            precio_unitario=300000,
+            precio_final=300000,
+            estado_preparacion="Pendiente",
+        ))
+
+        # 4. Completada por doble escaneo con Despacho 'Enviado' -> DESPACHO_COURIER (no LISTO_MOSTRADOR)
+        o_comp_courier = _crear_orden("ORD-OP-COMP-ENV", "Completada", 0)
+        db.add(Detalle_Orden(
+            id_detalle=uuid.uuid4(),
+            id_orden=o_comp_courier.id_orden,
+            descripcion_manual="Bomba enviada courier",
+            cantidad=1,
+            precio_unitario=300000,
+            precio_final=300000,
+            estado_preparacion="Listo",
+        ))
+        db.add(Despacho(
+            id_despacho=uuid.uuid4(),
+            id_orden=o_comp_courier.id_orden,
+            id_comuna_destino=301,
+            direccion_envio="Av. Libertad 100",
+            receptor_nombres="Luis Courier",
+            receptor_rut="14.111.222-3",
+            receptor_telefono="+56922223333",
+            empresa_transporte="Starken",
+            estado_despacho="Enviado",
+        ))
+
+        # 5. Pagada lista con Despacho aún 'Por Enviar' -> LISTO_MOSTRADOR (no DESPACHO_COURIER)
+        o_pag_por_enviar = _crear_orden("ORD-OP-PAG-POR-ENV", "Pagada", 0)
+        db.add(Detalle_Orden(
+            id_detalle=uuid.uuid4(),
+            id_orden=o_pag_por_enviar.id_orden,
+            descripcion_manual="Kit embalar mostrador",
+            cantidad=1,
+            precio_unitario=300000,
+            precio_final=300000,
+            estado_preparacion="Listo",
+        ))
+        db.add(Despacho(
+            id_despacho=uuid.uuid4(),
+            id_orden=o_pag_por_enviar.id_orden,
+            id_comuna_destino=301,
+            direccion_envio="Av. España 200",
+            receptor_nombres="Ana Retiro",
+            receptor_rut="16.333.444-5",
+            receptor_telefono="+56944445555",
+            empresa_transporte="Chilexpress",
+            estado_despacho="Por Enviar",
+        ))
+
+        # 6. Orden explícita en estado Despachada -> DESPACHO_COURIER
+        _crear_orden("ORD-OP-DESP", "Despachada", 0)
+
+        db.commit()
+
+        headers = {"Authorization": f"Bearer {token_gerente}"}
+
+        res_saldos = client.get("/api/v1/ordenes?filtro_operativo=SALDOS_POR_COBRAR&limite=50", headers=headers)
+        assert res_saldos.status_code == 200
+        folios_saldos = {it["folio"] for it in res_saldos.json()["items"]}
+        assert "ORD-OP-RES-LISTO" in folios_saldos
+        assert "ORD-OP-ANUL-SALDO" not in folios_saldos
+        assert "ORD-OP-PAG-PREP" not in folios_saldos
+
+        res_prep = client.get("/api/v1/ordenes?filtro_operativo=EN_PREPARACION&limite=50", headers=headers)
+        assert res_prep.status_code == 200
+        folios_prep = {it["folio"] for it in res_prep.json()["items"]}
+        assert "ORD-OP-PAG-PREP" in folios_prep
+        assert "ORD-OP-RES-LISTO" not in folios_prep
+        assert "ORD-OP-ANUL-SALDO" not in folios_prep
+
+        res_most = client.get("/api/v1/ordenes?filtro_operativo=LISTO_MOSTRADOR&limite=50", headers=headers)
+        assert res_most.status_code == 200
+        folios_most = {it["folio"] for it in res_most.json()["items"]}
+        assert "ORD-OP-RES-LISTO" in folios_most
+        assert "ORD-OP-PAG-POR-ENV" in folios_most
+        assert "ORD-OP-PAG-PREP" not in folios_most
+        assert "ORD-OP-COMP-ENV" not in folios_most
+
+        res_cour = client.get("/api/v1/ordenes?filtro_operativo=DESPACHO_COURIER&limite=50", headers=headers)
+        assert res_cour.status_code == 200
+        folios_cour = {it["folio"] for it in res_cour.json()["items"]}
+        assert "ORD-OP-COMP-ENV" in folios_cour
+        assert "ORD-OP-DESP" in folios_cour
+        assert "ORD-OP-PAG-POR-ENV" not in folios_cour
+    finally:
+        for ord_id in ordenes_creadas:
+            db.query(Despacho).filter_by(id_orden=ord_id).delete()
             db.query(Detalle_Orden).filter_by(id_orden=ord_id).delete()
             db.query(Orden_Venta).filter_by(id_orden=ord_id).delete()
         db.commit()

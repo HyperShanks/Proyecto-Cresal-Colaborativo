@@ -214,6 +214,9 @@ void main() {
           find.byKey(const Key('section_cobertura_stock_prescriptiva')),
           findsOneWidget,
         );
+        expect(find.text('Stock Disponible para Venta'), findsWidgets);
+        expect(find.text('Ventas en Verde Pendientes'), findsWidgets);
+        expect(find.textContaining('T+1'), findsNothing);
         expect(find.text('Déficit Crítico'), findsOneWidget);
         expect(find.text('Cobertura Óptima'), findsOneWidget);
         expect(find.text('-5 unid'), findsOneWidget);

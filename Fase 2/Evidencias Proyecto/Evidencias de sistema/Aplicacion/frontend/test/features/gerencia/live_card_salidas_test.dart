@@ -140,6 +140,41 @@ void main() {
       // Ahora el banner debe renderizarse
       expect(find.byKey(const Key('banner_filtro_motores_cajas')), findsOneWidget);
     });
+
+    testWidgets(
+      'aplicarFiltroOperativo limpia filtro de tipoActivo previo y muestra banner_filtro_operativo',
+      (tester) async {
+        tester.view.physicalSize = const Size(1366, 768);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+
+        final ordenesKey = GlobalKey<OrdenesGerenciaViewState>();
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: OrdenesGerenciaView(key: ordenesKey),
+            ),
+          ),
+        );
+
+        await ordenesKey.currentState?.aplicarFiltroTipoActivo('MOTORES_CAJAS');
+        await tester.pump();
+        expect(find.byKey(const Key('banner_filtro_motores_cajas')), findsOneWidget);
+
+        await ordenesKey.currentState?.aplicarFiltroOperativo('SALDOS_POR_COBRAR');
+        await tester.pump();
+
+        expect(find.byKey(const Key('banner_filtro_motores_cajas')), findsNothing);
+        expect(find.byKey(const Key('banner_filtro_operativo')), findsOneWidget);
+        expect(find.text('Filtro Activo: Saldos por Cobrar'), findsOneWidget);
+
+        await tester.tap(find.byKey(const Key('btn_limpiar_filtro_operativo_banner')));
+        await tester.pump();
+        expect(find.byKey(const Key('banner_filtro_operativo')), findsNothing);
+      },
+    );
   });
 
   group('3. DashboardGerenciaView - Integración de Live Card y Navegación al Clic', () {
@@ -185,12 +220,68 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      // La aplicación navega automáticamente a la pestaña de órdenes y activa el banner
+      // La aplicación navega automáticamente a la pestaña de órdenes y activa el banner con estado Completada
       expect(find.byKey(const Key('banner_filtro_motores_cajas')), findsOneWidget);
       expect(
         find.textContaining('Filtro Activo: Salidas de Motores y Cajas Inventariadas'),
         findsOneWidget,
       );
+      expect(
+        find.textContaining('estado Completada'),
+        findsOneWidget,
+      );
     });
+
+    testWidgets(
+      'Accesos rápidos de Alertas y Flujo de Despacho navegan con sus filtros operativos correspondientes',
+      (tester) async {
+        tester.view.physicalSize = const Size(1366, 900);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+
+        const mockKpis = KpiFinancieroModel(
+          ventasDelDia: 2500000,
+          transaccionesHoy: 8,
+          acumuladoMensualMtd: 35000000,
+          ticketPromedio: 312500.0,
+          salidasMotoresHoy: 3,
+          salidasCajasHoy: 2,
+          totalSalidasHoy: 5,
+        );
+
+        await tester.pumpWidget(
+          const MaterialApp(
+            home: Scaffold(
+              body: DashboardGerenciaView(kpisIniciales: mockKpis),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        final casos = <(Finder, String)>[
+          (find.byKey(const Key('btn_alerta_saldos_por_cobrar')), 'Filtro Activo: Saldos por Cobrar'),
+          (find.text('En Preparación (Rack)'), 'Filtro Activo: En Preparación (Rack)'),
+          (find.text('Listo Mostrador'), 'Filtro Activo: Listo en Mostrador'),
+          (find.text('Despacho Courier'), 'Filtro Activo: Despacho Courier'),
+        ];
+
+        for (final (targetFinder, expectedBannerTitle) in casos) {
+          await tester.ensureVisible(targetFinder);
+          await tester.tap(targetFinder);
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 100));
+
+          expect(find.byKey(const Key('banner_filtro_operativo')), findsOneWidget);
+          expect(find.text(expectedBannerTitle), findsOneWidget);
+          expect(find.byKey(const Key('banner_filtro_motores_cajas')), findsNothing);
+
+          // Volver al Dashboard para probar el siguiente botón
+          await tester.tap(find.text('Dashboard Ejecutivo'));
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 50));
+        }
+      },
+    );
   });
 }

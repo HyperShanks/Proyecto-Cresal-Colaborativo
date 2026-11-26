@@ -75,50 +75,44 @@ class _MetodosPagoChartState extends State<MetodosPagoChart> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Cabecera del Bento con Título y Toggle [$ Monto / # Cant]
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text(
-                      'RECAUDACIÓN',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0.8,
-                        color: Color(0xFF64748B),
-                      ),
+          // Cabecera del Bento con Título y Toggle [$ Monto / # Cant] responsivo
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final tituloCol = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  Text(
+                    'RECAUDACIÓN',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.8,
+                      color: Color(0xFF64748B),
                     ),
-                    SizedBox(height: 2),
-                    Text(
-                      'Medios de Pago',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF0F172A),
-                      ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Medios de Pago',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF0F172A),
                     ),
-                    SizedBox(height: 4),
-                    Text(
-                      'Distribución de ingresos por canal transaccional liquidado',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF94A3B8),
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Distribución de ingresos por canal transaccional liquidado',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF94A3B8),
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              );
 
-              // Segmented Control [$ Monto / # Cant]
-              Container(
+              final toggleControl = Container(
                 padding: const EdgeInsets.all(3),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF1F5F9), // Slate 100
@@ -154,72 +148,96 @@ class _MetodosPagoChartState extends State<MetodosPagoChart> {
                     ),
                   ],
                 ),
-              ),
-            ],
+              );
+
+              if (constraints.maxWidth < 340) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    tituloCol,
+                    const SizedBox(height: 10),
+                    toggleControl,
+                  ],
+                );
+              }
+
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: tituloCol),
+                  const SizedBox(width: 8),
+                  toggleControl,
+                ],
+              );
+            },
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
 
           // Gráfico Donut y Leyenda
           Expanded(
             child: (esMonto ? totalMonto == 0 : totalCant == 0) || desglose.isEmpty
                 ? _buildEmptyState()
-                : Row(
-                    children: [
-                      // Donut PieChart
-                      Expanded(
-                        flex: 5,
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            PieChart(
-                              PieChartData(
-                                pieTouchData: PieTouchData(
-                                  touchCallback: (FlTouchEvent event,
-                                      pieTouchResponse) {
-                                    final newIndex =
-                                        (!event.isInterestedForInteractions ||
-                                                pieTouchResponse == null ||
-                                                pieTouchResponse
-                                                        .touchedSection ==
-                                                    null)
-                                            ? -1
-                                            : pieTouchResponse
-                                                .touchedSection!
-                                                .touchedSectionIndex;
-                                    // Optimización de rendimiento a 60+ FPS: Solo reconstruye si el índice cambia
-                                    if (newIndex != _touchedIndex) {
-                                      setState(() {
-                                        _touchedIndex = newIndex;
-                                      });
-                                    }
-                                  },
-                                ),
-                                borderData: FlBorderData(show: false),
-                                sectionsSpace: 2.5,
-                                centerSpaceRadius: 36,
-                                sections: List.generate(desglose.length, (i) {
-                                  final isTouched = i == _touchedIndex;
-                                  final item = desglose[i];
-                                  final color = _obtenerColor(i, item.metodoPago);
-                                  final val = esMonto
-                                      ? item.montoTotal.toDouble()
-                                      : item.cantidad.toDouble();
+                : LayoutBuilder(
+                    builder: (context, chartConstraints) {
+                      final stacked = chartConstraints.maxWidth < 320;
 
-                                  return PieChartSectionData(
-                                    color: color,
-                                    value: val,
-                                    showTitle: false,
-                                    title: '',
-                                    radius: isTouched ? 36.0 : 30.0,
-                                  );
-                                }),
+                      final donutWidget = Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          PieChart(
+                            PieChartData(
+                              pieTouchData: PieTouchData(
+                                touchCallback: (FlTouchEvent event,
+                                    pieTouchResponse) {
+                                  final newIndex =
+                                      (!event.isInterestedForInteractions ||
+                                              pieTouchResponse == null ||
+                                              pieTouchResponse
+                                                      .touchedSection ==
+                                                  null)
+                                          ? -1
+                                          : pieTouchResponse
+                                              .touchedSection!
+                                              .touchedSectionIndex;
+                                  // Optimización de rendimiento a 60+ FPS: Solo reconstruye si el índice cambia
+                                  if (newIndex != _touchedIndex) {
+                                    setState(() {
+                                      _touchedIndex = newIndex;
+                                    });
+                                  }
+                                },
                               ),
-                              duration: const Duration(milliseconds: 100),
-                              curve: Curves.easeOutQuad,
-                            ),
+                              borderData: FlBorderData(show: false),
+                              sectionsSpace: 2.5,
+                              centerSpaceRadius: stacked ? 28 : 34,
+                              sections: List.generate(desglose.length, (i) {
+                                final isTouched = i == _touchedIndex;
+                                final item = desglose[i];
+                                final color = _obtenerColor(i, item.metodoPago);
+                                final val = esMonto
+                                    ? item.montoTotal.toDouble()
+                                    : item.cantidad.toDouble();
 
-                            // Centro Reactivo
-                            Column(
+                                return PieChartSectionData(
+                                  color: color,
+                                  value: val,
+                                  showTitle: false,
+                                  title: '',
+                                  radius: isTouched
+                                      ? (stacked ? 30.0 : 35.0)
+                                      : (stacked ? 24.0 : 29.0),
+                                );
+                              }),
+                            ),
+                            duration: const Duration(milliseconds: 100),
+                            curve: Curves.easeOutQuad,
+                          ),
+
+                          // Centro Reactivo
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
@@ -236,120 +254,139 @@ class _MetodosPagoChartState extends State<MetodosPagoChart> {
                                     letterSpacing: 0.5,
                                     color: Color(0xFF94A3B8),
                                   ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                                 const SizedBox(height: 2),
-                                Text(
-                                  _touchedIndex >= 0 &&
-                                          _touchedIndex < desglose.length
-                                      ? (esMonto
-                                          ? CurrencyFormatter.formatCLP(
-                                              desglose[_touchedIndex].montoTotal)
-                                          : '${desglose[_touchedIndex].cantidad} uds')
-                                      : (esMonto
-                                          ? CurrencyFormatter.formatCLP(totalMonto)
-                                          : '$totalCant uds'),
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w900,
-                                    color: Color(0xFF0F172A),
+                                FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    _touchedIndex >= 0 &&
+                                            _touchedIndex < desglose.length
+                                        ? (esMonto
+                                            ? CurrencyFormatter.formatCLP(
+                                                desglose[_touchedIndex].montoTotal)
+                                            : '${desglose[_touchedIndex].cantidad} uds')
+                                        : (esMonto
+                                            ? CurrencyFormatter.formatCLP(totalMonto)
+                                            : '$totalCant uds'),
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w900,
+                                      color: Color(0xFF0F172A),
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
+                          ),
+                        ],
+                      );
 
-                      // Leyenda Tonal
-                      Expanded(
-                        flex: 6,
-                        child: ListView.separated(
-                          shrinkWrap: true,
-                          physics: const ClampingScrollPhysics(),
-                          itemCount: desglose.length,
-                          separatorBuilder: (context, index) =>
-                              const SizedBox(height: 6),
-                          itemBuilder: (context, i) {
-                            final item = desglose[i];
-                            final color = _obtenerColor(i, item.metodoPago);
-                            final isHovered = i == _touchedIndex;
-                            final pct = esMonto
-                                ? item.porcentaje
-                                : item.porcentajeCantidad;
+                      final leyendaWidget = ListView.separated(
+                        shrinkWrap: true,
+                        physics: const ClampingScrollPhysics(),
+                        itemCount: desglose.length,
+                        separatorBuilder: (context, index) =>
+                            const SizedBox(height: 6),
+                        itemBuilder: (context, i) {
+                          final item = desglose[i];
+                          final color = _obtenerColor(i, item.metodoPago);
+                          final isHovered = i == _touchedIndex;
+                          final pct = esMonto
+                              ? item.porcentaje
+                              : item.porcentajeCantidad;
 
-                            return MouseRegion(
-                              onEnter: (_) {
-                                if (_touchedIndex != i) {
-                                  setState(() => _touchedIndex = i);
-                                }
-                              },
-                              onExit: (_) {
-                                if (_touchedIndex == i) {
-                                  setState(() => _touchedIndex = -1);
-                                }
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: isHovered
-                                      ? color.withValues(alpha: 0.1)
-                                      : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Expanded(
-                                      child: Row(
-                                        children: [
-                                          Container(
-                                            width: 10,
-                                            height: 10,
-                                            decoration: BoxDecoration(
-                                              color: color,
-                                              shape: BoxShape.circle,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 6),
-                                          Expanded(
-                                            child: Text(
-                                              item.metodoPago,
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: isHovered
-                                                    ? FontWeight.w700
-                                                    : FontWeight.w500,
-                                                color: const Color(0xFF334155),
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    Text(
-                                      esMonto
-                                          ? '${pct.toStringAsFixed(0)}%'
-                                          : '${item.cantidad} uds',
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w900,
-                                        color: Color(0xFF0F172A),
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                          return MouseRegion(
+                            onEnter: (_) {
+                              if (_touchedIndex != i) {
+                                setState(() => _touchedIndex = i);
+                              }
+                            },
+                            onExit: (_) {
+                              if (_touchedIndex == i) {
+                                setState(() => _touchedIndex = -1);
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 4,
                               ),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
+                              decoration: BoxDecoration(
+                                color: isHovered
+                                    ? color.withValues(alpha: 0.1)
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          width: 10,
+                                          height: 10,
+                                          decoration: BoxDecoration(
+                                            color: color,
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Expanded(
+                                          child: Text(
+                                            item.metodoPago,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: isHovered
+                                                  ? FontWeight.w700
+                                                  : FontWeight.w500,
+                                              color: const Color(0xFF334155),
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    esMonto
+                                        ? '${pct.toStringAsFixed(0)}%'
+                                        : '${item.cantidad} uds',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w900,
+                                      color: Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      );
+
+                      if (stacked) {
+                        return Column(
+                          children: [
+                            Expanded(flex: 5, child: donutWidget),
+                            const SizedBox(height: 8),
+                            Expanded(flex: 5, child: leyendaWidget),
+                          ],
+                        );
+                      }
+
+                      return Row(
+                        children: [
+                          Expanded(flex: 5, child: donutWidget),
+                          const SizedBox(width: 12),
+                          Expanded(flex: 6, child: leyendaWidget),
+                        ],
+                      );
+                    },
                   ),
           ),
         ],

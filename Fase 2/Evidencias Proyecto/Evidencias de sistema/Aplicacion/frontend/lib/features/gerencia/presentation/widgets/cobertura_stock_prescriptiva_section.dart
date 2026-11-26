@@ -111,8 +111,8 @@ class _CoberturaStockPrescriptivaSectionState
             const SizedBox(height: 6),
             Text(
               esSemanal
-                  ? 'Balance neto semanal (T+1) entre stock en vitrina, reservas activas y piezas en Paletizado/En Desarme por sucursal para compra en remates'
-                  : 'Balance neto acumulado (4 semanas) entre stock en vitrina, reservas activas y piezas en Paletizado/En Desarme para planificación de flota',
+                  ? 'Balance semanal entre stock disponible para venta, ventas en verde activas y piezas en preparación por sucursal'
+                  : 'Balance acumulado (4 semanas) entre stock disponible para venta, ventas en verde activas y piezas en preparación por sucursal',
               style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
@@ -159,25 +159,29 @@ class _CoberturaStockPrescriptivaSectionState
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _buildHorizonteButton(
-            key: const Key('btn_cobertura_horizonte_semanal'),
-            label: 'Vista Semanal',
-            selected: esSemanal,
-            onTap: () {
-              if (!esSemanal) {
-                setState(() => _horizonte = HorizontePrediccion.semanal);
-              }
-            },
+          Flexible(
+            child: _buildHorizonteButton(
+              key: const Key('btn_cobertura_horizonte_semanal'),
+              label: 'Vista Semanal',
+              selected: esSemanal,
+              onTap: () {
+                if (!esSemanal) {
+                  setState(() => _horizonte = HorizontePrediccion.semanal);
+                }
+              },
+            ),
           ),
-          _buildHorizonteButton(
-            key: const Key('btn_cobertura_horizonte_mensual'),
-            label: 'Vista Mensual',
-            selected: !esSemanal,
-            onTap: () {
-              if (esSemanal) {
-                setState(() => _horizonte = HorizontePrediccion.mensual);
-              }
-            },
+          Flexible(
+            child: _buildHorizonteButton(
+              key: const Key('btn_cobertura_horizonte_mensual'),
+              label: 'Vista Mensual',
+              selected: !esSemanal,
+              onTap: () {
+                if (esSemanal) {
+                  setState(() => _horizonte = HorizontePrediccion.mensual);
+                }
+              },
+            ),
           ),
         ],
       ),
@@ -196,7 +200,7 @@ class _CoberturaStockPrescriptivaSectionState
       borderRadius: BorderRadius.circular(7),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
           color: selected ? Colors.white : Colors.transparent,
           borderRadius: BorderRadius.circular(7),
@@ -212,6 +216,8 @@ class _CoberturaStockPrescriptivaSectionState
         ),
         child: Text(
           label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontSize: 12,
             fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
@@ -340,14 +346,17 @@ class _CoberturaStockPrescriptivaSectionState
                       child: Icon(iconData, size: 17, color: accentColor),
                     ),
                     const SizedBox(width: 9),
-                    Text(
-                      item.categoria.isNotEmpty
-                          ? item.categoria
-                          : (esMotor ? 'Motor' : 'Caja de Cambios'),
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF0F172A),
+                    Flexible(
+                      child: Text(
+                        item.categoria.isNotEmpty
+                            ? item.categoria
+                            : (esMotor ? 'Motor' : 'Caja de Cambios'),
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF0F172A),
+                        ),
                       ),
                     ),
                   ],
@@ -374,7 +383,7 @@ class _CoberturaStockPrescriptivaSectionState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildMetricRow(
-                  label: "Stock Disponible ('Disponible')",
+                  label: 'Stock Disponible para Venta',
                   value: '${item.stockDisponibleTasado} unid',
                   subtext:
                       'Viña del Mar: ${item.stockDisponibleVina} · Limache: ${item.stockDisponibleLimache}',
@@ -382,7 +391,7 @@ class _CoberturaStockPrescriptivaSectionState
                 ),
                 const Divider(height: 16, color: Color(0xFFF1F5F9)),
                 _buildMetricRow(
-                  label: "Stock en Proceso ('Paletizado' + 'En Desarme')",
+                  label: 'Stock en Preparación (Bodega y Desarme)',
                   value: '${item.stockEnProcesoInterno} unid',
                   subtext:
                       'Paletizado: ${item.stockPaletizadoSinTasar} · En Desarme: ${item.stockEnDesarme} | '
@@ -391,17 +400,17 @@ class _CoberturaStockPrescriptivaSectionState
                 ),
                 const Divider(height: 16, color: Color(0xFFF1F5F9)),
                 _buildMetricRow(
-                  label: 'Backorders Pendientes',
+                  label: 'Ventas en Verde Pendientes',
                   value: '${item.backordersPendientes} unid',
                   valueColor: const Color(0xFF475569),
                 ),
                 const SizedBox(height: 8),
                 _buildMetricRow(
                   label: esSemanal
-                      ? 'Demanda Proyectada IA (T+1)'
-                      : 'Demanda Proyectada IA (4 sem.)',
+                      ? 'Demanda Estimada (Próx. Semana)'
+                      : 'Demanda Estimada (4 Semanas)',
                   value: '$demandaEntera unid',
-                  subtext: 'Requerimiento total c/ backorders: $requerimientoTotal unid',
+                  subtext: 'Requerimiento total con ventas en verde: $requerimientoTotal unid',
                   valueColor: accentColor,
                 ),
                 const Divider(height: 18, color: Color(0xFFE2E8F0)),
@@ -495,12 +504,14 @@ class _CoberturaStockPrescriptivaSectionState
                             color: estilo.textColor,
                           ),
                           const SizedBox(width: 6),
-                          Text(
-                            'Recomendación Prescriptiva',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w900,
-                              color: estilo.textColor,
+                          Flexible(
+                            child: Text(
+                              'Recomendación Prescriptiva',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w900,
+                                color: estilo.textColor,
+                              ),
                             ),
                           ),
                         ],

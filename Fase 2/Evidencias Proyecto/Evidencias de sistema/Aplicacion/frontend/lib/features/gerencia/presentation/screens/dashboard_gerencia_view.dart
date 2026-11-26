@@ -74,10 +74,18 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
       ? VistaGerencia.inventario
       : VistaGerencia.dashboard;
   bool _sidebarOpen = true;
+  bool _mobileSidebarOpen = false;
+  bool _userToggledSidebar = false;
   bool _filtroSinTasar = false;
   bool _bellHovered = false;
   String? _filtroEstadoOrdenes;
   bool _dashboardDirty = false;
+
+  bool _isSidebarExpandedForWidth(double screenWidth) {
+    if (screenWidth < 640) return true;
+    if (screenWidth < 780 && !_userToggledSidebar) return false;
+    return _sidebarOpen;
+  }
 
   late AnimationController _spinController;
   SilentPollingManager? _gerenciaPollingManager;
@@ -473,32 +481,48 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
     }
   }
 
-  void _navegarAOrdenesConEstado(String estado) {
+  void _navegarAOrdenesConFiltroOperativo(String filtroOperativo) {
+    final ordenesYaMontado = _ordenesKey.currentState != null;
     setState(() {
-      _filtroEstadoOrdenes = estado;
+      _filtroEstadoOrdenes = null;
       _vistaActiva = VistaGerencia.ordenes;
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _ordenesKey.currentState?.aplicarFiltroEstado(estado);
-    });
+    if (ordenesYaMontado) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _ordenesKey.currentState?.aplicarFiltroOperativo(filtroOperativo);
+      });
+    }
   }
 
   void _navegarAInventarioSinTasar() {
+    final invYaMontado = _inventarioKey.currentState != null;
     setState(() {
-      _filtroSinTasar = true;
+      if (!invYaMontado) {
+        _filtroSinTasar = true;
+      }
       _vistaActiva = VistaGerencia.inventario;
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _inventarioKey.currentState?.aplicarFiltroSinTasar(true);
-    });
+    if (invYaMontado) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _inventarioKey.currentState?.aplicarFiltroSinTasar(true);
+      });
+    }
   }
 
-  void _navegarAOrdenesConTipoActivo(String tipoActivo, {String periodo = 'hoy'}) {
+  void _navegarAOrdenesConTipoActivo(
+    String tipoActivo, {
+    String periodo = 'hoy',
+    String estado = 'Completada',
+  }) {
     setState(() {
       _vistaActiva = VistaGerencia.ordenes;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _ordenesKey.currentState?.aplicarFiltroTipoActivo(tipoActivo, periodo: periodo);
+      _ordenesKey.currentState?.aplicarFiltroTipoActivo(
+        tipoActivo,
+        periodo: periodo,
+        estado: estado,
+      );
     });
   }
 
@@ -535,69 +559,102 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final isMobileShell = screenWidth < 640;
+    final contentPadding = EdgeInsets.all(screenWidth < 600 ? 12 : 24);
+    final sidebarExpanded = _isSidebarExpandedForWidth(screenWidth);
+
     return Scaffold(
       backgroundColor: AppPalette.backgroundLight,
-      body: Row(
+      body: Stack(
         children: [
-          // Sidebar Corporativo Deep Blue (#004c89 / AppPalette.tertiary)
-          _buildSidebar(),
+          Row(
+            children: [
+              // Sidebar Corporativo Deep Blue (#004c89 / AppPalette.tertiary)
+              if (!isMobileShell) _buildSidebar(expanded: sidebarExpanded),
 
-          // Área Principal (Topbar + Contenido Dinámico)
-          Expanded(
-            child: Column(
-              children: [
-                _buildTopbar(),
-                Expanded(
-                  child: IndexedStack(
-                    index: _vistaActiva.index,
-                    children: [
-                      // 0: VistaGerencia.dashboard
-                      _esAuditorSucursal
-                          ? const SizedBox.shrink()
-                          : _buildDashboardContent(),
-                      // 1: VistaGerencia.ordenes
-                      _esAuditorSucursal
-                          ? const SizedBox.shrink()
-                          : Padding(
-                              padding: const EdgeInsets.all(24),
-                              child: OrdenesGerenciaView(
-                                key: _ordenesKey,
-                                idSucursalInicial: _sucursalSeleccionada,
-                                estadoInicial: _filtroEstadoOrdenes,
-                              ),
-                            ),
-                      // 2: VistaGerencia.inventario
-                      InventarioGerenciaView(
-                        key: _inventarioKey,
-                        idSucursalInicial: _sucursalSeleccionada,
-                        filtroSinTasarInicial: _filtroSinTasar,
-                        onStockMutado: () {
-                          _dashboardDirty = true;
-                          if (_vistaActiva == VistaGerencia.dashboard &&
-                              !_esAuditorSucursal) {
-                            _cargarDashboard(silent: true);
-                          }
-                        },
+              // Área Principal (Topbar + Contenido Dinámico)
+              Expanded(
+                child: Column(
+                  children: [
+                    _buildTopbar(
+                      isMobileShell: isMobileShell,
+                      sidebarExpanded: sidebarExpanded,
+                    ),
+                    Expanded(
+                      child: IndexedStack(
+                        index: _vistaActiva.index,
+                        children: [
+                          // 0: VistaGerencia.dashboard
+                          _esAuditorSucursal
+                              ? const SizedBox.shrink()
+                              : _buildDashboardContent(
+                                  contentPadding: contentPadding,
+                                ),
+                          // 1: VistaGerencia.ordenes
+                          _esAuditorSucursal
+                              ? const SizedBox.shrink()
+                              : Padding(
+                                  padding: contentPadding,
+                                  child: OrdenesGerenciaView(
+                                    key: _ordenesKey,
+                                    idSucursalInicial: _sucursalSeleccionada,
+                                    estadoInicial: _filtroEstadoOrdenes,
+                                  ),
+                                ),
+                          // 2: VistaGerencia.inventario
+                          InventarioGerenciaView(
+                            key: _inventarioKey,
+                            idSucursalInicial: _sucursalSeleccionada,
+                            filtroSinTasarInicial: _filtroSinTasar,
+                            onStockMutado: () {
+                              _dashboardDirty = true;
+                              if (_vistaActiva == VistaGerencia.dashboard &&
+                                  !_esAuditorSucursal) {
+                                _cargarDashboard(silent: true);
+                              }
+                            },
+                          ),
+                          // 3: VistaGerencia.backorders
+                          _esAuditorSucursal
+                              ? const SizedBox.shrink()
+                              : BackordersGerenciaView(
+                                  key: _backordersKey,
+                                  idSucursalInicial: _sucursalSeleccionada,
+                                ),
+                        ],
                       ),
-                      // 3: VistaGerencia.backorders
-                      _esAuditorSucursal
-                          ? const SizedBox.shrink()
-                          : BackordersGerenciaView(
-                              key: _backordersKey,
-                              idSucursalInicial: _sucursalSeleccionada,
-                            ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
+          if (isMobileShell && _mobileSidebarOpen)
+            Positioned.fill(
+              child: Row(
+                children: [
+                  _buildSidebar(expanded: true),
+                  Expanded(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => setState(() => _mobileSidebarOpen = false),
+                      child: Container(
+                        color: Colors.black.withValues(alpha: 0.45),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildDashboardContent() {
+  Widget _buildDashboardContent({
+    EdgeInsetsGeometry contentPadding = const EdgeInsets.all(24),
+  }) {
     return _cargando && _kpis == null
         ? const Center(
             child: CircularProgressIndicator(color: AppPalette.primary),
@@ -609,7 +666,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
             color: AppPalette.primary,
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(24),
+              padding: contentPadding,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -656,10 +713,10 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
           );
   }
 
-  Widget _buildSidebar() {
+  Widget _buildSidebar({bool expanded = true}) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
-      width: _sidebarOpen ? 265 : 68,
+      width: expanded ? 265 : 68,
       decoration: const BoxDecoration(
         color: AppPalette.tertiary,
         border: Border(right: BorderSide(color: Colors.white12, width: 1)),
@@ -692,7 +749,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                       size: 20,
                     ),
                   ),
-                  if (_sidebarOpen) ...[
+                  if (expanded) ...[
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
@@ -740,7 +797,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                   vertical: 16,
                 ),
                 children: [
-                  if (_sidebarOpen)
+                  if (expanded)
                     Padding(
                       padding: const EdgeInsets.only(left: 8, bottom: 8),
                       child: Text(
@@ -762,6 +819,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                       icon: Icons.dashboard_rounded,
                       label: 'Dashboard Ejecutivo',
                       isSelected: _vistaActiva == VistaGerencia.dashboard,
+                      expanded: expanded,
                       onTap: () {
                         if (_vistaActiva != VistaGerencia.dashboard) {
                           debugPrint(
@@ -792,6 +850,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                       icon: Icons.receipt_long_rounded,
                       label: 'Historial de Órdenes',
                       isSelected: _vistaActiva == VistaGerencia.ordenes,
+                      expanded: expanded,
                       onTap: () {
                         if (_vistaActiva != VistaGerencia.ordenes) {
                           debugPrint(
@@ -819,6 +878,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                         ? 'Catálogo e Inventario'
                         : 'Inventario y Tasación',
                     isSelected: _vistaActiva == VistaGerencia.inventario,
+                    expanded: expanded,
                     badgeText:
                         !_esAuditorSucursal &&
                             (_flujo?.cuellosBotellaPaletizados ?? 0) > 0
@@ -829,11 +889,20 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                         debugPrint(
                           '🔀 [GERENCIA-NAV] 📂 Cambiando a pestaña: Inventario y Tasación',
                         );
+                        final estabaSinTasar =
+                            _filtroSinTasar ||
+                            (_inventarioKey.currentState?.soloSinTasar ?? false);
                         setState(() {
                           _vistaActiva = VistaGerencia.inventario;
                           _filtroSinTasar = false;
                         });
-                        _inventarioKey.currentState?.refrescarSilencioso();
+                        if (estabaSinTasar) {
+                          _inventarioKey.currentState?.aplicarFiltroSinTasar(
+                            false,
+                          );
+                        } else {
+                          _inventarioKey.currentState?.refrescarSilencioso();
+                        }
                       } else {
                         // Re-clic en la pestaña activa: refresca intencionalmente
                         _refrescarVistaActiva(mostrarToast: true);
@@ -849,6 +918,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                       icon: Icons.bookmark_added_rounded,
                       label: 'Ventas en Verde',
                       isSelected: _vistaActiva == VistaGerencia.backorders,
+                      expanded: expanded,
                       badgeText: null,
                       onTap: () {
                         if (_vistaActiva != VistaGerencia.backorders) {
@@ -876,6 +946,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                     icon: Icons.system_update_alt_rounded,
                     label: 'Actualizaciones',
                     isSelected: false,
+                    expanded: expanded,
                     badgeText: null,
                     onTap: () =>
                         AppUpdateChecker.check(context, showIfUpToDate: true),
@@ -891,7 +962,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                 border: Border(top: BorderSide(color: Colors.white12)),
                 color: Colors.black12,
               ),
-              child: _sidebarOpen
+              child: expanded
                   ? Row(
                       children: [
                         CircleAvatar(
@@ -994,11 +1065,17 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
     required IconData icon,
     required String label,
     required bool isSelected,
+    required bool expanded,
     required VoidCallback onTap,
     String? badgeText,
   }) {
     return InkWell(
-      onTap: onTap,
+      onTap: () {
+        if (_mobileSidebarOpen) {
+          setState(() => _mobileSidebarOpen = false);
+        }
+        onTap();
+      },
       borderRadius: BorderRadius.circular(8),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
@@ -1015,7 +1092,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
               size: 20,
               color: isSelected ? const Color(0xFF7DD3FC) : Colors.white70,
             ),
-            if (_sidebarOpen) ...[
+            if (expanded) ...[
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -1055,30 +1132,38 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
     );
   }
 
-  Widget _buildTopbar() {
+  Widget _buildTopbar({
+    required bool isMobileShell,
+    required bool sidebarExpanded,
+  }) {
     final cuellosBotella = _flujo?.cuellosBotellaPaletizados ?? 0;
     final saldoPendiente = _flujo?.alertasSaldoPendiente ?? 0;
+    final menuAbierto = isMobileShell ? _mobileSidebarOpen : sidebarExpanded;
 
-    return Container(
-      height: 64,
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: const Border(bottom: BorderSide(color: AppPalette.borderLight)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < 1000;
+        final isNarrow = constraints.maxWidth < 800;
+        final isUltraNarrow = constraints.maxWidth < 520;
+        final gapControl = isUltraNarrow ? 4.0 : 8.0;
+
+        return Container(
+          height: 64,
+          padding: EdgeInsets.symmetric(horizontal: isUltraNarrow ? 10 : 20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: const Border(
+              bottom: BorderSide(color: AppPalette.borderLight),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.02),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final isCompact = constraints.maxWidth < 1000;
-          final isNarrow = constraints.maxWidth < 800;
-
-          return Row(
+          child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               // Lado Izquierdo: Botón Colapsar Menú + Identidad Ejecutiva
@@ -1087,39 +1172,53 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                   children: [
                     IconButton(
                       icon: Icon(
-                        _sidebarOpen
+                        menuAbierto
                             ? Icons.menu_open_rounded
                             : Icons.menu_rounded,
                         color: const Color(0xFF0F172A),
                         size: 22,
                       ),
-                      tooltip: _sidebarOpen
+                      padding: isUltraNarrow ? const EdgeInsets.all(6) : null,
+                      constraints: isUltraNarrow
+                          ? const BoxConstraints(minWidth: 34, minHeight: 34)
+                          : null,
+                      tooltip: menuAbierto
                           ? 'Colapsar menú lateral'
                           : 'Expandir menú lateral',
-                      onPressed: () =>
-                          setState(() => _sidebarOpen = !_sidebarOpen),
+                      onPressed: () => setState(() {
+                        if (isMobileShell) {
+                          _mobileSidebarOpen = !_mobileSidebarOpen;
+                        } else if (MediaQuery.sizeOf(context).width < 780) {
+                          _userToggledSidebar = true;
+                          _sidebarOpen = !sidebarExpanded;
+                        } else {
+                          _sidebarOpen = !_sidebarOpen;
+                        }
+                      }),
                     ),
-                    const SizedBox(width: 8),
-                    Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: AppPalette.tertiary,
-                        borderRadius: BorderRadius.circular(10),
+                    SizedBox(width: isUltraNarrow ? 4 : 8),
+                    if (!isNarrow) ...[
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: AppPalette.tertiary,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          _vistaActiva == VistaGerencia.dashboard
+                              ? Icons.dashboard_customize
+                              : _vistaActiva == VistaGerencia.ordenes
+                              ? Icons.receipt_long
+                              : _vistaActiva == VistaGerencia.inventario
+                              ? Icons.inventory_2
+                              : Icons.bookmark_added_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
                       ),
-                      child: Icon(
-                        _vistaActiva == VistaGerencia.dashboard
-                            ? Icons.dashboard_customize
-                            : _vistaActiva == VistaGerencia.ordenes
-                            ? Icons.receipt_long
-                            : _vistaActiva == VistaGerencia.inventario
-                            ? Icons.inventory_2
-                            : Icons.bookmark_added_rounded,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
+                      const SizedBox(width: 12),
+                    ],
                     Expanded(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -1169,20 +1268,23 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: isUltraNarrow ? 6 : 12),
 
               // Lado Derecho: Selector de Sucursal, Guía Indicadores (Icono), Botón Refrescar y Campana
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   // Selector Dropdown de Sucursal (Fiel a Foto 4)
-                  _buildSelectorSucursales(isNarrow: isNarrow),
-                  const SizedBox(width: 8),
+                  _buildSelectorSucursales(
+                    isNarrow: isNarrow,
+                    isUltraNarrow: isUltraNarrow,
+                  ),
+                  SizedBox(width: gapControl),
 
                   // Icono en Topbar "Guía de Indicadores"
                   if (!_esAuditorSucursal) ...[
                     _buildBotonIconoGuiaIndicadores(),
-                    const SizedBox(width: 8),
+                    SizedBox(width: gapControl),
                   ],
 
                   // Botón Refrescar con Spin
@@ -1192,6 +1294,13 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                           ? null
                           : () => _refrescarVistaActiva(mostrarToast: true),
                       tooltip: _cargando ? 'Actualizando...' : 'Actualizar',
+                      visualDensity: isUltraNarrow
+                          ? VisualDensity.compact
+                          : VisualDensity.standard,
+                      padding: isUltraNarrow ? EdgeInsets.zero : null,
+                      constraints: isUltraNarrow
+                          ? const BoxConstraints(minWidth: 36, minHeight: 36)
+                          : null,
                       icon: RotationTransition(
                         turns: _spinController,
                         child: const Icon(
@@ -1240,7 +1349,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
 
                   // Campana de Notificaciones Ejecutivas con Badge y Hover Rectangular
                   if (!_esAuditorSucursal) ...[
-                    const SizedBox(width: 10),
+                    SizedBox(width: isUltraNarrow ? 4 : 10),
                     PopupMenuButton<String>(
                       tooltip: 'Alertas y Notificaciones Ejecutivas',
                       offset: const Offset(0, 48),
@@ -1409,7 +1518,9 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                         if (val == 'tasacion') {
                           _navegarAInventarioSinTasar();
                         } else if (val == 'ordenes') {
-                          _navegarAOrdenesConEstado('Reservada');
+                          _navegarAOrdenesConFiltroOperativo(
+                            'SALDOS_POR_COBRAR',
+                          );
                         }
                       },
                     ),
@@ -1417,9 +1528,9 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                 ],
               ),
             ],
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -1755,7 +1866,10 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
     );
   }
 
-  Widget _buildSelectorSucursales({bool isNarrow = false}) {
+  Widget _buildSelectorSucursales({
+    bool isNarrow = false,
+    bool isUltraNarrow = false,
+  }) {
     final Map<int, ({String titulo, String subtitulo, IconData icon})>
     sucursales = {
       -1: (
@@ -1788,7 +1902,10 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
         color: Colors.white,
         surfaceTintColor: Colors.white,
         elevation: 8,
-        constraints: const BoxConstraints(minWidth: 320, maxWidth: 390),
+        constraints: BoxConstraints(
+          minWidth: isUltraNarrow ? 250 : 320,
+          maxWidth: 360,
+        ),
         shadowColor: Colors.black.withValues(alpha: 0.12),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
@@ -1891,7 +2008,13 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
           }).toList();
         },
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          constraints: BoxConstraints(
+            maxWidth: isUltraNarrow ? 108 : (isNarrow ? 150 : 280),
+          ),
+          padding: EdgeInsets.symmetric(
+            horizontal: isUltraNarrow ? 8 : 12,
+            vertical: 8,
+          ),
           decoration: BoxDecoration(
             color: const Color(0xFFF1F5F9),
             borderRadius: BorderRadius.circular(12),
@@ -1905,7 +2028,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                 size: 16,
                 color: AppPalette.primary,
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: isUltraNarrow ? 4 : 6),
               if (!isNarrow) ...[
                 const Text(
                   'Sucursal: ',
@@ -1928,7 +2051,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 4),
               const Icon(
                 Icons.expand_more_rounded,
                 size: 16,
@@ -1970,7 +2093,8 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
             ),
           ),
           const SizedBox(height: 4),
-          Row(
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               const Text(
                 'Resumen operativo de hoy • ',
@@ -2044,7 +2168,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
             crossAxisCount: crossAxisCount,
             crossAxisSpacing: 16,
             mainAxisSpacing: 16,
-            mainAxisExtent: 110,
+            mainAxisExtent: 114,
           ),
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -2072,7 +2196,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
               subtitulo: 'Promedio por orden de mesón del día',
             ),
 
-            // KPI 4: Salidas en Tiempo Real: Motores y Cajas Inventariadas (Live Card con deep link)
+            // KPI 4: Salidas en Tiempo Real: Motores y Cajas Entregadas Hoy (Live Card con deep link)
             KpiCardWidget(
               key: const Key('kpi_card_salidas_motores_cajas'),
               titulo: 'Salidas en Tiempo Real',
@@ -2094,6 +2218,7 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  const SizedBox(width: 6),
                   const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -2115,7 +2240,11 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                   ),
                 ],
               ),
-              onTap: () => _navegarAOrdenesConTipoActivo('MOTORES_CAJAS', periodo: 'hoy'),
+              onTap: () => _navegarAOrdenesConTipoActivo(
+                'MOTORES_CAJAS',
+                periodo: 'hoy',
+                estado: 'Completada',
+              ),
             ),
           ],
         );
@@ -2148,17 +2277,17 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
         if (!isDesktop) {
           return Column(
             children: [
-              SizedBox(height: 400, child: MetodosPagoChart(resumen: pagos)),
+              SizedBox(height: 390, child: MetodosPagoChart(resumen: pagos)),
               const SizedBox(height: 16),
-              SizedBox(height: 400, child: _buildBentoAlertas(flujo)),
+              _buildBentoAlertas(flujo),
               const SizedBox(height: 16),
-              SizedBox(height: 400, child: _buildBentoFlujoDespacho(flujo)),
+              _buildBentoFlujoDespacho(flujo),
             ],
           );
         }
 
         return SizedBox(
-          height: 410,
+          height: 416,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -2203,12 +2332,17 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Column(
+                SizedBox(
+                  width: double.infinity,
+                  child: Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
                         children: const [
                           Text(
                             'CONTROL DE RIESGO',
@@ -2230,27 +2364,26 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFEF3C7), // Amber 100
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        '${flujo.alertasSaldoPendiente + flujo.cuellosBotellaPaletizados} Activas',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w900,
-                          color: Color(0xFF92400E),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF3C7), // Amber 100
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          '${flujo.alertasSaldoPendiente + flujo.cuellosBotellaPaletizados} Activas',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF92400E),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 4),
                 const Text(
@@ -2261,7 +2394,9 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
 
                 // Alerta 1: Saldos por Cobrar (Clic para auditar órdenes con saldo pendiente)
                 InkWell(
-                  onTap: () => _navegarAOrdenesConEstado('Reservada'),
+                  key: const Key('btn_alerta_saldos_por_cobrar'),
+                  onTap: () =>
+                      _navegarAOrdenesConFiltroOperativo('SALDOS_POR_COBRAR'),
                   borderRadius: BorderRadius.circular(12),
                   child: Container(
                     padding: const EdgeInsets.all(12),
@@ -2490,12 +2625,17 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Column(
+                SizedBox(
+                  width: double.infinity,
+                  child: Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
                         children: const [
                           Text(
                             'BODEGA & SALIDAS',
@@ -2517,37 +2657,37 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppPalette.success.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        children: const [
-                          Icon(
-                            Icons.circle,
-                            size: 8,
-                            color: AppPalette.success,
-                          ),
-                          SizedBox(width: 4),
-                          Text(
-                            'Flujo Normal',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w800,
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppPalette.success.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Icon(
+                              Icons.circle,
+                              size: 8,
                               color: AppPalette.success,
                             ),
-                          ),
-                        ],
+                            SizedBox(width: 4),
+                            Text(
+                              'Flujo Normal',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                color: AppPalette.success,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 4),
                 const Text(
@@ -2564,7 +2704,8 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                   conteo: flujo.enPreparacion,
                   badgeBg: const Color(0xFFFEF3C7),
                   badgeTextColor: const Color(0xFF92400E),
-                  onTap: () => _navegarAOrdenesConEstado('Reservada'),
+                  onTap: () =>
+                      _navegarAOrdenesConFiltroOperativo('EN_PREPARACION'),
                 ),
                 const SizedBox(height: 10),
 
@@ -2575,7 +2716,8 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                   conteo: flujo.listosMostrador,
                   badgeBg: const Color(0xFFDCFCE7),
                   badgeTextColor: const Color(0xFF166534),
-                  onTap: () => _navegarAOrdenesConEstado('Pagada'),
+                  onTap: () =>
+                      _navegarAOrdenesConFiltroOperativo('LISTO_MOSTRADOR'),
                 ),
                 const SizedBox(height: 10),
 
@@ -2586,7 +2728,8 @@ class _DashboardGerenciaViewState extends State<DashboardGerenciaView>
                   conteo: flujo.enviadosCourier,
                   badgeBg: const Color(0xFFE0F2FE),
                   badgeTextColor: const Color(0xFF075985),
-                  onTap: () => _navegarAOrdenesConEstado('Despachada'),
+                  onTap: () =>
+                      _navegarAOrdenesConFiltroOperativo('DESPACHO_COURIER'),
                 ),
               ],
             ),

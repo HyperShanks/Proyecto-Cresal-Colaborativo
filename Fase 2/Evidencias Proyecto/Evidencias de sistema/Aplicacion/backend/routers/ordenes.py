@@ -6,7 +6,7 @@ import uuid
 from collections import defaultdict
 from datetime import datetime, time as datetime_time, timezone, timedelta
 from zoneinfo import ZoneInfo
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Tuple, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy import or_, and_, not_, func, cast, String, case
@@ -16,7 +16,7 @@ from services.telegram_service import TelegramService
 from services.caja_events import notificar_caja
 from routers.inventario import extraer_siglas_motor
 from models import (
-    Auditoria_Edicion_Pago,
+    Auditoria_Barrera, Auditoria_Edicion_Pago,
     Usuario, Cliente, Region, Comuna, Orden_Venta, Detalle_Orden,
     Despacho, Activo_Inventariado, Estado_Activo,
     Vehiculo_Origen, Categoria_Activo, Transaccion_Pago,
@@ -541,6 +541,10 @@ def listar_ordenes_auditoria(
     metodo_pago: Optional[str] = Query(None, description="Filtro por método de pago"),
     tipo_activo: Optional[str] = Query(None, description="Filtro por tipo de activo: 'TODOS', 'MOTORES_CAJAS'"),
     tipo: Optional[str] = Query(None, description="Alias para tipo_activo"),
+    filtro_operativo: Optional[str] = Query(
+        None,
+        description="Filtro operativo del Dashboard: 'SALDOS_POR_COBRAR', 'EN_PREPARACION', 'LISTO_MOSTRADOR', 'DESPACHO_COURIER'",
+    ),
     search: Optional[str] = Query(None, description="Búsqueda predictiva (Folio, RUT, Cliente, Vendedor)"),
     busqueda: Optional[str] = Query(None, description="Alias para search"),
     pagina: int = Query(1, ge=1, description="Número de página"),
@@ -579,7 +583,23 @@ def listar_ordenes_auditoria(
     f_fin = fecha_fin or fecha_hasta
     start_utc, end_utc = parse_periodo_ordenes_chile(periodo, f_ini, f_fin)
     if start_utc is not None and end_utc is not None:
-        query = query.filter(Orden_Venta.fecha_creacion.between(start_utc, end_utc))
+        if est_target and est_target.strip().lower() == "completada":
+            subq_barrera_periodo = (
+                db.query(Auditoria_Barrera.id_orden)
+                .filter(
+                    Auditoria_Barrera.match_exitoso.is_(True),
+                    Auditoria_Barrera.fecha_escaneo.between(start_utc, end_utc),
+                )
+            )
+            query = query.filter(
+                or_(
+                    Orden_Venta.fecha_creacion.between(start_utc, end_utc),
+                    Orden_Venta.fecha_actualizacion.between(start_utc, end_utc),
+                    Orden_Venta.id_orden.in_(subq_barrera_periodo),
+                )
+            )
+        else:
+            query = query.filter(Orden_Venta.fecha_creacion.between(start_utc, end_utc))
 
     # 4. Filtro por Método de Pago
     if metodo_pago and metodo_pago.strip().lower() not in ["todos", ""]:
@@ -593,109 +613,85 @@ def listar_ordenes_auditoria(
         )
         query = query.filter(Orden_Venta.id_orden.in_(subq_pagos))
 
-    # 5. Filtro por Motores y Cajas (únicos activos inventariados en Cresal)
+    # 5. Filtro por Motores y Cajas Inventariadas (solo activos físicos reales MOT-XXXX / CAJ-XXXX)
     target_tipo = tipo_activo or tipo
     if target_tipo and target_tipo.strip().upper() not in ["TODOS", ""]:
         tipo_act_clean = target_tipo.strip().upper()
         if tipo_act_clean in ["MOTORES_CAJAS", "MOTOR_CAJA", "MOTORES", "CAJAS", "INVENTARIADO", "INVENTARIADOS"]:
-            # Filtro semántico estricto para evitar falsos positivos
-            desc_lower = func.lower(Detalle_Orden.descripcion_manual)
-
-            # Exclusiones estrictas para Motores (accesorios y periféricos secundarios)
-            exclusiones_motor_sql = and_(
-                not_(desc_lower.like("%cremallera%")),
-                not_(desc_lower.like("%partida%")),
-                not_(desc_lower.like("%arranque%")),
-                not_(desc_lower.like("%limpiaparabris%")),
-                not_(desc_lower.like("%limpia parabris%")),
-                not_(desc_lower.like("%limpiavidrio%")),
-                not_(desc_lower.like("%limpia vidrio%")),
-                not_(desc_lower.like("%alzavidrio%")),
-                not_(desc_lower.like("%alza vidrio%")),
-                not_(desc_lower.like("%calefacci%")),
-                not_(desc_lower.like("%ventilador%")),
-                not_(desc_lower.like("%electroventilador%")),
-                not_(desc_lower.like("%soplador%")),
-                not_(desc_lower.like("%blower%")),
-                not_(desc_lower.like("%espejo%")),
-                not_(desc_lower.like("%antena%")),
-                not_(desc_lower.like("%bomba%")),
-                not_(desc_lower.like("%paso a paso%")),
-                not_(desc_lower.like("%ralent%")),
-                not_(desc_lower.like("%sunroof%")),
-                not_(desc_lower.like("%techo%")),
-                not_(desc_lower.like("%actuador%")),
-                not_(desc_lower.like("%regulador%")),
-            )
-
-            # Exclusiones estrictas para Cajas (elementos auxiliares ajenos a la transmisión)
-            exclusiones_caja_sql = and_(
-                not_(desc_lower.like("%fusible%")),
-                not_(desc_lower.like("%fusilera%")),
-                not_(desc_lower.like("%direcci%")),
-                not_(desc_lower.like("%filtro%")),
-                not_(desc_lower.like("%evaporador%")),
-                not_(desc_lower.like("%bateria%")),
-                not_(desc_lower.like("%batería%")),
-                not_(desc_lower.like("%rele%")),
-                not_(desc_lower.like("%relé%")),
-                not_(desc_lower.like("%mariposa%")),
-                not_(desc_lower.like("%termostato%")),
-                not_(desc_lower.like("%herramienta%")),
-            )
-
-            # Condiciones positivas
-            cond_motor_miscelaneo = and_(
-                or_(desc_lower.like("%motor%"), desc_lower.like("%block%")),
-                exclusiones_motor_sql,
-            )
-
-            cond_caja_miscelaneo = and_(
+            cond_activo_inventariado = and_(
+                Detalle_Orden.id_activo.isnot(None),
                 or_(
-                    desc_lower.like("%caja de cambio%"),
-                    desc_lower.like("%caja cambio%"),
-                    desc_lower.like("%caja manual%"),
-                    desc_lower.like("%caja mecanica%"),
-                    desc_lower.like("%caja mecánica%"),
-                    desc_lower.like("%caja automatica%"),
-                    desc_lower.like("%caja automática%"),
-                    desc_lower.like("%caja cvt%"),
-                    desc_lower.like("%caja secuencial%"),
-                    desc_lower.like("%transmisi%"),
-                    and_(desc_lower.like("%caja%"), exclusiones_caja_sql),
+                    Activo_Inventariado.id_categoria.in_([1, 2]),
+                    func.lower(Categoria_Activo.nombre_categoria).like("%motor%"),
+                    func.lower(Categoria_Activo.nombre_categoria).like("%caja%"),
+                    func.lower(Categoria_Activo.nombre_categoria).like("%transmisi%"),
+                    func.lower(Activo_Inventariado.sku_qr_fisico).like("mot%"),
+                    func.lower(Activo_Inventariado.sku_qr_fisico).like("caj%"),
                 ),
-                exclusiones_caja_sql,
-            )
-
-            cond_verde_backorder = and_(
-                or_(desc_lower.like("%verde%"), desc_lower.like("%backorder%")),
-                exclusiones_motor_sql,
-                exclusiones_caja_sql,
-            )
-
-            cond_activo_inventariado = or_(
-                Activo_Inventariado.id_categoria.in_([1, 2]),
-                func.lower(Categoria_Activo.nombre_categoria).like("%motor%"),
-                func.lower(Categoria_Activo.nombre_categoria).like("%caja%"),
-                func.lower(Categoria_Activo.nombre_categoria).like("%transmisi%"),
-                func.lower(Activo_Inventariado.sku_qr_fisico).like("mot%"),
-                func.lower(Activo_Inventariado.sku_qr_fisico).like("caj%"),
             )
 
             subq_motores_cajas = (
                 db.query(Detalle_Orden.id_orden)
-                .outerjoin(Activo_Inventariado, Detalle_Orden.id_activo == Activo_Inventariado.id_activo)
+                .join(Activo_Inventariado, Detalle_Orden.id_activo == Activo_Inventariado.id_activo)
                 .outerjoin(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
-                .filter(
-                    or_(
-                        cond_activo_inventariado,
-                        cond_motor_miscelaneo,
-                        cond_caja_miscelaneo,
-                        cond_verde_backorder,
-                    )
-                )
+                .filter(cond_activo_inventariado)
             )
             query = query.filter(Orden_Venta.id_orden.in_(subq_motores_cajas))
+
+    # 5.1 Filtro Operativo Directo desde Dashboard Gerencia
+    f_op = (filtro_operativo or "").strip().upper()
+    if f_op == "SALDOS_POR_COBRAR":
+        query = query.filter(
+            Orden_Venta.estado_orden != "Anulada",
+            Orden_Venta.monto_pendiente > 0,
+        )
+    elif f_op == "EN_PREPARACION":
+        subq_en_prep = (
+            db.query(Detalle_Orden.id_orden)
+            .filter(
+                Detalle_Orden.id_orden.isnot(None),
+                Detalle_Orden.estado_preparacion != "Listo",
+                Detalle_Orden.estado_preparacion != "Reingresado",
+            )
+        )
+        query = query.filter(
+            Orden_Venta.estado_orden.in_(["Reservada", "Pagada"]),
+            Orden_Venta.id_orden.in_(subq_en_prep),
+        )
+    elif f_op == "LISTO_MOSTRADOR":
+        subq_listo = (
+            db.query(Detalle_Orden.id_orden)
+            .filter(
+                Detalle_Orden.id_orden.isnot(None),
+                Detalle_Orden.estado_preparacion == "Listo",
+            )
+        )
+        subq_despacho_enviado = (
+            db.query(Despacho.id_orden)
+            .filter(
+                Despacho.id_orden.isnot(None),
+                Despacho.estado_despacho == "Enviado",
+            )
+        )
+        query = query.filter(
+            Orden_Venta.estado_orden.in_(["Reservada", "Pagada"]),
+            Orden_Venta.id_orden.in_(subq_listo),
+            ~Orden_Venta.id_orden.in_(subq_despacho_enviado),
+        )
+    elif f_op == "DESPACHO_COURIER":
+        subq_courier_enviado = (
+            db.query(Despacho.id_orden)
+            .filter(
+                Despacho.id_orden.isnot(None),
+                Despacho.estado_despacho == "Enviado",
+            )
+        )
+        query = query.filter(
+            or_(
+                Orden_Venta.id_orden.in_(subq_courier_enviado),
+                Orden_Venta.estado_orden.ilike("Despachada"),
+            )
+        )
 
     # 6. Búsqueda Predictiva y Tolerante
     term = (search or busqueda or "").strip()
@@ -748,12 +744,16 @@ def listar_ordenes_auditoria(
     )
 
     # Optimización de Rendimiento (Resolución de problema N+1):
-    # Pre-cargamos en lote los pagos y artículos de todas las órdenes de la página
-    # mediante 2 consultas IN(orden_ids), evitando 40 viajes individuales de red a Supabase.
+    # Pre-cargamos en lote los pagos, artículos, preparación en bodega, salidas en barrera
+    # y auditorías de edición de todas las órdenes de la página en consultas IN(orden_ids).
     orden_ids = [orden.id_orden for orden, *_ in resultados_paginados]
-    pagos_por_orden: Dict[int, List[Transaccion_Pago]] = defaultdict(list)
-    articulos_por_orden: Dict[int, List[HistorialArticuloDTO]] = defaultdict(list)
-    auditorias_edicion_por_orden: Dict[int, list] = defaultdict(list)
+    orden_ids = [orden.id_orden for orden, *_ in resultados_paginados]
+    pagos_por_orden: Dict[uuid.UUID, List[Transaccion_Pago]] = defaultdict(list)
+    articulos_por_orden: Dict[uuid.UUID, List[HistorialArticuloDTO]] = defaultdict(list)
+    preparacion_por_orden: Dict[uuid.UUID, List[Tuple[datetime, str]]] = defaultdict(list)
+    barreras_por_orden: Dict[uuid.UUID, List[Tuple[Auditoria_Barrera, Optional[Usuario]]]] = defaultdict(list)
+    auditorias_pago_por_orden: Dict[uuid.UUID, List[Tuple[Auditoria_Edicion_Pago, Usuario]]] = defaultdict(list)
+    usuarios_anulacion_map: Dict[uuid.UUID, str] = {}
 
     # Resolución de cajera activa por sucursal para órdenes históricas que requieran fallback
     cajeras_db = db.query(Usuario).filter(Usuario.id_rol == 3, Usuario.estado == "Activo").all()
@@ -772,16 +772,6 @@ def listar_ordenes_auditoria(
         )
         for p in todos_pagos:
             pagos_por_orden[p.id_orden].append(p)
-
-        todas_auditorias_edicion = (
-            db.query(Auditoria_Edicion_Pago, Usuario)
-            .join(Usuario, Auditoria_Edicion_Pago.id_usuario == Usuario.id_usuario)
-            .filter(Auditoria_Edicion_Pago.id_orden.in_(orden_ids))
-            .order_by(Auditoria_Edicion_Pago.fecha_edicion.asc())
-            .all()
-        )
-        for aud, usr in todas_auditorias_edicion:
-            auditorias_edicion_por_orden[aud.id_orden].append((aud, usr))
 
         todos_detalles = (
             db.query(Detalle_Orden, Activo_Inventariado, Vehiculo_Origen, Categoria_Activo, Detalle_Motor, Detalle_Caja_Cambio)
@@ -827,15 +817,59 @@ def listar_ordenes_auditoria(
                     detalle_tecnico=detalle_tec,
                 )
             )
+            if det.fecha_preparacion is not None and (det.estado_preparacion or "").lower() == "listo":
+                etiqueta_item = sku_val or desc
+                preparacion_por_orden[det.id_orden].append((det.fecha_preparacion, etiqueta_item))
+
+        todas_barreras = (
+            db.query(Auditoria_Barrera, Usuario)
+            .outerjoin(Usuario, Auditoria_Barrera.id_bodeguero == Usuario.id_usuario)
+            .filter(Auditoria_Barrera.id_orden.in_(orden_ids))
+            .order_by(Auditoria_Barrera.fecha_escaneo.asc())
+            .all()
+        )
+        for aud_b, usr_b in todas_barreras:
+            barreras_por_orden[aud_b.id_orden].append((aud_b, usr_b))
+
+        todas_auditorias_pago = (
+            db.query(Auditoria_Edicion_Pago, Usuario)
+            .join(Usuario, Auditoria_Edicion_Pago.id_usuario == Usuario.id_usuario)
+            .filter(Auditoria_Edicion_Pago.id_orden.in_(orden_ids))
+            .order_by(Auditoria_Edicion_Pago.fecha_edicion.asc())
+            .all()
+        )
+        for aud_p, usr_p in todas_auditorias_pago:
+            auditorias_pago_por_orden[aud_p.id_orden].append((aud_p, usr_p))
+
+        ids_usr_anul = {
+            orden.id_usuario_anulacion
+            for orden, *_ in resultados_paginados
+            if orden.id_usuario_anulacion is not None
+        }
+        if ids_usr_anul:
+            usrs_anul = db.query(Usuario).filter(Usuario.id_usuario.in_(list(ids_usr_anul))).all()
+            usuarios_anulacion_map = {
+                u.id_usuario: f"{u.nombres} {u.apellidos or ''}".strip()
+                for u in usrs_anul
+            }
+
+    def _to_utc_aware(dt: Optional[datetime], fallback: datetime) -> datetime:
+        base = dt or fallback
+        return base.replace(tzinfo=timezone.utc) if base.tzinfo is None else base.astimezone(timezone.utc)
+
+    def _fmt_chile(dt_aware_utc: datetime) -> str:
+        dt_cl = dt_aware_utc.astimezone(tz_chile_ordenes)
+        return f"{dt_cl.strftime('%d/%m/%y')} {dt_cl.strftime('%H:%M')} hrs"
 
     items: List[HistorialOrdenItemResponse] = []
     for orden, cliente, vendedor, cajera, sucursal in resultados_paginados:
         # Fechas en formato chileno
         if orden.fecha_creacion:
-            dt_utc = orden.fecha_creacion.replace(tzinfo=timezone.utc)
+            dt_utc = orden.fecha_creacion.replace(tzinfo=timezone.utc) if orden.fecha_creacion.tzinfo is None else orden.fecha_creacion.astimezone(timezone.utc)
             dt_chile = dt_utc.astimezone(tz_chile_ordenes)
         else:
             dt_chile = datetime.now(tz_chile_ordenes)
+            dt_utc = dt_chile.astimezone(timezone.utc)
 
         fecha_iso = dt_chile.strftime("%Y-%m-%d")
         hora = dt_chile.strftime("%H:%M")
@@ -845,6 +879,7 @@ def listar_ordenes_auditoria(
 
         # Pagos asociados recuperados desde memoria (O(1))
         pagos_db = pagos_por_orden.get(orden.id_orden, [])
+        pagos_activos = [p for p in pagos_db if (p.estado_pago or "Procesado") != "Anulado"]
         desglose_pagos = [
             HistorialPagoDetalleDTO(
                 id_transaccion=p.id_pago,
@@ -852,7 +887,7 @@ def listar_ordenes_auditoria(
                 monto=p.monto,
                 fecha_pago=p.fecha_pago,
             )
-            for p in pagos_db
+            for p in pagos_activos
         ]
 
         if desglose_pagos:
@@ -860,55 +895,121 @@ def listar_ordenes_auditoria(
                 f"{p.metodo_pago}: ${p.monto:,.0f}".replace(",", ".")
                 for p in desglose_pagos
             )
+        elif (orden.estado_orden or "").lower() == "anulada":
+            metodos_resumen = "Anulada"
         else:
             metodos_resumen = "Sin pagos"
 
         # Artículos recuperados desde memoria (O(1))
         articulos_dto = articulos_por_orden.get(orden.id_orden, [])
 
-        # Timeline de movimientos (con año en 2 dígitos 26)
+        # Timeline de movimientos (con año en 2 dígitos y orden cronológico completo)
         vendedor_nom = f"{vendedor.nombres} {vendedor.apellidos or ''}".strip()
         if cajera:
             cajera_nom = f"{cajera.nombres} {cajera.apellidos or ''}".strip()
         elif orden.estado_orden and orden.estado_orden.lower() == "anulada":
             cajera_nom = "Sin cobro"
-        elif pagos_db or (orden.estado_orden and orden.estado_orden.lower() in ["completada", "pagada", "entregada"]):
+        elif pagos_activos or (orden.estado_orden and orden.estado_orden.lower() in ["completada", "pagada", "entregada"]):
             cajera_nom = cajeras_activas_por_sucursal.get(orden.id_sucursal, cajera_general)
         else:
             cajera_nom = "Pendiente de cobro"
 
-        movimientos = [
-            HistorialMovimientoDTO(
-                hora=f"{fecha_creacion_fmt_26} {hora} hrs",
-                evento=f"Orden emitida en Mesón por {vendedor_nom}",
-            )
-        ]
-        for p in pagos_db:
-            if p.fecha_pago:
-                p_dt = p.fecha_pago if p.fecha_pago.tzinfo else p.fecha_pago.replace(tzinfo=timezone.utc)
-                p_dt_chile = p_dt.astimezone(tz_chile_ordenes)
-                p_hora_str = f"{p_dt_chile.strftime('%d/%m/%y')} {p_dt_chile.strftime('%H:%M')} hrs"
-            else:
-                p_hora_str = f"{fecha_creacion_fmt_26} {hora} hrs"
-            movimientos.append(
-                HistorialMovimientoDTO(
-                    hora=p_hora_str,
-                    evento=f"Pago liquidado en ventanilla ({p.metodo_pago}: ${p.monto:,.0f})".replace(",", "."),
-                )
-            )
-        if orden.qr_transaccional_salida:
-            movimientos.append(
+        movimientos_sort: List[Tuple[datetime, int, HistorialMovimientoDTO]] = [
+            (
+                dt_utc,
+                0,
                 HistorialMovimientoDTO(
                     hora=f"{fecha_creacion_fmt_26} {hora} hrs",
-                    evento="QR Transaccional generado para barrera de salida",
+                    evento=f"Orden emitida en Mesón por {vendedor_nom}",
+                ),
+            )
+        ]
+
+        ultimo_pago_dt_utc: Optional[datetime] = None
+        for idx_p, p in enumerate(pagos_db):
+            p_utc = _to_utc_aware(p.fecha_pago, dt_utc)
+            p_hora_str = _fmt_chile(p_utc)
+            if (p.estado_pago or "Procesado") == "Anulado":
+                ev_pago = f"Pago reversado/anulado ({p.metodo_pago}: ${p.monto:,.0f})".replace(",", ".")
+            else:
+                if ultimo_pago_dt_utc is None or p_utc > ultimo_pago_dt_utc:
+                    ultimo_pago_dt_utc = p_utc
+                es_ultimo_activo = bool(pagos_activos) and (p.id_pago == pagos_activos[-1].id_pago)
+                if orden.estado_orden in ["Pagada", "Completada", "Despachada"] and es_ultimo_activo and (orden.monto_pendiente or 0) == 0:
+                    ev_pago = f"Pago liquidado en ventanilla ({p.metodo_pago}: ${p.monto:,.0f})".replace(",", ".")
+                else:
+                    ev_pago = f"Abono registrado en ventanilla ({p.metodo_pago}: ${p.monto:,.0f})".replace(",", ".")
+            movimientos_sort.append(
+                (
+                    p_utc,
+                    1,
+                    HistorialMovimientoDTO(
+                        hora=p_hora_str,
+                        evento=ev_pago,
+                    ),
                 )
             )
 
-        auditorias_pago_ord = auditorias_edicion_por_orden.get(orden.id_orden, [])
-        for aud, usr in auditorias_pago_ord:
-            aud_dt = (aud.fecha_edicion.replace(tzinfo=timezone.utc) if aud.fecha_edicion.tzinfo is None else aud.fecha_edicion).astimezone(tz_chile_ordenes)
-            aud_f = aud_dt.strftime("%d/%m/%y")
-            aud_h = aud_dt.strftime("%H:%M")
+        if orden.qr_transaccional_salida:
+            qr_utc = ultimo_pago_dt_utc or _to_utc_aware(orden.fecha_actualizacion, dt_utc)
+            movimientos_sort.append(
+                (
+                    qr_utc,
+                    2,
+                    HistorialMovimientoDTO(
+                        hora=_fmt_chile(qr_utc),
+                        evento="QR Transaccional generado para barrera de salida",
+                    ),
+                )
+            )
+
+        # Preparación Pre-Entrega en Bodega (agrupada por minuto para órdenes multi-ítem)
+        prep_items = preparacion_por_orden.get(orden.id_orden, [])
+        if prep_items:
+            prep_agrupado: Dict[str, Tuple[datetime, List[str]]] = {}
+            for prep_dt_raw, etiq in prep_items:
+                prep_utc = _to_utc_aware(prep_dt_raw, dt_utc)
+                clave_min = _fmt_chile(prep_utc)
+                if clave_min not in prep_agrupado:
+                    prep_agrupado[clave_min] = (prep_utc, [])
+                if etiq not in prep_agrupado[clave_min][1]:
+                    prep_agrupado[clave_min][1].append(etiq)
+            for hora_prep_str, (prep_utc, etiquetas) in prep_agrupado.items():
+                movimientos_sort.append(
+                    (
+                        prep_utc,
+                        3,
+                        HistorialMovimientoDTO(
+                            hora=hora_prep_str,
+                            evento=f"Preparación pre-entrega completada en Bodega ({', '.join(etiquetas)})",
+                        ),
+                    )
+                )
+
+        # Salida por Barrera / Doble Escaneo (Auditoria_Barrera)
+        skus_inventariados = [art.sku for art in articulos_dto if art.sku]
+        skus_str = f" [{', '.join(skus_inventariados)}]" if skus_inventariados else ""
+        for aud_b, usr_b in barreras_por_orden.get(orden.id_orden, []):
+            b_utc = _to_utc_aware(aud_b.fecha_escaneo, dt_utc)
+            bod_nom = f"{usr_b.nombres} {usr_b.apellidos or ''}".strip() if usr_b else "Bodega"
+            if aud_b.match_exitoso:
+                ev_barrera = f"Salida validada en barrera (Doble Escaneo){skus_str} por {bod_nom}"
+            else:
+                ev_barrera = f"Validación fallida en barrera de salida{skus_str} por {bod_nom}"
+            movimientos_sort.append(
+                (
+                    b_utc,
+                    4,
+                    HistorialMovimientoDTO(
+                        hora=_fmt_chile(b_utc),
+                        evento=ev_barrera,
+                    ),
+                )
+            )
+
+        # Correcciones de Pago (Auditoria_Edicion_Pago)
+        for aud, usr in auditorias_pago_por_orden.get(orden.id_orden, []):
+            aud_utc = _to_utc_aware(aud.fecha_edicion, dt_utc)
             usr_nom = f"{usr.nombres} {usr.apellidos or ''}".strip()
             if aud.campo_modificado == "metodo_pago":
                 ev = f"Método de pago corregido de {aud.valor_anterior} a {aud.valor_nuevo} por {usr_nom} (Motivo: {aud.motivo})"
@@ -918,12 +1019,36 @@ def listar_ordenes_auditoria(
                 ev = f"Fecha de imputación ajustada por {usr_nom} (Motivo: {aud.motivo})"
             else:
                 ev = f"Pago modificado por {usr_nom}: {aud.campo_modificado} (Motivo: {aud.motivo})"
-            movimientos.append(
-                HistorialMovimientoDTO(
-                    hora=f"{aud_f} {aud_h} hrs",
-                    evento=ev,
+            movimientos_sort.append(
+                (
+                    aud_utc,
+                    5,
+                    HistorialMovimientoDTO(
+                        hora=_fmt_chile(aud_utc),
+                        evento=ev,
+                    ),
                 )
             )
+
+        # Anulación de Orden
+        if (orden.estado_orden or "").lower() == "anulada":
+            anul_utc = _to_utc_aware(orden.fecha_anulacion or orden.fecha_actualizacion, dt_utc)
+            resp_anul = usuarios_anulacion_map.get(orden.id_usuario_anulacion) if orden.id_usuario_anulacion else None
+            quien_str = f" por {resp_anul}" if resp_anul else ""
+            motivo_str = f" (Motivo: {orden.motivo_anulacion})" if orden.motivo_anulacion else ""
+            movimientos_sort.append(
+                (
+                    anul_utc,
+                    6,
+                    HistorialMovimientoDTO(
+                        hora=_fmt_chile(anul_utc),
+                        evento=f"Orden anulada en el sistema{quien_str}{motivo_str}",
+                    ),
+                )
+            )
+
+        movimientos_sort.sort(key=lambda item_m: (item_m[0], item_m[1]))
+        movimientos = [item_m[2] for item_m in movimientos_sort]
 
         # Asegurar formato comercial ORD-XXXX si el folio viniera como TX-QR-... o nulo
         folio_display = orden.folio
@@ -952,13 +1077,13 @@ def listar_ordenes_auditoria(
                 sucursal_nombre=sucursal.nombre_sucursal if sucursal else f"Sucursal {orden.id_sucursal}",
                 id_sucursal=orden.id_sucursal,
                 estado_orden=orden.estado_orden,
-                modalidad_pago="split" if len(pagos_db) > 1 else "unico",
+                modalidad_pago="split" if len(pagos_activos) > 1 else "unico",
                 metodos_resumen=metodos_resumen,
                 total_venta=orden.total_venta,
                 descuento=getattr(orden, "descuento", 0) or 0,
                 abono_previo=0,
                 monto_pendiente=orden.monto_pendiente or 0,
-                total_liquidado=sum(p.monto for p in pagos_db),
+                total_liquidado=sum(p.monto for p in pagos_activos),
                 desglose_pagos=desglose_pagos,
                 articulos=articulos_dto,
                 historial_movimientos=movimientos,

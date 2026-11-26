@@ -25,6 +25,7 @@ class AuditoriaTablaView extends StatelessWidget {
   final int totalConsolidado;
   final ValueChanged<int> onCambiarPagina;
   final ValueChanged<HistorialOrdenItemModel> onVerDetalle;
+  final ValueChanged<HistorialOrdenItemModel>? onGestionarOrden;
 
   const AuditoriaTablaView({
     super.key,
@@ -35,6 +36,7 @@ class AuditoriaTablaView extends StatelessWidget {
     required this.totalConsolidado,
     required this.onCambiarPagina,
     required this.onVerDetalle,
+    this.onGestionarOrden,
   });
 
   /// Determina los colores pastel para los estados oficiales según el mockup
@@ -122,16 +124,10 @@ class AuditoriaTablaView extends StatelessWidget {
     }
   }
 
-  /// Insignias de contenido de alto valor (Motores y Cajas de Cambio):
-  /// - Para repuestos inventariados: despliega el código correlativo físico real (MOT-XXXX o CAJ-XXXX)
-  ///   con Tooltip interactivo que revela el vehículo de origen.
-  /// - Para repuestos misceláneos calificados: despliega la insignia MOTOR o CAJA (excluyendo
-  ///   estrictamente falsos positivos como motor de partida, cremallera, etc.).
-  static Widget? buildBadgesMotorCaja(
-    HistorialOrdenItemModel item, {
-    BuildContext? context,
-  }) {
-    final activos = item.activosAuditados;
+  /// Insignias de activos físicos inventariados reales (Motores MOT-XXXX y Cajas CAJ-XXXX)
+  /// con Tooltip interactivo que revela el vehículo de origen.
+  static Widget? buildBadgesMotorCaja(HistorialOrdenItemModel item, {BuildContext? context}) {
+    final activos = item.activosAuditados.where((a) => a.esInventariado).toList();
     if (activos.isEmpty) {
       return null;
     }
@@ -146,11 +142,8 @@ class AuditoriaTablaView extends StatelessWidget {
     );
   }
 
-  /// Insignia visual individual para un motor o transmisión clasificada
-  static Widget buildBadgeActivo(
-    ActivoAuditoriaItem activo, {
-    BuildContext? context,
-  }) {
+  /// Insignia visual individual para un motor o transmisión inventariada real
+  static Widget buildBadgeActivo(ActivoAuditoriaItem activo, {BuildContext? context}) {
     final Color bgColor;
     final Color borderColor;
     final Color textColor;
@@ -170,17 +163,7 @@ class AuditoriaTablaView extends StatelessWidget {
         icon = Icons.alt_route_rounded;
         break;
       case TipoActivoAuditoria.motorMiscelaneo:
-        bgColor = const Color(0xFFF0F9FF);
-        borderColor = const Color(0xFFBAE6FD);
-        textColor = const Color(0xFF0369A1);
-        icon = Icons.build_circle_outlined;
-        break;
       case TipoActivoAuditoria.cajaMiscelanea:
-        bgColor = const Color(0xFFFDF4FF);
-        borderColor = const Color(0xFFF5D0FE);
-        textColor = const Color(0xFFA21CAF);
-        icon = Icons.tune_rounded;
-        break;
       case TipoActivoAuditoria.ninguno:
         return const SizedBox.shrink();
     }
@@ -441,11 +424,8 @@ class AuditoriaTablaView extends StatelessWidget {
                 _buildHeaderCell('TOTAL VENTA', flex: 13),
                 _buildHeaderCell('PENDIENTE', flex: 12),
                 _buildHeaderCell('ESTADO OFICIAL', flex: 13),
-                _buildHeaderCell(
-                  'ACCIONES',
-                  flex: 12,
-                  alignment: Alignment.center,
-                ),
+                _buildHeaderCell('ACCIONES',
+                    flex: 14, alignment: Alignment.center),
               ],
             ),
           ),
@@ -705,13 +685,47 @@ class AuditoriaTablaView extends StatelessWidget {
               ),
             ),
 
-            // 10. ACCIONES (Pastilla estilizada interactiva con hover pulido, idéntica en tamaño y padding a Estado Oficial)
+            // 10. ACCIONES (Pastilla "Auditar" + acceso rápido de Gestión para Gerencia)
             Expanded(
-              flex: 12,
+              flex: 14,
               child: Align(
                 alignment: Alignment.center,
-                child: _BotonAuditarPastilla(
-                  onPressed: () => onVerDetalle(item),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _BotonAuditarPastilla(
+                        onPressed: () => onVerDetalle(item),
+                      ),
+                      if (onGestionarOrden != null) ...[
+                        const SizedBox(width: 6),
+                        Tooltip(
+                          message: 'Gestionar / Editar Orden',
+                          child: InkWell(
+                            onTap: () => onGestionarOrden!(item),
+                            borderRadius: BorderRadius.circular(14),
+                            child: Container(
+                              padding: const EdgeInsets.all(5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF8FAFC),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: const Color(0xFFCBD5E1),
+                                  width: 1,
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.edit_note_rounded,
+                                size: 15,
+                                color: Color(0xFF475569),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
               ),
             ),

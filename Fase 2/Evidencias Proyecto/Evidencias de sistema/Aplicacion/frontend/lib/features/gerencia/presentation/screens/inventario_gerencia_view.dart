@@ -43,6 +43,7 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
 
   bool _isModalAbierto = false;
   bool get isModalAbierto => _isModalAbierto;
+  bool get soloSinTasar => _soloSinTasar;
 
   /// Permite a vistas contenedoras (como [DashboardGerenciaView]) solicitar una recarga explícita.
   Future<void> refrescar({
@@ -122,6 +123,16 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
   Future<void> aplicarFiltroSinTasar(bool soloSinTasar) async {
     setState(() {
       _soloSinTasar = soloSinTasar;
+      if (soloSinTasar) {
+        _categoria = 'todas';
+        _galpon = 'todas';
+        _pasillo = 'todas';
+        _pallet = 'todas';
+        _combustible = 'todos';
+        _transmision = 'todas';
+        _estado = 'todos';
+        _busquedaController.clear();
+      }
       _paginaActual = 1;
     });
     await _cargarInventario(pagina: 1);
@@ -1308,16 +1319,17 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                                     if (_puedeEditar)
                                       OutlinedButton.icon(
                                         onPressed: () => _abrirModalEdicionPieza(item),
-                                        icon: const Icon(Icons.edit_note, size: 14),
+                                        icon: const Icon(Icons.edit_note, size: 16),
                                         label: const Text('Editar'),
                                         style: OutlinedButton.styleFrom(
+                                          backgroundColor: AppPalette.primary.withValues(alpha: 0.06),
                                           foregroundColor: AppPalette.primary,
-                                          side: const BorderSide(color: AppPalette.primary),
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                                          minimumSize: Size.zero,
+                                          side: BorderSide(color: AppPalette.primary.withValues(alpha: 0.75), width: 1.25),
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                                          minimumSize: const Size(0, 36),
                                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                          textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                                          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
                                         ),
                                       ),
                                     if (_puedeTasar)
@@ -1325,7 +1337,7 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                                         onPressed: () => _abrirModalTasacion(item),
                                         icon: Icon(
                                           !tienePrecio || esPaletizado ? Icons.sell : Icons.price_change_outlined,
-                                          size: 13,
+                                          size: 15,
                                         ),
                                         label: Text(!tienePrecio || esPaletizado ? 'Tasar' : 'Precio'),
                                         style: ElevatedButton.styleFrom(
@@ -1334,11 +1346,11 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                                               : AppPalette.tertiary,
                                           foregroundColor: Colors.white,
                                           elevation: 0,
-                                          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-                                          minimumSize: Size.zero,
+                                          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+                                          minimumSize: const Size(0, 36),
                                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                          textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                                          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
                                         ),
                                       ),
                                   ],
@@ -1905,24 +1917,25 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                           ),
                         )
                       : Wrap(
-                          spacing: 5,
-                          runSpacing: 4,
+                          spacing: 8,
+                          runSpacing: 6,
                           alignment: WrapAlignment.center,
                           crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             if (_puedeEditar)
                               OutlinedButton.icon(
                                 onPressed: () => _abrirModalEdicionPieza(item),
-                                icon: const Icon(Icons.edit_note, size: 13),
+                                icon: const Icon(Icons.edit_note, size: 16),
                                 label: const Text('Editar'),
                                 style: OutlinedButton.styleFrom(
+                                  backgroundColor: AppPalette.primary.withValues(alpha: 0.06),
                                   foregroundColor: AppPalette.primary,
-                                  side: const BorderSide(color: AppPalette.primary),
-                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
-                                  minimumSize: Size.zero,
+                                  side: BorderSide(color: AppPalette.primary.withValues(alpha: 0.75), width: 1.25),
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                                  minimumSize: const Size(0, 36),
                                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                  textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                                  textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
                                 ),
                               ),
                             if (_puedeTasar)
@@ -1930,7 +1943,7 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                                 onPressed: () => _abrirModalTasacion(item),
                                 icon: Icon(
                                   !tienePrecio || esPaletizado ? Icons.sell : Icons.price_change_outlined,
-                                  size: 13,
+                                  size: 15,
                                 ),
                                 label: Text(!tienePrecio || esPaletizado ? 'Tasar' : 'Precio'),
                                 style: ElevatedButton.styleFrom(
@@ -1939,11 +1952,11 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
                                       : AppPalette.tertiary,
                                   foregroundColor: Colors.white,
                                   elevation: 0,
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                                  minimumSize: Size.zero,
+                                  padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+                                  minimumSize: const Size(0, 36),
                                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                  textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                                  textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
                                 ),
                               ),
                           ],
@@ -2078,11 +2091,14 @@ class InventarioGerenciaViewState extends State<InventarioGerenciaView> {
   Future<void> _abrirModalEdicionPieza(CatalogoItem item) async {
     if (!_puedeEditar) return;
     setState(() => _isModalAbierto = true);
-    final resultado = await showModalBottomSheet<Map<String, dynamic>>(
+    final resultado = await showDialog<Map<String, dynamic>>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => EditarActivoModal(activo: item.toJson()),
+      barrierDismissible: false,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+        child: EditarActivoModal(activo: item.toJson(), lightTheme: true),
+      ),
     );
     setState(() => _isModalAbierto = false);
     if (resultado != null && mounted) {

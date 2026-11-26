@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import '../../../../core/services/api_service.dart';
 import '../../../../core/theme/tokens/app_palette.dart';
 import '../../../../core/theme/tokens/app_typography.dart';
+import '../../../auth/services/auth_service.dart';
 import '../../../caja/models/historial_caja_model.dart';
 import '../../services/gerencia_service.dart';
 import '../widgets/auditoria_detalle_dialog.dart';
 import '../widgets/auditoria_tabla_view.dart';
+import '../widgets/gestionar_orden_gerencia_dialog.dart';
 import '../widgets/panel_filtros_avanzados.dart';
 
 /// Vista de Auditoría y Visor Centralizado de Órdenes de Venta (HU-5.2).
@@ -20,6 +22,7 @@ class OrdenesGerenciaView extends StatefulWidget {
   final String? estadoInicial;
   final String? tipoActivoInicial;
   final String? periodoInicial;
+  final String? filtroOperativoInicial;
 
   const OrdenesGerenciaView({
     super.key,
@@ -27,6 +30,7 @@ class OrdenesGerenciaView extends StatefulWidget {
     this.estadoInicial,
     this.tipoActivoInicial,
     this.periodoInicial,
+    this.filtroOperativoInicial,
   });
 
   @override
@@ -42,6 +46,7 @@ class OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
   String _estado = 'todos';
   String _metodoPago = 'todos';
   String _tipoActivo = 'todos';
+  String _filtroOperativo = 'todos';
   int _paginaActual = 1;
 
   bool _isLoading = false;
@@ -86,6 +91,7 @@ class OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
         periodo: _periodo,
         metodoPago: _metodoPago,
         tipoActivo: _tipoActivo,
+        filtroOperativo: _filtroOperativo,
         busqueda: _busquedaController.text.trim(),
         pagina: targetPage,
         limite: 20,
@@ -106,17 +112,44 @@ class OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
     setState(() {
       _estado = estado;
       _periodo = 'todos';
+      _tipoActivo = 'todos';
+      _metodoPago = 'todos';
+      _filtroOperativo = 'todos';
+      _busquedaController.clear();
       _paginaActual = 1;
     });
     await _cargarOrdenes(pagina: 1);
   }
 
-  /// Aplica el filtro de tipo de activo (ej: 'MOTORES_CAJAS') y periodo, recargando inmediatamente
-  Future<void> aplicarFiltroTipoActivo(String tipoActivo, {String periodo = 'hoy'}) async {
+  /// Aplica el filtro de tipo de activo (ej: 'MOTORES_CAJAS'), periodo y estado oficial, recargando inmediatamente
+  Future<void> aplicarFiltroTipoActivo(
+    String tipoActivo, {
+    String periodo = 'hoy',
+    String estado = 'Completada',
+  }) async {
     setState(() {
       _tipoActivo = tipoActivo;
       _periodo = periodo;
-      _estado = 'todos';
+      _estado = estado;
+      _metodoPago = 'todos';
+      _filtroOperativo = 'todos';
+      _busquedaController.clear();
+      _paginaActual = 1;
+    });
+    await _cargarOrdenes(pagina: 1);
+  }
+
+  /// Aplica un filtro operativo exacto desde el Dashboard Ejecutivo limpiando filtros residuales.
+  Future<void> aplicarFiltroOperativo(
+    String filtroOperativo, {
+    String estado = 'todos',
+    String periodo = 'todos',
+  }) async {
+    setState(() {
+      _filtroOperativo = filtroOperativo;
+      _estado = estado;
+      _periodo = periodo;
+      _tipoActivo = 'todos';
       _metodoPago = 'todos';
       _busquedaController.clear();
       _paginaActual = 1;
@@ -137,6 +170,11 @@ class OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
     }
     if (widget.periodoInicial != null && widget.periodoInicial!.isNotEmpty) {
       _periodo = widget.periodoInicial!;
+    }
+    if (widget.filtroOperativoInicial != null &&
+        widget.filtroOperativoInicial!.isNotEmpty) {
+      _filtroOperativo = widget.filtroOperativoInicial!;
+      _periodo = widget.periodoInicial ?? 'todos';
     }
     _busquedaController = TextEditingController();
     _cargarOrdenes();
@@ -163,6 +201,12 @@ class OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
       _periodo = widget.periodoInicial!;
       shouldReload = true;
     }
+    if (oldWidget.filtroOperativoInicial != widget.filtroOperativoInicial &&
+        widget.filtroOperativoInicial != null) {
+      _filtroOperativo = widget.filtroOperativoInicial!;
+      _periodo = widget.periodoInicial ?? 'todos';
+      shouldReload = true;
+    }
     if (shouldReload) {
       setState(() => _paginaActual = 1);
       _cargarOrdenes();
@@ -178,7 +222,7 @@ class OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
 
   /// Consulto las órdenes aplicando los criterios multidimensionales actuales.
   Future<void> _cargarOrdenes({int pagina = 1}) async {
-    debugPrint('📦 [GERENCIA-ORDENES] 🔄 Solicitando historial de órdenes (Sucursal: ${_idSucursal ?? "Todas"}, Periodo: $_periodo, Estado: $_estado, Método Pago: $_metodoPago, Tipo Activo: $_tipoActivo, Pág: $pagina)...');
+    debugPrint('📦 [GERENCIA-ORDENES] 🔄 Solicitando historial de órdenes (Sucursal: ${_idSucursal ?? "Todas"}, Periodo: $_periodo, Estado: $_estado, Método Pago: $_metodoPago, Tipo Activo: $_tipoActivo, FiltroOp: $_filtroOperativo, Pág: $pagina)...');
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -195,6 +239,7 @@ class OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
         periodo: _periodo,
         metodoPago: _metodoPago,
         tipoActivo: _tipoActivo,
+        filtroOperativo: _filtroOperativo,
         busqueda: _busquedaController.text.trim(),
         pagina: _paginaActual,
         limite: 20,
@@ -253,6 +298,7 @@ class OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
   void _onEstadoChanged(String nuevoEstado) {
     setState(() {
       _estado = nuevoEstado;
+      _filtroOperativo = 'todos';
       _paginaActual = 1;
     });
     _cargarOrdenes();
@@ -282,6 +328,7 @@ class OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
       _estado = 'todos';
       _metodoPago = 'todos';
       _tipoActivo = 'todos';
+      _filtroOperativo = 'todos';
       _paginaActual = 1;
     });
     _cargarOrdenes();
@@ -326,6 +373,10 @@ class OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
         if (_tipoActivo.toUpperCase() == 'MOTORES_CAJAS')
           _buildBannerFiltroMotoresCajas(),
 
+        if (_filtroOperativo.toLowerCase() != 'todos' &&
+            _filtroOperativo.trim().isNotEmpty)
+          _buildBannerFiltroOperativo(),
+
         // ── 2. TABLA FORENSE DE AUDITORÍA CON 10 COLUMNAS E ÍCONOS DEL MOCKUP ──
         Expanded(
           child: _buildContenidoPrincipal(
@@ -341,87 +392,185 @@ class OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
   Widget _buildBannerFiltroMotoresCajas() {
     final periodoLabel = _periodo == 'hoy'
         ? 'Hoy'
-        : (_periodo == 'mes'
+        : (_periodo == 'mes' || _periodo == '30d'
             ? 'Este Mes'
-            : (_periodo == 'semana' ? 'Esta Semana' : 'Histórico Completo'));
+            : (_periodo == 'semana' || _periodo == '7d'
+                ? 'Esta Semana'
+                : 'Histórico Completo'));
+    final estadoDesc = _estado.toLowerCase() == 'todos'
+        ? 'todos los estados'
+        : 'estado $_estado';
 
+    return _buildBannerFiltroBase(
+      bannerKey: const Key('banner_filtro_motores_cajas'),
+      buttonKey: const Key('btn_limpiar_filtro_banner'),
+      bgColor: const Color(0xFFEEF2FF),
+      borderColor: const Color(0xFFC7D2FE),
+      accentColor: const Color(0xFF4338CA),
+      titleColor: const Color(0xFF312E81),
+      subtitleColor: const Color(0xFF4F46E5),
+      icon: Icons.precision_manufacturing_rounded,
+      titleSpan: const TextSpan(
+        text: 'Filtro Activo: Salidas de Motores y Cajas Inventariadas ',
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          color: Color(0xFF312E81),
+        ),
+        children: [
+          TextSpan(
+            text: '(MOT-XXXX y CAJ-XXXX)',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF4338CA),
+            ),
+          ),
+        ],
+      ),
+      subtitle:
+          'Mostrando exclusivamente órdenes con motores o cajas inventariadas ($estadoDesc) • Período: $periodoLabel',
+    );
+  }
+
+  Widget _buildBannerFiltroOperativo() {
+    final cfg = switch (_filtroOperativo.trim().toUpperCase()) {
+      'SALDOS_POR_COBRAR' => (
+          titulo: 'Filtro Activo: Saldos por Cobrar',
+          subtitulo:
+              'Mostrando órdenes activas con saldo pendiente por cobrar (monto pendiente mayor a \$0).',
+          icon: Icons.pending_actions_rounded,
+          bg: const Color(0xFFFFFBEB),
+          border: const Color(0xFFFDE68A),
+          accent: const Color(0xFFB45309),
+          titleColor: const Color(0xFF78350F),
+          subColor: const Color(0xFF92400E),
+        ),
+      'EN_PREPARACION' => (
+          titulo: 'Filtro Activo: En Preparación (Rack)',
+          subtitulo:
+              'Mostrando órdenes Reservadas o Pagadas con piezas aún en preparación física en bodega.',
+          icon: Icons.inventory_rounded,
+          bg: const Color(0xFFFFFBEB),
+          border: const Color(0xFFFDE68A),
+          accent: const Color(0xFFB45309),
+          titleColor: const Color(0xFF78350F),
+          subColor: const Color(0xFF92400E),
+        ),
+      'LISTO_MOSTRADOR' => (
+          titulo: 'Filtro Activo: Listo en Mostrador',
+          subtitulo:
+              'Mostrando órdenes Reservadas o Pagadas con piezas listas para retiro sin envío por courier.',
+          icon: Icons.store_mall_directory_rounded,
+          bg: const Color(0xFFECFDF5),
+          border: const Color(0xFFA7F3D0),
+          accent: const Color(0xFF047857),
+          titleColor: const Color(0xFF064E3B),
+          subColor: const Color(0xFF065F46),
+        ),
+      _ => (
+          titulo: 'Filtro Activo: Despacho Courier',
+          subtitulo:
+              'Mostrando órdenes con envío por courier (Starken / Chilexpress) o en estado Despachada.',
+          icon: Icons.local_shipping_rounded,
+          bg: const Color(0xFFF0F9FF),
+          border: const Color(0xFFBAE6FD),
+          accent: const Color(0xFF0369A1),
+          titleColor: const Color(0xFF0C4A6E),
+          subColor: const Color(0xFF075985),
+        ),
+    };
+
+    return _buildBannerFiltroBase(
+      bannerKey: const Key('banner_filtro_operativo'),
+      buttonKey: const Key('btn_limpiar_filtro_operativo_banner'),
+      bgColor: cfg.bg,
+      borderColor: cfg.border,
+      accentColor: cfg.accent,
+      titleColor: cfg.titleColor,
+      subtitleColor: cfg.subColor,
+      icon: cfg.icon,
+      titleSpan: TextSpan(
+        text: cfg.titulo,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          color: cfg.titleColor,
+        ),
+      ),
+      subtitle: cfg.subtitulo,
+    );
+  }
+
+  /// Banner reutilizable para mostrar filtros directos activos desde el Dashboard.
+  Widget _buildBannerFiltroBase({
+    required Key bannerKey,
+    required Key buttonKey,
+    required Color bgColor,
+    required Color borderColor,
+    required Color accentColor,
+    required Color titleColor,
+    required Color subtitleColor,
+    required IconData icon,
+    required TextSpan titleSpan,
+    required String subtitle,
+  }) {
     return Container(
-      key: const Key('banner_filtro_motores_cajas'),
+      key: bannerKey,
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFEEF2FF), // Indigo 50
+        color: bgColor,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFC7D2FE)), // Indigo 200
+        border: Border.all(color: borderColor),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF6366F1).withValues(alpha: 0.06),
+            color: accentColor.withValues(alpha: 0.06),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: Row(
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 12,
+        runSpacing: 10,
         children: [
-          Container(
-            padding: const EdgeInsets.all(7),
-            decoration: BoxDecoration(
-              color: const Color(0xFF6366F1).withValues(alpha: 0.15),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.precision_manufacturing_rounded,
-              size: 18,
-              color: Color(0xFF4338CA),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text.rich(
-                  TextSpan(
-                    text: 'Filtro Activo: Salidas de Motores y Cajas Inventariadas ',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF312E81), // Indigo 900
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: accentColor.withValues(alpha: 0.14),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 18, color: accentColor),
+              ),
+              const SizedBox(width: 12),
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text.rich(titleSpan),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(fontSize: 11.5, color: subtitleColor),
                     ),
-                    children: [
-                      TextSpan(
-                        text: '(MOT-XXXX y CAJ-XXXX)',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF4338CA),
-                        ),
-                      ),
-                    ],
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  ],
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  'Mostrando exclusivamente órdenes que contienen motores o transmisiones inventariadas • Periodo: $periodoLabel',
-                  style: const TextStyle(
-                    fontSize: 11.5,
-                    color: Color(0xFF4F46E5),
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
           OutlinedButton.icon(
-            key: const Key('btn_limpiar_filtro_banner'),
+            key: buttonKey,
             style: OutlinedButton.styleFrom(
               backgroundColor: Colors.white,
-              foregroundColor: const Color(0xFF4338CA),
-              side: const BorderSide(color: Color(0xFFA5B4FC)),
+              foregroundColor: accentColor,
+              side: BorderSide(color: borderColor),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -560,6 +709,8 @@ class OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
       );
     }
 
+    final bool puedeEditar = AuthService.cachedUser?.idRol != 8;
+
     return AuditoriaTablaView(
       items: items,
       paginaActual: _paginaActual,
@@ -567,7 +718,22 @@ class OrdenesGerenciaViewState extends State<OrdenesGerenciaView> {
       totalRegistros: totalRegistros,
       totalConsolidado: totalConsolidado,
       onCambiarPagina: (nuevaPagina) => _cargarOrdenes(pagina: nuevaPagina),
-      onVerDetalle: (orden) => AuditoriaDetalleDialog.show(context, orden),
+      onVerDetalle: (orden) => AuditoriaDetalleDialog.show(
+        context,
+        orden,
+        onOrdenModificada: () => _cargarOrdenes(pagina: _paginaActual),
+      ),
+      onGestionarOrden: puedeEditar
+          ? (orden) async {
+              final modificado = await GestionarOrdenGerenciaDialog.show(
+                context,
+                orden,
+              );
+              if (modificado == true) {
+                _cargarOrdenes(pagina: _paginaActual);
+              }
+            }
+          : null,
     );
   }
 }

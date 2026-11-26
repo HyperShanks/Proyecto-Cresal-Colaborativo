@@ -9,7 +9,7 @@ from datetime import datetime, time, timezone
 from typing import Optional, List
 import uuid
 from zoneinfo import ZoneInfo
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy import or_, and_, not_, func, cast, String
 from sqlalchemy.orm import Session
 
@@ -28,8 +28,11 @@ from models import (
     Reservas_Backorder,
     Vehiculo_Origen,
     Auditoria_Barrera,
+    Auditoria_Edicion_Pago,
+    Tracking_Logistico,
 )
 from core.security import (
+    get_current_user,
     require_gerencia_role,
     require_gerencia_o_auditor_central,
     require_gerencia_jefe_ventas_o_auditor_central,
@@ -47,6 +50,9 @@ from schemas import (
     BackorderPagoDetalleDTO,
     BackorderMovimientoDTO,
     PrediccionVentasStockResponseDTO,
+    EditarOrdenGerenciaRequest,
+    EditarOrdenGerenciaResponse,
+    EliminarOrdenGerenciaResponse,
 )
 from services.ml_prediction_service import generar_prediccion_ventas_y_stock
 
@@ -207,24 +213,30 @@ def obtener_kpis_financieros(
     pagos_mtd = query_mtd.all()
     acumulado_mensual_mtd = sum(p.monto for p in pagos_mtd)
 
-    # 3. Salidas en Tiempo Real: Motores y Cajas Inventariadas de hoy
-    ordenes_salidas_ids = {
-        p.id_orden for p in pagos_hoy if p.id_orden is not None
-    }
-    query_ordenes_activas_hoy = (
+    # 3. Salidas en Tiempo Real: Motores y Cajas Inventariadas de órdenes Completadas (entregadas) hoy
+    subq_barrera_hoy = (
+        db.query(Auditoria_Barrera.id_orden)
+        .filter(
+            Auditoria_Barrera.match_exitoso.is_(True),
+            Auditoria_Barrera.fecha_escaneo.between(inicio_hoy_utc, fin_hoy_utc),
+        )
+    )
+    query_ordenes_completadas_hoy = (
         db.query(Orden_Venta.id_orden)
         .filter(
-            Orden_Venta.estado_orden.in_(["Pagada", "Despachada", "Completada"]),
-            func.coalesce(Orden_Venta.fecha_actualizacion, Orden_Venta.fecha_creacion).between(inicio_hoy_utc, fin_hoy_utc),
-            Orden_Venta.estado_orden != "Anulada",
+            Orden_Venta.estado_orden == "Completada",
+            or_(
+                Orden_Venta.fecha_creacion.between(inicio_hoy_utc, fin_hoy_utc),
+                Orden_Venta.fecha_actualizacion.between(inicio_hoy_utc, fin_hoy_utc),
+                Orden_Venta.id_orden.in_(subq_barrera_hoy),
+            ),
         )
     )
     if id_sucursal is not None:
-        query_ordenes_activas_hoy = query_ordenes_activas_hoy.filter(
+        query_ordenes_completadas_hoy = query_ordenes_completadas_hoy.filter(
             Orden_Venta.id_sucursal == id_sucursal
         )
-    for r in query_ordenes_activas_hoy.all():
-        ordenes_salidas_ids.add(r[0])
+    ordenes_salidas_ids = {r[0] for r in query_ordenes_completadas_hoy.all()}
 
     salidas_motores_hoy = 0
     salidas_cajas_hoy = 0
@@ -245,39 +257,10 @@ def obtener_kpis_financieros(
             sku_upper = (sku or "").strip().upper()
             cat_upper = (nom_cat or "").strip().upper()
             c = cant if (cant and cant > 0) else 1
-            if sku_upper.startswith("MOT-") or "MOTOR" in cat_upper:
+            if sku_upper.startswith("MOT") or "MOTOR" in cat_upper:
                 salidas_motores_hoy += c
-            elif sku_upper.startswith("CAJ-") or "CAJA" in cat_upper or "TRANSMISI" in cat_upper:
+            elif sku_upper.startswith("CAJ") or "CAJA" in cat_upper or "TRANSMISI" in cat_upper:
                 salidas_cajas_hoy += c
-
-    reservas_pagadas_hoy_ids = {
-        p.id_reserva for p in pagos_hoy if p.id_reserva is not None
-    }
-    if reservas_pagadas_hoy_ids:
-        query_reservas_activos = (
-            db.query(
-                Activo_Inventariado.sku_qr_fisico,
-                Categoria_Activo.nombre_categoria,
-            )
-            .join(Reservas_Backorder, Reservas_Backorder.id_activo_asignado == Activo_Inventariado.id_activo)
-            .outerjoin(Categoria_Activo, Activo_Inventariado.id_categoria == Categoria_Activo.id_categoria)
-            .filter(
-                Reservas_Backorder.id_reserva.in_(reservas_pagadas_hoy_ids),
-                Reservas_Backorder.estado_reserva != "Anulada",
-                or_(
-                    Reservas_Backorder.id_orden.is_(None),
-                    not_(Reservas_Backorder.id_orden.in_(ordenes_salidas_ids)),
-                ),
-            )
-            .all()
-        )
-        for sku, nom_cat in query_reservas_activos:
-            sku_upper = (sku or "").strip().upper()
-            cat_upper = (nom_cat or "").strip().upper()
-            if sku_upper.startswith("MOT-") or "MOTOR" in cat_upper:
-                salidas_motores_hoy += 1
-            elif sku_upper.startswith("CAJ-") or "CAJA" in cat_upper or "TRANSMISI" in cat_upper:
-                salidas_cajas_hoy += 1
 
     total_salidas_hoy = salidas_motores_hoy + salidas_cajas_hoy
 
@@ -1078,5 +1061,544 @@ def obtener_predicciones_ventas_y_stock(
             status_code=503,
             detail=f"Servicio de inferencia ML temporalmente no disponible: {str(exc)}",
         )
+
+
+# ==========================================
+# GESTIÓN ADMINISTRATIVA DE ÓRDENES (HU-TAREA-25)
+# ==========================================
+
+_ESTADOS_ORDEN_VALIDOS = {
+    "reservada": "Reservada",
+    "pagada": "Pagada",
+    "despachada": "Despachada",
+    "completada": "Completada",
+    "anulada": "Anulada",
+}
+
+_METODOS_PAGO_CANONICOS = {
+    "efectivo": "Efectivo",
+    "debito": "Débito",
+    "débito": "Débito",
+    "credito": "Crédito",
+    "crédito": "Crédito",
+    "transferencia": "Transferencia",
+    "cheque": "Cheque",
+}
+
+
+def require_gerencia_escritura(
+    current_user: Usuario = Depends(get_current_user),
+) -> Usuario:
+    """
+    Restringe mutaciones administrativas de órdenes exclusivamente a
+    Gerencia General (id_rol == 4) y Administrador (id_rol == 5).
+    Bloquea al perfil Auditor solo lectura (id_rol == 8).
+    """
+    if current_user.id_rol not in [4, 5]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso restringido: Solo Gerencia General o Administrador puede editar o eliminar órdenes.",
+        )
+    return current_user
+
+
+def _obtener_estado_activo(db: Session, nombre: str, id_default: int) -> Estado_Activo:
+    """Obtiene o instancia el registro Estado_Activo correspondiente."""
+    estado_obj = db.query(Estado_Activo).filter(Estado_Activo.nombre_estado == nombre).first()
+    if not estado_obj:
+        estado_obj = Estado_Activo(id_estado=id_default, nombre_estado=nombre)
+        db.add(estado_obj)
+        db.flush()
+    return estado_obj
+
+
+def _restaurar_activo_a_stock(
+    db: Session,
+    activo: Activo_Inventariado,
+    now_utc: datetime,
+    observacion: Optional[str] = None,
+) -> None:
+    """Devuelve un activo a Paletizado (si conserva rack) o Disponible e incrementa version_lock."""
+    tiene_rack = bool(
+        activo.ubicacion_galpon or activo.ubicacion_pasillo or activo.ubicacion_pallet
+    )
+    estado_destino = (
+        _obtener_estado_activo(db, "Paletizado", 7)
+        if tiene_rack
+        else _obtener_estado_activo(db, "Disponible", 1)
+    )
+    activo.id_estado = estado_destino.id_estado
+    activo.reservado_por = None
+    activo.reserva_expira_en = None
+    if observacion:
+        activo.observacion_estado = observacion
+    activo.version_lock = (activo.version_lock or 1) + 1
+    activo.fecha_actualizacion = now_utc
+
+
+@router.patch(
+    "/ordenes/{id_orden}",
+    response_model=EditarOrdenGerenciaResponse,
+    summary="Edición Administrativa Integral de Orden de Venta (Gerencia)",
+    description=(
+        "Permite a Gerencia/Administrador cambiar el estado de una orden, auto-liquidar su saldo pendiente "
+        "al pasar a Pagada/Despachada/Completada, reasignar vendedor o anular administrativamente "
+        "manteniendo consistencia ACID en pagos, inventario físico y backorders."
+    ),
+)
+def editar_orden_gerencia(
+    id_orden: uuid.UUID,
+    payload: EditarOrdenGerenciaRequest,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_gerencia_escritura),
+):
+    orden = db.query(Orden_Venta).filter(Orden_Venta.id_orden == id_orden).first()
+    if not orden:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Orden con ID '{id_orden}' no encontrada.",
+        )
+
+    estado_anterior = orden.estado_orden
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    estado_destino: Optional[str] = None
+    if payload.nuevo_estado and payload.nuevo_estado.strip():
+        estado_norm = _ESTADOS_ORDEN_VALIDOS.get(payload.nuevo_estado.strip().lower())
+        if not estado_norm:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    f"Estado '{payload.nuevo_estado}' inválido. "
+                    "Permitidos: Reservada, Pagada, Despachada, Completada, Anulada."
+                ),
+            )
+        estado_destino = estado_norm
+    else:
+        estado_destino = estado_anterior
+
+    metodo_aplicado: Optional[str] = None
+    if payload.metodo_pago_liquidacion:
+        m_key = payload.metodo_pago_liquidacion.strip().lower()
+        metodo_aplicado = _METODOS_PAGO_CANONICOS.get(m_key)
+        if not metodo_aplicado:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Método de pago inválido. Use Efectivo, Débito, Crédito, Transferencia o Cheque.",
+            )
+    else:
+        metodo_aplicado = "Efectivo"
+
+    if (
+        estado_destino == estado_anterior
+        and payload.id_nuevo_vendedor is None
+        and not (
+            estado_destino in ["Pagada", "Despachada", "Completada"]
+            and payload.liquidar_saldo_pendiente
+            and (orden.monto_pendiente or 0) > 0
+        )
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se especificaron cambios válidos para aplicar sobre la orden.",
+        )
+
+    monto_auto_liquidado = 0
+    vendedor_reasignado = False
+    activos_actualizados = 0
+
+    try:
+        # 1. Reasignación de Vendedor (si aplica)
+        if payload.id_nuevo_vendedor and str(payload.id_nuevo_vendedor) != str(orden.id_vendedor):
+            nuevo_vendedor = (
+                db.query(Usuario)
+                .filter(Usuario.id_usuario == payload.id_nuevo_vendedor, Usuario.estado == "Activo")
+                .first()
+            )
+            if not nuevo_vendedor:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="El vendedor seleccionado no existe o no se encuentra activo.",
+                )
+            orden.id_vendedor = nuevo_vendedor.id_usuario
+            if (nuevo_vendedor.email and nuevo_vendedor.email.lower() == "limache@cresal.cl") or (
+                nuevo_vendedor.apellidos and "limache" in nuevo_vendedor.apellidos.lower()
+            ):
+                if not orden.id_vendedor_asignado:
+                    orden.id_vendedor_asignado = current_user.id_usuario
+            vendedor_reasignado = True
+
+        detalles = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == id_orden).all()
+        reservas = db.query(Reservas_Backorder).filter(Reservas_Backorder.id_orden == id_orden).all()
+        ids_reservas = [r.id_reserva for r in reservas]
+        if ids_reservas:
+            pagos = db.query(Transaccion_Pago).filter(
+                or_(
+                    Transaccion_Pago.id_orden == id_orden,
+                    Transaccion_Pago.id_reserva.in_(ids_reservas),
+                )
+            ).all()
+        else:
+            pagos = db.query(Transaccion_Pago).filter(Transaccion_Pago.id_orden == id_orden).all()
+        despacho_db = db.query(Despacho).filter(Despacho.id_orden == id_orden).first()
+
+        # 2. Transición de Estado y Cuadratura Financiera/Logística
+        if estado_destino in ["Pagada", "Despachada", "Completada"]:
+            pagado_activo = sum(
+                (p.monto or 0)
+                for p in pagos
+                if (p.estado_pago or "Procesado") != "Anulado"
+            )
+            faltante = max(0, (orden.total_venta or 0) - pagado_activo)
+
+            if faltante > 0 and payload.liquidar_saldo_pendiente:
+                pago_nuevo = Transaccion_Pago(
+                    id_pago=uuid.uuid4(),
+                    id_orden=orden.id_orden,
+                    id_reserva=reservas[0].id_reserva if reservas else None,
+                    monto=faltante,
+                    metodo_pago=metodo_aplicado,
+                    estado_pago="Procesado",
+                    fecha_pago=now_utc,
+                )
+                db.add(pago_nuevo)
+                monto_auto_liquidado = faltante
+                orden.monto_pendiente = 0
+                if not orden.id_cajera:
+                    orden.id_cajera = current_user.id_usuario
+            else:
+                orden.monto_pendiente = faltante
+
+            # Si se reactiva desde Anulada, limpiar metadata de anulación
+            if estado_anterior == "Anulada":
+                orden.motivo_anulacion = None
+                orden.observacion_anulacion = None
+                orden.id_usuario_anulacion = None
+                orden.fecha_anulacion = None
+
+            if not orden.qr_transaccional_salida:
+                orden.qr_transaccional_salida = f"TX-QR-{uuid.uuid4()}"
+
+            if estado_destino in ["Pagada", "Despachada"]:
+                estado_vendido = _obtener_estado_activo(db, "Vendido", 3)
+                for d in detalles:
+                    if d.id_activo is None:
+                        d.estado_preparacion = "Listo"
+                        if not d.fecha_preparacion:
+                            d.fecha_preparacion = now_utc
+                    else:
+                        if d.estado_preparacion == "Reingreso Pendiente":
+                            d.estado_preparacion = "Pendiente"
+                        act = db.query(Activo_Inventariado).filter(
+                            Activo_Inventariado.id_activo == d.id_activo
+                        ).first()
+                        if act:
+                            act.id_estado = estado_vendido.id_estado
+                            act.reservado_por = None
+                            act.reserva_expira_en = None
+                            act.version_lock = (act.version_lock or 1) + 1
+                            act.fecha_actualizacion = now_utc
+                            activos_actualizados += 1
+
+                for r_bo in reservas:
+                    if monto_auto_liquidado > 0 or orden.monto_pendiente == 0:
+                        r_bo.monto_abonado = r_bo.precio_acordado
+                    r_bo.estado_reserva = "Confirmada"
+                    r_bo.fecha_actualizacion = now_utc
+
+                if despacho_db and estado_destino == "Despachada":
+                    despacho_db.estado_despacho = "Enviado"
+                    despacho_db.fecha_actualizacion = now_utc
+
+            elif estado_destino == "Completada":
+                estado_entregado = _obtener_estado_activo(db, "Entregado", 6)
+                gerente_nom = f"{current_user.nombres} {current_user.apellidos or ''}".strip()
+                for d in detalles:
+                    d.estado_preparacion = "Listo"
+                    if not d.fecha_preparacion:
+                        d.fecha_preparacion = now_utc
+                    if d.id_activo:
+                        act = db.query(Activo_Inventariado).filter(
+                            Activo_Inventariado.id_activo == d.id_activo
+                        ).first()
+                        if act:
+                            act.id_estado = estado_entregado.id_estado
+                            act.ubicacion_galpon = None
+                            act.ubicacion_pasillo = None
+                            act.ubicacion_pallet = None
+                            act.reservado_por = None
+                            act.reserva_expira_en = None
+                            act.observacion_estado = (
+                                f"Completado administrativamente por {gerente_nom} - Orden #{orden.folio}"
+                            )
+                            act.version_lock = (act.version_lock or 1) + 1
+                            act.fecha_actualizacion = now_utc
+                            activos_actualizados += 1
+
+                for r_bo in reservas:
+                    if monto_auto_liquidado > 0 or orden.monto_pendiente == 0:
+                        r_bo.monto_abonado = r_bo.precio_acordado
+                    r_bo.estado_reserva = "Completada"
+                    r_bo.fecha_actualizacion = now_utc
+
+                if despacho_db:
+                    despacho_db.estado_despacho = "Enviado"
+                    despacho_db.fecha_actualizacion = now_utc
+
+                barrera_existente = (
+                    db.query(Auditoria_Barrera)
+                    .filter(Auditoria_Barrera.id_orden == orden.id_orden)
+                    .first()
+                )
+                if not barrera_existente:
+                    db.add(
+                        Auditoria_Barrera(
+                            id_auditoria=uuid.uuid4(),
+                            id_orden=orden.id_orden,
+                            id_bodeguero=current_user.id_usuario,
+                            fecha_escaneo=now_utc,
+                            match_exitoso=True,
+                        )
+                    )
+
+        elif estado_destino == "Reservada":
+            pagado_activo = sum(
+                (p.monto or 0)
+                for p in pagos
+                if (p.estado_pago or "Procesado") != "Anulado"
+            )
+            orden.monto_pendiente = max(0, (orden.total_venta or 0) - pagado_activo)
+            orden.qr_transaccional_salida = None
+            if estado_anterior == "Anulada":
+                orden.motivo_anulacion = None
+                orden.observacion_anulacion = None
+                orden.id_usuario_anulacion = None
+                orden.fecha_anulacion = None
+
+            estado_reservado = _obtener_estado_activo(db, "Reservado", 2)
+            for d in detalles:
+                if d.estado_preparacion == "Reingreso Pendiente":
+                    d.estado_preparacion = "Pendiente"
+                if d.id_activo:
+                    act = db.query(Activo_Inventariado).filter(
+                        Activo_Inventariado.id_activo == d.id_activo
+                    ).first()
+                    if act:
+                        act.id_estado = estado_reservado.id_estado
+                        act.reservado_por = None
+                        act.reserva_expira_en = None
+                        act.version_lock = (act.version_lock or 1) + 1
+                        act.fecha_actualizacion = now_utc
+                        activos_actualizados += 1
+
+            for r_bo in reservas:
+                r_bo.estado_reserva = "Pendiente"
+                r_bo.fecha_actualizacion = now_utc
+
+            if despacho_db:
+                despacho_db.estado_despacho = "Por Enviar"
+                despacho_db.fecha_actualizacion = now_utc
+
+        elif estado_destino == "Anulada":
+            motivo_txt = (payload.motivo or "Anulación administrativa por Gerencia").strip()
+            orden.monto_pendiente = 0
+            orden.qr_transaccional_salida = None
+            orden.motivo_anulacion = motivo_txt[:100]
+            orden.observacion_anulacion = (
+                motivo_txt if len(motivo_txt) >= 10 else f"{motivo_txt} (Autorizado por Gerencia)"
+            )
+            orden.id_usuario_anulacion = current_user.id_usuario
+            orden.fecha_anulacion = now_utc
+
+            for p in pagos:
+                if p.estado_pago != "Anulado":
+                    p.estado_pago = "Anulado"
+
+            for r_bo in reservas:
+                r_bo.estado_reserva = "Anulada"
+                r_bo.id_activo_asignado = None
+                r_bo.fecha_actualizacion = now_utc
+
+            for d in detalles:
+                if d.id_activo:
+                    act = db.query(Activo_Inventariado).filter(
+                        Activo_Inventariado.id_activo == d.id_activo
+                    ).first()
+                    if act:
+                        _restaurar_activo_a_stock(
+                            db,
+                            act,
+                            now_utc,
+                            observacion=f"Reingresado por anulación gerencial - Orden #{orden.folio}",
+                        )
+                        activos_actualizados += 1
+                d.estado_preparacion = "Reingreso Pendiente"
+
+        orden.estado_orden = estado_destino
+        orden.fecha_actualizacion = now_utc
+
+        db.commit()
+        db.refresh(orden)
+
+        partes_msg = [f"Orden {orden.folio} actualizada a '{orden.estado_orden}'"]
+        if monto_auto_liquidado > 0:
+            partes_msg.append(
+                f"saldo de ${monto_auto_liquidado:,.0f} liquidado automáticamente ({metodo_aplicado})".replace(",", ".")
+            )
+        if vendedor_reasignado:
+            partes_msg.append("vendedor titular reasignado")
+
+        return EditarOrdenGerenciaResponse(
+            id_orden=orden.id_orden,
+            folio=orden.folio,
+            estado_anterior=estado_anterior,
+            estado_nuevo=orden.estado_orden,
+            monto_auto_liquidado=monto_auto_liquidado,
+            metodo_pago_aplicado=metodo_aplicado if monto_auto_liquidado > 0 else None,
+            monto_pendiente_actual=orden.monto_pendiente or 0,
+            vendedor_reasignado=vendedor_reasignado,
+            activos_actualizados=activos_actualizados,
+            mensaje=". ".join(partes_msg) + ".",
+        )
+
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error transaccional al actualizar la orden: {str(e)}",
+        )
+
+
+@router.delete(
+    "/ordenes/{id_orden}",
+    response_model=EliminarOrdenGerenciaResponse,
+    summary="Eliminación Física Controlada de Orden de Venta (Gerencia)",
+    description=(
+        "Elimina definitivamente una orden del historial en una transacción ACID: "
+        "restaura los activos físicos vinculados a stock disponible, limpia registros hijos "
+        "dependientes y elimina la cabecera Orden_Venta."
+    ),
+)
+def eliminar_orden_gerencia(
+    id_orden: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_gerencia_escritura),
+):
+    orden = db.query(Orden_Venta).filter(Orden_Venta.id_orden == id_orden).first()
+    if not orden:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Orden con ID '{id_orden}' no encontrada.",
+        )
+
+    folio_doc = orden.folio
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    try:
+        detalles = db.query(Detalle_Orden).filter(Detalle_Orden.id_orden == id_orden).all()
+        reservas = db.query(Reservas_Backorder).filter(Reservas_Backorder.id_orden == id_orden).all()
+        ids_reservas = [r.id_reserva for r in reservas]
+
+        # 1. Restaurar activos físicos vinculados en Detalle_Orden o Reservas_Backorder
+        activos_ids_vistos = set()
+        for d in detalles:
+            if d.id_activo:
+                activos_ids_vistos.add(d.id_activo)
+        for r_bo in reservas:
+            if r_bo.id_activo_asignado:
+                activos_ids_vistos.add(r_bo.id_activo_asignado)
+
+        activos_restaurados = 0
+        for act_id in activos_ids_vistos:
+            act = db.query(Activo_Inventariado).filter(
+                Activo_Inventariado.id_activo == act_id
+            ).first()
+            if act:
+                _restaurar_activo_a_stock(
+                    db,
+                    act,
+                    now_utc,
+                    observacion=f"Stock restaurado por eliminación administrativa de Orden #{folio_doc}",
+                )
+                activos_restaurados += 1
+
+        # 2. Recopilar todos los pagos ligados directa o indirectamente (por orden o reserva)
+        if ids_reservas:
+            pagos = db.query(Transaccion_Pago).filter(
+                or_(
+                    Transaccion_Pago.id_orden == id_orden,
+                    Transaccion_Pago.id_reserva.in_(ids_reservas),
+                )
+            ).all()
+        else:
+            pagos = db.query(Transaccion_Pago).filter(Transaccion_Pago.id_orden == id_orden).all()
+
+        ids_pagos = [p.id_pago for p in pagos]
+
+        # 3. Eliminar tablas hijas en orden estricto de integridad referencial
+        if ids_pagos:
+            db.query(Auditoria_Edicion_Pago).filter(
+                or_(
+                    Auditoria_Edicion_Pago.id_orden == id_orden,
+                    Auditoria_Edicion_Pago.id_pago.in_(ids_pagos),
+                )
+            ).delete(synchronize_session=False)
+        else:
+            db.query(Auditoria_Edicion_Pago).filter(
+                Auditoria_Edicion_Pago.id_orden == id_orden
+            ).delete(synchronize_session=False)
+
+        db.query(Auditoria_Barrera).filter(
+            Auditoria_Barrera.id_orden == id_orden
+        ).delete(synchronize_session=False)
+
+        db.query(Tracking_Logistico).filter(
+            Tracking_Logistico.id_orden == id_orden
+        ).delete(synchronize_session=False)
+
+        db.query(Despacho).filter(
+            Despacho.id_orden == id_orden
+        ).delete(synchronize_session=False)
+
+        if ids_pagos:
+            db.query(Transaccion_Pago).filter(
+                Transaccion_Pago.id_pago.in_(ids_pagos)
+            ).delete(synchronize_session=False)
+
+        db.query(Reservas_Backorder).filter(
+            Reservas_Backorder.id_orden == id_orden
+        ).delete(synchronize_session=False)
+
+        db.query(Detalle_Orden).filter(
+            Detalle_Orden.id_orden == id_orden
+        ).delete(synchronize_session=False)
+
+        db.delete(orden)
+        db.commit()
+
+        return EliminarOrdenGerenciaResponse(
+            id_orden=id_orden,
+            folio=folio_doc,
+            activos_restaurados=activos_restaurados,
+            pagos_eliminados=len(pagos),
+            mensaje=(
+                f"Orden {folio_doc} eliminada definitivamente del historial. "
+                f"Activos restaurados a stock: {activos_restaurados}."
+            ),
+        )
+
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error transaccional al eliminar la orden: {str(e)}",
+        )
+
 
 

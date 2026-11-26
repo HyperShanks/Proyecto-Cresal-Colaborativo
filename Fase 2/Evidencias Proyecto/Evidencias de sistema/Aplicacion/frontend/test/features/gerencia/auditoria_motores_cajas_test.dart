@@ -49,7 +49,7 @@ void main() {
       expect(actCaja.vehiculoOrigen, 'Toyota Hilux 2021');
     });
 
-    test('2. Misceláneos Válidos: Despliega badges distintivos MOTOR y CAJA sin SKU', () {
+    test('2. Misceláneos sin SKU: No generan badges ni clasificación como activo inventariado', () {
       final miscMotor = HistorialArticuloModel(
         cantidad: 1,
         tipo: 'DESARME',
@@ -68,17 +68,8 @@ void main() {
         subtotal: 500000,
       );
 
-      final actMotor = miscMotor.activoAuditado;
-      expect(actMotor, isNotNull);
-      expect(actMotor!.tipo, TipoActivoAuditoria.motorMiscelaneo);
-      expect(actMotor.label, 'MOTOR');
-      expect(actMotor.esInventariado, false);
-
-      final actCaja = miscCaja.activoAuditado;
-      expect(actCaja, isNotNull);
-      expect(actCaja!.tipo, TipoActivoAuditoria.cajaMiscelanea);
-      expect(actCaja.label, 'CAJA');
-      expect(actCaja.esInventariado, false);
+      expect(miscMotor.activoAuditado, isNull);
+      expect(miscCaja.activoAuditado, isNull);
     });
 
     test('3. Validación Negativa (Sin Falsos Positivos): Descarta accesorios y periféricos', () {

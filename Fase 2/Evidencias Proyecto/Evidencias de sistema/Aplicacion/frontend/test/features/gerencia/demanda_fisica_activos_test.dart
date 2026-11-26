@@ -298,13 +298,15 @@ void main() {
         expect(find.text('\$ 500.000'), findsOneWidget);
         expect(find.text('Sobre tasación actual (+20.0%)'), findsOneWidget);
 
-        // Desglose Stock Físico vs Compras en Verde (Backorders)
+        // Desglose Stock Físico vs Compras en Verde
         expect(find.text('Stock Físico: 12 unid'), findsOneWidget);
         expect(
-          find.text('Compras en Verde (Backorder): 4 unid'),
+          find.text('Compras en Verde: 4 unid'),
           findsOneWidget,
         );
         expect(find.text('Total: 16 unid'), findsOneWidget);
+        expect(find.textContaining('T+1'), findsNothing);
+        expect(find.textContaining('Backorder'), findsNothing);
 
         // Excluir alertas de quiebre de stock (reservadas para CRES-284)
         expect(find.text('Déficit Crítico'), findsNothing);

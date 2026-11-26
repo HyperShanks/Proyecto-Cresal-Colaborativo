@@ -492,9 +492,10 @@ def test_gerencia_kpis_aislamiento_por_sucursal_y_exclusion_pagos_anulados(
     assert "salidas_motores_hoy" in data
     assert "salidas_cajas_hoy" in data
     assert "total_salidas_hoy" in data
-    assert data["salidas_motores_hoy"] == 1
+    # ord1 está en estado 'Pagada' (sin entregar aún), por lo que no suma salidas completadas hoy
+    assert data["salidas_motores_hoy"] == 0
     assert data["salidas_cajas_hoy"] == 0
-    assert data["total_salidas_hoy"] == 1
+    assert data["total_salidas_hoy"] == 0
 
 
 def test_gerencia_kpis_consolidado_global_toda_la_cadena(
@@ -683,28 +684,106 @@ def test_gerencia_kpis_salidas_motores_cajas_inventariadas(
 ):
     """
     Verifica que el cálculo de salidas en tiempo real de piezas inventariadas:
-    - Retorne contadores numéricos exactos de motores (MOT-XXXX) y cajas (CAJ-XXXX).
-    - Desglose correctamente la suma total de salidas hoy.
-    - Excluya ventas misceláneas sin SKU inventariado y transacciones anuladas.
+    - Contabilice EXCLUSIVAMENTE órdenes en estado 'Completada' (entregadas hoy).
+    - Excluya órdenes en 'Pagada' o 'Reservada' (pendientes de entrega), misceláneos y anuladas.
     """
     admin = db_session_gerencia["user_admin"]
+    vendedor = db_session_gerencia["user_vendedor"]
+    cli1 = db_session_gerencia["cli1"]
     token = create_access_token(
         data={"sub": str(admin.id_usuario), "rol": admin.id_rol}
     )
     headers = {"Authorization": f"Bearer {token}"}
 
-    # Consulta consolidada global
-    res = client.get("/api/v1/gerencia/dashboard/kpis", headers=headers)
-    assert res.status_code == 200
-    data = res.json()
+    db = TestingSessionLocal()
+    try:
+        ahora_utc = datetime.now(tz_chile).astimezone(timezone.utc).replace(tzinfo=None)
+        act_mot_comp = Activo_Inventariado(
+            id_activo=uuid.uuid4(),
+            sku_qr_fisico="MOT-COMP-901",
+            id_categoria=1,
+            id_estado=6,
+            id_sucursal_actual=101,
+            precio_referencia=1200000,
+            estado="Activo",
+        )
+        act_caj_pag = Activo_Inventariado(
+            id_activo=uuid.uuid4(),
+            sku_qr_fisico="CAJ-PEND-902",
+            id_categoria=2,
+            id_estado=3,
+            id_sucursal_actual=101,
+            precio_referencia=500000,
+            estado="Activo",
+        )
+        db.add_all([act_mot_comp, act_caj_pag])
+        db.flush()
 
-    assert "salidas_motores_hoy" in data
-    assert "salidas_cajas_hoy" in data
-    assert "total_salidas_hoy" in data
-    assert isinstance(data["salidas_motores_hoy"], int)
-    assert isinstance(data["salidas_cajas_hoy"], int)
-    assert isinstance(data["total_salidas_hoy"], int)
-    assert data["total_salidas_hoy"] == data["salidas_motores_hoy"] + data["salidas_cajas_hoy"]
+        ord_comp = Orden_Venta(
+            id_orden=uuid.uuid4(),
+            id_cliente=cli1.id_cliente,
+            id_vendedor=vendedor.id_usuario,
+            id_sucursal=101,
+            estado_orden="Completada",
+            total_venta=1200000,
+            monto_pendiente=0,
+            fecha_creacion=ahora_utc - timedelta(days=2),
+            fecha_actualizacion=ahora_utc,
+        )
+        ord_pag = Orden_Venta(
+            id_orden=uuid.uuid4(),
+            id_cliente=cli1.id_cliente,
+            id_vendedor=vendedor.id_usuario,
+            id_sucursal=101,
+            estado_orden="Pagada",
+            total_venta=500000,
+            monto_pendiente=0,
+            fecha_creacion=ahora_utc,
+            fecha_actualizacion=ahora_utc,
+        )
+        db.add_all([ord_comp, ord_pag])
+        db.flush()
+
+        db.add_all([
+            Detalle_Orden(
+                id_detalle=uuid.uuid4(),
+                id_orden=ord_comp.id_orden,
+                id_activo=act_mot_comp.id_activo,
+                cantidad=1,
+                precio_final=1200000,
+                estado_preparacion="Listo",
+            ),
+            Detalle_Orden(
+                id_detalle=uuid.uuid4(),
+                id_orden=ord_pag.id_orden,
+                id_activo=act_caj_pag.id_activo,
+                cantidad=1,
+                precio_final=500000,
+                estado_preparacion="Listo",
+            ),
+        ])
+        db.commit()
+
+        # Consulta consolidada global
+        res = client.get("/api/v1/gerencia/dashboard/kpis", headers=headers)
+        assert res.status_code == 200
+        data = res.json()
+
+        assert data["salidas_motores_hoy"] == 1
+        assert data["salidas_cajas_hoy"] == 0
+        assert data["total_salidas_hoy"] == 1
+    finally:
+        db.query(Detalle_Orden).filter(
+            Detalle_Orden.id_activo.in_([act_mot_comp.id_activo, act_caj_pag.id_activo])
+        ).delete(synchronize_session=False)
+        db.query(Orden_Venta).filter(
+            Orden_Venta.id_orden.in_([ord_comp.id_orden, ord_pag.id_orden])
+        ).delete(synchronize_session=False)
+        db.query(Activo_Inventariado).filter(
+            Activo_Inventariado.id_activo.in_([act_mot_comp.id_activo, act_caj_pag.id_activo])
+        ).delete(synchronize_session=False)
+        db.commit()
+        db.close()
 
 
 def test_gerencia_predicciones_ml_ventas_y_stock(

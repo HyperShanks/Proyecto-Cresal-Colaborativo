@@ -115,8 +115,8 @@ class _DemandaFisicaActivosSectionState
             const SizedBox(height: 6),
             Text(
               esSemanal
-                  ? 'Unidades físicas estimadas para la próxima semana (T+1), ticket promedio vs. tasación en bodega y origen de demanda (Stock Físico vs. Compras en Verde)'
-                  : 'Unidades físicas acumuladas para las próximas 4 semanas, ticket promedio vs. tasación en bodega y origen de demanda del último mes',
+                  ? 'Unidades estimadas para la próxima semana, ticket promedio frente a tasación en bodega y origen de ventas del último mes'
+                  : 'Unidades estimadas para las próximas 4 semanas, ticket promedio frente a tasación en bodega y origen de ventas del último mes',
               style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
@@ -163,25 +163,29 @@ class _DemandaFisicaActivosSectionState
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _buildHorizonteButton(
-            key: const Key('btn_demanda_horizonte_semanal'),
-            label: 'Vista Semanal',
-            selected: esSemanal,
-            onTap: () {
-              if (!esSemanal) {
-                setState(() => _horizonte = HorizontePrediccion.semanal);
-              }
-            },
+          Flexible(
+            child: _buildHorizonteButton(
+              key: const Key('btn_demanda_horizonte_semanal'),
+              label: 'Vista Semanal',
+              selected: esSemanal,
+              onTap: () {
+                if (!esSemanal) {
+                  setState(() => _horizonte = HorizontePrediccion.semanal);
+                }
+              },
+            ),
           ),
-          _buildHorizonteButton(
-            key: const Key('btn_demanda_horizonte_mensual'),
-            label: 'Vista Mensual',
-            selected: !esSemanal,
-            onTap: () {
-              if (esSemanal) {
-                setState(() => _horizonte = HorizontePrediccion.mensual);
-              }
-            },
+          Flexible(
+            child: _buildHorizonteButton(
+              key: const Key('btn_demanda_horizonte_mensual'),
+              label: 'Vista Mensual',
+              selected: !esSemanal,
+              onTap: () {
+                if (esSemanal) {
+                  setState(() => _horizonte = HorizontePrediccion.mensual);
+                }
+              },
+            ),
           ),
         ],
       ),
@@ -200,7 +204,7 @@ class _DemandaFisicaActivosSectionState
       borderRadius: BorderRadius.circular(7),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
           color: selected ? Colors.white : Colors.transparent,
           borderRadius: BorderRadius.circular(7),
@@ -216,6 +220,8 @@ class _DemandaFisicaActivosSectionState
         ),
         child: Text(
           label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontSize: 12,
             fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
@@ -375,6 +381,8 @@ class _DemandaFisicaActivosSectionState
               Expanded(
                 child: Text(
                   cfg.titulo,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w800,
@@ -382,6 +390,7 @@ class _DemandaFisicaActivosSectionState
                   ),
                 ),
               ),
+              const SizedBox(width: 6),
               _buildRegimenBadge(cfg.regimen),
             ],
           ),
@@ -724,7 +733,7 @@ class _DemandaFisicaActivosSectionState
               ),
               _buildOrigenChip(
                 dotColor: _colorBackorder,
-                label: 'Compras en Verde (Backorder): $backorder unid',
+                label: 'Compras en Verde: $backorder unid',
               ),
             ],
           ),
@@ -792,12 +801,14 @@ class _DemandaFisicaActivosSectionState
             ),
           ),
           SizedBox(width: 12),
-          Text(
-            'Calculando pronóstico de demanda física...',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF475569),
+          Flexible(
+            child: Text(
+              'Calculando pronóstico de demanda física...',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF475569),
+              ),
             ),
           ),
         ],

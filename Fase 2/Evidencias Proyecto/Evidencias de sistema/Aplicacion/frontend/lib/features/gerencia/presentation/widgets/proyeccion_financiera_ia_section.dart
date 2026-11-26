@@ -158,7 +158,7 @@ class _ProyeccionFinancieraIaSectionState
                   ),
                 ),
                 const Text(
-                  'Proyección Financiera IA & Mix de Ingresos (XGBoost)',
+                  'Proyección Financiera y Mix de Ingresos',
                   style: TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w900,
@@ -178,7 +178,7 @@ class _ProyeccionFinancieraIaSectionState
                       border: Border.all(color: const Color(0xFFBAE6FD)),
                     ),
                     child: Text(
-                      'Precisión WAPE ${pred.metadataModelo.exactitudWapePct.toStringAsFixed(1)}%',
+                      'Precisión ${pred.metadataModelo.exactitudWapePct.toStringAsFixed(1)}%',
                       style: const TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w800,
@@ -192,9 +192,9 @@ class _ProyeccionFinancieraIaSectionState
             Text(
               pred != null
                   ? (esSemanal
-                        ? 'Horizonte inmediato: semana del ${_formatShortDate(pred.prediccionSemanalT1.semanaInicio)} vs. promedio últimas 4 semanas cerradas'
-                        : 'Horizonte mensual acumulado (4 semanas desde ${_formatShortDate(pred.metadataModelo.semanaProyectadaInicio)}) vs. equivalente 4 semanas')
-                  : 'Proyección de ingresos CLP y participación porcentual por categoría con modelo XGBoost Multi-Target',
+                        ? 'Estimación para la semana del ${_formatShortDate(pred.prediccionSemanalT1.semanaInicio)} comparada con el promedio de las últimas 4 semanas'
+                        : 'Estimación acumulada de 4 semanas (desde el ${_formatShortDate(pred.metadataModelo.semanaProyectadaInicio)}) comparada con el mes anterior')
+                  : 'Proyección de ingresos y participación por categoría de producto',
               style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
@@ -209,11 +209,7 @@ class _ProyeccionFinancieraIaSectionState
         if (isCompact) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              titleBlock,
-              const SizedBox(height: 12),
-              selector,
-            ],
+            children: [titleBlock, const SizedBox(height: 12), selector],
           );
         }
 
@@ -241,25 +237,29 @@ class _ProyeccionFinancieraIaSectionState
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _buildHorizonteButton(
-            key: const Key('btn_horizonte_semanal'),
-            label: 'Vista Semanal',
-            selected: esSemanal,
-            onTap: () {
-              if (!esSemanal) {
-                setState(() => _horizonte = HorizontePrediccion.semanal);
-              }
-            },
+          Flexible(
+            child: _buildHorizonteButton(
+              key: const Key('btn_horizonte_semanal'),
+              label: 'Vista Semanal',
+              selected: esSemanal,
+              onTap: () {
+                if (!esSemanal) {
+                  setState(() => _horizonte = HorizontePrediccion.semanal);
+                }
+              },
+            ),
           ),
-          _buildHorizonteButton(
-            key: const Key('btn_horizonte_mensual'),
-            label: 'Vista Mensual',
-            selected: !esSemanal,
-            onTap: () {
-              if (esSemanal) {
-                setState(() => _horizonte = HorizontePrediccion.mensual);
-              }
-            },
+          Flexible(
+            child: _buildHorizonteButton(
+              key: const Key('btn_horizonte_mensual'),
+              label: 'Vista Mensual',
+              selected: !esSemanal,
+              onTap: () {
+                if (esSemanal) {
+                  setState(() => _horizonte = HorizontePrediccion.mensual);
+                }
+              },
+            ),
           ),
         ],
       ),
@@ -278,7 +278,7 @@ class _ProyeccionFinancieraIaSectionState
       borderRadius: BorderRadius.circular(7),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
           color: selected ? Colors.white : Colors.transparent,
           borderRadius: BorderRadius.circular(7),
@@ -294,6 +294,8 @@ class _ProyeccionFinancieraIaSectionState
         ),
         child: Text(
           label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontSize: 12,
             fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
@@ -367,25 +369,20 @@ class _ProyeccionFinancieraIaSectionState
           const SizedBox(height: 12),
         ],
         _buildKpiCardsGrid(
-          esSemanal: esSemanal,
           ventaTotal: ventaTotal,
           varTotal: varTotal,
-          baseTotal: baseTotal.round(),
           montoMotor: montoMotor,
           varMotor: varMotor,
-          baseMotor: baseMotor.round(),
           montoCaja: montoCaja,
           varCaja: varCaja,
-          baseCaja: baseCaja.round(),
           montoAccesorio: montoAccesorio,
           varAccesorio: varAccesorio,
-          baseAccesorio: baseAccesorio.round(),
         ),
         const SizedBox(height: 20),
         LayoutBuilder(
           builder: (context, constraints) {
             final isDesktop = constraints.maxWidth >= 980;
-            final trendChart = _buildTrendChartCard(pred, esSemanal);
+            final trendChart = _buildTrendChartCard(pred);
             final mixChart = _buildMixChartCard(
               motorMonto: montoMotor,
               cajaMonto: montoCaja,
@@ -400,9 +397,9 @@ class _ProyeccionFinancieraIaSectionState
             if (!isDesktop) {
               return Column(
                 children: [
-                  SizedBox(height: 360, child: trendChart),
+                  SizedBox(height: 350, child: trendChart),
                   const SizedBox(height: 16),
-                  SizedBox(height: 360, child: mixChart),
+                  mixChart,
                 ],
               );
             }
@@ -425,23 +422,15 @@ class _ProyeccionFinancieraIaSectionState
   }
 
   Widget _buildKpiCardsGrid({
-    required bool esSemanal,
     required int ventaTotal,
     required double varTotal,
-    required int baseTotal,
     required int montoMotor,
     required double varMotor,
-    required int baseMotor,
     required int montoCaja,
     required double varCaja,
-    required int baseCaja,
     required int montoAccesorio,
     required double varAccesorio,
-    required int baseAccesorio,
   }) {
-    final etiquetaPeriodo = esSemanal ? 'Próx. semana (t+1)' : 'Acum. 4 semanas';
-    final etiquetaBase = esSemanal ? 'Prom. 4 sem' : 'Equiv. 4 sem';
-
     return LayoutBuilder(
       builder: (context, constraints) {
         int crossAxisCount = 4;
@@ -456,7 +445,7 @@ class _ProyeccionFinancieraIaSectionState
             crossAxisCount: crossAxisCount,
             crossAxisSpacing: 14,
             mainAxisSpacing: 14,
-            mainAxisExtent: 126,
+            mainAxisExtent: 108,
           ),
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -466,7 +455,6 @@ class _ProyeccionFinancieraIaSectionState
               titulo: 'Venta Total Proyectada',
               valor: _formatClp(ventaTotal),
               variacionPct: varTotal,
-              subtitulo: '$etiquetaPeriodo • $etiquetaBase: ${_formatClp(baseTotal)}',
               accentColor: AppPalette.tertiary,
               icono: Icons.account_balance_wallet_rounded,
             ),
@@ -475,7 +463,6 @@ class _ProyeccionFinancieraIaSectionState
               titulo: 'Ingresos Estimados por Motores',
               valor: _formatClp(montoMotor),
               variacionPct: varMotor,
-              subtitulo: '$etiquetaBase: ${_formatClp(baseMotor)}',
               accentColor: _colorMotor,
               icono: Icons.precision_manufacturing_rounded,
             ),
@@ -484,7 +471,6 @@ class _ProyeccionFinancieraIaSectionState
               titulo: 'Ingresos Estimados por Cajas de Cambio',
               valor: _formatClp(montoCaja),
               variacionPct: varCaja,
-              subtitulo: '$etiquetaBase: ${_formatClp(baseCaja)}',
               accentColor: _colorCaja,
               icono: Icons.settings_input_component_rounded,
             ),
@@ -493,7 +479,6 @@ class _ProyeccionFinancieraIaSectionState
               titulo: 'Ingresos por Venta Menor / Accesorios',
               valor: _formatClp(montoAccesorio),
               variacionPct: varAccesorio,
-              subtitulo: '$etiquetaBase: ${_formatClp(baseAccesorio)}',
               accentColor: const Color(0xFFB45309),
               icono: Icons.build_circle_rounded,
             ),
@@ -503,7 +488,8 @@ class _ProyeccionFinancieraIaSectionState
     );
   }
 
-  Widget _buildTrendChartCard(PredictionDashboardModel pred, bool esSemanal) {
+  Widget _buildTrendChartCard(PredictionDashboardModel pred) {
+    final esSemanal = _horizonte == HorizontePrediccion.semanal;
     final hist = pred.historialReciente8Semanas;
     final List<ProyeccionSemanalItemModel> futuro = esSemanal
         ? [
@@ -563,13 +549,17 @@ class _ProyeccionFinancieraIaSectionState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Expanded(
-                child: Column(
+          SizedBox(
+            width: double.infinity,
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 12,
+              runSpacing: 8,
+              children: [
+                const Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       'TENDENCIA TEMPORAL DE INGRESOS',
@@ -582,7 +572,7 @@ class _ProyeccionFinancieraIaSectionState
                     ),
                     SizedBox(height: 2),
                     Text(
-                      'Historial Real (8 Semanas) vs. Proyección IA',
+                      'Historial Real (8 Semanas) vs. Proyección',
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w900,
@@ -591,25 +581,24 @@ class _ProyeccionFinancieraIaSectionState
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 8),
-              Wrap(
-                spacing: 12,
-                runSpacing: 4,
-                children: [
-                  _buildLineLegendItem(
-                    label: 'Real (8 sem)',
-                    color: AppPalette.tertiary,
-                    dashed: false,
-                  ),
-                  _buildLineLegendItem(
-                    label: esSemanal ? 'Proyección (t+1)' : 'Proyección (4 sem)',
-                    color: AppPalette.primary,
-                    dashed: true,
-                  ),
-                ],
-              ),
-            ],
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 4,
+                  children: [
+                    _buildLineLegendItem(
+                      label: 'Real (8 sem)',
+                      color: AppPalette.tertiary,
+                      dashed: false,
+                    ),
+                    _buildLineLegendItem(
+                      label: 'Proyección',
+                      color: AppPalette.primary,
+                      dashed: true,
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 14),
           Expanded(
@@ -717,10 +706,9 @@ class _ProyeccionFinancieraIaSectionState
                           getTooltipItems: (touchedSpots) {
                             return touchedSpots.map((spot) {
                               final idx = spot.x.round();
-                              final fecha =
-                                  (idx >= 0 && idx < allLabels.length)
-                                      ? allLabels[idx]
-                                      : '';
+                              final fecha = (idx >= 0 && idx < allLabels.length)
+                                  ? allLabels[idx]
+                                  : '';
                               final esSerieProyectada =
                                   spot.bar.dashArray != null;
                               // Evita duplicar tooltip en el punto puente de empalme
@@ -729,8 +717,9 @@ class _ProyeccionFinancieraIaSectionState
                                   idx == hist.length - 1) {
                                 return null;
                               }
-                              final prefijo =
-                                  esSerieProyectada ? 'Proy. IA' : 'Real';
+                              final prefijo = esSerieProyectada
+                                  ? 'Proyección'
+                                  : 'Real';
                               return LineTooltipItem(
                                 '$prefijo ($fecha)\n${_formatClp(spot.y.round())}',
                                 TextStyle(
@@ -758,15 +747,17 @@ class _ProyeccionFinancieraIaSectionState
                               show: true,
                               getDotPainter: (spot, percent, bar, index) =>
                                   FlDotCirclePainter(
-                                radius: 3.5,
-                                color: AppPalette.tertiary,
-                                strokeWidth: 1.5,
-                                strokeColor: Colors.white,
-                              ),
+                                    radius: 3.5,
+                                    color: AppPalette.tertiary,
+                                    strokeWidth: 1.5,
+                                    strokeColor: Colors.white,
+                                  ),
                             ),
                             belowBarData: BarAreaData(
                               show: true,
-                              color: AppPalette.tertiary.withValues(alpha: 0.08),
+                              color: AppPalette.tertiary.withValues(
+                                alpha: 0.08,
+                              ),
                             ),
                           ),
                         if (dashedSpots.length >= 2)
@@ -787,11 +778,11 @@ class _ProyeccionFinancieraIaSectionState
                               },
                               getDotPainter: (spot, percent, bar, index) =>
                                   FlDotCirclePainter(
-                                radius: 4.5,
-                                color: Colors.white,
-                                strokeWidth: 2.5,
-                                strokeColor: AppPalette.primary,
-                              ),
+                                    radius: 4.5,
+                                    color: Colors.white,
+                                    strokeWidth: 2.5,
+                                    strokeColor: AppPalette.primary,
+                                  ),
                             ),
                             belowBarData: BarAreaData(
                               show: true,
@@ -846,12 +837,7 @@ class _ProyeccionFinancieraIaSectionState
     required bool esSemanal,
   }) {
     final items = [
-      (
-        label: 'Motor',
-        pct: motorPct,
-        monto: motorMonto,
-        color: _colorMotor,
-      ),
+      (label: 'Motor', pct: motorPct, monto: motorMonto, color: _colorMotor),
       (
         label: 'Caja de Cambios',
         pct: cajaPct,
@@ -874,249 +860,282 @@ class _ProyeccionFinancieraIaSectionState
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isStacked = constraints.maxWidth < 380;
+
+          final donutWidget = Stack(
+            alignment: Alignment.center,
             children: [
-              const Expanded(
+              PieChart(
+                PieChartData(
+                  pieTouchData: PieTouchData(
+                    touchCallback: (event, response) {
+                      final newIdx =
+                          (!event.isInterestedForInteractions ||
+                              response == null ||
+                              response.touchedSection == null)
+                          ? -1
+                          : response.touchedSection!.touchedSectionIndex;
+                      if (newIdx != _touchedMixIndex) {
+                        setState(() => _touchedMixIndex = newIdx);
+                      }
+                    },
+                  ),
+                  borderData: FlBorderData(show: false),
+                  sectionsSpace: 2.5,
+                  centerSpaceRadius: isStacked ? 30 : 34,
+                  sections: List.generate(items.length, (i) {
+                    final isTouched = i == _touchedMixIndex;
+                    final item = items[i];
+                    return PieChartSectionData(
+                      color: item.color,
+                      value: item.monto > 0 ? item.monto.toDouble() : 0.01,
+                      showTitle: false,
+                      radius: isTouched
+                          ? (isStacked ? 30.0 : 34.0)
+                          : (isStacked ? 24.0 : 28.0),
+                    );
+                  }),
+                ),
+                duration: const Duration(milliseconds: 120),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      'PARTICIPACIÓN POR CATEGORÍA',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0.7,
-                        color: Color(0xFF64748B),
+                      _touchedMixIndex >= 0 && _touchedMixIndex < items.length
+                          ? items[_touchedMixIndex].label
+                                .split(' ')[0]
+                                .toUpperCase()
+                          : 'TOTAL',
+                      style: const TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF94A3B8),
                       ),
                     ),
-                    SizedBox(height: 2),
-                    Text(
-                      'Mix de Ingresos Proyectado',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF0F172A),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        _touchedMixIndex >= 0 && _touchedMixIndex < items.length
+                            ? '${items[_touchedMixIndex].pct.toStringAsFixed(1)}%'
+                            : _formatAxisClp(totalMonto.toDouble()),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF0F172A),
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                child: Text(
-                  esSemanal ? 'Semanal (t+1)' : 'Mensual (4 sem)',
-                  style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    color: AppPalette.tertiary,
-                  ),
-                ),
-              ),
             ],
-          ),
-          const SizedBox(height: 12),
-          // Barra apilada horizontal del mix porcentual
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: SizedBox(
-              height: 10,
-              child: totalMonto <= 0
-                  ? Container(color: const Color(0xFFE2E8F0))
-                  : Row(
-                      children: items.map((it) {
-                        final flexVal = math.max((it.pct * 10).round(), 1);
-                        return Expanded(
-                          flex: flexVal,
-                          child: Container(color: it.color),
-                        );
-                      }).toList(),
+          );
+
+          final legendColumn = Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: List.generate(items.length, (i) {
+              final item = items[i];
+              final isHovered = i == _touchedMixIndex;
+              return MouseRegion(
+                onEnter: (_) {
+                  if (_touchedMixIndex != i) {
+                    setState(() => _touchedMixIndex = i);
+                  }
+                },
+                onExit: (_) {
+                  if (_touchedMixIndex == i) {
+                    setState(() => _touchedMixIndex = -1);
+                  }
+                },
+                child: Container(
+                  margin: const EdgeInsets.symmetric(vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isHovered
+                        ? item.color.withValues(alpha: 0.1)
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isHovered
+                          ? item.color.withValues(alpha: 0.4)
+                          : const Color(0xFFE2E8F0),
                     ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Expanded(
-            child: totalMonto <= 0
-                ? const Center(
-                    child: Text(
-                      'Sin ingresos proyectados para calcular mix.',
-                      style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
-                    ),
-                  )
-                : Row(
+                  ),
+                  child: Row(
                     children: [
+                      Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: item.color,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
                       Expanded(
-                        flex: 5,
-                        child: Stack(
-                          alignment: Alignment.center,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            PieChart(
-                              PieChartData(
-                                pieTouchData: PieTouchData(
-                                  touchCallback: (event, response) {
-                                    final newIdx =
-                                        (!event.isInterestedForInteractions ||
-                                                response == null ||
-                                                response.touchedSection == null)
-                                            ? -1
-                                            : response
-                                                .touchedSection!
-                                                .touchedSectionIndex;
-                                    if (newIdx != _touchedMixIndex) {
-                                      setState(() => _touchedMixIndex = newIdx);
-                                    }
-                                  },
-                                ),
-                                borderData: FlBorderData(show: false),
-                                sectionsSpace: 2.5,
-                                centerSpaceRadius: 34,
-                                sections: List.generate(items.length, (i) {
-                                  final isTouched = i == _touchedMixIndex;
-                                  final item = items[i];
-                                  return PieChartSectionData(
-                                    color: item.color,
-                                    value: item.monto > 0
-                                        ? item.monto.toDouble()
-                                        : 0.01,
-                                    showTitle: false,
-                                    radius: isTouched ? 34.0 : 28.0,
-                                  );
-                                }),
+                            Text(
+                              item.label,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF1E293B),
                               ),
-                              duration: const Duration(milliseconds: 120),
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  _touchedMixIndex >= 0 &&
-                                          _touchedMixIndex < items.length
-                                      ? items[_touchedMixIndex].label
-                                            .split(' ')[0]
-                                            .toUpperCase()
-                                      : 'MIX IA',
-                                  style: const TextStyle(
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w800,
-                                    color: Color(0xFF94A3B8),
-                                  ),
-                                ),
-                                Text(
-                                  _touchedMixIndex >= 0 &&
-                                          _touchedMixIndex < items.length
-                                      ? '${items[_touchedMixIndex].pct.toStringAsFixed(1)}%'
-                                      : _formatAxisClp(totalMonto.toDouble()),
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w900,
-                                    color: Color(0xFF0F172A),
-                                  ),
-                                ),
-                              ],
+                            Text(
+                              _formatClp(item.monto),
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF64748B),
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        flex: 6,
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: List.generate(items.length, (i) {
-                            final item = items[i];
-                            final isHovered = i == _touchedMixIndex;
-                            return MouseRegion(
-                              onEnter: (_) {
-                                if (_touchedMixIndex != i) {
-                                  setState(() => _touchedMixIndex = i);
-                                }
-                              },
-                              onExit: (_) {
-                                if (_touchedMixIndex == i) {
-                                  setState(() => _touchedMixIndex = -1);
-                                }
-                              },
-                              child: Container(
-                                margin: const EdgeInsets.symmetric(vertical: 4),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: isHovered
-                                      ? item.color.withValues(alpha: 0.1)
-                                      : Colors.white,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: isHovered
-                                        ? item.color.withValues(alpha: 0.4)
-                                        : const Color(0xFFE2E8F0),
-                                  ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 10,
-                                      height: 10,
-                                      decoration: BoxDecoration(
-                                        color: item.color,
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            item.label,
-                                            style: const TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w700,
-                                              color: Color(0xFF1E293B),
-                                            ),
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                          Text(
-                                            _formatClp(item.monto),
-                                            style: const TextStyle(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.w600,
-                                              color: Color(0xFF64748B),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      '${item.pct.toStringAsFixed(1)}%',
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w900,
-                                        color: Color(0xFF0F172A),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          }),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${item.pct.toStringAsFixed(1)}%',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF0F172A),
                         ),
                       ),
                     ],
                   ),
-          ),
-        ],
+                ),
+              );
+            }),
+          );
+
+          final bodyContent = totalMonto <= 0
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 48),
+                  child: Center(
+                    child: Text(
+                      'Sin ingresos proyectados para calcular mix.',
+                      style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                    ),
+                  ),
+                )
+              : isStacked
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(height: 165, child: donutWidget),
+                    const SizedBox(height: 12),
+                    legendColumn,
+                  ],
+                )
+              : Row(
+                  children: [
+                    Expanded(
+                      flex: 5,
+                      child: SizedBox(height: 185, child: donutWidget),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(flex: 6, child: legendColumn),
+                  ],
+                );
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: double.infinity,
+                child: Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'PARTICIPACIÓN POR CATEGORÍA',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.7,
+                            color: Color(0xFF64748B),
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Mix de Ingresos Proyectado',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF0F172A),
+                          ),
+                        ),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Text(
+                        esSemanal ? 'Próxima semana' : 'Próximas 4 semanas',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: AppPalette.tertiary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: SizedBox(
+                  height: 10,
+                  child: totalMonto <= 0
+                      ? Container(color: const Color(0xFFE2E8F0))
+                      : Row(
+                          children: items.map((it) {
+                            final flexVal = math.max((it.pct * 10).round(), 1);
+                            return Expanded(
+                              flex: flexVal,
+                              child: Container(color: it.color),
+                            );
+                          }).toList(),
+                        ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (constraints.hasBoundedHeight)
+                Expanded(child: bodyContent)
+              else
+                bodyContent,
+            ],
+          );
+        },
       ),
     );
   }
@@ -1137,7 +1156,7 @@ class _ProyeccionFinancieraIaSectionState
           CircularProgressIndicator(color: AppPalette.primary),
           SizedBox(height: 14),
           Text(
-            'Calculando proyección financiera con modelo XGBoost...',
+            'Calculando proyección de ingresos...',
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w700,
@@ -1170,7 +1189,7 @@ class _ProyeccionFinancieraIaSectionState
           ),
           const SizedBox(height: 10),
           const Text(
-            'No fue posible cargar la proyección financiera IA',
+            'No fue posible cargar la proyección de ingresos',
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w800,
@@ -1248,7 +1267,6 @@ class _FinancialForecastKpiCard extends StatelessWidget {
   final String titulo;
   final String valor;
   final double variacionPct;
-  final String subtitulo;
   final Color accentColor;
   final IconData icono;
 
@@ -1257,7 +1275,6 @@ class _FinancialForecastKpiCard extends StatelessWidget {
     required this.titulo,
     required this.valor,
     required this.variacionPct,
-    required this.subtitulo,
     required this.accentColor,
     required this.icono,
   });
@@ -1267,8 +1284,9 @@ class _FinancialForecastKpiCard extends StatelessWidget {
     final esPositivo = variacionPct >= 0;
     final badgeColor = esPositivo ? AppPalette.success : AppPalette.error;
     final badgeBg = esPositivo ? AppPalette.successBg : AppPalette.errorBg;
-    final badgeBorder =
-        esPositivo ? AppPalette.successBorder : AppPalette.errorBorder;
+    final badgeBorder = esPositivo
+        ? AppPalette.successBorder
+        : AppPalette.errorBorder;
     final signo = esPositivo ? '+' : '-';
     final textoBadge = '$signo${variacionPct.abs().toStringAsFixed(1)}%';
 
@@ -1356,16 +1374,6 @@ class _FinancialForecastKpiCard extends StatelessWidget {
               ),
               maxLines: 1,
             ),
-          ),
-          Text(
-            subtitulo,
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF64748B),
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),

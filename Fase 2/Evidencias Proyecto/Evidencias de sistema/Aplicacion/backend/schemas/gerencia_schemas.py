@@ -5,6 +5,7 @@ Defino los DTOs analíticos para métricas, pagos y flujo operativo.
 """
 
 from typing import List, Optional
+from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -446,5 +447,61 @@ class PrediccionVentasStockResponseDTO(BaseModel):
 
 
 PrediccionGerenciaResponseDTO = PrediccionVentasStockResponseDTO
+
+
+# ==========================================
+# GESTIÓN ADMINISTRATIVA DE ÓRDENES (HU-TAREA-25)
+# ==========================================
+
+class EditarOrdenGerenciaRequest(BaseModel):
+    """Payload para edición administrativa integral de órdenes desde Gerencia."""
+    nuevo_estado: Optional[str] = Field(
+        None,
+        description="Estado destino: Reservada, Pagada, Despachada, Completada, Anulada",
+    )
+    liquidar_saldo_pendiente: bool = Field(
+        True,
+        description="Si es True y el estado destino es Pagada/Despachada/Completada, registra automáticamente el pago del saldo pendiente",
+    )
+    metodo_pago_liquidacion: Optional[str] = Field(
+        "Efectivo",
+        description="Método de pago para el saldo auto-liquidado: Efectivo, Débito/Debito, Crédito/Credito, Transferencia, Cheque",
+    )
+    id_nuevo_vendedor: Optional[UUID] = Field(
+        None,
+        description="UUID del nuevo vendedor titular si se desea reasignar",
+    )
+    motivo: Optional[str] = Field(
+        None,
+        description="Motivo u observación administrativa del cambio o anulación",
+    )
+
+
+class EditarOrdenGerenciaResponse(BaseModel):
+    """Respuesta tras editar administrativamente una orden desde Gerencia."""
+    id_orden: UUID
+    folio: str
+    estado_anterior: str
+    estado_nuevo: str
+    monto_auto_liquidado: int = 0
+    metodo_pago_aplicado: Optional[str] = None
+    monto_pendiente_actual: int = 0
+    vendedor_reasignado: bool = False
+    activos_actualizados: int = 0
+    mensaje: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class EliminarOrdenGerenciaResponse(BaseModel):
+    """Respuesta tras eliminar físicamente una orden del historial desde Gerencia."""
+    id_orden: UUID
+    folio: str
+    activos_restaurados: int = 0
+    pagos_eliminados: int = 0
+    mensaje: str
+
+    model_config = ConfigDict(from_attributes=True)
+
 
 

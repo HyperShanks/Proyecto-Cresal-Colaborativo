@@ -131,6 +131,7 @@ class GerenciaService {
     String? fechaFin,
     String? metodoPago,
     String? tipoActivo,
+    String? filtroOperativo,
     String? busqueda,
     int pagina = 1,
     int limite = 20,
@@ -166,6 +167,11 @@ class GerenciaService {
           tipoActivo.isNotEmpty &&
           tipoActivo.toLowerCase() != 'todos') {
         queryParams['tipo_activo'] = tipoActivo;
+      }
+      if (filtroOperativo != null &&
+          filtroOperativo.isNotEmpty &&
+          filtroOperativo.toLowerCase() != 'todos') {
+        queryParams['filtro_operativo'] = filtroOperativo;
       }
       if (busqueda != null && busqueda.trim().isNotEmpty) {
         queryParams['search'] = busqueda.trim();
@@ -511,7 +517,7 @@ class GerenciaService {
         final msg = ApiService.extraerMensajeError(
           response,
           fallback:
-              'No fue posible generar la proyección financiera IA del modelo XGBoost.',
+              'No fue posible generar la proyección financiera de ingresos.',
         );
         throw CustomApiException(
           messageUser: msg,
@@ -524,8 +530,135 @@ class GerenciaService {
     } catch (e) {
       throw CustomApiException(
         messageUser:
-            'No fue posible conectar con el servicio de proyección financiera IA.',
+            'No fue posible conectar con el servicio de proyección financiera.',
         errorCode: 'GERENCIA_PREDICCION_NETWORK_ERROR',
+        messageDev: e.toString(),
+      );
+    }
+  }
+
+  /// Edita administrativamente una orden (estado, auto-liquidación de saldo, vendedor y motivo).
+  /// Exclusivo para roles Gerencia (4) y Administrador (5).
+  static Future<Map<String, dynamic>> editarOrdenGerencia({
+    required String idOrden,
+    String? nuevoEstado,
+    bool liquidarSaldoPendiente = true,
+    String metodoPagoLiquidacion = 'Efectivo',
+    String? idNuevoVendedor,
+    String? motivo,
+  }) async {
+    try {
+      final uri = Uri.parse('${ApiConstants.gerenciaEndpoint}/ordenes/$idOrden');
+      final payload = <String, dynamic>{
+        'liquidar_saldo_pendiente': liquidarSaldoPendiente,
+        'metodo_pago_liquidacion': metodoPagoLiquidacion,
+      };
+      if (nuevoEstado != null && nuevoEstado.trim().isNotEmpty) {
+        payload['nuevo_estado'] = nuevoEstado.trim();
+      }
+      if (idNuevoVendedor != null && idNuevoVendedor.trim().isNotEmpty) {
+        payload['id_nuevo_vendedor'] = idNuevoVendedor.trim();
+      }
+      if (motivo != null && motivo.trim().isNotEmpty) {
+        payload['motivo'] = motivo.trim();
+      }
+
+      final response = await ApiService.patch(
+        uri,
+        body: jsonEncode(payload),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      } else {
+        final msg = ApiService.extraerMensajeError(
+          response,
+          fallback: 'No fue posible actualizar la orden.',
+        );
+        throw CustomApiException(
+          messageUser: msg,
+          errorCode: 'GERENCIA_EDIT_ORDEN_ERROR',
+          statusCode: response.statusCode,
+        );
+      }
+    } on CustomApiException {
+      rethrow;
+    } catch (e) {
+      throw CustomApiException(
+        messageUser: 'Error de conexión al actualizar la orden.',
+        errorCode: 'GERENCIA_EDIT_ORDEN_NETWORK_ERROR',
+        messageDev: e.toString(),
+      );
+    }
+  }
+
+  /// Elimina físicamente una orden del historial en una transacción ACID,
+  /// restaurando cualquier activo físico asociado a stock disponible.
+  static Future<Map<String, dynamic>> eliminarOrdenGerencia({
+    required String idOrden,
+  }) async {
+    try {
+      final uri = Uri.parse('${ApiConstants.gerenciaEndpoint}/ordenes/$idOrden');
+      final response = await ApiService.delete(uri);
+
+      if (response.statusCode == 200) {
+        return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      } else {
+        final msg = ApiService.extraerMensajeError(
+          response,
+          fallback: 'No fue posible eliminar la orden del historial.',
+        );
+        throw CustomApiException(
+          messageUser: msg,
+          errorCode: 'GERENCIA_DELETE_ORDEN_ERROR',
+          statusCode: response.statusCode,
+        );
+      }
+    } on CustomApiException {
+      rethrow;
+    } catch (e) {
+      throw CustomApiException(
+        messageUser: 'Error de conexión al eliminar la orden.',
+        errorCode: 'GERENCIA_DELETE_ORDEN_NETWORK_ERROR',
+        messageDev: e.toString(),
+      );
+    }
+  }
+
+  /// Obtiene la lista de vendedores activos disponibles para reasignación de titularidad.
+  static Future<List<Map<String, dynamic>>> obtenerVendedoresActivos({
+    int? idSucursal,
+  }) async {
+    try {
+      final queryParams = <String, String>{'incluir_online': 'true'};
+      if (idSucursal != null) {
+        queryParams['sucursal_id'] = idSucursal.toString();
+      }
+      final uri = Uri.parse('${ApiConstants.ordenesEndpoint}/vendedores')
+          .replace(queryParameters: queryParams);
+      final response = await ApiService.get(uri);
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data =
+            jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
+        return data.whereType<Map<String, dynamic>>().toList();
+      } else {
+        final msg = ApiService.extraerMensajeError(
+          response,
+          fallback: 'No fue posible cargar la lista de vendedores activos.',
+        );
+        throw CustomApiException(
+          messageUser: msg,
+          errorCode: 'GERENCIA_VENDEDORES_ERROR',
+          statusCode: response.statusCode,
+        );
+      }
+    } on CustomApiException {
+      rethrow;
+    } catch (e) {
+      throw CustomApiException(
+        messageUser: 'Error de conexión al consultar vendedores activos.',
+        errorCode: 'GERENCIA_VENDEDORES_NETWORK_ERROR',
         messageDev: e.toString(),
       );
     }

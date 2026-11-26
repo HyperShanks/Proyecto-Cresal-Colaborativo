@@ -8,10 +8,12 @@ import '../../services/inventario_service.dart';
 /// Solo disponible para repuestos en estado 'Disponible' o 'Paletizado'.
 class EditarActivoModal extends StatefulWidget {
   final Map<String, dynamic> activo;
+  final bool lightTheme;
 
   const EditarActivoModal({
     super.key,
     required this.activo,
+    this.lightTheme = false,
   });
 
   @override
@@ -52,6 +54,16 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
   late final String? _initialTraccion;
 
   bool _isSaving = false;
+
+  Color get _bgColor => widget.lightTheme ? AppPalette.backgroundLight : AppPalette.background;
+  Color get _surfaceColor => widget.lightTheme ? AppPalette.surfaceLight : AppPalette.surface;
+  Color get _inputFillColor =>
+      widget.lightTheme ? const Color(0xFFF8FAFC) : AppPalette.background.withValues(alpha: 0.6);
+  Color get _textPrimary => widget.lightTheme ? AppPalette.textPrimaryLight : AppPalette.textPrimary;
+  Color get _textSecondary => widget.lightTheme ? AppPalette.textSecondaryLight : AppPalette.textSecondary;
+  Color get _borderColor =>
+      widget.lightTheme ? AppPalette.borderLight : AppPalette.neutral.withValues(alpha: 0.25);
+  Color get _accentColor => widget.lightTheme ? AppPalette.tertiary : AppPalette.primary;
 
   @override
   void initState() {
@@ -151,27 +163,29 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
     final res = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppPalette.surface,
+        backgroundColor: _surfaceColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         title: Text(
           'Descartar cambios',
-          style: AppTypography.title.copyWith(color: AppPalette.textPrimary),
+          style: AppTypography.title.copyWith(color: _textPrimary),
         ),
         content: Text(
           'Tienes cambios sin guardar. ¿Estás seguro de que quieres salir y descartar las modificaciones?',
-          style: AppTypography.body.copyWith(color: AppPalette.textSecondary),
+          style: AppTypography.body.copyWith(color: _textSecondary),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(
               'Seguir editando',
-              style: AppTypography.button.copyWith(color: AppPalette.neutral),
+              style: AppTypography.button.copyWith(color: _textSecondary),
             ),
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppPalette.error,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             child: Text(
               'Descartar',
@@ -260,7 +274,8 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
           context: context,
           barrierDismissible: false,
           builder: (ctx) => AlertDialog(
-            backgroundColor: AppPalette.surface,
+            backgroundColor: _surfaceColor,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             title: Row(
               children: [
                 const Icon(Icons.warning_amber_rounded, color: AppPalette.secondary, size: 28),
@@ -268,7 +283,7 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
                 Expanded(
                   child: Text(
                     'Información Desactualizada',
-                    style: AppTypography.title.copyWith(color: AppPalette.textPrimary),
+                    style: AppTypography.title.copyWith(color: _textPrimary),
                   ),
                 ),
               ],
@@ -276,7 +291,7 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
             content: Text(
               'Este repuesto fue modificado recientemente por otro usuario. '
               'Los datos se actualizarán ahora para que revises los cambios antes de volver a editar.',
-              style: AppTypography.body.copyWith(color: AppPalette.textSecondary),
+              style: AppTypography.body.copyWith(color: _textSecondary),
             ),
             actions: [
               ElevatedButton(
@@ -284,8 +299,8 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
                   Navigator.of(ctx).pop();
                   Navigator.of(context).pop({'conflict': true});
                 },
-                style: ElevatedButton.styleFrom(backgroundColor: AppPalette.primary),
-                child: const Text('Actualizar y Revisar'),
+                style: ElevatedButton.styleFrom(backgroundColor: _accentColor),
+                child: const Text('Actualizar y Revisar', style: TextStyle(color: Colors.white)),
               ),
             ],
           ),
@@ -313,78 +328,99 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
         'Repuesto';
     final sku = widget.activo['sku']?.toString() ?? widget.activo['sku_qr_fisico']?.toString() ?? 'S/N';
 
+    final bool isLight = widget.lightTheme;
+
     return SafeArea(
       child: Center(
-        child: Container(
-          constraints: BoxConstraints(
-            maxWidth: 680,
-            maxHeight: MediaQuery.of(context).size.height * 0.90,
-          ),
-          padding: EdgeInsets.only(bottom: bottomInset),
-          decoration: const BoxDecoration(
-            color: AppPalette.background,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-          children: [
-            // Cabecera Modal
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              decoration: BoxDecoration(
-                color: AppPalette.surface,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                border: Border(
-                  bottom: BorderSide(
-                    color: AppPalette.neutral.withValues(alpha: 0.15),
-                  ),
+        child: Material(
+          type: MaterialType.transparency,
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            constraints: BoxConstraints(
+              maxWidth: 700,
+              maxHeight: MediaQuery.of(context).size.height * 0.88,
+            ),
+            padding: EdgeInsets.only(bottom: bottomInset),
+            decoration: BoxDecoration(
+              color: _bgColor,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: _borderColor),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: isLight ? 0.16 : 0.45),
+                  blurRadius: 24,
+                  offset: const Offset(0, 10),
                 ),
-              ),
-              child: Row(
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
+                  // Cabecera Modal
                   Container(
-                    padding: const EdgeInsets.all(8),
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
                     decoration: BoxDecoration(
-                      color: AppPalette.primary.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(8),
+                      color: isLight ? AppPalette.tertiary : AppPalette.surface,
+                      border: Border(
+                        bottom: BorderSide(
+                          color: isLight ? Colors.transparent : _borderColor,
+                        ),
+                      ),
                     ),
-                    child: const Icon(
-                      Icons.edit_note,
-                      color: AppPalette.primary,
-                      size: 26,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Row(
                       children: [
-                        Text(
-                          'Editar Activo: $categoria',
-                          style: AppTypography.title.copyWith(
-                            fontSize: 16,
-                            color: AppPalette.textPrimary,
+                        Container(
+                          padding: const EdgeInsets.all(9),
+                          decoration: BoxDecoration(
+                            color: isLight
+                                ? Colors.white.withValues(alpha: 0.16)
+                                : AppPalette.primary.withValues(alpha: 0.14),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            Icons.edit_note,
+                            color: isLight ? Colors.white : AppPalette.primary,
+                            size: 24,
                           ),
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'SKU: $sku',
-                          style: AppTypography.small.copyWith(
-                            color: AppPalette.textSecondary,
-                            fontSize: 12,
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Editar Activo: $categoria',
+                                style: AppTypography.title.copyWith(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: isLight ? Colors.white : _textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'SKU: $sku',
+                                style: AppTypography.small.copyWith(
+                                  color: isLight ? const Color(0xFFBAE6FD) : _textSecondary,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
                           ),
+                        ),
+                        IconButton(
+                          icon: Icon(
+                            Icons.close,
+                            color: isLight ? Colors.white70 : _textSecondary,
+                          ),
+                          onPressed: _handleCancelOrClose,
+                          tooltip: 'Cerrar',
                         ),
                       ],
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: AppPalette.textSecondary),
-                    onPressed: _handleCancelOrClose,
-                    tooltip: 'Cerrar',
-                  ),
-                ],
-              ),
-            ),
 
             // Formulario Scrollable con Ubicación, Vehículo y Especificaciones Técnicas
             Flexible(
@@ -392,7 +428,7 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
                 builder: (context, constraints) {
                   final isNarrow = constraints.maxWidth < 460;
                   final isUltraNarrow = constraints.maxWidth < 360;
-                  final formPadding = isNarrow ? 14.0 : 20.0;
+                  final formPadding = isNarrow ? 16.0 : 22.0;
 
                   return SingleChildScrollView(
                     padding: EdgeInsets.all(formPadding),
@@ -400,265 +436,296 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // ── 1. UBICACIÓN FÍSICA EN BODEGA (GALPÓN, PASILLO, PALLET) ──
-                        _buildSectionHeader(
-                          title: 'UBICACIÓN FÍSICA EN BODEGA',
-                          subtitle: 'Indica o actualiza la posición física: galpón, pasillo y pallet.',
-                          icon: Icons.warehouse_outlined,
-                        ),
-                        const SizedBox(height: 14),
+                        _buildSectionCard(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildSectionHeader(
+                                title: 'UBICACIÓN FÍSICA EN BODEGA',
+                                subtitle: 'Indica o actualiza la posición física: galpón, pasillo y pallet.',
+                                icon: Icons.warehouse_outlined,
+                              ),
+                              const SizedBox(height: 16),
 
-                        if (isNarrow) ...[
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildTextField(
-                                  controller: _galponController,
-                                  label: 'Galpón',
-                                  hintText: 'Ej. 1',
-                                  icon: Icons.warehouse_outlined,
+                              if (isNarrow) ...[
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _buildTextField(
+                                        controller: _galponController,
+                                        label: 'Galpón',
+                                        hintText: 'Ej. 1',
+                                        icon: Icons.warehouse_outlined,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: _buildTextField(
+                                        controller: _pasilloController,
+                                        label: 'Pasillo',
+                                        hintText: 'Ej. A',
+                                        icon: Icons.view_column_outlined,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: _buildTextField(
-                                  controller: _pasilloController,
-                                  label: 'Pasillo',
-                                  hintText: 'Ej. A',
-                                  icon: Icons.view_column_outlined,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          _buildTextField(
-                            controller: _palletController,
-                            label: 'Pallet',
-                            hintText: 'Ej. P-01',
-                            icon: Icons.layers_outlined,
-                          ),
-                        ] else ...[
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildTextField(
-                                  controller: _galponController,
-                                  label: 'Galpón',
-                                  hintText: 'Ej. 1',
-                                  icon: Icons.warehouse_outlined,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: _buildTextField(
-                                  controller: _pasilloController,
-                                  label: 'Pasillo',
-                                  hintText: 'Ej. A',
-                                  icon: Icons.view_column_outlined,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: _buildTextField(
+                                const SizedBox(height: 12),
+                                _buildTextField(
                                   controller: _palletController,
                                   label: 'Pallet',
                                   hintText: 'Ej. P-01',
                                   icon: Icons.layers_outlined,
                                 ),
-                              ),
+                              ] else ...[
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _buildTextField(
+                                        controller: _galponController,
+                                        label: 'Galpón',
+                                        hintText: 'Ej. 1',
+                                        icon: Icons.warehouse_outlined,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: _buildTextField(
+                                        controller: _pasilloController,
+                                        label: 'Pasillo',
+                                        hintText: 'Ej. A',
+                                        icon: Icons.view_column_outlined,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: _buildTextField(
+                                        controller: _palletController,
+                                        label: 'Pallet',
+                                        hintText: 'Ej. P-01',
+                                        icon: Icons.layers_outlined,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                              const SizedBox(height: 12),
+
+                              // Sugerencias rápidas de Galpón y Pasillo
+                              _buildQuickLocationSuggestions(),
                             ],
                           ),
-                        ],
-                        const SizedBox(height: 8),
+                        ),
 
-                        // Sugerencias rápidas de Galpón y Pasillo
-                        _buildQuickLocationSuggestions(),
-
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 16),
 
                         // ── 2. DATOS DEL VEHÍCULO DE ORIGEN ──
-                        _buildSectionHeader(
-                          title: 'DATOS DEL VEHÍCULO DE ORIGEN',
-                          subtitle: 'Marca, modelo, año y tracción del vehículo de procedencia.',
-                          icon: Icons.directions_car_outlined,
-                        ),
-                        const SizedBox(height: 14),
-
-                        if (isUltraNarrow) ...[
-                          _buildTextField(
-                            controller: _marcaController,
-                            label: 'Marca',
-                            hintText: 'Ej. Toyota',
-                            icon: Icons.branding_watermark_outlined,
-                          ),
-                          const SizedBox(height: 10),
-                          _buildTextField(
-                            controller: _modeloController,
-                            label: 'Modelo',
-                            hintText: 'Ej. Corolla',
-                            icon: Icons.directions_car_outlined,
-                          ),
-                          const SizedBox(height: 10),
-                          _buildTextField(
-                            controller: _anioController,
-                            label: 'Año',
-                            hintText: 'Ej. 2021',
-                            icon: Icons.calendar_today_outlined,
-                            keyboardType: TextInputType.number,
-                          ),
-                          const SizedBox(height: 10),
-                          _buildDropdownField(
-                            label: 'Tracción',
-                            value: _traccionSeleccionada,
-                            items: OpcionesTraccion.lista,
-                            icon: Icons.swap_calls_outlined,
-                            onChanged: (val) => setState(() => _traccionSeleccionada = val),
-                          ),
-                        ] else ...[
-                          Row(
+                        _buildSectionCard(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Expanded(
-                                child: _buildTextField(
+                              _buildSectionHeader(
+                                title: 'DATOS DEL VEHÍCULO DE ORIGEN',
+                                subtitle: 'Marca, modelo, año y tracción del vehículo de procedencia.',
+                                icon: Icons.directions_car_outlined,
+                              ),
+                              const SizedBox(height: 16),
+
+                              if (isUltraNarrow) ...[
+                                _buildTextField(
                                   controller: _marcaController,
                                   label: 'Marca',
                                   hintText: 'Ej. Toyota',
                                   icon: Icons.branding_watermark_outlined,
                                 ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: _buildTextField(
+                                const SizedBox(height: 12),
+                                _buildTextField(
                                   controller: _modeloController,
                                   label: 'Modelo',
                                   hintText: 'Ej. Corolla',
                                   icon: Icons.directions_car_outlined,
                                 ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildTextField(
+                                const SizedBox(height: 12),
+                                _buildTextField(
                                   controller: _anioController,
                                   label: 'Año',
                                   hintText: 'Ej. 2021',
                                   icon: Icons.calendar_today_outlined,
                                   keyboardType: TextInputType.number,
                                 ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: _buildDropdownField(
+                                const SizedBox(height: 12),
+                                _buildDropdownField(
                                   label: 'Tracción',
                                   value: _traccionSeleccionada,
                                   items: OpcionesTraccion.lista,
                                   icon: Icons.swap_calls_outlined,
                                   onChanged: (val) => setState(() => _traccionSeleccionada = val),
                                 ),
-                              ),
+                              ] else ...[
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _buildTextField(
+                                        controller: _marcaController,
+                                        label: 'Marca',
+                                        hintText: 'Ej. Toyota',
+                                        icon: Icons.branding_watermark_outlined,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: _buildTextField(
+                                        controller: _modeloController,
+                                        label: 'Modelo',
+                                        hintText: 'Ej. Corolla',
+                                        icon: Icons.directions_car_outlined,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 14),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _buildTextField(
+                                        controller: _anioController,
+                                        label: 'Año',
+                                        hintText: 'Ej. 2021',
+                                        icon: Icons.calendar_today_outlined,
+                                        keyboardType: TextInputType.number,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: _buildDropdownField(
+                                        label: 'Tracción',
+                                        value: _traccionSeleccionada,
+                                        items: OpcionesTraccion.lista,
+                                        icon: Icons.swap_calls_outlined,
+                                        onChanged: (val) => setState(() => _traccionSeleccionada = val),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ],
                           ),
-                        ],
+                        ),
 
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 16),
 
                         // ── 3. ESPECIFICACIONES TÉCNICAS (DISPONIBLES PARA TODO ACTIVO) ──
-                        _buildSectionHeader(
-                          title: 'ESPECIFICACIONES TÉCNICAS',
-                          subtitle: 'Modifica los datos mecánicos registrados para este activo.',
-                          icon: Icons.precision_manufacturing_outlined,
-                        ),
-                        const SizedBox(height: 14),
-
-                        _buildTextField(
-                          controller: _numeroMotorController,
-                          label: 'Número de Motor',
-                          hintText: 'Ej. 1NZ-FE-123456',
-                          icon: Icons.tag,
-                        ),
-                        const SizedBox(height: 12),
-
-                        if (isUltraNarrow) ...[
-                          _buildTextField(
-                            controller: _cilindradaController,
-                            label: 'Cilindrada',
-                            hintText: 'Ej. 1.8L',
-                            icon: Icons.speed,
-                          ),
-                          const SizedBox(height: 10),
-                          _buildDropdownField(
-                            label: 'Combustible',
-                            value: _combustibleSeleccionado,
-                            items: OpcionesCombustible.lista,
-                            icon: Icons.local_gas_station_outlined,
-                            onChanged: (val) => setState(() => _combustibleSeleccionado = val),
-                          ),
-                        ] else ...[
-                          Row(
+                        _buildSectionCard(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Expanded(
-                                child: _buildTextField(
+                              _buildSectionHeader(
+                                title: 'ESPECIFICACIONES TÉCNICAS',
+                                subtitle: 'Modifica los datos mecánicos registrados para este activo.',
+                                icon: Icons.precision_manufacturing_outlined,
+                              ),
+                              const SizedBox(height: 16),
+
+                              _buildTextField(
+                                controller: _numeroMotorController,
+                                label: 'Número de Motor',
+                                hintText: 'Ej. 1NZ-FE-123456',
+                                icon: Icons.tag,
+                              ),
+                              const SizedBox(height: 14),
+
+                              if (isUltraNarrow) ...[
+                                _buildTextField(
                                   controller: _cilindradaController,
                                   label: 'Cilindrada',
                                   hintText: 'Ej. 1.8L',
                                   icon: Icons.speed,
                                 ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: _buildDropdownField(
+                                const SizedBox(height: 12),
+                                _buildDropdownField(
                                   label: 'Combustible',
                                   value: _combustibleSeleccionado,
                                   items: OpcionesCombustible.lista,
                                   icon: Icons.local_gas_station_outlined,
                                   onChanged: (val) => setState(() => _combustibleSeleccionado = val),
                                 ),
+                              ] else ...[
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _buildTextField(
+                                        controller: _cilindradaController,
+                                        label: 'Cilindrada',
+                                        hintText: 'Ej. 1.8L',
+                                        icon: Icons.speed,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: _buildDropdownField(
+                                        label: 'Combustible',
+                                        value: _combustibleSeleccionado,
+                                        items: OpcionesCombustible.lista,
+                                        icon: Icons.local_gas_station_outlined,
+                                        onChanged: (val) => setState(() => _combustibleSeleccionado = val),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                              const SizedBox(height: 14),
+
+                              _buildDropdownField(
+                                label: 'Transmisión',
+                                value: _transmisionSeleccionada,
+                                items: OpcionesTransmision.lista,
+                                icon: Icons.settings_outlined,
+                                onChanged: (val) => setState(() => _transmisionSeleccionada = val),
                               ),
                             ],
                           ),
-                        ],
-                        const SizedBox(height: 12),
-
-                        _buildDropdownField(
-                          label: 'Transmisión',
-                          value: _transmisionSeleccionada,
-                          items: OpcionesTransmision.lista,
-                          icon: Icons.settings_outlined,
-                          onChanged: (val) => setState(() => _transmisionSeleccionada = val),
                         ),
 
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 16),
 
                         // ── 4. OBSERVACIÓN / ESTADO ──
-                        _buildSectionHeader(
-                          title: 'OBSERVACIÓN DEL ESTADO',
-                          subtitle: 'Detalles visuales, mecánicos o condiciones del repuesto.',
-                          icon: Icons.notes_outlined,
-                        ),
-                        const SizedBox(height: 10),
-                        TextField(
-                          controller: _observacionController,
-                          maxLines: 3,
-                          style: AppTypography.body.copyWith(color: AppPalette.textPrimary),
-                          decoration: InputDecoration(
-                            hintText: 'Detalles visuales o mecánicos del repuesto...',
-                            hintStyle: AppTypography.body.copyWith(color: AppPalette.textSecondary.withValues(alpha: 0.5)),
-                            filled: true,
-                            fillColor: AppPalette.surface,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide(color: AppPalette.neutral.withValues(alpha: 0.2)),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide(color: AppPalette.neutral.withValues(alpha: 0.2)),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: const BorderSide(color: AppPalette.primary, width: 1.5),
-                            ),
+                        _buildSectionCard(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildSectionHeader(
+                                title: 'OBSERVACIÓN DEL ESTADO',
+                                subtitle: 'Detalles visuales, mecánicos o condiciones del repuesto.',
+                                icon: Icons.notes_outlined,
+                              ),
+                              const SizedBox(height: 12),
+                              TextField(
+                                controller: _observacionController,
+                                maxLines: 3,
+                                style: AppTypography.body.copyWith(color: _textPrimary, fontSize: 13.5),
+                                decoration: InputDecoration(
+                                  hintText: 'Detalles visuales o mecánicos del repuesto...',
+                                  hintStyle: AppTypography.body.copyWith(
+                                    color: _textSecondary.withValues(alpha: 0.65),
+                                    fontSize: 13,
+                                  ),
+                                  filled: true,
+                                  fillColor: _inputFillColor,
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                    borderSide: BorderSide(color: _borderColor),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                    borderSide: BorderSide(color: _borderColor),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                    borderSide: BorderSide(color: _accentColor, width: 1.6),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
@@ -670,13 +737,11 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
 
             // Barra Inferior de Acciones
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               decoration: BoxDecoration(
-                color: AppPalette.surface,
+                color: _surfaceColor,
                 border: Border(
-                  top: BorderSide(
-                    color: AppPalette.neutral.withValues(alpha: 0.15),
-                  ),
+                  top: BorderSide(color: _borderColor),
                 ),
               ),
               child: LayoutBuilder(
@@ -685,8 +750,9 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
                   final btnCancelar = OutlinedButton(
                     onPressed: _isSaving ? null : _handleCancelOrClose,
                     style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      side: BorderSide(color: AppPalette.neutral.withValues(alpha: 0.4)),
+                      minimumSize: const Size(0, 44),
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                      side: BorderSide(color: _borderColor, width: 1.25),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
@@ -695,7 +761,11 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
                       fit: BoxFit.scaleDown,
                       child: Text(
                         'CANCELAR',
-                        style: AppTypography.button.copyWith(color: AppPalette.textSecondary),
+                        style: AppTypography.button.copyWith(
+                          color: _textSecondary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   );
@@ -711,20 +781,23 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
                               color: Colors.white,
                             ),
                           )
-                        : const Icon(Icons.check_rounded, color: Colors.white),
+                        : const Icon(Icons.check_rounded, color: Colors.white, size: 18),
                     label: FittedBox(
                       fit: BoxFit.scaleDown,
                       child: Text(
                         _isSaving ? 'GUARDANDO...' : 'GUARDAR CAMBIOS',
                         style: AppTypography.button.copyWith(
                           color: Colors.white,
-                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppPalette.primary,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      backgroundColor: _accentColor,
+                      elevation: 0,
+                      minimumSize: const Size(0, 44),
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
@@ -760,8 +833,22 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
         ),
       ),
     ),
-  );
+  ),
+),
+);
 }
+
+  Widget _buildSectionCard({required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: _surfaceColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _borderColor),
+      ),
+      child: child,
+    );
+  }
 
   Widget _buildQuickLocationSuggestions() {
     return Column(
@@ -769,23 +856,23 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
       children: [
         Row(
           children: [
-            const Icon(Icons.flash_on, size: 13, color: AppPalette.primary),
+            Icon(Icons.flash_on, size: 14, color: _accentColor),
             const SizedBox(width: 4),
             Expanded(
               child: Text(
                 'Sugerencias rápidas para Galpón y Pasillo:',
                 style: AppTypography.small.copyWith(
-                  color: AppPalette.textSecondary,
-                  fontSize: 11,
+                  color: _textSecondary,
+                  fontSize: 11.5,
                 ),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 8),
         Wrap(
-          spacing: 6,
-          runSpacing: 6,
+          spacing: 8,
+          runSpacing: 8,
           children: [
             ...OpcionesUbicacionBodega.galpones.map((g) {
               final isSelected = _galponController.text.trim() == g;
@@ -795,32 +882,34 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
                     _galponController.text = g;
                   });
                 },
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(8),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                   decoration: BoxDecoration(
                     color: isSelected
-                        ? AppPalette.primary.withValues(alpha: 0.25)
-                        : AppPalette.surface,
-                    borderRadius: BorderRadius.circular(6),
+                        ? AppPalette.primary.withValues(alpha: widget.lightTheme ? 0.12 : 0.25)
+                        : _inputFillColor,
+                    borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: isSelected
-                          ? AppPalette.primary
-                          : AppPalette.neutral.withValues(alpha: 0.25),
+                      color: isSelected ? AppPalette.primary : _borderColor,
                       width: isSelected ? 1.5 : 1.0,
                     ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.warehouse_outlined, size: 12, color: isSelected ? AppPalette.primary : AppPalette.textSecondary),
-                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.warehouse_outlined,
+                        size: 13,
+                        color: isSelected ? AppPalette.primary : _textSecondary,
+                      ),
+                      const SizedBox(width: 5),
                       Text(
                         'Galpón $g',
                         style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                          color: isSelected ? AppPalette.primary : AppPalette.textPrimary,
+                          fontSize: 12,
+                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                          color: isSelected ? AppPalette.primary : _textPrimary,
                         ),
                       ),
                     ],
@@ -830,38 +919,41 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
             }),
             ...OpcionesUbicacionBodega.pasillos.map((p) {
               final isSelected = _pasilloController.text.trim() == p;
+              final pasilloAccent = widget.lightTheme ? const Color(0xFFD97706) : AppPalette.secondary;
               return InkWell(
                 onTap: () {
                   setState(() {
                     _pasilloController.text = p;
                   });
                 },
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(8),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                   decoration: BoxDecoration(
                     color: isSelected
-                        ? AppPalette.secondary.withValues(alpha: 0.25)
-                        : AppPalette.surface,
-                    borderRadius: BorderRadius.circular(6),
+                        ? pasilloAccent.withValues(alpha: widget.lightTheme ? 0.12 : 0.25)
+                        : _inputFillColor,
+                    borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: isSelected
-                          ? AppPalette.secondary
-                          : AppPalette.neutral.withValues(alpha: 0.25),
+                      color: isSelected ? pasilloAccent : _borderColor,
                       width: isSelected ? 1.5 : 1.0,
                     ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.view_column_outlined, size: 12, color: isSelected ? AppPalette.secondary : AppPalette.textSecondary),
-                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.view_column_outlined,
+                        size: 13,
+                        color: isSelected ? pasilloAccent : _textSecondary,
+                      ),
+                      const SizedBox(width: 5),
                       Text(
                         'Pasillo $p',
                         style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                          color: isSelected ? AppPalette.secondary : AppPalette.textPrimary,
+                          fontSize: 12,
+                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                          color: isSelected ? pasilloAccent : _textPrimary,
                         ),
                       ),
                     ],
@@ -885,15 +977,15 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
       children: [
         Row(
           children: [
-            Icon(icon, color: AppPalette.primary, size: 16),
-            const SizedBox(width: 6),
+            Icon(icon, color: _accentColor, size: 17),
+            const SizedBox(width: 7),
             Expanded(
               child: Text(
                 title,
                 style: AppTypography.small.copyWith(
-                  color: AppPalette.primary,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.1,
+                  color: _accentColor,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.9,
                   fontSize: 12,
                 ),
               ),
@@ -904,8 +996,8 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
         Text(
           subtitle,
           style: AppTypography.small.copyWith(
-            color: AppPalette.textSecondary,
-            fontSize: 11,
+            color: _textSecondary,
+            fontSize: 11.5,
           ),
         ),
       ],
@@ -925,35 +1017,38 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
         Text(
           label,
           style: AppTypography.small.copyWith(
-            fontWeight: FontWeight.bold,
-            color: AppPalette.textPrimary,
+            fontWeight: FontWeight.w600,
+            fontSize: 12.5,
+            color: _textPrimary,
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 7),
         TextField(
           controller: controller,
           keyboardType: keyboardType,
-          style: AppTypography.body.copyWith(color: AppPalette.textPrimary),
+          style: AppTypography.body.copyWith(color: _textPrimary, fontSize: 13.5),
           decoration: InputDecoration(
-            isDense: true,
             hintText: hintText,
-            hintStyle: AppTypography.body.copyWith(color: AppPalette.textSecondary.withValues(alpha: 0.5)),
-            prefixIcon: Icon(icon, color: AppPalette.primary, size: 18),
-            prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            hintStyle: AppTypography.body.copyWith(
+              color: _textSecondary.withValues(alpha: 0.65),
+              fontSize: 13,
+            ),
+            prefixIcon: Icon(icon, color: _accentColor, size: 18),
+            prefixIconConstraints: const BoxConstraints(minWidth: 42, minHeight: 42),
             filled: true,
-            fillColor: AppPalette.surface,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+            fillColor: _inputFillColor,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: AppPalette.neutral.withValues(alpha: 0.2)),
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: _borderColor),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: AppPalette.neutral.withValues(alpha: 0.2)),
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: _borderColor),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: AppPalette.primary, width: 1.5),
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: _accentColor, width: 1.6),
             ),
           ),
         ),
@@ -975,34 +1070,34 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
         Text(
           label,
           style: AppTypography.small.copyWith(
-            fontWeight: FontWeight.bold,
-            color: AppPalette.textPrimary,
+            fontWeight: FontWeight.w600,
+            fontSize: 12.5,
+            color: _textPrimary,
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 7),
         DropdownButtonFormField<String>(
           initialValue: validValue,
           isExpanded: true,
-          dropdownColor: AppPalette.surface,
-          style: const TextStyle(color: AppPalette.textPrimary),
+          dropdownColor: _surfaceColor,
+          style: TextStyle(color: _textPrimary, fontSize: 13.5),
           decoration: InputDecoration(
-            isDense: true,
-            prefixIcon: Icon(icon, color: AppPalette.primary, size: 18),
-            prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            prefixIcon: Icon(icon, color: _accentColor, size: 18),
+            prefixIconConstraints: const BoxConstraints(minWidth: 42, minHeight: 42),
             filled: true,
-            fillColor: AppPalette.surface,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+            fillColor: _inputFillColor,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: AppPalette.neutral.withValues(alpha: 0.2)),
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: _borderColor),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: AppPalette.neutral.withValues(alpha: 0.2)),
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: _borderColor),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: AppPalette.primary, width: 1.5),
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: _accentColor, width: 1.6),
             ),
           ),
           items: items.map((item) {
@@ -1011,7 +1106,7 @@ class _EditarActivoModalState extends State<EditarActivoModal> {
               child: Text(
                 item,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: AppPalette.textPrimary, fontSize: 13),
+                style: TextStyle(color: _textPrimary, fontSize: 13.5),
               ),
             );
           }).toList(),
